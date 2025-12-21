@@ -37,9 +37,10 @@ interface SortableStopProps {
   onRemove: (id: string) => void;
   onChange: (id: string, value: string) => void;
   canRemove: boolean;
+  disabled?: boolean;
 }
 
-function SortableStop({ stop, onRemove, onChange, canRemove }: SortableStopProps) {
+function SortableStop({ stop, onRemove, onChange, canRemove, disabled }: SortableStopProps) {
   const {
     attributes,
     listeners,
@@ -110,6 +111,7 @@ function SortableStop({ stop, onRemove, onChange, canRemove }: SortableStopProps
             value={stop.value}
             onChange={(e) => onChange(stop.id, e.target.value)}
             placeholder={getPlaceholder()}
+            disabled={disabled}
             className="bg-secondary/50 h-8 mt-1"
           />
         </div>
@@ -136,6 +138,7 @@ interface TripData {
   passengers?: number;
   distance?: number;
   ratePerKmOverride?: number | null;
+  specialOrigin?: "base" | "continue" | "return";
 }
 
 interface AddTripModalProps {
@@ -143,13 +146,22 @@ interface AddTripModalProps {
   trip?: TripData | null;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  onSave?: (trip: Required<Pick<TripData, "id" | "date" | "route" | "project" | "purpose" | "passengers" | "distance">> & Pick<TripData, "ratePerKmOverride">) => void;
+  previousDestination?: string;
+  onSave?: (trip: Required<Pick<TripData, "id" | "date" | "route" | "project" | "purpose" | "passengers" | "distance">> & Pick<TripData, "ratePerKmOverride" | "specialOrigin">) => void;
 }
 
-export function AddTripModal({ trigger, trip, open, onOpenChange, onSave }: AddTripModalProps) {
+export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestination, onSave }: AddTripModalProps) {
   const isEditing = !!trip;
   const { profile } = useUserProfile();
   const settingsRateLabel = useMemo(() => profile.ratePerKm, [profile.ratePerKm]);
+  const baseLocation = useMemo(() => {
+    const parts = [profile.baseAddress, profile.city, profile.country].map((p) => p.trim()).filter(Boolean);
+    return parts.join(", ");
+  }, [profile.baseAddress, profile.city, profile.country]);
+  const previousDestinationEffective = useMemo(() => {
+    const value = (previousDestination ?? "").trim();
+    return value || baseLocation;
+  }, [previousDestination, baseLocation]);
   
   const getInitialStops = (): Stop[] => {
     if (trip?.route && trip.route.length >= 2) {
@@ -159,9 +171,13 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, onSave }: AddT
         type: index === 0 ? "origin" : index === trip.route!.length - 1 ? "destination" : "stop",
       }));
     }
+    const defaultSpecialOrigin: TripData["specialOrigin"] =
+      trip?.specialOrigin ?? (previousDestinationEffective && previousDestinationEffective !== baseLocation ? "continue" : "base");
+    const originValue = defaultSpecialOrigin === "base" ? baseLocation : previousDestinationEffective;
+    const destinationValue = defaultSpecialOrigin === "return" ? baseLocation : baseLocation;
     return [
-      { id: "origin", value: "", type: "origin" },
-      { id: "destination", value: "", type: "destination" },
+      { id: "origin", value: originValue, type: "origin" },
+      { id: "destination", value: destinationValue, type: "destination" },
     ];
   };
 
@@ -177,10 +193,39 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, onSave }: AddT
   const [project, setProject] = useState("");
   const [purpose, setPurpose] = useState("");
   const [specialOrigin, setSpecialOrigin] = useState("base");
+  const [originTouched, setOriginTouched] = useState(false);
+  const [destinationTouched, setDestinationTouched] = useState(false);
   const [tripRate, setTripRate] = useState("");
+
+  type SpecialOrigin = NonNullable<TripData["specialOrigin"]>;
+
+  const handleSpecialOriginChange = (next: SpecialOrigin) => {
+    setSpecialOrigin(next);
+
+    if (next === "return") {
+      setDestinationTouched(false);
+    }
+
+    setStops((prev) =>
+      prev.map((stop) => {
+        if (stop.id === "origin" && !originTouched) {
+          const originValue = next === "base" ? baseLocation : previousDestinationEffective;
+          return { ...stop, value: originValue };
+        }
+        if (stop.id === "destination") {
+          if (next === "return") return { ...stop, value: baseLocation };
+          if (!destinationTouched) return { ...stop, value: stop.value || baseLocation };
+        }
+        return stop;
+      })
+    );
+  };
 
   useEffect(() => {
     if (!isOpen) return;
+
+    const defaultSpecialOrigin: TripData["specialOrigin"] =
+      trip?.specialOrigin ?? (previousDestinationEffective && previousDestinationEffective !== baseLocation ? "continue" : "base");
 
     setStops(getInitialStops());
     setDate(trip?.date || "");
@@ -188,9 +233,11 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, onSave }: AddT
     setPassengers(trip?.passengers?.toString() || "0");
     setProject(trip?.project || "");
     setPurpose(trip?.purpose || "");
-    setSpecialOrigin("base");
+    setSpecialOrigin(defaultSpecialOrigin || "base");
+    setOriginTouched(false);
+    setDestinationTouched(false);
     setTripRate(trip?.ratePerKmOverride != null ? formatLocaleNumber(trip.ratePerKmOverride) : "");
-  }, [isOpen, trip]);
+  }, [isOpen, trip, baseLocation, previousDestinationEffective]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -243,6 +290,8 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, onSave }: AddT
   };
 
   const updateStop = (id: string, value: string) => {
+    if (id === "origin") setOriginTouched(true);
+    if (id === "destination") setDestinationTouched(true);
     setStops((prev) =>
       prev.map((s) => (s.id === id ? { ...s, value } : s))
     );
@@ -324,6 +373,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, onSave }: AddT
                         onRemove={removeStop}
                         onChange={updateStop}
                         canRemove={stops.length > 2}
+                        disabled={stop.type === "destination" && specialOrigin === "return"}
                       />
                     ))}
                   </div>
@@ -337,7 +387,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, onSave }: AddT
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label>Origen especial</Label>
-              <Select value={specialOrigin} onValueChange={setSpecialOrigin}>
+              <Select value={specialOrigin} onValueChange={(value) => handleSpecialOriginChange(value as SpecialOrigin)}>
                 <SelectTrigger className="bg-secondary/50">
                   <SelectValue />
                 </SelectTrigger>
@@ -420,8 +470,15 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, onSave }: AddT
                 const distanceValue = parseLocaleNumber(distance) ?? 0;
                 const passengersValue = parseLocaleNumber(passengers) ?? 0;
                 const rateOverride = parseLocaleNumber(tripRate);
-
-                const routeValues = stops.map((s) => s.value.trim()).filter(Boolean);
+                const trimmedStops = stops.map((s) => s.value.trim());
+                const originFallback = specialOrigin === "base" ? baseLocation : previousDestinationEffective;
+                const origin = trimmedStops[0] || originFallback;
+                const destination =
+                  specialOrigin === "return"
+                    ? baseLocation
+                    : trimmedStops[trimmedStops.length - 1] || baseLocation;
+                const middleStops = trimmedStops.slice(1, -1).filter(Boolean);
+                const routeValues = [origin, ...middleStops, destination].filter(Boolean);
 
                 const id = trip?.id || (globalThis.crypto?.randomUUID?.() ?? String(Date.now()));
 
@@ -434,6 +491,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, onSave }: AddT
                   passengers: Math.max(0, Math.floor(passengersValue)),
                   distance: Math.max(0, distanceValue),
                   ratePerKmOverride: rateOverride == null ? null : Math.max(0, rateOverride),
+                  specialOrigin,
                 });
               }}
             >

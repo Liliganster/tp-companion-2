@@ -3,7 +3,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Filter, Upload, Calendar, MoreVertical, Pencil, Trash2, Map, CalendarPlus } from "lucide-react";
+import { Plus, Filter, Upload, Calendar, MoreVertical, Pencil, Trash2, Map, CalendarPlus, ChevronUp, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -12,19 +12,9 @@ import { AddTripModal } from "@/components/trips/AddTripModal";
 import { BulkUploadModal } from "@/components/trips/BulkUploadModal";
 import { TripDetailModal } from "@/components/trips/TripDetailModal";
 import { useUserProfile } from "@/contexts/UserProfileContext";
+import { Trip, useTrips } from "@/contexts/TripsContext";
 import { parseLocaleNumber, roundTo } from "@/lib/number";
-interface Trip {
-  id: string;
-  date: string;
-  route: string[];
-  project: string;
-  purpose: string;
-  passengers: number;
-  warnings?: string[];
-  co2: number;
-  distance: number;
-  ratePerKmOverride?: number | null;
-}
+import { Badge } from "@/components/ui/badge";
 const calculateCO2 = (distance: number) => Math.round(distance * 0.12 * 10) / 10;
 const mockTripsData: Trip[] = [{
   id: "1",
@@ -77,7 +67,8 @@ export default function Trips() {
   const { profile } = useUserProfile();
   const [selectedProject, setSelectedProject] = useState("all");
   const [selectedYear, setSelectedYear] = useState("2024");
-  const [trips, setTrips] = useState<Trip[]>(mockTripsData);
+  const { trips, setTrips } = useTrips();
+  const [dateSort, setDateSort] = useState<"desc" | "asc">("desc");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -86,9 +77,12 @@ export default function Trips() {
   const {
     toast
   } = useToast();
-  const handleViewMap = (trip: Trip) => {
+  const openTripDetails = (trip: Trip) => {
     setSelectedTrip(trip);
     setDetailModalOpen(true);
+  };
+  const handleViewMap = (trip: Trip) => {
+    openTripDetails(trip);
   };
   const handleEditTrip = (trip: Trip) => {
     setTripToEdit(trip);
@@ -103,6 +97,17 @@ export default function Trips() {
 
   const settingsRatePerKm = parseLocaleNumber(profile.ratePerKm) ?? 0;
   const settingsPassengerSurchargePerKm = parseLocaleNumber(profile.passengerSurcharge) ?? 0;
+  const baseLocation = [profile.baseAddress, profile.city, profile.country].map((p) => p.trim()).filter(Boolean).join(", ");
+
+  const getTripTime = (trip: Trip) => {
+    const time = Date.parse(trip.date);
+    return Number.isFinite(time) ? time : 0;
+  };
+
+  const getTripDestination = (trip: Trip | undefined) => {
+    if (!trip) return baseLocation;
+    return trip.route[trip.route.length - 1] || baseLocation;
+  };
 
   const calculateTripReimbursement = (trip: Trip) => {
     const baseRate = trip.ratePerKmOverride ?? settingsRatePerKm;
@@ -118,6 +123,7 @@ export default function Trips() {
     passengers: number;
     distance: number;
     ratePerKmOverride?: number | null;
+    specialOrigin?: "base" | "continue" | "return";
   };
 
   const handleSaveTrip = (data: SavedTrip) => {
@@ -132,21 +138,37 @@ export default function Trips() {
         distance: data.distance,
         co2: calculateCO2(data.distance),
         ratePerKmOverride: data.ratePerKmOverride ?? null,
+        specialOrigin: data.specialOrigin ?? "base",
       };
 
       const exists = prev.some((t) => t.id === data.id);
       return exists ? prev.map((t) => (t.id === data.id ? { ...t, ...nextTrip } : t)) : [nextTrip, ...prev];
     });
   };
+
+  const tripsByDateDesc = [...trips].sort((a, b) => getTripTime(b) - getTripTime(a) || a.id.localeCompare(b.id));
+  const addPreviousDestination = getTripDestination(tripsByDateDesc[0]);
+  const editPreviousDestination = (() => {
+    if (!tripToEdit) return addPreviousDestination;
+    const index = tripsByDateDesc.findIndex((t) => t.id === tripToEdit.id);
+    if (index < 0) return addPreviousDestination;
+    return getTripDestination(tripsByDateDesc[index + 1]);
+  })();
   const filteredTrips = trips.filter(trip => {
     const matchesProject = selectedProject === "all" || trip.project === selectedProject;
     return matchesProject;
   });
+
+  const visibleTrips = [...filteredTrips].sort((a, b) => {
+    const diff = getTripTime(a) - getTripTime(b);
+    if (diff !== 0) return dateSort === "asc" ? diff : -diff;
+    return a.id.localeCompare(b.id);
+  });
   const toggleSelectAll = () => {
-    if (selectedIds.size === filteredTrips.length) {
+    if (selectedIds.size === visibleTrips.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(filteredTrips.map(t => t.id)));
+      setSelectedIds(new Set(visibleTrips.map(t => t.id)));
     }
   };
   const toggleSelect = (id: string) => {
@@ -166,7 +188,7 @@ export default function Trips() {
     });
     setSelectedIds(new Set());
   };
-  const isAllSelected = filteredTrips.length > 0 && selectedIds.size === filteredTrips.length;
+  const isAllSelected = visibleTrips.length > 0 && selectedIds.size === visibleTrips.length;
   const isSomeSelected = selectedIds.size > 0;
   return <MainLayout>
       <div className="max-w-7xl mx-auto space-y-6">
@@ -192,7 +214,7 @@ export default function Trips() {
             <AddTripModal trigger={<Button>
                   <Plus className="w-4 h-4" />
                   <span className="hidden sm:inline">Add Trip</span>
-                </Button>} onSave={handleSaveTrip} />
+                </Button>} onSave={handleSaveTrip} previousDestination={addPreviousDestination} />
           </div>
         </div>
 
@@ -226,7 +248,7 @@ export default function Trips() {
 
         {/* Mobile & Tablet Cards View */}
         <div className="lg:hidden space-y-3 animate-fade-in animation-delay-200">
-          {filteredTrips.map((trip, index) => <div key={trip.id} className={`glass-card p-3 sm:p-4 animate-slide-up ${selectedIds.has(trip.id) ? 'ring-2 ring-primary' : ''}`} style={{
+          {visibleTrips.map((trip, index) => <div key={trip.id} className={`glass-card p-3 sm:p-4 animate-slide-up ${selectedIds.has(trip.id) ? 'ring-2 ring-primary' : ''}`} style={{
           animationDelay: `${index * 50}ms`
         }}>
               <div className="flex items-start justify-between gap-2">
@@ -242,6 +264,16 @@ export default function Trips() {
                       year: "numeric"
                     })}
                       </span>
+                      {trip.specialOrigin === "continue" && (
+                        <Badge variant="secondary" className="w-fit text-[10px] sm:text-xs">
+                          Continuación
+                        </Badge>
+                      )}
+                      {trip.specialOrigin === "return" && (
+                        <Badge variant="secondary" className="w-fit text-[10px] sm:text-xs">
+                          Fin continuación
+                        </Badge>
+                      )}
                       <span className="text-[10px] sm:text-xs text-primary truncate max-w-[150px] sm:max-w-none">
                         {trip.project}
                       </span>
@@ -320,7 +352,21 @@ export default function Trips() {
                   <TableHead className="w-10">
                     <Checkbox checked={isAllSelected} onCheckedChange={toggleSelectAll} aria-label="Select all" />
                   </TableHead>
-                  <TableHead className="text-foreground font-semibold whitespace-nowrap">Date</TableHead>
+                  <TableHead className="text-foreground font-semibold whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => setDateSort((prev) => (prev === "asc" ? "desc" : "asc"))}
+                      className="inline-flex items-center gap-1 hover:text-foreground"
+                      aria-label={`Sort by date (${dateSort === "asc" ? "ascending" : "descending"})`}
+                      title="Sort by date"
+                    >
+                      Date
+                      <span className="flex flex-col leading-none">
+                        <ChevronUp className={`h-3 w-3 ${dateSort === "asc" ? "text-foreground" : "text-muted-foreground/50"}`} />
+                        <ChevronDown className={`-mt-1 h-3 w-3 ${dateSort === "desc" ? "text-foreground" : "text-muted-foreground/50"}`} />
+                      </span>
+                    </button>
+                  </TableHead>
                   <TableHead className="text-foreground font-semibold whitespace-nowrap">Route</TableHead>
                   <TableHead className="text-foreground font-semibold whitespace-nowrap">Project</TableHead>
                   <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">CO₂</TableHead>
@@ -331,18 +377,42 @@ export default function Trips() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredTrips.map((trip, index) => <TableRow key={trip.id} className={`hover:bg-secondary/30 border-border/30 animate-slide-up ${selectedIds.has(trip.id) ? 'bg-primary/10' : ''}`} style={{
-                animationDelay: `${index * 50}ms`
-              }}>
+                {visibleTrips.map((trip, index) => <TableRow
+                  key={trip.id}
+                  className={`hover:bg-secondary/30 border-border/30 animate-slide-up cursor-pointer ${selectedIds.has(trip.id) ? 'bg-primary/10' : ''}`}
+                  style={{
+                  animationDelay: `${index * 50}ms`
+                }}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openTripDetails(trip)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openTripDetails(trip);
+                    }
+                  }}
+                >
                     <TableCell>
-                      <Checkbox checked={selectedIds.has(trip.id)} onCheckedChange={() => toggleSelect(trip.id)} aria-label={`Select trip ${trip.id}`} />
+                      <Checkbox
+                        checked={selectedIds.has(trip.id)}
+                        onCheckedChange={() => toggleSelect(trip.id)}
+                        aria-label={`Select trip ${trip.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                      />
                     </TableCell>
                     <TableCell className="font-medium whitespace-nowrap">
-                      {new Date(trip.date).toLocaleDateString("de-DE", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric"
-                  })}
+                      <div className="flex items-center gap-2">
+                        <span>
+                          {new Date(trip.date).toLocaleDateString("de-DE", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric"
+                      })}
+                        </span>
+                        {trip.specialOrigin === "continue" && <Badge variant="secondary">Continuación</Badge>}
+                        {trip.specialOrigin === "return" && <Badge variant="secondary">Fin continuación</Badge>}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1 flex-wrap">
@@ -366,7 +436,12 @@ export default function Trips() {
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <MoreVertical className="w-4 h-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -400,10 +475,10 @@ export default function Trips() {
         <div className="glass-card p-4 animate-fade-in">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">
-              Showing {filteredTrips.length} trips
+              Showing {visibleTrips.length} trips
             </span>
             <span className="font-medium">
-              Total: {filteredTrips.reduce((acc, trip) => acc + trip.distance, 0).toLocaleString()} km
+              Total: {visibleTrips.reduce((acc, trip) => acc + trip.distance, 0).toLocaleString()} km
             </span>
           </div>
         </div>
@@ -417,6 +492,7 @@ export default function Trips() {
           open={editModalOpen} 
           onOpenChange={setEditModalOpen} 
           onSave={handleSaveTrip}
+          previousDestination={editPreviousDestination}
         />
       </div>
     </MainLayout>;

@@ -43,99 +43,20 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { ProjectDetailModal } from "@/components/projects/ProjectDetailModal";
-
-interface Project {
-  id: string;
-  name: string;
-  producer?: string;
-  description?: string;
-  ratePerKm: number;
-  starred: boolean;
-  trips: number;
-  totalKm: number;
-  documents: number;
-  estimatedCost: number;
-  shootingDays: number;
-  kmPerDay: number;
-  co2Emissions: number;
-}
-
-const mockProjectsData: Project[] = [
-  {
-    id: "1",
-    name: "Film Production XY",
-    producer: "XY Productions GmbH",
-    description: "Feature film production across multiple locations in Germany",
-    ratePerKm: 0.35,
-    starred: true,
-    trips: 24,
-    totalKm: 4850,
-    documents: 12,
-    estimatedCost: 1697.50,
-    shootingDays: 15,
-    kmPerDay: 323.3,
-    co2Emissions: 582,
-  },
-  {
-    id: "2",
-    name: "Client ABC",
-    producer: "ABC Corporation",
-    description: "Regular client meetings and presentations",
-    ratePerKm: 0.30,
-    starred: true,
-    trips: 8,
-    totalKm: 1520,
-    documents: 4,
-    estimatedCost: 456.00,
-    shootingDays: 5,
-    kmPerDay: 304,
-    co2Emissions: 182.4,
-  },
-  {
-    id: "3",
-    name: "Internal",
-    producer: undefined,
-    description: "Internal company travel and office commutes",
-    ratePerKm: 0.30,
-    starred: false,
-    trips: 15,
-    totalKm: 890,
-    documents: 0,
-    estimatedCost: 267.00,
-    shootingDays: 10,
-    kmPerDay: 89,
-    co2Emissions: 106.8,
-  },
-  {
-    id: "4",
-    name: "Event Z",
-    producer: "Event Agency Z",
-    description: "Corporate event setup and management",
-    ratePerKm: 0.32,
-    starred: false,
-    trips: 6,
-    totalKm: 650,
-    documents: 3,
-    estimatedCost: 208.00,
-    shootingDays: 3,
-    kmPerDay: 216.7,
-    co2Emissions: 78,
-  },
-];
+import { Project, useProjects } from "@/contexts/ProjectsContext";
 
 export default function Projects() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedYear, setSelectedYear] = useState("2024");
-  const [projects, setProjects] = useState(mockProjectsData);
+  const { projects, setProjects, toggleStar } = useProjects();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const { toast } = useToast();
 
-  const toggleStar = (id: string) => {
-    setProjects((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, starred: !p.starred } : p))
-    );
+  const openProjectDetails = (project: Project) => {
+    setSelectedProject(project);
+    setDetailModalOpen(true);
   };
 
   const filteredProjects = projects.filter(
@@ -302,20 +223,33 @@ export default function Projects() {
                 {filteredProjects.map((project, index) => (
                   <TableRow
                     key={project.id}
-                    className={`hover:bg-secondary/30 border-border/30 animate-slide-up ${selectedIds.has(project.id) ? 'bg-primary/10' : ''}`}
+                    className={`hover:bg-secondary/30 border-border/30 animate-slide-up cursor-pointer ${selectedIds.has(project.id) ? 'bg-primary/10' : ''}`}
                     style={{ animationDelay: `${index * 50}ms` }}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openProjectDetails(project)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        openProjectDetails(project);
+                      }
+                    }}
                   >
                     <TableCell>
                       <Checkbox
                         checked={selectedIds.has(project.id)}
                         onCheckedChange={() => toggleSelect(project.id)}
                         aria-label={`Select project ${project.name}`}
+                        onClick={(e) => e.stopPropagation()}
                       />
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => toggleStar(project.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleStar(project.id);
+                          }}
                           className="shrink-0 opacity-60 hover:opacity-100 transition-opacity"
                         >
                           {project.starred ? (
@@ -354,14 +288,18 @@ export default function Projects() {
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <MoreVertical className="w-4 h-4" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="bg-popover">
                           <DropdownMenuItem onClick={() => {
-                            setSelectedProject(project);
-                            setDetailModalOpen(true);
+                            openProjectDetails(project);
                           }}>
                             <Eye className="w-4 h-4 mr-2" />
                             View Details

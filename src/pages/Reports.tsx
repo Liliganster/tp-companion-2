@@ -30,6 +30,8 @@ import {
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
+import { useTrips } from "@/contexts/TripsContext";
+import { useUserProfile } from "@/contexts/UserProfileContext";
 
 interface Report {
   id: string;
@@ -132,6 +134,8 @@ const mockReportTrips = [
 
 export default function Reports() {
   const navigate = useNavigate();
+  const { profile } = useUserProfile();
+  const { trips } = useTrips();
   const [selectedProject, setSelectedProject] = useState("all");
   const [selectedMonth, setSelectedMonth] = useState("01");
   const [selectedYear, setSelectedYear] = useState("2024");
@@ -139,12 +143,61 @@ export default function Reports() {
   const [warnings, setWarnings] = useState<TripWarning[]>([]);
   const { toast } = useToast();
 
+  const getTripTime = (date: string) => {
+    const time = Date.parse(date);
+    return Number.isFinite(time) ? time : 0;
+  };
+
+  const getTripsForSelection = () => {
+    const monthIndex = Math.max(0, Math.min(11, Number.parseInt(selectedMonth, 10) - 1));
+    const yearValue = Number.parseInt(selectedYear, 10);
+
+    return trips
+      .filter((t) => {
+        const time = getTripTime(t.date);
+        if (!time) return false;
+        const d = new Date(time);
+        const matchesPeriod = d.getFullYear() === yearValue && d.getMonth() === monthIndex;
+        const matchesProject = selectedProject === "all" || t.project === selectedProject;
+        return matchesPeriod && matchesProject;
+      })
+      .sort((a, b) => getTripTime(a.date) - getTripTime(b.date) || a.id.localeCompare(b.id));
+  };
+
   const handleGenerateClick = () => {
-    if (selectedMonth === "01" && selectedProject === "all") {
-      setWarnings(mockWarnings);
-    } else {
-      setWarnings([]);
-    }
+    const selectedTrips = getTripsForSelection();
+    const nextWarnings: TripWarning[] = [];
+
+    selectedTrips.forEach((trip) => {
+      const time = getTripTime(trip.date);
+      const formattedDate = time
+        ? new Date(time).toLocaleDateString("es-ES", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+          })
+        : trip.date;
+
+      if (trip.distance > 500) {
+        nextWarnings.push({
+          tripId: trip.id,
+          date: formattedDate,
+          route: trip.route.join(" → "),
+          warning: "Distancia inusual detectada",
+        });
+      }
+
+      if (!trip.purpose?.trim()) {
+        nextWarnings.push({
+          tripId: trip.id,
+          date: formattedDate,
+          route: trip.route.join(" → "),
+          warning: "Falta el motivo del viaje",
+        });
+      }
+    });
+
+    setWarnings(nextWarnings);
     setVerificationModalOpen(true);
   };
 
@@ -158,24 +211,27 @@ export default function Reports() {
   };
 
   const navigateToReportView = () => {
+    const selectedTrips = getTripsForSelection();
+    const monthIndex = Math.max(0, Math.min(11, Number.parseInt(selectedMonth, 10) - 1));
+    const yearValue = Number.parseInt(selectedYear, 10);
+    const start = new Date(yearValue, monthIndex, 1);
+    const end = new Date(yearValue, monthIndex + 1, 0);
+
     const params = new URLSearchParams({
-      period: "19-11-2019 - 02-12-2025",
-      driver: "lilianmartinez357",
-      address: "Laurenzgasse, 6/31, Wien",
-      licensePlate: "W-123AB",
-      project: getProjectName(selectedProject),
+      period: `${start.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" })} - ${end.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" })}`,
+      driver: profile.fullName,
+      address: [profile.baseAddress, profile.city].filter(Boolean).join(", "),
+      licensePlate: profile.licensePlate,
+      project: selectedProject === "all" ? "Todos los proyectos" : selectedProject,
+      month: selectedMonth,
+      year: selectedYear,
+      trips: String(selectedTrips.length),
     });
     navigate(`/reports/view?${params.toString()}`);
   };
 
   const getProjectName = (value: string) => {
-    const projects: Record<string, string> = {
-      all: "Todos los proyectos",
-      film: "Film Production XY",
-      client: "Client ABC",
-      internal: "Internal",
-    };
-    return projects[value] || value;
+    return value === "all" ? "Todos los proyectos" : value;
   };
 
   const getMonthName = (month: string) => {
@@ -211,9 +267,15 @@ export default function Reports() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Projects</SelectItem>
-                  <SelectItem value="film">Film Production XY</SelectItem>
-                  <SelectItem value="client">Client ABC</SelectItem>
-                  <SelectItem value="internal">Internal</SelectItem>
+                  {Array.from(
+                    new Set(trips.map((t) => t.project).map((p) => p.trim()).filter(Boolean))
+                  )
+                    .sort((a, b) => a.localeCompare(b))
+                    .map((name) => (
+                      <SelectItem key={name} value={name}>
+                        {name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
