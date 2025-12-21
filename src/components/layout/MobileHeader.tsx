@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import appIcon from "@/assets/app-icon.png";
+import { getProfileInitial, useUserProfile } from "@/contexts/UserProfileContext";
 const navigation = [{
   name: "Dashboard",
   href: "/",
@@ -38,6 +39,8 @@ export function MobileHeader({
 }: MobileHeaderProps) {
   const location = useLocation();
   const [open, setOpen] = useState(false);
+  const { profile } = useUserProfile();
+  const profileInitial = getProfileInitial(profile.fullName);
   return <header className="lg:hidden fixed top-0 left-0 right-0 z-50 h-16 glass border-b border-border/50">
       <div className="flex items-center justify-between h-full px-4">
         <Link to="/" className="flex items-center gap-2">
@@ -97,11 +100,11 @@ export function MobileHeader({
                 {/* User Profile */}
                 <div className="flex items-center gap-3 pt-3 border-t border-border/50">
                   <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-                    <span className="text-sm font-medium text-muted-foreground">L</span>
+                    <span className="text-sm font-medium text-muted-foreground">{profileInitial}</span>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">lilianmartinez357</p>
-                    <p className="text-xs text-muted-foreground">W-123AB</p>
+                    <p className="text-sm font-medium truncate">{profile.fullName}</p>
+                    <p className="text-xs text-muted-foreground">{profile.licensePlate}</p>
                   </div>
                 </div>
               </div>

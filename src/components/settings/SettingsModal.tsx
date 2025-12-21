@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +25,7 @@ import {
   Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useUserProfile } from "@/contexts/UserProfileContext";
 
 interface SettingsModalProps {
   open: boolean;
@@ -43,23 +44,26 @@ const navItems = [
 export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState("profile");
 
-  // Form state for profile
-  const [profileData, setProfileData] = useState({
-    fullName: "lilianmartinez357",
-    vatId: "ATU12345678",
-    licensePlate: "W-123AB",
-    ratePerKm: "0,5",
-    passengerSurcharge: "0,15",
-    baseAddress: "Laurenzgasse, 6/31",
-    city: "Wien",
-    country: "Austria",
-  });
+  const { profile, saveProfile } = useUserProfile();
+
+  // Draft form state for profile
+  const [profileData, setProfileData] = useState(profile);
+
+  useEffect(() => {
+    if (!open) return;
+    setProfileData(profile);
+  }, [open, profile]);
 
   // Personalization state
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [uiOpacity, setUiOpacity] = useState([0]);
   const [uiBlur, setUiBlur] = useState([16]);
   const [bgBlur, setBgBlur] = useState([0]);
+
+  const handleSave = () => {
+    saveProfile(profileData);
+    onOpenChange(false);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -443,7 +447,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button variant="save">
+            <Button variant="save" onClick={handleSave}>
               <Save className="w-4 h-4 mr-2" />
               Guardar ajustes
             </Button>

@@ -6,7 +6,9 @@ import { ProjectChart } from "@/components/dashboard/ProjectChart";
 import { Button } from "@/components/ui/button";
 import { Route, FolderKanban, Leaf, Plus, Settings, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useUserProfile } from "@/contexts/UserProfileContext";
 export default function Index() {
+  const { profile } = useUserProfile();
   return <MainLayout>
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
@@ -15,7 +17,7 @@ export default function Index() {
             <div className="flex items-center gap-4">
               <div>
                 <h1 className="text-2xl sm:text-3xl font-bold text-zinc-50">
-                  Welcome back, <span className="text-white">Max</span>
+                  Welcome back, <span className="text-white">{profile.fullName}</span>
                 </h1>
                 <p className="text-muted-foreground mt-1">
                   Here's your mileage overview for this month

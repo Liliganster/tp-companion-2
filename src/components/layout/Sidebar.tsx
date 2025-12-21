@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import appIcon from "@/assets/app-icon.png";
+import { getProfileInitial, useUserProfile } from "@/contexts/UserProfileContext";
 const navigation = [{
   name: "Dashboard",
   href: "/",
@@ -37,6 +38,8 @@ export function Sidebar({
 }: SidebarProps) {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const { profile } = useUserProfile();
+  const profileInitial = getProfileInitial(profile.fullName);
   return <aside className={cn("hidden lg:flex flex-col h-screen glass border-r border-border/50 transition-all duration-300", collapsed ? "w-20" : "w-64")}>
       {/* Logo */}
       <div className="flex items-center justify-between h-16 px-4 border-b border-border/50">
@@ -86,11 +89,11 @@ export function Sidebar({
         {/* User Profile */}
         <div className={cn("flex items-center gap-3 pt-3 border-t border-border/50", collapsed && "justify-center")}>
           <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-            <span className="text-sm font-medium text-muted-foreground">L</span>
+            <span className="text-sm font-medium text-muted-foreground">{profileInitial}</span>
           </div>
           {!collapsed && <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium truncate text-white">lilianmartinez357</p>
-              <p className="text-xs text-muted-foreground">W-123AB</p>
+              <p className="text-sm font-medium truncate text-white">{profile.fullName}</p>
+              <p className="text-xs text-muted-foreground">{profile.licensePlate}</p>
             </div>}
         </div>
       </div>
