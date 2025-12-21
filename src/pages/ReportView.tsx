@@ -467,12 +467,6 @@ export default function ReportView() {
             <span className="sm:hidden">{t("reportView.backShort")}</span>
           </Button>
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-            {!savedReport && (
-              <Button size="sm" onClick={handleSave} disabled={!canSave}>
-                <Save className="w-4 h-4 sm:mr-2" />
-                <span className="hidden sm:inline">{t("reportView.saveReport")}</span>
-              </Button>
-            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -609,6 +603,15 @@ export default function ReportView() {
                 </tfoot>
               </table>
             </div>
+
+            {!savedReport && (
+              <div className="flex justify-end mt-4 print:hidden">
+                <Button onClick={handleSave} disabled={!canSave}>
+                  <Save className="w-4 h-4 mr-2" />
+                  {t("reportView.saveReport")}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -60,6 +60,29 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
+## Google Maps (Trips map)
+
+The trip detail modal uses Google Maps to render the route on an interactive map.
+
+### Environment variables
+
+Create a `.env.local` (ignored by git) with:
+
+```sh
+# Client (will be visible in the browser; restrict by HTTP referrer + limit APIs to "Maps JavaScript API")
+VITE_GOOGLE_MAPS_BROWSER_KEY=...
+
+# Server-only (keep secret; used by /api/google/* proxies for Directions/Geocoding/Places)
+GOOGLE_MAPS_SERVER_KEY=...
+```
+
+### Security note
+
+For interactive maps, the **Maps JavaScript API key must be sent to the browser**. The recommended approach is:
+
+- Use a **browser-restricted key** for `VITE_GOOGLE_MAPS_BROWSER_KEY` (HTTP referrer restrictions + only "Maps JavaScript API").
+- Use a **server key** for `GOOGLE_MAPS_SERVER_KEY` and call Directions/Geocoding/Places via the serverless proxies (`/api/google/*`).
+
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.

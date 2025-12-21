@@ -1,15 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { MapPin, FileText, Paperclip, CircleDot } from "lucide-react";
-import mapboxgl from "mapbox-gl";
-import "mapbox-gl/dist/mapbox-gl.css";
 import { useI18n } from "@/hooks/use-i18n";
 import { tf } from "@/lib/i18n";
+import { TripGoogleMap } from "@/components/trips/TripGoogleMap";
 
 interface Trip {
   id: string;
@@ -31,78 +29,19 @@ interface TripDetailModalProps {
 }
 
 export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalProps) {
-  const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<mapboxgl.Map | null>(null);
-  const [mapboxToken, setMapboxToken] = useState("");
-  const [tokenSubmitted, setTokenSubmitted] = useState(false);
   const { t, locale, language } = useI18n();
-
-  useEffect(() => {
-    const storedToken = localStorage.getItem("mapbox_token");
-    if (storedToken) {
-      setMapboxToken(storedToken);
-      setTokenSubmitted(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!mapContainer.current || !tokenSubmitted || !mapboxToken || !open) return;
-
-    mapboxgl.accessToken = mapboxToken;
-
-    try {
-      map.current = new mapboxgl.Map({
-        container: mapContainer.current,
-        style: "mapbox://styles/mapbox/dark-v11",
-        center: [16.3738, 48.2082],
-        zoom: 10,
-      });
-
-      map.current.addControl(new mapboxgl.NavigationControl(), "bottom-right");
-
-      if (trip) {
-        const mockCoordinates = [
-          [16.3738, 48.2082],
-          [16.3256, 48.3053],
-          [16.3189, 48.2886],
-          [16.3738, 48.2082],
-        ];
-
-        trip.route.forEach((stop, index) => {
-          if (index < mockCoordinates.length) {
-            new mapboxgl.Marker({
-              color: index === 0 || index === trip.route.length - 1 ? "#ef4444" : "#3b82f6",
-            })
-              .setLngLat(mockCoordinates[index] as [number, number])
-              .setPopup(new mapboxgl.Popup().setHTML(`<p class="text-sm font-medium">${stop}</p>`))
-              .addTo(map.current!);
-          }
-        });
-      }
-    } catch (error) {
-      console.error("Error initializing map:", error);
-      setTokenSubmitted(false);
-    }
-
-    return () => {
-      map.current?.remove();
-    };
-  }, [tokenSubmitted, mapboxToken, open, trip]);
-
-  const handleTokenSubmit = () => {
-    if (mapboxToken.trim()) {
-      localStorage.setItem("mapbox_token", mapboxToken);
-      setTokenSubmitted(true);
-    }
-  };
 
   if (!trip) return null;
 
-  const formattedDate = new Date(trip.date).toLocaleDateString(locale, {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
+  const formattedDate = useMemo(
+    () =>
+      new Date(trip.date).toLocaleDateString(locale, {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }),
+    [trip.date, locale],
+  );
 
   const documentedTotal = 0;
   const documentedTotalLabel = `${documentedTotal.toLocaleString(locale, {
@@ -192,33 +131,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
             <Tabs defaultValue="map" className="flex-1 flex flex-col">
               <div className="flex-1 relative">
                 <TabsContent value="map" className="absolute inset-0 m-0">
-                  {!tokenSubmitted ? (
-                    <div className="flex flex-col items-center justify-center h-full p-8 space-y-4 bg-secondary/20">
-                      <MapPin className="w-12 h-12 text-muted-foreground" />
-                      <div className="text-center space-y-2">
-                        <h3 className="font-semibold">{t("tripDetail.mapSetupTitle")}</h3>
-                        <p className="text-sm text-muted-foreground max-w-sm">
-                          {t("tripDetail.mapSetupBody")}{" "}
-                          <a
-                            href="https://mapbox.com"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary underline"
-                          >
-                            mapbox.com
-                          </a>
-                        </p>
-                      </div>
-                      <div className="w-full max-w-sm space-y-2">
-                        <Input placeholder="pk.eyJ1Ijoi..." value={mapboxToken} onChange={(e) => setMapboxToken(e.target.value)} />
-                        <Button onClick={handleTokenSubmit} className="w-full">
-                          {t("tripDetail.saveToken")}
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div ref={mapContainer} className="w-full h-full" />
-                  )}
+                  <TripGoogleMap route={trip.route} open={open} />
                 </TabsContent>
 
                 <TabsContent value="document" className="absolute inset-0 m-0 flex items-center justify-center bg-secondary/20">
@@ -252,4 +165,3 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
     </Dialog>
   );
 }
-
