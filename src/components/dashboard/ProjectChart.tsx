@@ -1,15 +1,17 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { getProjectsForDashboard } from "@/lib/projects";
+import { useI18n } from "@/hooks/use-i18n";
 
 export function ProjectChart() {
   const { projects } = useProjects();
   const dashboardProjects = getProjectsForDashboard(projects);
   const data = dashboardProjects.map((p) => ({ name: p.name, km: p.totalKm }));
+  const { t } = useI18n();
 
   return (
     <div className="glass-card p-5 animate-fade-in animation-delay-300">
-      <h2 className="font-semibold text-lg mb-4 text-foreground">Kilometers by Project</h2>
+      <h2 className="font-semibold text-lg mb-4 text-foreground">{t("chart.kmByProject")}</h2>
       
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
@@ -39,7 +41,7 @@ export function ProjectChart() {
               labelStyle={{
                 color: "hsl(var(--foreground))"
               }} 
-              formatter={(value: number) => [`${value} km`, "Distance"]}
+              formatter={(value: number) => [`${value} km`, t("chart.distance")]}
               cursor={false}
             />
             <Bar 

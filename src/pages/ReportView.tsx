@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTrips } from "@/contexts/TripsContext";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { useUserProfile } from "@/contexts/UserProfileContext";
+import { useI18n } from "@/hooks/use-i18n";
 
 interface ReportTrip {
   date: string;
@@ -86,6 +87,7 @@ export default function ReportView() {
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { profile } = useUserProfile();
+  const { t, tf, locale } = useI18n();
   const { trips: allTrips } = useTrips();
   const { projects } = useProjects();
   
@@ -93,9 +95,20 @@ export default function ReportView() {
   const driver = searchParams.get("driver") || profile.fullName;
   const address = searchParams.get("address") || [profile.baseAddress, profile.city].filter(Boolean).join(", ");
   const licensePlate = searchParams.get("licensePlate") || profile.licensePlate;
-  const projectFilter = searchParams.get("project") || "Todos los proyectos";
+  const rawProjectParam = searchParams.get("project") ?? "all";
   const selectedMonth = searchParams.get("month") || "";
   const selectedYear = searchParams.get("year") || "";
+
+  const normalizeProjectParam = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return "all";
+    const lower = trimmed.toLowerCase();
+    if (trimmed === "all" || lower === "todos los proyectos" || lower === "all projects" || lower === "alle projekte") return "all";
+    return trimmed;
+  };
+
+  const projectFilter = normalizeProjectParam(rawProjectParam);
+  const projectLabel = projectFilter === "all" ? t("reports.allProjects") : projectFilter;
 
   const getTripTime = (date: string) => {
     const time = Date.parse(date);
@@ -112,7 +125,7 @@ export default function ReportView() {
       const d = new Date(time);
       const matchesPeriod =
         monthIndex == null || yearValue == null ? true : d.getFullYear() === yearValue && d.getMonth() === monthIndex;
-      const matchesProject = projectFilter === "Todos los proyectos" || t.project === projectFilter;
+      const matchesProject = projectFilter === "all" || t.project === projectFilter;
       return matchesPeriod && matchesProject;
     })
     .sort((a, b) => getTripTime(a.date) - getTripTime(b.date) || a.id.localeCompare(b.id));
@@ -120,7 +133,7 @@ export default function ReportView() {
   const reportTrips: ReportTrip[] = filteredTrips.map((trip) => {
     const time = getTripTime(trip.date);
     const dateLabel = time
-      ? new Date(time).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" })
+      ? new Date(time).toLocaleDateString(locale, { day: "2-digit", month: "2-digit", year: "numeric" })
       : trip.date;
     const producer = projects.find((p) => p.name === trip.project)?.producer ?? "";
 
@@ -164,9 +177,16 @@ export default function ReportView() {
       .replace(/^_+|_+$/g, "")
       .slice(0, 80);
 
-  const fileBase = `reporte_${sanitizeFilePart(period)}_${sanitizeFilePart(projectFilter)}`;
+  const fileBase = `${t("reportView.filePrefix")}_${sanitizeFilePart(period)}_${sanitizeFilePart(projectLabel)}`;
 
-  const headers = ["Fecha", "Proyecto", "Empresa/Productor", "Ruta", "Pasajeros", "Distancia (km)"];
+  const headers = [
+    t("reportView.colDate"),
+    t("reportView.colProject"),
+    t("reportView.colCompanyProducer"),
+    t("reportView.colRoute"),
+    t("reportView.colPassengers"),
+    t("reportView.colDistanceKm"),
+  ];
   const rows = trips.map((trip) => [
     trip.date,
     trip.project,
@@ -183,8 +203,8 @@ export default function ReportView() {
       csv: "CSV",
     };
     toast({
-      title: `Exportando a ${formatNames[format]}`,
-      description: "El archivo se descargará en breve.",
+      title: tf("reportView.toastExportingTitle", { format: formatNames[format] }),
+      description: t("reportView.toastExportingBody"),
     });
 
     (async () => {
@@ -199,7 +219,7 @@ export default function ReportView() {
           const XLSX = await import("xlsx");
           const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
           const wb = XLSX.utils.book_new();
-          XLSX.utils.book_append_sheet(wb, ws, "Informe");
+          XLSX.utils.book_append_sheet(wb, ws, t("reportView.sheetName"));
           XLSX.writeFile(wb, `${fileBase}.xlsx`, { compression: true });
           return;
         }
@@ -238,22 +258,22 @@ export default function ReportView() {
         doc.setTextColor(0, 0, 0);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(16);
-        doc.text("Registro de viajes / Fahrtenbuch", pageWidth / 2, 44, { align: "center" });
+        doc.text(t("reportView.reportTitle"), pageWidth / 2, 44, { align: "center" });
 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(11);
-        doc.text(`Período: ${period}`, pageWidth / 2, 64, { align: "center" });
+        doc.text(`${t("reportView.periodLabel")}: ${period}`, pageWidth / 2, 64, { align: "center" });
 
         const leftX = margin;
         const rightEdge = pageWidth - margin;
         const metaY1 = 86;
         const metaY2 = 104;
 
-        drawLabelValueLeft(leftX, metaY1, "Conductor", driver);
-        drawLabelValueLeft(leftX, metaY2, "Dirección", address);
+        drawLabelValueLeft(leftX, metaY1, t("reportView.driverLabel"), driver);
+        drawLabelValueLeft(leftX, metaY2, t("reportView.addressLabel"), address);
 
-        drawLabelValueRight(rightEdge, metaY1, "Matrícula(s)", licensePlate);
-        drawLabelValueRight(rightEdge, metaY2, "Proyecto", projectFilter);
+        drawLabelValueRight(rightEdge, metaY1, t("reportView.licensePlateLabel"), licensePlate);
+        drawLabelValueRight(rightEdge, metaY2, t("reportView.projectLabel"), projectLabel);
 
         doc.setDrawColor(0, 0, 0);
         doc.setLineWidth(0.5);
@@ -264,7 +284,7 @@ export default function ReportView() {
           body: rows.map((r) => [r[0], r[1], r[2], r[3], String(r[4] ?? ""), String(r[5] ?? "")]),
           foot: [
             [
-              { content: "Total de kilómetros recorridos:", colSpan: 5, styles: { halign: "right", fontStyle: "bold" } },
+              { content: `${t("reportView.totalDistanceLabel")}:`, colSpan: 5, styles: { halign: "right", fontStyle: "bold" } },
               { content: `${totalDistance.toFixed(1)} km`, styles: { halign: "right", fontStyle: "bold" } },
             ],
           ],
@@ -287,13 +307,13 @@ export default function ReportView() {
         doc.save(`${fileBase}.pdf`);
 
         toast({
-          title: "PDF descargado",
-          description: "El archivo se ha descargado correctamente.",
+          title: t("reportView.toastPdfDownloadedTitle"),
+          description: t("reportView.toastPdfDownloadedBody"),
         });
       } catch {
         toast({
-          title: "Error al exportar",
-          description: "No se pudo generar el archivo. Inténtalo de nuevo.",
+          title: t("reportView.toastExportErrorTitle"),
+          description: t("reportView.toastExportErrorBody"),
           variant: "destructive",
         });
       }
@@ -307,35 +327,35 @@ export default function ReportView() {
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <Button variant="ghost" onClick={() => navigate("/reports")} className="px-2 sm:px-4">
             <ArrowLeft className="w-4 h-4 mr-2" />
-            <span className="hidden sm:inline">Volver a informes</span>
-            <span className="sm:hidden">Volver</span>
+            <span className="hidden sm:inline">{t("reportView.backToReports")}</span>
+            <span className="sm:hidden">{t("reportView.backShort")}</span>
           </Button>
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm">
                   <Download className="w-4 h-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Exportar</span>
+                  <span className="hidden sm:inline">{t("reportView.export")}</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-popover">
                 <DropdownMenuItem onClick={() => handleExport("excel")}>
                   <FileSpreadsheet className="w-4 h-4 mr-2" />
-                  Excel (.xlsx)
+                  {t("reportView.exportExcel")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleExport("pdf")}>
                   <FileText className="w-4 h-4 mr-2" />
-                  PDF
+                  {t("reportView.exportPdf")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleExport("csv")}>
                   <FileDown className="w-4 h-4 mr-2" />
-                  CSV
+                  {t("reportView.exportCsv")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             <Button variant="outline" size="sm" onClick={() => window.print()}>
               <Printer className="w-4 h-4 sm:mr-2" />
-              <span className="hidden sm:inline">Imprimir</span>
+              <span className="hidden sm:inline">{t("reportView.print")}</span>
             </Button>
           </div>
         </div>
@@ -347,19 +367,29 @@ export default function ReportView() {
           <div className="bg-slate-800 text-white rounded-lg p-4 sm:p-6 lg:p-8 print:bg-white print:text-black print:rounded-none print:p-8">
             {/* Report Header */}
             <div className="text-center mb-6">
-              <h1 className="text-lg sm:text-xl font-bold mb-1">Registro de viajes / Fahrtenbuch</h1>
-              <p className="text-xs sm:text-sm text-slate-300 print:text-black">Período: {period}</p>
+              <h1 className="text-lg sm:text-xl font-bold mb-1">{t("reportView.reportTitle")}</h1>
+              <p className="text-xs sm:text-sm text-slate-300 print:text-black">
+                {t("reportView.periodLabel")}: {period}
+              </p>
             </div>
 
             {/* Report Meta Info */}
             <div className="flex flex-col sm:flex-row sm:justify-between gap-3 mb-6 text-xs sm:text-sm">
               <div>
-                <p><span className="font-semibold">Conductor:</span> {driver}</p>
-                <p><span className="font-semibold">Dirección:</span> {address}</p>
+                <p>
+                  <span className="font-semibold">{t("reportView.driverLabel")}:</span> {driver}
+                </p>
+                <p>
+                  <span className="font-semibold">{t("reportView.addressLabel")}:</span> {address}
+                </p>
               </div>
               <div className="sm:text-right">
-                <p><span className="font-semibold">Matrícula(s):</span> {licensePlate}</p>
-                <p><span className="font-semibold">Proyecto:</span> {projectFilter}</p>
+                <p>
+                  <span className="font-semibold">{t("reportView.licensePlateLabel")}:</span> {licensePlate}
+                </p>
+                <p>
+                  <span className="font-semibold">{t("reportView.projectLabel")}:</span> {projectLabel}
+                </p>
               </div>
             </div>
 
@@ -370,12 +400,16 @@ export default function ReportView() {
               <table className="w-full text-xs sm:text-sm min-w-[600px] print:min-w-0 print:text-[11px]">
                 <thead>
                   <tr className="border-b border-slate-600 print:border-black">
-                    <th className="text-left py-3 px-2 font-semibold whitespace-nowrap">Fecha</th>
-                    <th className="text-left py-3 px-2 font-semibold whitespace-nowrap">Proyecto</th>
-                    <th className="text-left py-3 px-2 font-semibold whitespace-nowrap hidden md:table-cell">Empresa/Productor</th>
-                    <th className="text-left py-3 px-2 font-semibold whitespace-nowrap">Ruta</th>
-                    <th className="text-center py-3 px-2 font-semibold whitespace-nowrap hidden sm:table-cell">Pasajeros</th>
-                    <th className="text-right py-3 px-2 font-semibold whitespace-nowrap">Distancia</th>
+                    <th className="text-left py-3 px-2 font-semibold whitespace-nowrap">{t("reportView.colDate")}</th>
+                    <th className="text-left py-3 px-2 font-semibold whitespace-nowrap">{t("reportView.colProject")}</th>
+                    <th className="text-left py-3 px-2 font-semibold whitespace-nowrap hidden md:table-cell">
+                      {t("reportView.colCompanyProducer")}
+                    </th>
+                    <th className="text-left py-3 px-2 font-semibold whitespace-nowrap">{t("reportView.colRoute")}</th>
+                    <th className="text-center py-3 px-2 font-semibold whitespace-nowrap hidden sm:table-cell">
+                      {t("reportView.colPassengers")}
+                    </th>
+                    <th className="text-right py-3 px-2 font-semibold whitespace-nowrap">{t("reportView.colDistance")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -405,10 +439,10 @@ export default function ReportView() {
                 <tfoot>
                   <tr className="border-t-2 border-slate-500 print:border-black">
                     <td colSpan={5} className="py-4 px-2 text-right font-semibold hidden sm:table-cell">
-                      Total de kilómetros recorridos:
+                      {t("reportView.totalDistanceLabel")}:
                     </td>
                     <td className="py-4 px-2 text-left font-semibold sm:hidden" colSpan={3}>
-                      Total:
+                      {t("reportView.totalShort")}:
                     </td>
                     <td className="py-4 px-2 text-right font-bold text-base sm:text-lg whitespace-nowrap">
                       {totalDistance.toFixed(1)} km

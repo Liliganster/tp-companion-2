@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { MapPin, ArrowRight, Calendar, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/hooks/use-i18n";
 
 interface Trip {
   id: string;
@@ -50,13 +51,14 @@ const mockTrips: Trip[] = [
 ];
 
 export function RecentTrips() {
+  const { t, locale } = useI18n();
   return (
     <div className="glass-card p-5 animate-fade-in animation-delay-200">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="font-semibold text-lg">Recent Trips</h2>
+        <h2 className="font-semibold text-lg">{t("dashboard.recentTrips")}</h2>
         <Button variant="ghost" size="sm" asChild>
           <Link to="/trips" className="flex items-center gap-1">
-            View all
+            {t("dashboard.viewAll")}
             <ArrowRight className="w-4 h-4" />
           </Link>
         </Button>
@@ -73,7 +75,7 @@ export function RecentTrips() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1.5">
                   <Calendar className="w-3.5 h-3.5" />
-                  <span>{new Date(trip.date).toLocaleDateString("de-DE")}</span>
+                  <span>{new Date(trip.date).toLocaleDateString(locale)}</span>
                   <span className="text-xs px-1.5 py-0.5 rounded bg-primary/20 text-primary">
                     {trip.project}
                   </span>

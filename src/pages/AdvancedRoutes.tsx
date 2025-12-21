@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/hooks/use-i18n";
 
 interface RouteTemplate {
   id: string;
@@ -33,16 +34,9 @@ interface RouteTemplate {
   uses: number;
 }
 
-const categories = [
-  { id: "all", label: "Todas las categorías" },
-  { id: "business", label: "Negocios" },
-  { id: "commute", label: "Conmutación" },
-  { id: "client", label: "Cliente" },
-  { id: "other", label: "Otro" },
-];
-
 export default function AdvancedRoutes() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [templates, setTemplates] = useState<RouteTemplate[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -68,7 +62,15 @@ export default function AdvancedRoutes() {
 
   const mostUsed = templates.length > 0
     ? templates.reduce((max, t) => t.uses > max.uses ? t : max, templates[0])?.name
-    : "Ninguna";
+    : t("advancedRoutes.none");
+
+  const categories = [
+    { id: "all", label: t("advancedRoutes.categoryAll") },
+    { id: "business", label: t("advancedRoutes.categoryBusiness") },
+    { id: "commute", label: t("advancedRoutes.categoryCommute") },
+    { id: "client", label: t("advancedRoutes.categoryClient") },
+    { id: "other", label: t("advancedRoutes.categoryOther") },
+  ];
 
   const handleCreateTemplate = () => {
     const newTemplate: RouteTemplate = {
@@ -99,30 +101,30 @@ export default function AdvancedRoutes() {
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold">Plantillas de rutas</h1>
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold">{t("advancedRoutes.pageTitle")}</h1>
               <p className="text-muted-foreground mt-1 text-sm sm:text-base">
-                Guarda rutas frecuentes como plantillas reutilizables.
+                {t("advancedRoutes.pageSubtitle")}
               </p>
             </div>
           </div>
           <Button variant="add" onClick={() => setCreateModalOpen(true)} className="shrink-0">
             <Plus className="w-4 h-4 mr-2" />
-            Crear plantilla
+            {t("advancedRoutes.createTemplate")}
           </Button>
         </div>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-fade-in animation-delay-100">
           <div className="glass-card p-5">
-            <p className="text-xs uppercase text-muted-foreground tracking-wider mb-2">Total de plantillas</p>
+            <p className="text-xs uppercase text-muted-foreground tracking-wider mb-2">{t("advancedRoutes.statTotalTemplates")}</p>
             <p className="text-2xl sm:text-3xl font-bold">{templates.length}</p>
           </div>
           <div className="glass-card p-5">
-            <p className="text-xs uppercase text-muted-foreground tracking-wider mb-2">Distancia promedio</p>
+            <p className="text-xs uppercase text-muted-foreground tracking-wider mb-2">{t("advancedRoutes.statAvgDistance")}</p>
             <p className="text-2xl sm:text-3xl font-bold">{avgDistance.toFixed(1)} km</p>
           </div>
           <div className="glass-card p-5">
-            <p className="text-xs uppercase text-muted-foreground tracking-wider mb-2">Más usada</p>
+            <p className="text-xs uppercase text-muted-foreground tracking-wider mb-2">{t("advancedRoutes.statMostUsed")}</p>
             <p className="text-2xl sm:text-3xl font-bold truncate">{mostUsed}</p>
           </div>
         </div>
@@ -183,16 +185,16 @@ export default function AdvancedRoutes() {
       <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Crear nueva plantilla</DialogTitle>
+            <DialogTitle>{t("advancedRoutes.createTemplateTitle")}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-6 py-4">
             {/* Información básica */}
             <div className="space-y-4">
-              <h3 className="text-sm font-medium">Información básica</h3>
+              <h3 className="text-sm font-medium">{t("advancedRoutes.basicInfo")}</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Nombre de plantilla</Label>
+                  <Label htmlFor="name">{t("advancedRoutes.templateName")}</Label>
                   <Input
                     id="name"
                     value={formData.name}
@@ -201,7 +203,7 @@ export default function AdvancedRoutes() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="category">Categoría</Label>
+                  <Label htmlFor="category">{t("advancedRoutes.category")}</Label>
                   <Select
                     value={formData.category}
                     onValueChange={(value) => setFormData({ ...formData, category: value })}
@@ -210,10 +212,10 @@ export default function AdvancedRoutes() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="business">Negocios</SelectItem>
-                      <SelectItem value="commute">Conmutación</SelectItem>
-                      <SelectItem value="client">Cliente</SelectItem>
-                      <SelectItem value="other">Otro</SelectItem>
+                      <SelectItem value="business">{t("advancedRoutes.categoryBusiness")}</SelectItem>
+                      <SelectItem value="commute">{t("advancedRoutes.categoryCommute")}</SelectItem>
+                      <SelectItem value="client">{t("advancedRoutes.categoryClient")}</SelectItem>
+                      <SelectItem value="other">{t("advancedRoutes.categoryOther")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -222,10 +224,10 @@ export default function AdvancedRoutes() {
 
             {/* Detalles de ruta */}
             <div className="space-y-4">
-              <h3 className="text-sm font-medium">Detalles de ruta</h3>
+              <h3 className="text-sm font-medium">{t("advancedRoutes.routeDetails")}</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="startLocation">Ubicación de inicio</Label>
+                  <Label htmlFor="startLocation">{t("advancedRoutes.startLocation")}</Label>
                   <Input
                     id="startLocation"
                     value={formData.startLocation}
@@ -234,7 +236,7 @@ export default function AdvancedRoutes() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="endLocation">Ubicación de destino</Label>
+                  <Label htmlFor="endLocation">{t("advancedRoutes.endLocation")}</Label>
                   <Input
                     id="endLocation"
                     value={formData.endLocation}
@@ -243,7 +245,7 @@ export default function AdvancedRoutes() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="distance">Distancia (km)</Label>
+                  <Label htmlFor="distance">{t("advancedRoutes.distanceKm")}</Label>
                   <Input
                     id="distance"
                     type="number"
@@ -253,7 +255,7 @@ export default function AdvancedRoutes() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="estimatedTime">Tiempo estimado (min)</Label>
+                  <Label htmlFor="estimatedTime">{t("advancedRoutes.estimatedTimeMin")}</Label>
                   <Input
                     id="estimatedTime"
                     type="number"
@@ -267,12 +269,12 @@ export default function AdvancedRoutes() {
 
             {/* Detalles adicionales */}
             <div className="space-y-4">
-              <h3 className="text-sm font-medium">Detalles adicionales</h3>
+              <h3 className="text-sm font-medium">{t("advancedRoutes.additionalDetails")}</h3>
               <div className="space-y-2">
-                <Label htmlFor="description">Descripción</Label>
+                <Label htmlFor="description">{t("advancedRoutes.description")}</Label>
                 <Textarea
                   id="description"
-                  placeholder="Ingresa una descripción"
+                  placeholder={t("advancedRoutes.descriptionPlaceholder")}
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="bg-secondary/50 resize-none min-h-[100px]"
@@ -283,11 +285,11 @@ export default function AdvancedRoutes() {
 
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
             <Button variant="outline" onClick={() => setCreateModalOpen(false)}>
-              Cancelar
+              {t("advancedRoutes.cancel")}
             </Button>
             <Button variant="add" onClick={handleCreateTemplate}>
               <Plus className="w-4 h-4 mr-2" />
-              Crear plantilla
+              {t("advancedRoutes.createTemplate")}
             </Button>
           </div>
         </DialogContent>

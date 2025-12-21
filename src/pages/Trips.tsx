@@ -3,7 +3,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Filter, Upload, Calendar, MoreVertical, Pencil, Trash2, Map, CalendarPlus, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Filter, Upload, Calendar, MoreVertical, Pencil, Trash2, Map, CalendarPlus, ChevronUp, ChevronDown, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -15,6 +15,8 @@ import { useUserProfile } from "@/contexts/UserProfileContext";
 import { Trip, useTrips } from "@/contexts/TripsContext";
 import { parseLocaleNumber, roundTo } from "@/lib/number";
 import { Badge } from "@/components/ui/badge";
+import { computeTripWarnings } from "@/lib/trip-warnings";
+import { useI18n } from "@/hooks/use-i18n";
 const calculateCO2 = (distance: number) => Math.round(distance * 0.12 * 10) / 10;
 const mockTripsData: Trip[] = [{
   id: "1",
@@ -65,6 +67,7 @@ const mockTripsData: Trip[] = [{
 }];
 export default function Trips() {
   const { profile } = useUserProfile();
+  const { t, tf, locale } = useI18n();
   const [selectedProject, setSelectedProject] = useState("all");
   const [selectedYear, setSelectedYear] = useState("2024");
   const { trips, setTrips } = useTrips();
@@ -90,8 +93,11 @@ export default function Trips() {
   };
   const handleAddToCalendar = (trip: Trip) => {
     toast({
-      title: "Added to calendar",
-      description: `Trip to ${trip.route[trip.route.length - 1]} on ${new Date(trip.date).toLocaleDateString("de-DE")} added to calendar.`
+      title: t("trips.toastAddedToCalendarTitle"),
+      description: tf("trips.toastAddedToCalendarBody", {
+        destination: trip.route[trip.route.length - 1],
+        date: new Date(trip.date).toLocaleDateString(locale),
+      }),
     });
   };
 
@@ -159,6 +165,8 @@ export default function Trips() {
     return matchesProject;
   });
 
+  const tripWarnings = computeTripWarnings(trips);
+ 
   const visibleTrips = [...filteredTrips].sort((a, b) => {
     const diff = getTripTime(a) - getTripTime(b);
     if (diff !== 0) return dateSort === "asc" ? diff : -diff;
@@ -183,8 +191,8 @@ export default function Trips() {
   const handleDeleteSelected = () => {
     setTrips(prev => prev.filter(t => !selectedIds.has(t.id)));
     toast({
-      title: "Trips deleted",
-      description: `${selectedIds.size} trip(s) have been deleted.`
+      title: t("trips.toastTripsDeletedTitle"),
+      description: tf("trips.toastTripsDeletedBody", { count: selectedIds.size }),
     });
     setSelectedIds(new Set());
   };
@@ -196,24 +204,24 @@ export default function Trips() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold">
-              Trips
+              {t("trips.title")}
             </h1>
             <p className="text-muted-foreground mt-1">
-              Manage and track all your business trips
+              {t("trips.subtitle")}
             </p>
           </div>
           <div className="flex items-center gap-2">
             {isSomeSelected && <Button variant="destructive" onClick={handleDeleteSelected}>
                 <Trash2 className="w-4 h-4" />
-                <span className="hidden sm:inline">Delete ({selectedIds.size})</span>
+                <span className="hidden sm:inline">{t("trips.delete")} ({selectedIds.size})</span>
               </Button>}
             <BulkUploadModal trigger={<Button variant="upload">
                   <Upload className="w-4 h-4" />
-                  <span className="hidden sm:inline">Bulk Upload</span>
+                  <span className="hidden sm:inline">{t("trips.bulkUpload")}</span>
                 </Button>} />
             <AddTripModal trigger={<Button>
                   <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">Add Trip</span>
+                  <span className="hidden sm:inline">{t("trips.addTrip")}</span>
                 </Button>} onSave={handleSaveTrip} previousDestination={addPreviousDestination} />
           </div>
         </div>
@@ -224,10 +232,10 @@ export default function Trips() {
             <Select value={selectedProject} onValueChange={setSelectedProject}>
               <SelectTrigger className="w-full sm:w-48 bg-secondary/50">
                 <Filter className="w-4 h-4 mr-2" />
-                <SelectValue placeholder="Project" />
+                <SelectValue placeholder={t("trips.project")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Projects</SelectItem>
+                <SelectItem value="all">{t("trips.allProjects")}</SelectItem>
                 <SelectItem value="Film Production XY">Film Production XY</SelectItem>
                 <SelectItem value="Client ABC">Client ABC</SelectItem>
                 <SelectItem value="Internal">Internal</SelectItem>
@@ -236,7 +244,7 @@ export default function Trips() {
             <Select value={selectedYear} onValueChange={setSelectedYear}>
               <SelectTrigger className="w-full sm:w-32 bg-secondary/50">
                 <Calendar className="w-4 h-4 mr-2" />
-                <SelectValue placeholder="Year" />
+                <SelectValue placeholder={t("trips.year")} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="2024">2024</SelectItem>
@@ -253,17 +261,28 @@ export default function Trips() {
         }}>
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0">
-                  <Checkbox checked={selectedIds.has(trip.id)} onCheckedChange={() => toggleSelect(trip.id)} aria-label={`Select trip ${trip.id}`} className="mt-0.5 shrink-0" />
+                  <Checkbox
+                    checked={selectedIds.has(trip.id)}
+                    onCheckedChange={() => toggleSelect(trip.id)}
+                    aria-label={tf("trips.selectTrip", { id: trip.id })}
+                    className="mt-0.5 shrink-0"
+                  />
                   <div className="flex-1 min-w-0 overflow-hidden">
                     {/* Date and Project */}
                     <div className="flex flex-col xs:flex-row xs:items-center gap-1 xs:gap-2 mb-2">
                       <span className="text-sm sm:text-base font-medium shrink-0">
-                        {new Date(trip.date).toLocaleDateString("de-DE", {
+                        {new Date(trip.date).toLocaleDateString(locale, {
                       day: "2-digit",
                       month: "2-digit",
                       year: "numeric"
                     })}
                       </span>
+                      {(tripWarnings.byId[trip.id]?.length ?? 0) > 0 && (
+                        <AlertTriangle
+                          className="h-4 w-4 shrink-0 text-warning"
+                          title={(tripWarnings.byId[trip.id] ?? []).map((w) => w.title).join("\n")}
+                        />
+                      )}
                       {trip.specialOrigin === "continue" && (
                         <Badge variant="secondary" className="w-fit text-[10px] sm:text-xs">
                           Continuación
@@ -320,22 +339,42 @@ export default function Trips() {
                       <MoreVertical className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-popover">
-                    <DropdownMenuItem onClick={() => handleViewMap(trip)}>
+                  <DropdownMenuContent
+                    align="end"
+                    className="bg-popover"
+                    onClick={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <DropdownMenuItem
+                      onSelect={(e) => {
+                        handleViewMap(trip);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <Map className="w-4 h-4 mr-2" />
-                      View Map
+                      {t("trips.viewMap")}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleAddToCalendar(trip)}>
+                    <DropdownMenuItem
+                      onSelect={(e) => {
+                        handleAddToCalendar(trip);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <CalendarPlus className="w-4 h-4 mr-2" />
-                      Add to Calendar
+                      {t("trips.addToCalendar")}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleEditTrip(trip)}>
+                    <DropdownMenuItem
+                      onSelect={(e) => {
+                        handleEditTrip(trip);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <Pencil className="w-4 h-4 mr-2" />
-                      Edit
+                      {t("trips.edit")}
                     </DropdownMenuItem>
                     <DropdownMenuItem className="text-destructive">
                       <Trash2 className="w-4 h-4 mr-2" />
-                      Delete
+                      {t("trips.delete")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -350,29 +389,31 @@ export default function Trips() {
               <TableHeader>
                 <TableRow className="hover:bg-transparent border-border/50">
                   <TableHead className="w-10">
-                    <Checkbox checked={isAllSelected} onCheckedChange={toggleSelectAll} aria-label="Select all" />
+                    <Checkbox checked={isAllSelected} onCheckedChange={toggleSelectAll} aria-label={t("projects.selectAll")} />
                   </TableHead>
                   <TableHead className="text-foreground font-semibold whitespace-nowrap">
                     <button
                       type="button"
                       onClick={() => setDateSort((prev) => (prev === "asc" ? "desc" : "asc"))}
                       className="inline-flex items-center gap-1 hover:text-foreground"
-                      aria-label={`Sort by date (${dateSort === "asc" ? "ascending" : "descending"})`}
-                      title="Sort by date"
+                      aria-label={tf("trips.sortByDate", {
+                        order: dateSort === "asc" ? t("trips.sortAsc") : t("trips.sortDesc"),
+                      })}
+                      title={t("trips.date")}
                     >
-                      Date
+                      {t("trips.date")}
                       <span className="flex flex-col leading-none">
                         <ChevronUp className={`h-3 w-3 ${dateSort === "asc" ? "text-foreground" : "text-muted-foreground/50"}`} />
                         <ChevronDown className={`-mt-1 h-3 w-3 ${dateSort === "desc" ? "text-foreground" : "text-muted-foreground/50"}`} />
                       </span>
                     </button>
                   </TableHead>
-                  <TableHead className="text-foreground font-semibold whitespace-nowrap">Route</TableHead>
-                  <TableHead className="text-foreground font-semibold whitespace-nowrap">Project</TableHead>
-                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">CO₂</TableHead>
-                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden lg:table-cell">Passengers</TableHead>
-                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">Reimbursement</TableHead>
-                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">Distance</TableHead>
+                  <TableHead className="text-foreground font-semibold whitespace-nowrap">{t("trips.route")}</TableHead>
+                  <TableHead className="text-foreground font-semibold whitespace-nowrap">{t("trips.project")}</TableHead>
+                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.co2")}</TableHead>
+                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("trips.passengers")}</TableHead>
+                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.reimbursement")}</TableHead>
+                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.distance")}</TableHead>
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -397,19 +438,25 @@ export default function Trips() {
                       <Checkbox
                         checked={selectedIds.has(trip.id)}
                         onCheckedChange={() => toggleSelect(trip.id)}
-                        aria-label={`Select trip ${trip.id}`}
+                        aria-label={tf("trips.selectTrip", { id: trip.id })}
                         onClick={(e) => e.stopPropagation()}
                       />
                     </TableCell>
                     <TableCell className="font-medium whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <span>
-                          {new Date(trip.date).toLocaleDateString("de-DE", {
+                          {new Date(trip.date).toLocaleDateString(locale, {
                         day: "2-digit",
                         month: "2-digit",
                         year: "numeric"
                       })}
                         </span>
+                        {(tripWarnings.byId[trip.id]?.length ?? 0) > 0 && (
+                          <AlertTriangle
+                            className="h-4 w-4 shrink-0 text-warning"
+                            title={(tripWarnings.byId[trip.id] ?? []).map((w) => w.title).join("\n")}
+                          />
+                        )}
                         {trip.specialOrigin === "continue" && <Badge variant="secondary">Continuación</Badge>}
                         {trip.specialOrigin === "return" && <Badge variant="secondary">Fin continuación</Badge>}
                       </div>
@@ -445,22 +492,42 @@ export default function Trips() {
                             <MoreVertical className="w-4 h-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="bg-popover">
-                          <DropdownMenuItem onClick={() => handleViewMap(trip)}>
+                        <DropdownMenuContent
+                          align="end"
+                          className="bg-popover"
+                          onClick={(e) => e.stopPropagation()}
+                          onPointerDown={(e) => e.stopPropagation()}
+                        >
+                          <DropdownMenuItem
+                            onSelect={(e) => {
+                              handleViewMap(trip);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <Map className="w-4 h-4 mr-2" />
-                            View Map
+                            {t("trips.viewMap")}
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleAddToCalendar(trip)}>
+                          <DropdownMenuItem
+                            onSelect={(e) => {
+                              handleAddToCalendar(trip);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <CalendarPlus className="w-4 h-4 mr-2" />
-                            Add to Calendar
+                            {t("trips.addToCalendar")}
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleEditTrip(trip)}>
+                          <DropdownMenuItem
+                            onSelect={(e) => {
+                              handleEditTrip(trip);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <Pencil className="w-4 h-4 mr-2" />
-                            Edit
+                            {t("trips.edit")}
                           </DropdownMenuItem>
                           <DropdownMenuItem className="text-destructive">
                             <Trash2 className="w-4 h-4 mr-2" />
-                            Delete
+                            {t("trips.delete")}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -475,10 +542,10 @@ export default function Trips() {
         <div className="glass-card p-4 animate-fade-in">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">
-              Showing {visibleTrips.length} trips
+              {tf("trips.showing", { count: visibleTrips.length })}
             </span>
             <span className="font-medium">
-              Total: {visibleTrips.reduce((acc, trip) => acc + trip.distance, 0).toLocaleString()} km
+              {tf("trips.total", { km: visibleTrips.reduce((acc, trip) => acc + trip.distance, 0).toLocaleString(locale) })}
             </span>
           </div>
         </div>

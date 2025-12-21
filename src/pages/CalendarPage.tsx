@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -12,6 +12,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/hooks/use-i18n";
 
 interface CalendarEvent {
   id: string;
@@ -36,6 +37,7 @@ const calendars = [
 ];
 
 export default function CalendarPage() {
+  const { t, tf, locale } = useI18n();
   const [currentDate, setCurrentDate] = useState(new Date(2024, 0, 1));
   const [isConnected] = useState(false);
 
@@ -56,10 +58,11 @@ export default function CalendarPage() {
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const emptyDays = Array.from({ length: adjustedFirstDay }, (_, i) => i);
 
-  const monthNames = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
+  const weekdayLabels = useMemo(() => t("calendar.weekdays").split(","), [t]);
+  const monthLabel = useMemo(() => {
+    const raw = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).toLocaleString(locale, { month: "long" });
+    return raw ? raw[0].toUpperCase() + raw.slice(1) : raw;
+  }, [currentDate, locale]);
 
   const getEventsForDay = (day: number) => {
     const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -73,21 +76,21 @@ export default function CalendarPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold">
-              Calendar
+              {t("calendar.title")}
             </h1>
             <p className="text-muted-foreground mt-1">
-              Sync events from Google Calendar
+              {t("calendar.subtitle")}
             </p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline">
               <RefreshCw className="w-4 h-4" />
-              Refresh
+              {t("calendar.refresh")}
             </Button>
             {!isConnected && (
               <Button variant="add">
                 <ExternalLink className="w-4 h-4" />
-                Connect Google
+                {t("calendar.connectGoogle")}
               </Button>
             )}
           </div>
@@ -97,7 +100,7 @@ export default function CalendarPage() {
           {/* Calendars sidebar */}
           <div className="lg:col-span-1 space-y-4">
             <div className="glass-card p-4 animate-fade-in animation-delay-100">
-              <h2 className="font-semibold mb-3">Calendars</h2>
+              <h2 className="font-semibold mb-3">{t("calendar.calendars")}</h2>
               <div className="space-y-3">
                 {calendars.map((cal) => (
                   <div key={cal.id} className="flex items-center justify-between">
@@ -113,13 +116,13 @@ export default function CalendarPage() {
 
             {!isConnected && (
               <div className="glass-card p-4 border-warning/30 bg-warning/5 animate-fade-in animation-delay-200">
-                <h3 className="font-medium text-sm mb-2">Not Connected</h3>
+                <h3 className="font-medium text-sm mb-2">{t("calendar.notConnected")}</h3>
                 <p className="text-xs text-muted-foreground mb-3">
-                  Connect your Google Calendar to sync events and create trips from calendar entries.
+                  {t("calendar.notConnectedBody")}
                 </p>
                 <Button size="sm" variant="outline" className="w-full">
                   <ExternalLink className="w-3.5 h-3.5" />
-                  Connect
+                  {t("calendar.connect")}
                 </Button>
               </div>
             )}
@@ -141,7 +144,7 @@ export default function CalendarPage() {
                 <ChevronLeft className="w-5 h-5" />
               </Button>
               <h2 className="text-xl font-semibold">
-                {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+                {monthLabel} {currentDate.getFullYear()}
               </h2>
               <Button
                 variant="ghost"
@@ -158,7 +161,7 @@ export default function CalendarPage() {
 
             {/* Weekday headers */}
             <div className="grid grid-cols-7 gap-1 mb-2">
-              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+              {weekdayLabels.map((day) => (
                 <div
                   key={day}
                   className="text-center text-xs font-medium text-muted-foreground py-2"
@@ -211,7 +214,7 @@ export default function CalendarPage() {
                         ))}
                         {events.length > 2 && (
                           <div className="text-[10px] text-muted-foreground">
-                            +{events.length - 2} more
+                            {tf("calendar.more", { count: events.length - 2 })}
                           </div>
                         )}
                       </div>

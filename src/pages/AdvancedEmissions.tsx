@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/hooks/use-i18n";
 
 // Mock data for results
 const mockResults = [
@@ -48,6 +49,7 @@ const mockResults = [
 
 export default function AdvancedEmissions() {
   const navigate = useNavigate();
+  const { t, tf } = useI18n();
   const [isConfigured, setIsConfigured] = useState(false);
   const [configModalOpen, setConfigModalOpen] = useState(false);
 
@@ -72,16 +74,16 @@ export default function AdvancedEmissions() {
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold">Ranking CO2</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold">{t("advancedEmissions.pageTitle")}</h1>
               <p className="text-muted-foreground mt-1">
-                Evalúa el impacto ambiental de tus viajes y compáralos.
+                {t("advancedEmissions.pageSubtitle")}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <Button className="gap-2 bg-primary hover:bg-primary/90">
               <Download className="w-4 h-4" />
-              Exportar
+              {t("advancedEmissions.export")}
             </Button>
           </div>
         </div>
@@ -93,11 +95,9 @@ export default function AdvancedEmissions() {
             <div className="mb-6">
               <Sprout className="w-20 h-20 text-success" />
             </div>
-            <h2 className="text-xl font-semibold mb-4">Bienvenido al análisis de CO₂</h2>
+            <h2 className="text-xl font-semibold mb-4">{t("advancedEmissions.welcomeTitle")}</h2>
             <p className="text-muted-foreground text-center max-w-lg mb-8">
-              Obtén información sobre el impacto ambiental de tus viajes. Configura tus
-              preferencias de análisis para comenzar a rastrear tu huella de carbono y descubrir
-              oportunidades para viajes más sostenibles.
+              {t("advancedEmissions.welcomeBody")}
             </p>
             <Button
               variant="add"
@@ -105,7 +105,7 @@ export default function AdvancedEmissions() {
               className="gap-2"
             >
               <Settings2 className="w-4 h-4" />
-              Configurar análisis CO₂
+              {t("advancedEmissions.configureButton")}
             </Button>
           </div>
         ) : (
@@ -115,7 +115,7 @@ export default function AdvancedEmissions() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="glass-card p-5">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-muted-foreground">Emisiones totales de CO₂</span>
+                  <span className="text-sm text-muted-foreground">{t("advancedEmissions.totalEmissions")}</span>
                   <Flame className="w-5 h-5 text-destructive" />
                 </div>
                 <p className="text-2xl font-bold text-destructive">28.6 kg</p>
@@ -123,7 +123,7 @@ export default function AdvancedEmissions() {
 
               <div className="glass-card p-5">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-muted-foreground">Eficiencia promedio</span>
+                  <span className="text-sm text-muted-foreground">{t("advancedEmissions.avgEfficiency")}</span>
                   <Gauge className="w-5 h-5 text-primary" />
                 </div>
                 <p className="text-2xl font-bold text-primary">0.28 kg/km</p>
@@ -131,7 +131,7 @@ export default function AdvancedEmissions() {
 
               <div className="glass-card p-5">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-muted-foreground">Consumo de combustible</span>
+                  <span className="text-sm text-muted-foreground">{t("advancedEmissions.fuelConsumption")}</span>
                   <Fuel className="w-5 h-5 text-cyan-400" />
                 </div>
                 <p className="text-2xl font-bold text-cyan-400">12.5 L</p>
@@ -139,7 +139,7 @@ export default function AdvancedEmissions() {
 
               <div className="glass-card p-5">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-muted-foreground">Árboles necesarios</span>
+                  <span className="text-sm text-muted-foreground">{t("advancedEmissions.treesNeeded")}</span>
                   <TreePine className="w-5 h-5 text-success" />
                 </div>
                 <p className="text-2xl font-bold text-success">2</p>
@@ -149,7 +149,7 @@ export default function AdvancedEmissions() {
             {/* Results List */}
             <div className="space-y-4">
               <h3 className="text-sm font-medium text-muted-foreground">
-                Resultados del ranking CO₂ ({mockResults.length})
+                {tf("advancedEmissions.resultsTitle", { count: mockResults.length })}
               </h3>
 
               {mockResults.map((result) => (
@@ -175,19 +175,19 @@ export default function AdvancedEmissions() {
                       {/* Stats Grid */}
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
                         <div>
-                          <p className="text-xs text-muted-foreground mb-1">CO₂ (kg) (kg)</p>
+                          <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.metricCo2Kg")}</p>
                           <p className="text-lg font-semibold">{result.co2Kg}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground mb-1">Eficiencia (kg/km)</p>
+                          <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.metricEfficiency")}</p>
                           <p className="text-lg font-semibold">{result.efficiency}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground mb-1">Distancia (km)</p>
+                          <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.metricDistance")}</p>
                           <p className="text-lg font-semibold">{result.distanceKm}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground mb-1">Viajes</p>
+                          <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.metricTrips")}</p>
                           <p className="text-lg font-semibold">{result.trips}</p>
                         </div>
                       </div>
@@ -204,9 +204,9 @@ export default function AdvancedEmissions() {
       <Dialog open={configModalOpen} onOpenChange={setConfigModalOpen}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>Configuración de análisis CO₂</DialogTitle>
+            <DialogTitle>{t("advancedEmissions.configTitle")}</DialogTitle>
             <p className="text-sm text-muted-foreground">
-              Configura las preferencias de análisis de emisiones CO₂
+              {t("advancedEmissions.configSubtitle")}
             </p>
           </DialogHeader>
 
@@ -215,15 +215,15 @@ export default function AdvancedEmissions() {
               {/* View Mode */}
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground uppercase tracking-wide">
-                  Modo de vista
+                  {t("advancedEmissions.viewMode")}
                 </Label>
                 <Select value={viewMode} onValueChange={setViewMode}>
                   <SelectTrigger className="bg-secondary/50">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="projects">Solo proyectos</SelectItem>
-                    <SelectItem value="all">Todos los viajes</SelectItem>
+                    <SelectItem value="projects">{t("advancedEmissions.viewModeProjectsOnly")}</SelectItem>
+                    <SelectItem value="all">{t("advancedEmissions.viewModeAllTrips")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -231,20 +231,20 @@ export default function AdvancedEmissions() {
               {/* Sort By */}
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground uppercase tracking-wide">
-                  Ordenar por
+                  {t("advancedEmissions.sortBy")}
                 </Label>
                 <Select value={sortBy} onValueChange={setSortBy}>
                   <SelectTrigger className="bg-secondary/50">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="co2">CO₂ (kg)</SelectItem>
-                    <SelectItem value="efficiency">Eficiencia</SelectItem>
-                    <SelectItem value="distance">Distancia</SelectItem>
+                    <SelectItem value="co2">{t("advancedEmissions.sortByCo2")}</SelectItem>
+                    <SelectItem value="efficiency">{t("advancedEmissions.sortByEfficiency")}</SelectItem>
+                    <SelectItem value="distance">{t("advancedEmissions.sortByDistance")}</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Selecciona la métrica principal para clasificar proyectos
+                  {t("advancedEmissions.sortByHelp")}
                 </p>
               </div>
             </div>
@@ -253,28 +253,28 @@ export default function AdvancedEmissions() {
               {/* Time Range */}
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground uppercase tracking-wide">
-                  Rango de tiempo
+                  {t("advancedEmissions.timeRange")}
                 </Label>
                 <Select value={timeRange} onValueChange={setTimeRange}>
                   <SelectTrigger className="bg-secondary/50">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="7days">Últimos 7 días</SelectItem>
-                    <SelectItem value="30days">Últimos 30 días</SelectItem>
-                    <SelectItem value="90days">Últimos 90 días</SelectItem>
-                    <SelectItem value="year">Este año</SelectItem>
+                    <SelectItem value="7days">{t("advancedEmissions.last7Days")}</SelectItem>
+                    <SelectItem value="30days">{t("advancedEmissions.last30Days")}</SelectItem>
+                    <SelectItem value="90days">{t("advancedEmissions.last90Days")}</SelectItem>
+                    <SelectItem value="year">{t("advancedEmissions.thisYear")}</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Selecciona el período de tiempo para el análisis de CO₂
+                  {t("advancedEmissions.selectPeriodHelp")}
                 </p>
               </div>
 
               {/* Fuel Efficiency */}
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground uppercase tracking-wide">
-                  Eficiencia de combustible (L/100km)
+                  {t("advancedEmissions.fuelEfficiency")}
                 </Label>
                 <div className="relative">
                   <Input
@@ -288,7 +288,7 @@ export default function AdvancedEmissions() {
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Consumo promedio de combustible por 100km (usado para cálculos de CO₂)
+                  {t("advancedEmissions.fuelEfficiencyHelp")}
                 </p>
               </div>
             </div>
@@ -298,11 +298,9 @@ export default function AdvancedEmissions() {
               <div className="flex items-start gap-3">
                 <Info className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
                 <div>
-                  <h4 className="text-sm font-medium mb-1">Acerca de los cálculos de CO₂</h4>
+                  <h4 className="text-sm font-medium mb-1">{t("advancedEmissions.aboutTitle")}</h4>
                   <p className="text-xs text-muted-foreground">
-                    Las emisiones de CO₂ se calculan basándose en la eficiencia de combustible y el
-                    tipo de vehículo. El análisis te ayuda a entender el impacto ambiental de tus
-                    viajes e identificar oportunidades para viajes más eficientes.
+                    {t("advancedEmissions.aboutBody")}
                   </p>
                 </div>
               </div>
@@ -311,11 +309,11 @@ export default function AdvancedEmissions() {
 
           <div className="flex justify-end gap-3">
             <Button variant="outline" onClick={() => setConfigModalOpen(false)}>
-              Cancelar
+              {t("advancedEmissions.cancel")}
             </Button>
             <Button variant="save" onClick={handleSaveConfig} className="gap-2">
               <Save className="w-4 h-4" />
-              Guardar configuración
+              {t("advancedEmissions.save")}
             </Button>
           </div>
         </DialogContent>

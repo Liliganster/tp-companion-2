@@ -32,6 +32,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useTrips } from "@/contexts/TripsContext";
 import { useUserProfile } from "@/contexts/UserProfileContext";
+import { useI18n } from "@/hooks/use-i18n";
 
 interface Report {
   id: string;
@@ -54,7 +55,7 @@ const mockReports: Report[] = [
   {
     id: "1",
     period: "19-11-2019 - 02-12-2025",
-    project: "Todos los proyectos",
+    project: "all",
     totalKm: 2840,
     trips: 12,
     generatedAt: "2025-12-21T10:30:00",
@@ -135,6 +136,7 @@ const mockReportTrips = [
 export default function Reports() {
   const navigate = useNavigate();
   const { profile } = useUserProfile();
+  const { t, tf, locale } = useI18n();
   const { trips } = useTrips();
   const [selectedProject, setSelectedProject] = useState("all");
   const [selectedMonth, setSelectedMonth] = useState("01");
@@ -171,19 +173,19 @@ export default function Reports() {
     selectedTrips.forEach((trip) => {
       const time = getTripTime(trip.date);
       const formattedDate = time
-        ? new Date(time).toLocaleDateString("es-ES", {
+        ? new Date(time).toLocaleDateString(locale, {
             day: "2-digit",
             month: "2-digit",
             year: "numeric",
           })
         : trip.date;
 
-      if (trip.distance > 500) {
+      if (trip.distance > 1500) {
         nextWarnings.push({
           tripId: trip.id,
           date: formattedDate,
           route: trip.route.join(" → "),
-          warning: "Distancia inusual detectada",
+          warning: t("reports.warningImprobableDistance"),
         });
       }
 
@@ -192,7 +194,7 @@ export default function Reports() {
           tripId: trip.id,
           date: formattedDate,
           route: trip.route.join(" → "),
-          warning: "Falta el motivo del viaje",
+          warning: t("reports.warningMissingPurpose"),
         });
       }
     });
@@ -204,8 +206,8 @@ export default function Reports() {
   const handleGenerateReport = () => {
     setVerificationModalOpen(false);
     toast({
-      title: "Informe generado",
-      description: "El informe fiscal se ha generado correctamente.",
+      title: t("reports.toastGeneratedTitle"),
+      description: t("reports.toastGeneratedBody"),
     });
     navigateToReportView();
   };
@@ -218,11 +220,11 @@ export default function Reports() {
     const end = new Date(yearValue, monthIndex + 1, 0);
 
     const params = new URLSearchParams({
-      period: `${start.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" })} - ${end.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" })}`,
+      period: `${start.toLocaleDateString(locale, { day: "2-digit", month: "2-digit", year: "numeric" })} - ${end.toLocaleDateString(locale, { day: "2-digit", month: "2-digit", year: "numeric" })}`,
       driver: profile.fullName,
       address: [profile.baseAddress, profile.city].filter(Boolean).join(", "),
       licensePlate: profile.licensePlate,
-      project: selectedProject === "all" ? "Todos los proyectos" : selectedProject,
+      project: selectedProject,
       month: selectedMonth,
       year: selectedYear,
       trips: String(selectedTrips.length),
@@ -231,12 +233,12 @@ export default function Reports() {
   };
 
   const getProjectName = (value: string) => {
-    return value === "all" ? "Todos los proyectos" : value;
+    return value === "all" ? t("reports.allProjects") : value;
   };
 
   const getMonthName = (month: string) => {
     const date = new Date(2024, parseInt(month) - 1);
-    return date.toLocaleString("es", { month: "long" });
+    return date.toLocaleString(locale, { month: "long" });
   };
 
   return (
@@ -246,27 +248,27 @@ export default function Reports() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold">
-              Reports
+              {t("reports.title")}
             </h1>
             <p className="text-muted-foreground mt-1">
-              Generate and manage mileage reports
+              {t("reports.subtitle")}
             </p>
           </div>
         </div>
 
         {/* Report Generator */}
         <div className="glass-card p-6 animate-fade-in animation-delay-100">
-          <h2 className="font-semibold text-lg mb-4">Generate New Report</h2>
+          <h2 className="font-semibold text-lg mb-4">{t("reports.generateNew")}</h2>
           
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-4">
             <div className="space-y-2">
-              <Label>Project</Label>
+              <Label>{t("reports.project")}</Label>
               <Select value={selectedProject} onValueChange={setSelectedProject}>
                 <SelectTrigger className="bg-secondary/50">
-                  <SelectValue placeholder="Select project" />
+                  <SelectValue placeholder={t("reports.selectProject")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Projects</SelectItem>
+                  <SelectItem value="all">{t("reports.allProjects")}</SelectItem>
                   {Array.from(
                     new Set(trips.map((t) => t.project).map((p) => p.trim()).filter(Boolean))
                   )
@@ -281,15 +283,15 @@ export default function Reports() {
             </div>
             
             <div className="space-y-2">
-              <Label>Month</Label>
+              <Label>{t("reports.month")}</Label>
               <Select value={selectedMonth} onValueChange={setSelectedMonth}>
                 <SelectTrigger className="bg-secondary/50">
-                  <SelectValue placeholder="Month" />
+                  <SelectValue placeholder={t("reports.month")} />
                 </SelectTrigger>
                 <SelectContent>
                   {Array.from({ length: 12 }, (_, i) => (
                     <SelectItem key={i} value={String(i + 1).padStart(2, "0")}>
-                      {new Date(2024, i).toLocaleString("en", { month: "long" })}
+                      {new Date(2024, i).toLocaleString(locale, { month: "long" })}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -297,10 +299,10 @@ export default function Reports() {
             </div>
             
             <div className="space-y-2">
-              <Label>Year</Label>
+              <Label>{t("reports.year")}</Label>
               <Select value={selectedYear} onValueChange={setSelectedYear}>
                 <SelectTrigger className="bg-secondary/50">
-                  <SelectValue placeholder="Year" />
+                  <SelectValue placeholder={t("reports.year")} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="2024">2024</SelectItem>
@@ -312,7 +314,7 @@ export default function Reports() {
             <div className="flex items-end">
               <Button className="w-full" onClick={handleGenerateClick}>
                 <FileText className="w-4 h-4" />
-                Generate Report
+                {t("reports.generateReport")}
               </Button>
             </div>
           </div>
@@ -328,16 +330,16 @@ export default function Reports() {
                     <Checkbox />
                   </th>
                   <th className="text-left py-3 px-4 text-xs font-semibold uppercase text-muted-foreground whitespace-nowrap">
-                    Generado el
+                    {t("reports.tableGeneratedAt")}
                   </th>
                   <th className="text-left py-3 px-4 text-xs font-semibold uppercase text-muted-foreground whitespace-nowrap">
-                    Período del informe
+                    {t("reports.tablePeriod")}
                   </th>
                   <th className="text-left py-3 px-4 text-xs font-semibold uppercase text-muted-foreground whitespace-nowrap hidden sm:table-cell">
-                    Proyecto
+                    {t("reports.project")}
                   </th>
                   <th className="text-right py-3 px-4 text-xs font-semibold uppercase text-muted-foreground whitespace-nowrap">
-                    Acciones
+                    {t("reports.tableActions")}
                   </th>
                 </tr>
               </thead>
@@ -348,7 +350,7 @@ export default function Reports() {
                       <Checkbox />
                     </td>
                     <td className="py-4 px-4 whitespace-nowrap">
-                      {new Date(report.generatedAt).toLocaleDateString("es-ES", {
+                      {new Date(report.generatedAt).toLocaleDateString(locale, {
                         day: "2-digit",
                         month: "2-digit",
                         year: "numeric",
@@ -358,7 +360,7 @@ export default function Reports() {
                       {report.period}
                     </td>
                     <td className="py-4 px-4 hidden sm:table-cell">
-                      {report.project}
+                      {getProjectName(report.project)}
                     </td>
                     <td className="py-4 px-4">
                       <div className="flex items-center justify-end gap-2">
@@ -368,7 +370,7 @@ export default function Reports() {
                           className="text-primary h-auto p-0"
                           onClick={navigateToReportView}
                         >
-                          Ver
+                          {t("reports.view")}
                         </Button>
                         <Button
                           variant="ghost"
@@ -391,10 +393,49 @@ export default function Reports() {
       <Dialog open={verificationModalOpen} onOpenChange={setVerificationModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Generar informe fiscal</DialogTitle>
+            <DialogTitle>{t("reports.verifyTitle")}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            <div>
+              <h4 className="font-semibold text-sm mb-2">{t("reports.verifyChecklistTitle")}</h4>
+              <p className="text-sm text-muted-foreground">{t("reports.verifyChecklistBody")}</p>
+            </div>
+
+            {warnings.length === 0 ? (
+              <div className="flex items-center gap-3 p-4 rounded-lg bg-success/10 border border-success/30">
+                <Check className="w-5 h-5 text-success shrink-0" />
+                <p className="text-sm text-success">{t("reports.verifyNoProblems")}</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-warning">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span className="text-sm font-medium">
+                    {tf("reports.verifyFoundWarnings", { count: warnings.length })}
+                  </span>
+                </div>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {warnings.map((warning, index) => (
+                    <div
+                      key={index}
+                      className="flex items-start gap-3 p-3 rounded-lg bg-warning/10 border border-warning/30"
+                    >
+                      <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+                      <div className="text-sm">
+                        <p className="font-medium">{warning.route}</p>
+                        <p className="text-muted-foreground text-xs">
+                          {warning.date} - {warning.warning}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">{t("reports.verifyContinueOrReview")}</p>
+              </div>
+            )}
+
+            <div className="hidden">
             <div>
               <h4 className="font-semibold text-sm mb-2">Lista de verificación pre-exportación</h4>
               <p className="text-sm text-muted-foreground">
@@ -427,7 +468,7 @@ export default function Reports() {
                       <div className="text-sm">
                         <p className="font-medium">{warning.route}</p>
                         <p className="text-muted-foreground text-xs">
-                          {warning.date} • {warning.warning}
+                          {warning.date} - {warning.warning}
                         </p>
                       </div>
                     </div>
@@ -438,20 +479,30 @@ export default function Reports() {
                 </p>
               </div>
             )}
+            </div>
           </div>
 
           <div className="flex gap-2 pt-2">
+            <Button variant="outline" onClick={() => setVerificationModalOpen(false)}>
+              {t("reports.back")}
+            </Button>
+            <Button className="flex-1" onClick={handleGenerateReport}>
+              {t("reports.generateReport")}
+            </Button>
+          </div>
+
+          <div className="hidden flex gap-2 pt-2">
             <Button
               variant="outline"
               onClick={() => setVerificationModalOpen(false)}
             >
-              Atrás
+              {t("reports.back")}
             </Button>
             <Button
               className="flex-1"
               onClick={handleGenerateReport}
             >
-              Generar informe
+              {t("reports.generateReport")}
             </Button>
           </div>
         </DialogContent>

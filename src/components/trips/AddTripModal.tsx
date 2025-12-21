@@ -25,6 +25,7 @@ import { CSS } from "@dnd-kit/utilities";
 import tripHeaderImage from "@/assets/trip-modal-header.jpg";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { formatLocaleNumber, parseLocaleNumber } from "@/lib/number";
+import { useI18n } from "@/hooks/use-i18n";
 
 interface Stop {
   id: string;
@@ -38,9 +39,11 @@ interface SortableStopProps {
   onChange: (id: string, value: string) => void;
   canRemove: boolean;
   disabled?: boolean;
+  placeholder?: string;
 }
 
-function SortableStop({ stop, onRemove, onChange, canRemove, disabled }: SortableStopProps) {
+function SortableStop({ stop, onRemove, onChange, canRemove, disabled, placeholder }: SortableStopProps) {
+  const { t } = useI18n();
   const {
     attributes,
     listeners,
@@ -59,22 +62,22 @@ function SortableStop({ stop, onRemove, onChange, canRemove, disabled }: Sortabl
   const getLabel = () => {
     switch (stop.type) {
       case "origin":
-        return "Origin";
+        return t("tripModal.origin");
       case "destination":
-        return "Destination";
+        return t("tripModal.destination");
       default:
-        return "Stop";
+        return t("tripModal.stop");
     }
   };
 
   const getPlaceholder = () => {
     switch (stop.type) {
       case "origin":
-        return "Start location";
+        return t("tripModal.originPlaceholder");
       case "destination":
-        return "End location";
+        return t("tripModal.destinationPlaceholder");
       default:
-        return "Intermediate stop";
+        return t("tripModal.stopPlaceholder");
     }
   };
 
@@ -110,7 +113,7 @@ function SortableStop({ stop, onRemove, onChange, canRemove, disabled }: Sortabl
           <Input
             value={stop.value}
             onChange={(e) => onChange(stop.id, e.target.value)}
-            placeholder={getPlaceholder()}
+            placeholder={placeholder ?? getPlaceholder()}
             disabled={disabled}
             className="bg-secondary/50 h-8 mt-1"
           />
@@ -153,6 +156,7 @@ interface AddTripModalProps {
 export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestination, onSave }: AddTripModalProps) {
   const isEditing = !!trip;
   const { profile } = useUserProfile();
+  const { t } = useI18n();
   const settingsRateLabel = useMemo(() => profile.ratePerKm, [profile.ratePerKm]);
   const baseLocation = useMemo(() => {
     const parts = [profile.baseAddress, profile.city, profile.country].map((p) => p.trim()).filter(Boolean);
@@ -164,20 +168,43 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
   }, [previousDestination, baseLocation]);
   
   const getInitialStops = (): Stop[] => {
-    if (trip?.route && trip.route.length >= 2) {
-      return trip.route.map((value, index) => ({
-        id: index === 0 ? "origin" : index === trip.route!.length - 1 ? "destination" : `stop-${index}`,
-        value,
-        type: index === 0 ? "origin" : index === trip.route!.length - 1 ? "destination" : "stop",
-      }));
+    const defaultSpecialOrigin: TripData["specialOrigin"] = trip?.specialOrigin ?? "base";
+
+    const originDefault = defaultSpecialOrigin === "base" ? baseLocation : previousDestinationEffective;
+    const destinationDefault = baseLocation;
+
+    if (!trip) {
+      return [
+        { id: "origin", value: "", type: "origin" },
+        { id: "destination", value: "", type: "destination" },
+      ];
     }
-    const defaultSpecialOrigin: TripData["specialOrigin"] =
-      trip?.specialOrigin ?? (previousDestinationEffective && previousDestinationEffective !== baseLocation ? "continue" : "base");
-    const originValue = defaultSpecialOrigin === "base" ? baseLocation : previousDestinationEffective;
-    const destinationValue = defaultSpecialOrigin === "return" ? baseLocation : baseLocation;
+
+    if (trip?.route && trip.route.length >= 2) {
+      return trip.route.map((rawValue, index) => {
+        const trimmed = rawValue?.trim?.() ?? "";
+        const isFirst = index === 0;
+        const isLast = index === trip.route!.length - 1;
+
+        const value = isFirst
+          ? trimmed || originDefault
+          : isLast
+            ? defaultSpecialOrigin === "return"
+              ? baseLocation
+              : trimmed || destinationDefault
+            : trimmed;
+
+        return {
+          id: isFirst ? "origin" : isLast ? "destination" : `stop-${index}`,
+          value,
+          type: isFirst ? "origin" : isLast ? "destination" : "stop",
+        };
+      });
+    }
+
     return [
-      { id: "origin", value: originValue, type: "origin" },
-      { id: "destination", value: destinationValue, type: "destination" },
+      { id: "origin", value: originDefault || baseLocation, type: "origin" },
+      { id: "destination", value: destinationDefault || baseLocation, type: "destination" },
     ];
   };
 
@@ -189,7 +216,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
   const [stops, setStops] = useState<Stop[]>(() => getInitialStops());
   const [date, setDate] = useState("");
   const [distance, setDistance] = useState("");
-  const [passengers, setPassengers] = useState("0");
+  const [passengers, setPassengers] = useState("");
   const [project, setProject] = useState("");
   const [purpose, setPurpose] = useState("");
   const [specialOrigin, setSpecialOrigin] = useState("base");
@@ -200,6 +227,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
   type SpecialOrigin = NonNullable<TripData["specialOrigin"]>;
 
   const handleSpecialOriginChange = (next: SpecialOrigin) => {
+    const prevSpecialOrigin = specialOrigin;
     setSpecialOrigin(next);
 
     if (next === "return") {
@@ -208,12 +236,18 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
 
     setStops((prev) =>
       prev.map((stop) => {
-        if (stop.id === "origin" && !originTouched) {
+        if (stop.id === "origin" && isEditing && !originTouched) {
           const originValue = next === "base" ? baseLocation : previousDestinationEffective;
           return { ...stop, value: originValue };
         }
         if (stop.id === "destination") {
           if (next === "return") return { ...stop, value: baseLocation };
+
+          if (!isEditing) {
+            if (prevSpecialOrigin === "return" && !destinationTouched) return { ...stop, value: "" };
+            return stop;
+          }
+
           if (!destinationTouched) return { ...stop, value: stop.value || baseLocation };
         }
         return stop;
@@ -224,13 +258,12 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
   useEffect(() => {
     if (!isOpen) return;
 
-    const defaultSpecialOrigin: TripData["specialOrigin"] =
-      trip?.specialOrigin ?? (previousDestinationEffective && previousDestinationEffective !== baseLocation ? "continue" : "base");
+    const defaultSpecialOrigin: TripData["specialOrigin"] = trip?.specialOrigin ?? "base";
 
     setStops(getInitialStops());
     setDate(trip?.date || "");
     setDistance(trip?.distance?.toString() || "");
-    setPassengers(trip?.passengers?.toString() || "0");
+    setPassengers(trip?.passengers?.toString() || "");
     setProject(trip?.project || "");
     setPurpose(trip?.purpose || "");
     setSpecialOrigin(defaultSpecialOrigin || "base");
@@ -238,6 +271,15 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
     setDestinationTouched(false);
     setTripRate(trip?.ratePerKmOverride != null ? formatLocaleNumber(trip.ratePerKmOverride) : "");
   }, [isOpen, trip, baseLocation, previousDestinationEffective]);
+
+  const originPlaceholder = useMemo(() => {
+    const fallback = specialOrigin === "base" ? baseLocation : previousDestinationEffective;
+    return fallback || t("tripModal.originPlaceholder");
+  }, [specialOrigin, baseLocation, previousDestinationEffective, t]);
+
+  const destinationPlaceholder = useMemo(() => {
+    return baseLocation || t("tripModal.destinationPlaceholder");
+  }, [baseLocation, t]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -311,13 +353,13 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
 
       <div className="px-6 pb-6">
         <DialogHeader className="pb-4">
-          <DialogTitle>{isEditing ? "Edit Trip" : "Add New Trip"}</DialogTitle>
+          <DialogTitle>{isEditing ? t("tripModal.editTitle") : t("tripModal.addTitle")}</DialogTitle>
         </DialogHeader>
 
         <div className="grid gap-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="date">Date</Label>
+              <Label htmlFor="date">{t("tripModal.date")}</Label>
               <Input 
                 id="date" 
                 type="date" 
@@ -327,10 +369,10 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="project">Project</Label>
+              <Label htmlFor="project">{t("tripModal.project")}</Label>
               <Select value={project} onValueChange={setProject}>
                 <SelectTrigger className="bg-secondary/50">
-                  <SelectValue placeholder="Select project" />
+                  <SelectValue placeholder={t("tripModal.selectProject")} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Film Production XY">Film Production XY</SelectItem>
@@ -344,7 +386,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
             {/* Draggable Route Stops */}
             <div className="grid gap-2">
               <div className="flex items-center justify-between">
-                <Label>Route</Label>
+                <Label>{t("tripModal.route")}</Label>
                 <Button
                   type="button"
                   variant="ghost"
@@ -353,7 +395,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
                   className="h-7 text-xs"
                 >
                   <Plus className="w-3 h-3 mr-1" />
-                  Add Stop
+                  {t("tripModal.addStop")}
                 </Button>
               </div>
               <DndContext
@@ -373,33 +415,37 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
                         onRemove={removeStop}
                         onChange={updateStop}
                         canRemove={stops.length > 2}
+                        placeholder={
+                          stop.type === "origin"
+                            ? originPlaceholder
+                            : stop.type === "destination"
+                              ? destinationPlaceholder
+                              : undefined
+                        }
                         disabled={stop.type === "destination" && specialOrigin === "return"}
                       />
                     ))}
                   </div>
                 </SortableContext>
               </DndContext>
-              <p className="text-xs text-muted-foreground">
-                Drag to reorder stops
-              </p>
             </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label>Origen especial</Label>
+              <Label>{t("tripModal.specialOrigin")}</Label>
               <Select value={specialOrigin} onValueChange={(value) => handleSpecialOriginChange(value as SpecialOrigin)}>
                 <SelectTrigger className="bg-secondary/50">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="base">Salida desde mi dirección base</SelectItem>
-                  <SelectItem value="continue">Continuar desde el último destino</SelectItem>
-                  <SelectItem value="return">Regresar a mi dirección base (desde el último destino)</SelectItem>
+                  <SelectItem value="base">{t("tripModal.specialOriginBase")}</SelectItem>
+                  <SelectItem value="continue">{t("tripModal.specialOriginContinue")}</SelectItem>
+                  <SelectItem value="return">{t("tripModal.specialOriginReturn")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="passengers">Passengers</Label>
+              <Label htmlFor="passengers">{t("tripModal.passengers")}</Label>
               <Input 
                 id="passengers" 
                 type="number" 
@@ -411,9 +457,9 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
             </div>
           </div>
 
-          <div className="flex items-end gap-2">
-            <div className="grid gap-2 flex-1">
-              <Label htmlFor="distance">Distancia (km)</Label>
+          <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
+            <div className="grid gap-2">
+              <Label htmlFor="distance">{t("tripModal.distance")}</Label>
               <Input 
                 id="distance" 
                 type="number" 
@@ -435,8 +481,8 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
             >
               <Route className="w-5 h-5" />
             </Button>
-            <div className="grid gap-2 flex-1">
-              <Label htmlFor="tripRate">Tarifa de viaje (€/km)</Label>
+            <div className="grid gap-2">
+              <Label htmlFor="tripRate">{t("tripModal.rate")}</Label>
               <Input 
                 id="tripRate" 
                 type="text" 
@@ -445,17 +491,14 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
                 placeholder={settingsRateLabel}
                 className="bg-secondary/50" 
               />
-              <p className="text-xs text-muted-foreground">
-                Deja este campo en blanco para usar la tarifa de Ajustes.
-              </p>
             </div>
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="purpose">Purpose</Label>
+            <Label htmlFor="purpose">{t("tripModal.purpose")}</Label>
             <Input 
               id="purpose" 
-              placeholder="Trip purpose" 
+              placeholder={t("tripModal.purposePlaceholder")} 
               value={purpose}
               onChange={(e) => setPurpose(e.target.value)}
               className="bg-secondary/50" 
@@ -495,7 +538,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
                 });
               }}
             >
-              {isEditing ? "Update Trip" : "Save Trip"}
+              {isEditing ? t("tripModal.update") : t("tripModal.save")}
             </Button>
           </DialogClose>
         </div>

@@ -44,8 +44,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { ProjectDetailModal } from "@/components/projects/ProjectDetailModal";
 import { Project, useProjects } from "@/contexts/ProjectsContext";
+import { useI18n } from "@/hooks/use-i18n";
 
 export default function Projects() {
+  const { t, tf, locale } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedYear, setSelectedYear] = useState("2024");
   const { projects, setProjects, toggleStar } = useProjects();
@@ -86,8 +88,8 @@ export default function Projects() {
   const handleDeleteSelected = () => {
     setProjects(prev => prev.filter(p => !selectedIds.has(p.id)));
     toast({
-      title: "Projects deleted",
-      description: `${selectedIds.size} project(s) have been deleted.`
+      title: t("projects.toastDeletedTitle"),
+      description: tf("projects.toastDeletedBody", { count: selectedIds.size }),
     });
     setSelectedIds(new Set());
   };
@@ -102,50 +104,50 @@ export default function Projects() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold">
-              Projects
+              {t("projects.title")}
             </h1>
             <p className="text-muted-foreground mt-1">
-              Organize trips by project for easy reporting
+              {t("projects.subtitle")}
             </p>
           </div>
           <div className="flex items-center gap-2">
             {isSomeSelected && (
               <Button variant="destructive" onClick={handleDeleteSelected}>
                 <Trash2 className="w-4 h-4" />
-                <span className="hidden sm:inline">Delete ({selectedIds.size})</span>
+                <span className="hidden sm:inline">{t("projects.delete")} ({selectedIds.size})</span>
               </Button>
             )}
             <Dialog>
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="w-4 h-4" />
-                  New Project
+                  {t("projects.newProject")}
                 </Button>
               </DialogTrigger>
               <DialogContent className="glass max-w-lg">
                 <DialogHeader>
-                  <DialogTitle>Create New Project</DialogTitle>
+                  <DialogTitle>{t("projects.createNewProject")}</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="name">Project Name</Label>
+                    <Label htmlFor="name">{t("projects.projectName")}</Label>
                     <Input id="name" placeholder="e.g., Film Production XY" className="bg-secondary/50" />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="producer">Producer / Client</Label>
-                    <Input id="producer" placeholder="Company name" className="bg-secondary/50" />
+                    <Label htmlFor="producer">{t("projects.company")}</Label>
+                    <Input id="producer" placeholder={t("projects.companyPlaceholder")} className="bg-secondary/50" />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="description">Description</Label>
+                    <Label htmlFor="description">{t("projects.description")}</Label>
                     <Textarea
                       id="description"
-                      placeholder="Brief project description"
+                      placeholder={t("projects.descriptionPlaceholder")}
                       className="bg-secondary/50 resize-none"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="rate">Rate per km (€)</Label>
+                      <Label htmlFor="rate">{t("projects.ratePerKm")}</Label>
                       <Input
                         id="rate"
                         type="number"
@@ -155,7 +157,7 @@ export default function Projects() {
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="ratePassenger">Rate per passenger (€)</Label>
+                      <Label htmlFor="ratePassenger">{t("projects.ratePerPassenger")}</Label>
                       <Input
                         id="ratePassenger"
                         type="number"
@@ -165,7 +167,7 @@ export default function Projects() {
                       />
                     </div>
                   </div>
-                  <Button className="w-full mt-2">Create Project</Button>
+                  <Button className="w-full mt-2">{t("projects.createProject")}</Button>
                 </div>
               </DialogContent>
             </Dialog>
@@ -178,7 +180,7 @@ export default function Projects() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search projects..."
+                placeholder={t("projects.searchPlaceholder")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9 bg-secondary/50"
@@ -187,7 +189,7 @@ export default function Projects() {
             <Select value={selectedYear} onValueChange={setSelectedYear}>
               <SelectTrigger className="w-full sm:w-32 bg-secondary/50">
                 <Calendar className="w-4 h-4 mr-2" />
-                <SelectValue placeholder="Year" />
+                <SelectValue placeholder={t("projects.year")} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="2024">2024</SelectItem>
@@ -207,15 +209,15 @@ export default function Projects() {
                     <Checkbox
                       checked={isAllSelected}
                       onCheckedChange={toggleSelectAll}
-                      aria-label="Select all"
+                      aria-label={t("projects.selectAll")}
                     />
                   </TableHead>
-                  <TableHead className="text-foreground font-semibold whitespace-nowrap">Project</TableHead>
-                  <TableHead className="text-foreground font-semibold whitespace-nowrap hidden sm:table-cell">Producer</TableHead>
-                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">Trips</TableHead>
-                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden md:table-cell">Total km</TableHead>
-                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden lg:table-cell">Documents</TableHead>
-                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">Cost</TableHead>
+                  <TableHead className="text-foreground font-semibold whitespace-nowrap">{t("projects.tableProject")}</TableHead>
+                  <TableHead className="text-foreground font-semibold whitespace-nowrap hidden sm:table-cell">{t("projects.tableCompany")}</TableHead>
+                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("projects.tableTrips")}</TableHead>
+                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden md:table-cell">{t("projects.tableTotalKm")}</TableHead>
+                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("projects.tableDocuments")}</TableHead>
+                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("projects.tableCost")}</TableHead>
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -239,7 +241,7 @@ export default function Projects() {
                       <Checkbox
                         checked={selectedIds.has(project.id)}
                         onCheckedChange={() => toggleSelect(project.id)}
-                        aria-label={`Select project ${project.name}`}
+                        aria-label={tf("projects.selectProject", { name: project.name })}
                         onClick={(e) => e.stopPropagation()}
                       />
                     </TableCell>
@@ -302,15 +304,15 @@ export default function Projects() {
                             openProjectDetails(project);
                           }}>
                             <Eye className="w-4 h-4 mr-2" />
-                            View Details
+                            {t("projects.viewDetails")}
                           </DropdownMenuItem>
                           <DropdownMenuItem>
                             <Pencil className="w-4 h-4 mr-2" />
-                            Edit
+                            {t("projects.edit")}
                           </DropdownMenuItem>
                           <DropdownMenuItem className="text-destructive">
                             <Trash2 className="w-4 h-4 mr-2" />
-                            Delete
+                            {t("projects.delete")}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -326,11 +328,11 @@ export default function Projects() {
         {filteredProjects.length === 0 && (
           <div className="glass-card p-12 text-center animate-fade-in">
             <FolderKanban className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">No projects found</h3>
+            <h3 className="text-lg font-medium mb-2">{t("projects.emptyTitle")}</h3>
             <p className="text-muted-foreground mb-4">
               {searchQuery
-                ? "Try adjusting your search query"
-                : "Create your first project to get started"}
+                ? t("projects.emptyTryAdjust")
+                : t("projects.emptyCreateFirst")}
             </p>
           </div>
         )}
@@ -339,10 +341,10 @@ export default function Projects() {
         <div className="glass-card p-4 animate-fade-in">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">
-              {filteredProjects.length} projects
+              {tf("projects.summaryCount", { count: filteredProjects.length })}
             </span>
             <span className="font-medium">
-              Total: {filteredProjects.reduce((acc, p) => acc + p.totalKm, 0).toLocaleString()} km
+              {tf("projects.summaryTotal", { km: filteredProjects.reduce((acc, p) => acc + p.totalKm, 0).toLocaleString(locale) })}
             </span>
           </div>
         </div>

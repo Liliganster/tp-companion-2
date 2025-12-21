@@ -2,45 +2,111 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Check, Crown, Sparkles, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const plans = [
-  {
-    name: "Free",
-    price: "€0",
-    period: "forever",
-    description: "Perfect for getting started",
-    features: [
-      "Unlimited trips",
-      "5 projects",
-      "Basic reports",
-      "10 AI extractions/month",
-      "CSV export",
-    ],
-    limitations: ["No Google Calendar sync"],
-    current: true,
-  },
-  {
-    name: "Pro",
-    price: "€9.99",
-    period: "per month",
-    description: "For professionals and teams",
-    features: [
-      "Unlimited trips",
-      "Unlimited projects",
-      "Advanced reports",
-      "100 AI extractions/month",
-      "Google Calendar integration",
-      "Route templates",
-      "Cost analysis",
-      "Priority support",
-    ],
-    limitations: [],
-    current: false,
-    popular: true,
-  },
-];
+import { useMemo } from "react";
+import { useI18n } from "@/hooks/use-i18n";
 
 export default function Plans() {
+  const { t, tf, language } = useI18n();
+
+  const plans = useMemo(() => {
+    if (language === "de") {
+      return [
+        {
+          name: "Kostenlos",
+          price: "€0",
+          period: "dauerhaft",
+          description: "Perfekt zum Einstieg",
+          features: ["Unbegrenzte Fahrten", "5 Projekte", "Basisberichte", "10 KI-Extraktionen/Monat", "CSV-Export"],
+          limitations: ["Keine Google-Calendar-Synchronisation"],
+          current: true,
+        },
+        {
+          name: "Pro",
+          price: "€9.99",
+          period: "pro Monat",
+          description: "Für Profis und Teams",
+          features: [
+            "Unbegrenzte Fahrten",
+            "Unbegrenzte Projekte",
+            "Erweiterte Berichte",
+            "100 KI-Extraktionen/Monat",
+            "Google-Calendar-Integration",
+            "Routen-Vorlagen",
+            "Kostenanalyse",
+            "Priorisierter Support",
+          ],
+          limitations: [],
+          current: false,
+          popular: true,
+        },
+      ] as const;
+    }
+
+    if (language === "en") {
+      return [
+        {
+          name: "Free",
+          price: "€0",
+          period: "forever",
+          description: "Perfect for getting started",
+          features: ["Unlimited trips", "5 projects", "Basic reports", "10 AI extractions/month", "CSV export"],
+          limitations: ["No Google Calendar sync"],
+          current: true,
+        },
+        {
+          name: "Pro",
+          price: "€9.99",
+          period: "per month",
+          description: "For professionals and teams",
+          features: [
+            "Unlimited trips",
+            "Unlimited projects",
+            "Advanced reports",
+            "100 AI extractions/month",
+            "Google Calendar integration",
+            "Route templates",
+            "Cost analysis",
+            "Priority support",
+          ],
+          limitations: [],
+          current: false,
+          popular: true,
+        },
+      ] as const;
+    }
+
+    return [
+      {
+        name: "Gratis",
+        price: "€0",
+        period: "para siempre",
+        description: "Perfecto para empezar",
+        features: ["Viajes ilimitados", "5 proyectos", "Informes básicos", "10 extracciones IA/mes", "Exportación CSV"],
+        limitations: ["Sin sincronización con Google Calendar"],
+        current: true,
+      },
+      {
+        name: "Pro",
+        price: "€9.99",
+        period: "al mes",
+        description: "Para profesionales y equipos",
+        features: [
+          "Viajes ilimitados",
+          "Proyectos ilimitados",
+          "Informes avanzados",
+          "100 extracciones IA/mes",
+          "Integración con Google Calendar",
+          "Plantillas de rutas",
+          "Análisis de costes",
+          "Soporte prioritario",
+        ],
+        limitations: [],
+        current: false,
+        popular: true,
+      },
+    ] as const;
+  }, [language]);
+
   return (
     <MainLayout>
       <div className="max-w-5xl mx-auto space-y-8">
@@ -48,10 +114,10 @@ export default function Plans() {
         <div className="text-center animate-fade-in">
           <h1 className="text-2xl sm:text-3xl font-bold flex items-center justify-center gap-3">
             <Crown className="w-8 h-8 text-warning" />
-            Choose Your Plan
+            {t("plans.title")}
           </h1>
           <p className="text-muted-foreground mt-2 max-w-md mx-auto">
-            Upgrade to Pro for unlimited features and advanced analytics
+            {t("plans.subtitle")}
           </p>
         </div>
 
@@ -68,7 +134,7 @@ export default function Plans() {
             >
               {plan.popular && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-gradient-to-r from-primary to-accent text-xs font-medium text-primary-foreground">
-                  Most Popular
+                  {t("plans.mostPopular")}
                 </div>
               )}
 
@@ -114,11 +180,11 @@ export default function Plans() {
 
               {plan.current ? (
                 <Button variant="outline" className="w-full" disabled>
-                  Current Plan
+                  {t("plans.currentPlan")}
                 </Button>
               ) : (
                 <Button variant="add" className="w-full">
-                  Upgrade to {plan.name}
+                  {tf("plans.upgradeTo", { name: plan.name })}
                 </Button>
               )}
             </div>
@@ -127,11 +193,11 @@ export default function Plans() {
 
         {/* FAQ or additional info */}
         <div className="glass-card p-6 text-center animate-fade-in animation-delay-300">
-          <h3 className="font-semibold mb-2">Need more AI extractions?</h3>
+          <h3 className="font-semibold mb-2">{t("plans.needMoreAi")}</h3>
           <p className="text-sm text-muted-foreground mb-4">
-            Contact us for enterprise plans with higher limits and custom features.
+            {t("plans.contactBody")}
           </p>
-          <Button variant="outline">Contact Sales</Button>
+          <Button variant="outline">{t("plans.contactSales")}</Button>
         </div>
       </div>
     </MainLayout>

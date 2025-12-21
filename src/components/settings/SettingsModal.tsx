@@ -26,23 +26,16 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserProfile } from "@/contexts/UserProfileContext";
+import { useI18n } from "@/hooks/use-i18n";
 
 interface SettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-const navItems = [
-  { id: "profile", label: "Perfil", icon: User },
-  { id: "apis", label: "APIs y servicios externos", icon: Sparkles },
-  { id: "personalization", label: "Personalización", icon: Palette },
-  { id: "language", label: "Idioma", icon: Languages },
-  { id: "news", label: "Novedades", icon: Newspaper },
-  { id: "help", label: "Ayuda y docs", icon: HelpCircle },
-];
-
 export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState("profile");
+  const { t } = useI18n();
 
   const { profile, saveProfile } = useUserProfile();
 
@@ -60,6 +53,15 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [uiBlur, setUiBlur] = useState([16]);
   const [bgBlur, setBgBlur] = useState([0]);
 
+  const navItems = [
+    { id: "profile", label: t("settings.tabProfile"), icon: User },
+    { id: "apis", label: t("settings.tabApis"), icon: Sparkles },
+    { id: "personalization", label: t("settings.tabPersonalization"), icon: Palette },
+    { id: "language", label: t("settings.tabLanguage"), icon: Languages },
+    { id: "news", label: t("settings.tabNews"), icon: Newspaper },
+    { id: "help", label: t("settings.tabHelp"), icon: HelpCircle },
+  ];
+
   const handleSave = () => {
     saveProfile(profileData);
     onOpenChange(false);
@@ -69,7 +71,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl w-[800px] h-[600px] p-0 gap-0 overflow-hidden flex flex-col">
         <DialogHeader className="px-6 py-4 border-b border-border shrink-0">
-          <DialogTitle className="text-xl font-semibold">Ajustes</DialogTitle>
+          <DialogTitle className="text-xl font-semibold">{t("settings.title")}</DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-1 overflow-hidden">
@@ -118,11 +120,11 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
             <div className="p-6">
               {activeTab === "profile" && (
                 <div className="space-y-6">
-                  <h2 className="text-lg font-medium">Mi perfil</h2>
+                  <h2 className="text-lg font-medium">{t("settings.profileSectionTitle")}</h2>
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="fullName">Nombre completo</Label>
+                      <Label htmlFor="fullName">{t("settings.fullName")}</Label>
                       <Input
                         id="fullName"
                         value={profileData.fullName}
@@ -131,7 +133,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="vatId">NIF / VAT ID (UID)</Label>
+                      <Label htmlFor="vatId">{t("settings.vatId")}</Label>
                       <Input
                         id="vatId"
                         value={profileData.vatId}
@@ -140,7 +142,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="licensePlate">Matrícula</Label>
+                      <Label htmlFor="licensePlate">{t("settings.licensePlate")}</Label>
                       <Input
                         id="licensePlate"
                         value={profileData.licensePlate}
@@ -149,7 +151,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="ratePerKm">Tarifa (€/km)</Label>
+                      <Label htmlFor="ratePerKm">{t("settings.ratePerKm")}</Label>
                       <Input
                         id="ratePerKm"
                         value={profileData.ratePerKm}
@@ -160,7 +162,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="passengerSurcharge">Recargo por pasajero (€/km)</Label>
+                    <Label htmlFor="passengerSurcharge">{t("settings.passengerSurcharge")}</Label>
                     <Input
                       id="passengerSurcharge"
                       value={profileData.passengerSurcharge}
@@ -170,7 +172,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="baseAddress">Dirección base / Domicilio</Label>
+                    <Label htmlFor="baseAddress">{t("settings.baseAddress")}</Label>
                     <Input
                       id="baseAddress"
                       value={profileData.baseAddress}
@@ -181,7 +183,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="city">Ciudad</Label>
+                      <Label htmlFor="city">{t("settings.city")}</Label>
                       <Input
                         id="city"
                         value={profileData.city}
@@ -190,7 +192,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="country">País</Label>
+                      <Label htmlFor="country">{t("settings.country")}</Label>
                       <Input
                         id="country"
                         value={profileData.country}
@@ -205,13 +207,13 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                     <div className="flex items-start gap-3">
                       <Trash2 className="w-5 h-5 text-destructive mt-0.5 shrink-0" />
                       <div className="flex-1">
-                        <h3 className="font-medium text-destructive">Eliminar cuenta</h3>
+                        <h3 className="font-medium text-destructive">{t("settings.deleteAccountTitle")}</h3>
                         <p className="text-sm text-muted-foreground mt-1 mb-4">
-                          Esto eliminará permanentemente todos tus viajes, proyectos, facturas, informes y ajustes personalizados asociados a tu perfil.
+                          {t("settings.deleteAccountBody")}
                         </p>
                         <Button variant="destructive" size="sm">
                           <Trash2 className="w-4 h-4 mr-2" />
-                          Eliminar mi cuenta
+                          {t("settings.deleteAccountButton")}
                         </Button>
                       </div>
                     </div>
@@ -222,16 +224,16 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
               {activeTab === "apis" && (
                 <div className="space-y-6">
-                  <h2 className="text-lg font-medium">APIs y servicios externos</h2>
+                  <h2 className="text-lg font-medium">{t("settings.tabApis")}</h2>
                   <div className="glass-card p-4">
                     <div className="flex items-center justify-between">
                       <div>
                         <h3 className="font-medium">Gemini AI (Default)</h3>
-                        <p className="text-sm text-muted-foreground">Server-side AI for callsheet parsing</p>
+                        <p className="text-sm text-muted-foreground">{t("settings.apisGeminiBody")}</p>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-success">
                         <div className="w-2 h-2 rounded-full bg-success" />
-                        Activo
+                        {t("settings.apisActive")}
                       </div>
                     </div>
                   </div>
@@ -239,13 +241,13 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   <div className="glass-card p-4 space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="font-medium">OpenRouter (Opcional)</h3>
-                        <p className="text-sm text-muted-foreground">Usa tu propia API key</p>
+                        <h3 className="font-medium">{t("settings.apisOpenRouterTitle")}</h3>
+                        <p className="text-sm text-muted-foreground">{t("settings.apisOpenRouterBody")}</p>
                       </div>
                       <Switch />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="openrouter">API Key</Label>
+                      <Label htmlFor="openrouter">{t("settings.apisApiKey")}</Label>
                       <Input id="openrouter" type="password" placeholder="sk-..." className="bg-secondary/50" />
                     </div>
                   </div>
@@ -254,9 +256,9 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                     <div className="flex items-center justify-between">
                       <div>
                         <h3 className="font-medium">Google Calendar</h3>
-                        <p className="text-sm text-muted-foreground">Sincronizar eventos</p>
+                        <p className="text-sm text-muted-foreground">{t("settings.apisGoogleCalendarBody")}</p>
                       </div>
-                      <Button variant="outline" size="sm">Conectar</Button>
+                      <Button variant="outline" size="sm">{t("settings.apisConnect")}</Button>
                     </div>
                   </div>
                 </div>
@@ -264,11 +266,11 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
               {activeTab === "personalization" && (
                 <div className="space-y-6">
-                  <h2 className="text-lg font-medium">Ajustes de apariencia</h2>
+                  <h2 className="text-lg font-medium">{t("settings.appearanceTitle")}</h2>
                   
                   {/* Theme */}
                   <div className="space-y-3">
-                    <Label>Tema</Label>
+                    <Label>{t("settings.theme")}</Label>
                     <div className="grid grid-cols-2 gap-3">
                       <button
                         onClick={() => setTheme("light")}
@@ -281,8 +283,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       >
                         <Sun className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" />
                         <div>
-                          <h4 className="font-medium text-sm">Claro {theme === "light" && "(actual)"}</h4>
-                          <p className="text-xs text-muted-foreground mt-1">Fondos claros y efecto vidrio suave.</p>
+                          <h4 className="font-medium text-sm">
+                            {t("settings.themeLight")} {theme === "light" && `(${t("settings.current")})`}
+                          </h4>
+                          <p className="text-xs text-muted-foreground mt-1">{t("settings.themeLightDesc")}</p>
                         </div>
                       </button>
                       <button
@@ -296,26 +300,28 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       >
                         <Moon className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
                         <div>
-                          <h4 className="font-medium text-sm">Oscuro {theme === "dark" && "(actual)"}</h4>
-                          <p className="text-xs text-muted-foreground mt-1">Mayor contraste para ambientes con poca luz.</p>
+                          <h4 className="font-medium text-sm">
+                            {t("settings.themeDark")} {theme === "dark" && `(${t("settings.current")})`}
+                          </h4>
+                          <p className="text-xs text-muted-foreground mt-1">{t("settings.themeDarkDesc")}</p>
                         </div>
                       </button>
                     </div>
-                    <p className="text-xs text-muted-foreground">Cambia entre claro y oscuro sin tocar el resto de estilos.</p>
+                    <p className="text-xs text-muted-foreground">{t("settings.themeHint")}</p>
                   </div>
 
                   {/* Background Image */}
                   <div className="space-y-3">
-                    <Label>Imagen de fondo</Label>
+                    <Label>{t("settings.backgroundImage")}</Label>
                     <Button variant="upload" className="gap-2">
                       <Upload className="w-4 h-4" />
-                      Subir desde el ordenador
+                      {t("settings.uploadFromComputer")}
                     </Button>
                   </div>
 
                   {/* Preset Backgrounds */}
                   <div className="space-y-3">
-                    <Label>Fondos preestablecidos</Label>
+                    <Label>{t("settings.presetBackgrounds")}</Label>
                     <div className="flex gap-3">
                       <button className="w-24 h-16 rounded-lg bg-gradient-to-br from-gray-400 to-gray-600 border-2 border-transparent hover:border-primary/50 transition-colors overflow-hidden">
                         <div className="w-full h-full bg-[url('https://images.unsplash.com/photo-1501691223387-dd0500403074?w=200')] bg-cover bg-center" />
@@ -332,7 +338,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   {/* UI Opacity */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label>Opacidad de la IU</Label>
+                      <Label>{t("settings.uiOpacity")}</Label>
                       <span className="text-sm text-muted-foreground">{uiOpacity[0]}%</span>
                     </div>
                     <Slider
@@ -347,7 +353,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   {/* UI Blur */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label>Efecto de desenfoque de la IU</Label>
+                      <Label>{t("settings.uiBlur")}</Label>
                       <span className="text-sm text-muted-foreground">{uiBlur[0]}px</span>
                     </div>
                     <Slider
@@ -362,7 +368,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   {/* Background Blur */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label>Desenfoque de imagen de fondo</Label>
+                      <Label>{t("settings.backgroundBlur")}</Label>
                       <span className="text-sm text-muted-foreground">{bgBlur[0]}px</span>
                     </div>
                     <Slider
@@ -378,7 +384,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
               {activeTab === "language" && (
                 <div className="space-y-6">
-                  <h2 className="text-lg font-medium">Idioma</h2>
+                  <h2 className="text-lg font-medium">{t("settings.tabLanguage")}</h2>
                   <div className="grid grid-cols-2 gap-2">
                     {[
                       { code: "de", name: "Deutsch" },
@@ -387,9 +393,11 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                     ].map((lang) => (
                       <button
                         key={lang.code}
+                        type="button"
+                        onClick={() => setProfileData({ ...profileData, language: lang.code as typeof profileData.language })}
                         className={cn(
                           "p-3 rounded-lg border transition-colors text-left",
-                          lang.code === "es"
+                          lang.code === profileData.language
                             ? "bg-primary/10 border-primary/50 text-primary"
                             : "bg-secondary/50 border-border/50 hover:border-primary/50"
                         )}
@@ -403,34 +411,34 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
               {activeTab === "news" && (
                 <div className="space-y-6">
-                  <h2 className="text-lg font-medium">Novedades</h2>
+                  <h2 className="text-lg font-medium">{t("settings.tabNews")}</h2>
                   <div className="glass-card p-4 space-y-2">
-                    <h3 className="font-medium">Versión de la aplicación</h3>
+                    <h3 className="font-medium">{t("settings.appVersionTitle")}</h3>
                     <p className="text-sm text-muted-foreground">Fahrtenbuch Pro v1.0.0</p>
-                    <Button variant="outline" size="sm">Buscar actualizaciones</Button>
+                    <Button variant="outline" size="sm">{t("settings.checkUpdates")}</Button>
                   </div>
 
                   <div className="glass-card p-4 space-y-2">
                     <h3 className="font-medium">Changelog</h3>
-                    <p className="text-sm text-muted-foreground">Ver cambios recientes y actualizaciones</p>
-                    <Button variant="outline" size="sm">Ver Changelog</Button>
+                    <p className="text-sm text-muted-foreground">{t("settings.changelogBody")}</p>
+                    <Button variant="outline" size="sm">{t("settings.viewChangelog")}</Button>
                   </div>
                 </div>
               )}
 
               {activeTab === "help" && (
                 <div className="space-y-6">
-                  <h2 className="text-lg font-medium">Ayuda y documentación</h2>
+                  <h2 className="text-lg font-medium">{t("settings.helpTitle")}</h2>
                   <div className="glass-card p-4 space-y-2">
-                    <h3 className="font-medium">Documentación</h3>
-                    <p className="text-sm text-muted-foreground">Aprende a usar todas las funciones</p>
-                    <Button variant="outline" size="sm">Ver documentación</Button>
+                    <h3 className="font-medium">{t("settings.docsTitle")}</h3>
+                    <p className="text-sm text-muted-foreground">{t("settings.docsBody")}</p>
+                    <Button variant="outline" size="sm">{t("settings.viewDocs")}</Button>
                   </div>
 
                   <div className="glass-card p-4 space-y-2">
-                    <h3 className="font-medium">Soporte</h3>
-                    <p className="text-sm text-muted-foreground">¿Necesitas ayuda? Contáctanos</p>
-                    <Button variant="outline" size="sm">Contactar soporte</Button>
+                    <h3 className="font-medium">{t("settings.supportTitle")}</h3>
+                    <p className="text-sm text-muted-foreground">{t("settings.supportBody")}</p>
+                    <Button variant="outline" size="sm">{t("settings.contactSupport")}</Button>
                   </div>
                 </div>
               )}
@@ -441,15 +449,15 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
         {/* Footer */}
         <div className="px-6 py-4 border-t border-border flex items-center justify-between">
           <p className="text-xs text-muted-foreground">
-            Build: 1fded46 @ 2025-12-20T20:43:47.046Z
+            {t("settings.build")} 1fded46 @ 2025-12-20T20:43:47.046Z
           </p>
           <div className="flex items-center gap-3">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
+              {t("settings.cancel")}
             </Button>
             <Button variant="save" onClick={handleSave}>
               <Save className="w-4 h-4 mr-2" />
-              Guardar ajustes
+              {t("settings.save")}
             </Button>
           </div>
         </div>

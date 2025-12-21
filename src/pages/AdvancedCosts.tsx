@@ -164,15 +164,15 @@ export default function AdvancedCosts() {
                 <ul className="space-y-3 text-sm text-muted-foreground">
                   <li className="flex items-start gap-2">
                     <span className="w-2 h-2 rounded-full bg-muted-foreground mt-1.5 shrink-0" />
-                    Fuel: €{costAssumptions.fuelPerKm.toFixed(2)}/km
+                    Combustible: €{costAssumptions.fuelPerKm.toFixed(2)}/km
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="w-2 h-2 rounded-full bg-muted-foreground mt-1.5 shrink-0" />
-                    Maintenance (total): €{costAssumptions.maintenanceTotal.toFixed(2)}
+                    Mantenimiento (total): €{costAssumptions.maintenanceTotal.toFixed(2)}
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="w-2 h-2 rounded-full bg-muted-foreground mt-1.5 shrink-0" />
-                    Other (total): €{costAssumptions.otherTotal.toFixed(2)}
+                    Otros (total): €{costAssumptions.otherTotal.toFixed(2)}
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="w-2 h-2 rounded-full bg-muted-foreground mt-1.5 shrink-0" />

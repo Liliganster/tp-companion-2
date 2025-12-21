@@ -9,8 +9,10 @@ import { Link } from "react-router-dom";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { getProjectsForDashboard } from "@/lib/projects";
+import { useI18n } from "@/hooks/use-i18n";
 export default function Index() {
   const { profile } = useUserProfile();
+  const { t, locale } = useI18n();
   const { projects } = useProjects();
   const dashboardProjects = getProjectsForDashboard(projects);
 
@@ -51,7 +53,7 @@ export default function Index() {
     }) as const;
 
   const distanceTrendValue = 12;
-  const distanceTrendLabel = "este mes vs el anterior";
+  const distanceTrendLabel = t("dashboard.thisMonthVsPrevious");
   const distanceBubbleTint = "34,197,94";
   const distanceBubbleStyle = getTintedBubbleStyle(distanceBubbleTint);
 
@@ -73,10 +75,10 @@ export default function Index() {
             <div className="flex items-center gap-4">
               <div>
                 <h1 className="text-2xl sm:text-3xl font-bold text-zinc-50">
-                  Welcome back, <span className="text-white">{profile.fullName}</span>
+                  {t("dashboard.welcomeBackPrefix")} <span className="text-white">{profile.fullName}</span>
                 </h1>
                 <p className="text-muted-foreground mt-1">
-                  Here's your mileage overview for this month
+                  {t("dashboard.subtitle")}
                 </p>
               </div>
             </div>
@@ -97,10 +99,10 @@ export default function Index() {
         {/* KPI Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <KPICard
-            title="Total Distance"
-            value="6,220 km"
+            title="DISTANCIA TOTAL"
+            value={`${(6220).toLocaleString(locale)} km`}
             subtitle={undefined}
-            icon={<div className={kpiTitleClassName}>Total Distance</div>}
+            icon={<div className={kpiTitleClassName}>{t("dashboard.totalDistance")}</div>}
             iconWrapperClassName={kpiTitleWrapperClassName}
             hideTitle
             headerRight={<div className="absolute top-4 right-4 flex flex-col items-center text-center">
@@ -114,23 +116,23 @@ export default function Index() {
             variant="primary"
             valueGradient={false}
             valueClassName="text-white"
-            action={<Link to="/trips" className="text-xs text-primary hover:underline">Ver viajes</Link>}
+            action={<Link to="/trips" className="text-xs text-primary hover:underline">{t("dashboard.viewTrips")}</Link>}
           />
           <KPICard
-            title="Active Projects"
+            title="PROYECTOS ACTIVOS"
             value={dashboardProjects.length}
             subtitle={undefined}
-            icon={<div className={kpiTitleClassName}>Active Projects</div>}
+            icon={<div className={kpiTitleClassName}>{t("dashboard.activeProjects")}</div>}
             iconWrapperClassName={kpiTitleWrapperClassName}
             hideTitle
             variant="accent"
-            action={<Link to="/projects" className="text-xs text-primary hover:underline">Ver proyectos</Link>}
+            action={<Link to="/projects" className="text-xs text-primary hover:underline">{t("dashboard.viewProjects")}</Link>}
           />
           <KPICard
-            title={"CO\u2082 Emissions"}
-            value={`${co2Kg.toLocaleString("en-US")} kg`}
+            title={"EMISIONES CO\u2082"}
+            value={`${co2Kg.toLocaleString(locale)} kg`}
             subtitle={undefined}
-             icon={<div className={kpiTitleClassName}>{"CO\u2082 Emissions"}</div>}
+             icon={<div className={kpiTitleClassName}>{t("dashboard.co2Emissions")}</div>}
              hideTitle
              iconWrapperClassName={kpiTitleWrapperClassName}
              headerRight={<div className="absolute top-4 right-4 flex flex-col items-center text-center">
@@ -143,9 +145,9 @@ export default function Index() {
                  <Co2TrendIcon className="h-3 w-3" />
                  <span>{Math.abs(co2TrendValue)}%</span>
                </div>
-               <div className="text-[10px] leading-tight text-muted-foreground mt-0.5">vs last month</div>
+               <div className="text-[10px] leading-tight text-muted-foreground mt-0.5">{t("dashboard.vsLastMonth")}</div>
              </div>}
-             action={<Link to="/advanced/emissions" className="text-xs text-primary hover:underline">Ver Ranking</Link>}
+             action={<Link to="/advanced/emissions" className="text-xs text-primary hover:underline">{t("dashboard.viewCo2")}</Link>}
            />
          </div>
 

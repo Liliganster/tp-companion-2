@@ -4,6 +4,7 @@ export type UserProfile = {
   fullName: string;
   vatId: string;
   licensePlate: string;
+  language: "es" | "en" | "de";
   ratePerKm: string;
   passengerSurcharge: string;
   baseAddress: string;
@@ -17,6 +18,7 @@ const DEFAULT_PROFILE: UserProfile = {
   fullName: "lilianmartinez357",
   vatId: "ATU12345678",
   licensePlate: "W-123AB",
+  language: "es",
   ratePerKm: "0,5",
   passengerSurcharge: "0,15",
   baseAddress: "Laurenzgasse, 6/31",
@@ -98,4 +100,3 @@ export function getProfileInitial(fullName: string) {
   if (!trimmed) return "?";
   return trimmed[0].toUpperCase();
 }
-
