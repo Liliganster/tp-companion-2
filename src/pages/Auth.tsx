@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Car, Mail, Lock, User, ArrowRight, Loader2 } from "lucide-react";
+import { Mail, Lock, User, ArrowRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/hooks/use-i18n";
 
@@ -30,9 +30,7 @@ export default function Auth() {
         
         <div className="relative z-10 flex flex-col justify-center px-12">
           <div className="flex items-center gap-3 mb-8">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-              <Car className="w-7 h-7 text-primary-foreground" />
-            </div>
+            <img src="/logo.svg" alt="Fahrtenbuch Pro" className="w-12 h-12 rounded-xl" />
             <div>
               <h1 className="text-2xl font-bold gradient-text">Fahrtenbuch Pro</h1>
               <p className="text-sm text-muted-foreground">{t("auth.tagline")}</p>
@@ -67,9 +65,7 @@ export default function Auth() {
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-3 mb-8 justify-center">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-              <Car className="w-6 h-6 text-primary-foreground" />
-            </div>
+            <img src="/logo.svg" alt="Fahrtenbuch Pro" className="w-10 h-10 rounded-xl" />
             <span className="text-xl font-bold gradient-text">Fahrtenbuch Pro</span>
           </div>
 

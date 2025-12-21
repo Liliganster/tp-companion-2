@@ -6,11 +6,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Download, Printer, ArrowLeft, FileSpreadsheet, FileText, FileDown } from "lucide-react";
+import { Download, Printer, ArrowLeft, FileSpreadsheet, FileText, FileDown, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTrips } from "@/contexts/TripsContext";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { useUserProfile } from "@/contexts/UserProfileContext";
+import { useReports } from "@/contexts/ReportsContext";
 import { useI18n } from "@/hooks/use-i18n";
 
 interface ReportTrip {
@@ -22,7 +23,7 @@ interface ReportTrip {
   distance: number;
 }
 
-// Mock report data
+/* Mock report data (unused)
 const mockReportTrips: ReportTrip[] = [
   {
     date: "19-11-2019",
@@ -81,6 +82,7 @@ const mockReportTrips: ReportTrip[] = [
     distance: 8.9,
   },
 ];
+*/
 
 export default function ReportView() {
   const navigate = useNavigate();
@@ -90,14 +92,33 @@ export default function ReportView() {
   const { t, tf, locale } = useI18n();
   const { trips: allTrips } = useTrips();
   const { projects } = useProjects();
+  const { reports, addReport } = useReports();
+  const reportId = searchParams.get("reportId");
+  const savedReport = reportId ? reports.find((r) => r.id === reportId) : undefined;
+
+  if (reportId && !savedReport) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="sticky top-0 z-10 bg-background border-b border-border px-4 sm:px-6 py-4 print:hidden">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+            <Button variant="ghost" onClick={() => navigate("/reports")} className="px-2 sm:px-4">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              <span className="hidden sm:inline">{t("reportView.backToReports")}</span>
+              <span className="sm:hidden">{t("reportView.backShort")}</span>
+            </Button>
+          </div>
+        </div>
+        <div className="max-w-3xl mx-auto p-6">
+          <h1 className="text-xl font-semibold">{t("reportView.notFoundTitle")}</h1>
+          <p className="text-muted-foreground mt-2">{t("reportView.notFoundBody")}</p>
+        </div>
+      </div>
+    );
+  }
   
-  const period = searchParams.get("period") || "19-11-2019 - 02-12-2025";
-  const driver = searchParams.get("driver") || profile.fullName;
-  const address = searchParams.get("address") || [profile.baseAddress, profile.city].filter(Boolean).join(", ");
-  const licensePlate = searchParams.get("licensePlate") || profile.licensePlate;
   const rawProjectParam = searchParams.get("project") ?? "all";
-  const selectedMonth = searchParams.get("month") || "";
-  const selectedYear = searchParams.get("year") || "";
+  const selectedMonth = savedReport?.month ?? (searchParams.get("month") || "");
+  const selectedYear = savedReport?.year ?? (searchParams.get("year") || "");
 
   const normalizeProjectParam = (value: string) => {
     const trimmed = value.trim();
@@ -108,7 +129,16 @@ export default function ReportView() {
   };
 
   const projectFilter = normalizeProjectParam(rawProjectParam);
-  const projectLabel = projectFilter === "all" ? t("reports.allProjects") : projectFilter;
+  const effectiveProject = savedReport?.project ?? projectFilter;
+  const projectLabel = effectiveProject === "all" ? t("reports.allProjects") : effectiveProject;
+
+  const formatDateShort = (dateOnly: string) =>
+    new Date(`${dateOnly}T00:00:00`).toLocaleDateString(locale, { day: "2-digit", month: "2-digit", year: "numeric" });
+
+  const period = savedReport ? `${formatDateShort(savedReport.startDate)} - ${formatDateShort(savedReport.endDate)}` : (searchParams.get("period") || "");
+  const driver = savedReport?.driver ?? (searchParams.get("driver") || profile.fullName);
+  const address = savedReport?.address ?? (searchParams.get("address") || [profile.baseAddress, profile.city].filter(Boolean).join(", "));
+  const licensePlate = savedReport?.licensePlate ?? (searchParams.get("licensePlate") || profile.licensePlate);
 
   const getTripTime = (date: string) => {
     const time = Date.parse(date);
@@ -120,12 +150,13 @@ export default function ReportView() {
 
   const filteredTrips = allTrips
     .filter((t) => {
+      if (savedReport) return savedReport.tripIds.includes(t.id);
       const time = getTripTime(t.date);
       if (!time) return false;
       const d = new Date(time);
       const matchesPeriod =
         monthIndex == null || yearValue == null ? true : d.getFullYear() === yearValue && d.getMonth() === monthIndex;
-      const matchesProject = projectFilter === "all" || t.project === projectFilter;
+      const matchesProject = effectiveProject === "all" || t.project === effectiveProject;
       return matchesPeriod && matchesProject;
     })
     .sort((a, b) => getTripTime(a.date) - getTripTime(b.date) || a.id.localeCompare(b.id));
@@ -187,6 +218,15 @@ export default function ReportView() {
     t("reportView.colPassengers"),
     t("reportView.colDistanceKm"),
   ];
+
+  const pdfHeaders = [
+    t("reportView.colDate"),
+    t("reportView.colProject"),
+    t("reportView.colCompanyProducer"),
+    t("reportView.colRoute"),
+    t("reportView.colPassengersShort"),
+    t("reportView.colDistanceKm"),
+  ];
   const rows = trips.map((trip) => [
     trip.date,
     trip.project,
@@ -195,6 +235,51 @@ export default function ReportView() {
     trip.passengers,
     trip.distance,
   ]);
+
+  const pdfRows = trips.map((trip) => [
+    trip.date,
+    trip.project,
+    trip.producer,
+    trip.route.join(" -> "),
+    String(trip.passengers),
+    trip.distance.toFixed(1),
+  ]);
+
+  const canSave =
+    !savedReport &&
+    Boolean(selectedMonth) &&
+    Boolean(selectedYear) &&
+    filteredTrips.length > 0;
+
+  const handleSave = () => {
+    if (!canSave) return;
+
+    const monthIndexForSave = Math.max(0, Math.min(11, Number.parseInt(selectedMonth, 10) - 1));
+    const yearValueForSave = Number.parseInt(selectedYear, 10);
+    const start = new Date(yearValueForSave, monthIndexForSave, 1);
+    const end = new Date(yearValueForSave, monthIndexForSave + 1, 0);
+
+    const next = addReport({
+      month: selectedMonth,
+      year: selectedYear,
+      project: effectiveProject,
+      tripIds: filteredTrips.map((t) => t.id),
+      startDate: start.toISOString().slice(0, 10),
+      endDate: end.toISOString().slice(0, 10),
+      totalDistanceKm: totalDistance,
+      tripsCount: filteredTrips.length,
+      driver,
+      address,
+      licensePlate,
+    });
+
+    toast({
+      title: t("reportView.toastSavedTitle"),
+      description: t("reportView.toastSavedBody"),
+    });
+
+    navigate(`/reports/view?reportId=${encodeURIComponent(next.id)}`, { replace: true });
+  };
 
   const handleExport = (format: "excel" | "pdf" | "csv") => {
     const formatNames = {
@@ -232,6 +317,7 @@ export default function ReportView() {
         const pageWidth = doc.internal.pageSize.getWidth();
         const margin = 48;
         const headerBottomY = 112;
+        const availableWidth = pageWidth - margin * 2;
 
         const drawLabelValueLeft = (x: number, y: number, label: string, value: string) => {
           const labelText = `${label}: `;
@@ -257,11 +343,11 @@ export default function ReportView() {
 
         doc.setTextColor(0, 0, 0);
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(16);
+        doc.setFontSize(14);
         doc.text(t("reportView.reportTitle"), pageWidth / 2, 44, { align: "center" });
 
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(11);
+        doc.setFontSize(9);
         doc.text(`${t("reportView.periodLabel")}: ${period}`, pageWidth / 2, 64, { align: "center" });
 
         const leftX = margin;
@@ -279,9 +365,59 @@ export default function ReportView() {
         doc.setLineWidth(0.5);
         doc.line(margin, headerBottomY, pageWidth - margin, headerBottomY);
 
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+
+        const computeColumnWidths = () => {
+          const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+          const pad = 10;
+
+          const min = [58, 92, 120, 260, 38, 62];
+          const max = [72, 130, 180, 420, 55, 86];
+
+          const desired = pdfHeaders.map((header, colIndex) => {
+            let maxTextWidth = doc.getTextWidth(String(header));
+            for (const row of pdfRows) {
+              const raw = row[colIndex] ?? "";
+              const text =
+                colIndex === 3 ? String(raw).slice(0, 90) : String(raw);
+              maxTextWidth = Math.max(maxTextWidth, doc.getTextWidth(text));
+            }
+            return clamp(maxTextWidth + pad, min[colIndex], max[colIndex]);
+          });
+
+          let widths = desired.slice();
+          const sum = () => widths.reduce((acc, w) => acc + w, 0);
+
+          if (sum() > availableWidth) {
+            const reducible = [2, 1, 3, 0, 5];
+            for (let iteration = 0; iteration < 4 && sum() > availableWidth; iteration++) {
+              const overflow = sum() - availableWidth;
+              const totalSlack = reducible.reduce((acc, i) => acc + Math.max(0, widths[i] - min[i]), 0);
+              if (totalSlack <= 0) break;
+
+              for (const i of reducible) {
+                const slack = Math.max(0, widths[i] - min[i]);
+                if (!slack) continue;
+                const reduce = Math.min(slack, overflow * (slack / totalSlack));
+                widths[i] -= reduce;
+              }
+            }
+          } else if (sum() < availableWidth) {
+            const extra = availableWidth - sum();
+            const routeIndex = 3;
+            widths[routeIndex] = Math.min(max[routeIndex], widths[routeIndex] + extra);
+          }
+
+          widths = widths.map((w) => Math.floor(w));
+          return widths;
+        };
+
+        const columnWidths = computeColumnWidths();
+
         autoTable(doc, {
-          head: [headers],
-          body: rows.map((r) => [r[0], r[1], r[2], r[3], String(r[4] ?? ""), String(r[5] ?? "")]),
+          head: [pdfHeaders],
+          body: pdfRows.map((r) => [r[0], r[1], r[2], r[3], r[4], r[5]]),
           foot: [
             [
               { content: `${t("reportView.totalDistanceLabel")}:`, colSpan: 5, styles: { halign: "right", fontStyle: "bold" } },
@@ -290,17 +426,17 @@ export default function ReportView() {
           ],
           startY: headerBottomY + 18,
           theme: "grid",
-          styles: { fontSize: 9, cellPadding: 4, textColor: 0, lineColor: 0, lineWidth: 0.5 },
-          headStyles: { fillColor: [255, 255, 255], textColor: 0, fontStyle: "bold", lineColor: 0, lineWidth: 0.5 },
-          footStyles: { fillColor: [255, 255, 255], textColor: 0, lineColor: 0, lineWidth: 0.5 },
+          styles: { fontSize: 7.5, cellPadding: 3, textColor: 0, lineColor: [165, 165, 165], lineWidth: 0.35 },
+          headStyles: { fillColor: [255, 255, 255], textColor: 0, fontStyle: "bold", fontSize: 8, lineColor: 0, lineWidth: 0.6 },
+          footStyles: { fillColor: [255, 255, 255], textColor: 0, fontSize: 8, lineColor: 0, lineWidth: 0.6 },
           margin: { left: margin, right: margin },
           columnStyles: {
-            0: { cellWidth: 70 },
-            1: { cellWidth: 100 },
-            2: { cellWidth: 140 },
-            3: { cellWidth: 270 },
-            4: { cellWidth: 80, halign: "center" },
-            5: { cellWidth: 90, halign: "right" },
+            0: { cellWidth: columnWidths[0] },
+            1: { cellWidth: columnWidths[1], overflow: "ellipsize" },
+            2: { cellWidth: columnWidths[2], overflow: "ellipsize" },
+            3: { cellWidth: columnWidths[3], overflow: "linebreak" },
+            4: { cellWidth: columnWidths[4], halign: "center" },
+            5: { cellWidth: columnWidths[5], halign: "right" },
           },
         });
 
@@ -331,6 +467,12 @@ export default function ReportView() {
             <span className="sm:hidden">{t("reportView.backShort")}</span>
           </Button>
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            {!savedReport && (
+              <Button size="sm" onClick={handleSave} disabled={!canSave}>
+                <Save className="w-4 h-4 sm:mr-2" />
+                <span className="hidden sm:inline">{t("reportView.saveReport")}</span>
+              </Button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -397,54 +539,70 @@ export default function ReportView() {
 
             {/* Report Table */}
             <div className="overflow-x-auto -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 print:overflow-visible print:mx-0 print:px-0">
-              <table className="w-full text-xs sm:text-sm min-w-[600px] print:min-w-0 print:text-[11px]">
+              <table className="w-full text-xs sm:text-sm min-w-[600px] print:min-w-0 print:text-[9px] print:leading-tight table-fixed print:table-fixed">
+                <colgroup>
+                  <col style={{ width: "10%" }} />
+                  <col style={{ width: "14%" }} />
+                  <col style={{ width: "18%" }} />
+                  <col style={{ width: "41%" }} />
+                  <col style={{ width: "5%" }} />
+                  <col style={{ width: "12%" }} />
+                </colgroup>
                 <thead>
                   <tr className="border-b border-slate-600 print:border-black">
-                    <th className="text-left py-3 px-2 font-semibold whitespace-nowrap">{t("reportView.colDate")}</th>
-                    <th className="text-left py-3 px-2 font-semibold whitespace-nowrap">{t("reportView.colProject")}</th>
-                    <th className="text-left py-3 px-2 font-semibold whitespace-nowrap hidden md:table-cell">
+                    <th className="text-left py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap">{t("reportView.colDate")}</th>
+                    <th className="text-left py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap">{t("reportView.colProject")}</th>
+                    <th className="text-left py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap hidden md:table-cell">
                       {t("reportView.colCompanyProducer")}
                     </th>
-                    <th className="text-left py-3 px-2 font-semibold whitespace-nowrap">{t("reportView.colRoute")}</th>
-                    <th className="text-center py-3 px-2 font-semibold whitespace-nowrap hidden sm:table-cell">
-                      {t("reportView.colPassengers")}
+                    <th className="text-left py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap">{t("reportView.colRoute")}</th>
+                    <th className="text-center py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap hidden sm:table-cell">
+                      {t("reportView.colPassengersShort")}
                     </th>
-                    <th className="text-right py-3 px-2 font-semibold whitespace-nowrap">{t("reportView.colDistance")}</th>
+                    <th className="text-right py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap">{t("reportView.colDistanceKm")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {trips.map((trip, index) => (
                     <tr key={index} className="border-b border-slate-700/50 print:border-black">
-                      <td className="py-3 sm:py-4 px-2 align-top whitespace-nowrap">
+                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-1 align-top whitespace-nowrap">
                         {trip.date}
                       </td>
-                      <td className="py-3 sm:py-4 px-2 align-top">
+                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-1 align-top overflow-hidden text-ellipsis whitespace-nowrap">
                         {trip.project}
                       </td>
-                      <td className="py-3 sm:py-4 px-2 align-top hidden md:table-cell">
+                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-1 align-top hidden md:table-cell overflow-hidden text-ellipsis whitespace-nowrap">
                         {trip.producer}
                       </td>
-                      <td className="py-3 sm:py-4 px-2 align-top text-slate-300 max-w-[200px] sm:max-w-none truncate sm:whitespace-normal print:text-black print:truncate-none print:max-w-none print:whitespace-normal print:break-words">
+                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-1 align-top text-slate-300 max-w-[200px] sm:max-w-none truncate sm:whitespace-normal print:text-black print:truncate-none print:max-w-none print:whitespace-normal print:break-words">
                         {trip.route.join(" -> ")}
                       </td>
-                      <td className="py-3 sm:py-4 px-2 align-top text-center hidden sm:table-cell">
+                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-1 align-top text-center hidden sm:table-cell">
                         {trip.passengers}
                       </td>
-                      <td className="py-3 sm:py-4 px-2 align-top text-right font-semibold whitespace-nowrap">
-                        {trip.distance.toFixed(1)} km
+                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-1 align-top text-right font-semibold whitespace-nowrap">
+                        {trip.distance.toFixed(1)}
                       </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-slate-500 print:border-black">
-                    <td colSpan={5} className="py-4 px-2 text-right font-semibold hidden sm:table-cell">
+                  <tr className="border-t-2 border-slate-500 print:hidden">
+                    <td colSpan={5} className="py-4 px-2 print:py-2 print:px-1 text-right font-semibold hidden sm:table-cell">
                       {t("reportView.totalDistanceLabel")}:
                     </td>
                     <td className="py-4 px-2 text-left font-semibold sm:hidden" colSpan={3}>
                       {t("reportView.totalShort")}:
                     </td>
-                    <td className="py-4 px-2 text-right font-bold text-base sm:text-lg whitespace-nowrap">
+                    <td className="py-4 px-2 print:py-2 print:px-1 text-right font-bold text-sm sm:text-lg print:text-[10px] whitespace-nowrap">
+                      {totalDistance.toFixed(1)} km
+                    </td>
+                  </tr>
+                  <tr className="hidden print:table-row border-t-2 border-black">
+                    <td colSpan={5} className="py-2 px-1 text-right font-semibold">
+                      {t("reportView.totalDistanceLabel")}:
+                    </td>
+                    <td className="py-2 px-1 text-right font-semibold text-[10px] whitespace-nowrap">
                       {totalDistance.toFixed(1)} km
                     </td>
                   </tr>

@@ -4,7 +4,6 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import appIcon from "@/assets/app-icon.png";
 import { getProfileInitial, useUserProfile } from "@/contexts/UserProfileContext";
 import { useI18n } from "@/hooks/use-i18n";
 interface MobileHeaderProps {
@@ -46,7 +45,7 @@ export function MobileHeader({
   return <header className="lg:hidden fixed top-0 left-0 right-0 z-50 h-16 glass border-b border-border/50">
       <div className="flex items-center justify-between h-full px-4">
         <Link to="/" className="flex items-center gap-2">
-          
+          <img src="/logo.svg" alt="Fahrtenbuch Pro" className="w-8 h-8 rounded-md" />
           <span className="font-semibold text-lg text-foreground">Fahrtenbuch Pro</span>
         </Link>
 

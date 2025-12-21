@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Fahrtenbuch Pro">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="78%">
+      <stop offset="0%" stop-color="#f7fbff"/>
+      <stop offset="45%" stop-color="#cdd7e1"/>
+      <stop offset="100%" stop-color="#738392"/>
+    </radialGradient>
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feColorMatrix
+        in="blur"
+        type="matrix"
+        values="1 0 0 0 0
+                0 1 0 0 0
+                0 0 1 0 0
+                0 0 0 0.35 0"
+        result="glow"
+      />
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#bg)"/>
+
+  <g filter="url(#softGlow)" transform="translate(64,84)" stroke="#0b3d73" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Document -->
+    <path d="M34 36h92a18 18 0 0 1 18 18v126a18 18 0 0 1-18 18H34a18 18 0 0 1-18-18V54a18 18 0 0 1 18-18z"/>
+    <path d="M118 36v42h42"/>
+    <path d="M46 86h70"/>
+    <path d="M46 112h62"/>
+    <path d="M46 138h54"/>
+    <path d="M46 164h40"/>
+
+    <!-- Pin -->
+    <path d="M330 96c0-30 24-54 54-54s54 24 54 54c0 46-54 102-54 102s-54-56-54-102z"/>
+    <circle cx="384" cy="96" r="18"/>
+
+    <!-- Car -->
+    <path d="M134 214c10-28 26-54 46-76 10-10 22-16 36-16h120c14 0 26 6 36 16 20 22 36 48 46 76"/>
+    <path d="M164 214h220"/>
+    <path d="M158 214c-26 0-46 20-46 46v44c0 10 8 18 18 18h36"/>
+    <path d="M394 214c26 0 46 20 46 46v44c0 10-8 18-18 18h-36"/>
+    <path d="M176 322h160"/>
+    <path d="M142 322l18-56c6-18 22-30 42-30h108c20 0 36 12 42 30l18 56"/>
+    <path d="M176 270l-34-18"/>
+    <path d="M336 270l34-18"/>
+    <path d="M210 304h92"/>
+    <path d="M210 304l10-34h72l10 34"/>
+
+    <!-- Ground swoosh -->
+    <path d="M64 350c90 34 262 34 352 0"/>
+  </g>
+
+  <!-- Title -->
+  <g transform="translate(0,0)">
+    <text x="256" y="420" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="72" font-weight="700" fill="#0b3d73" opacity="0.15">
+      Fahrtenbuch
+    </text>
+    <text x="256" y="420" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="72" font-weight="700" fill="#f7fbff" stroke="#0b3d73" stroke-width="4">
+      Fahrtenbuch
+    </text>
+    <text x="256" y="480" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="64" font-weight="800" fill="#1d6fb8" stroke="#0b3d73" stroke-width="3">
+      Pro
+    </text>
+  </g>
+</svg>

@@ -18,12 +18,6 @@ import {
 } from "@/components/ui/dialog";
 import {
   FileText,
-  Download,
-  Printer,
-  Calendar,
-  CheckCircle,
-  Clock,
-  Eye,
   AlertTriangle,
   Check,
   Trash2,
@@ -32,17 +26,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useTrips } from "@/contexts/TripsContext";
 import { useUserProfile } from "@/contexts/UserProfileContext";
+import { useReports } from "@/contexts/ReportsContext";
 import { useI18n } from "@/hooks/use-i18n";
-
-interface Report {
-  id: string;
-  period: string;
-  project: string;
-  totalKm: number;
-  trips: number;
-  generatedAt: string;
-  status: "complete" | "pending";
-}
 
 interface TripWarning {
   tripId: string;
@@ -51,19 +36,9 @@ interface TripWarning {
   warning: string;
 }
 
-const mockReports: Report[] = [
-  {
-    id: "1",
-    period: "19-11-2019 - 02-12-2025",
-    project: "all",
-    totalKm: 2840,
-    trips: 12,
-    generatedAt: "2025-12-21T10:30:00",
-    status: "complete",
-  },
-];
+// Reports are stored locally when generated.
 
-// Mock warnings
+/* Mock data (unused)
 const mockWarnings: TripWarning[] = [
   {
     tripId: "4",
@@ -132,12 +107,14 @@ const mockReportTrips = [
     distance: 8.9,
   },
 ];
+*/
 
 export default function Reports() {
   const navigate = useNavigate();
   const { profile } = useUserProfile();
   const { t, tf, locale } = useI18n();
   const { trips } = useTrips();
+  const { reports, deleteReport } = useReports();
   const [selectedProject, setSelectedProject] = useState("all");
   const [selectedMonth, setSelectedMonth] = useState("01");
   const [selectedYear, setSelectedYear] = useState("2024");
@@ -184,7 +161,7 @@ export default function Reports() {
         nextWarnings.push({
           tripId: trip.id,
           date: formattedDate,
-          route: trip.route.join(" → "),
+          route: trip.route.join(" -> "),
           warning: t("reports.warningImprobableDistance"),
         });
       }
@@ -193,7 +170,7 @@ export default function Reports() {
         nextWarnings.push({
           tripId: trip.id,
           date: formattedDate,
-          route: trip.route.join(" → "),
+          route: trip.route.join(" -> "),
           warning: t("reports.warningMissingPurpose"),
         });
       }
@@ -205,20 +182,16 @@ export default function Reports() {
 
   const handleGenerateReport = () => {
     setVerificationModalOpen(false);
-    toast({
-      title: t("reports.toastGeneratedTitle"),
-      description: t("reports.toastGeneratedBody"),
-    });
-    navigateToReportView();
-  };
-
-  const navigateToReportView = () => {
     const selectedTrips = getTripsForSelection();
     const monthIndex = Math.max(0, Math.min(11, Number.parseInt(selectedMonth, 10) - 1));
     const yearValue = Number.parseInt(selectedYear, 10);
     const start = new Date(yearValue, monthIndex, 1);
     const end = new Date(yearValue, monthIndex + 1, 0);
 
+    toast({
+      title: t("reports.toastGeneratedTitle"),
+      description: t("reports.toastGeneratedBody"),
+    });
     const params = new URLSearchParams({
       period: `${start.toLocaleDateString(locale, { day: "2-digit", month: "2-digit", year: "numeric" })} - ${end.toLocaleDateString(locale, { day: "2-digit", month: "2-digit", year: "numeric" })}`,
       driver: profile.fullName,
@@ -232,13 +205,12 @@ export default function Reports() {
     navigate(`/reports/view?${params.toString()}`);
   };
 
-  const getProjectName = (value: string) => {
-    return value === "all" ? t("reports.allProjects") : value;
+  const navigateToReportView = (id: string) => {
+    navigate(`/reports/view?reportId=${encodeURIComponent(id)}`);
   };
 
-  const getMonthName = (month: string) => {
-    const date = new Date(2024, parseInt(month) - 1);
-    return date.toLocaleString(locale, { month: "long" });
+  const getProjectName = (value: string) => {
+    return value === "all" ? t("reports.allProjects") : value;
   };
 
   return (
@@ -344,20 +316,30 @@ export default function Reports() {
                 </tr>
               </thead>
               <tbody>
-                {mockReports.map((report) => (
+                {reports.map((report) => (
                   <tr key={report.id} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
                     <td className="py-4 px-4">
                       <Checkbox />
                     </td>
                     <td className="py-4 px-4 whitespace-nowrap">
-                      {new Date(report.generatedAt).toLocaleDateString(locale, {
+                      {new Date(report.createdAt).toLocaleDateString(locale, {
                         day: "2-digit",
                         month: "2-digit",
                         year: "numeric",
                       })}
                     </td>
                     <td className="py-4 px-4 whitespace-nowrap">
-                      {report.period}
+                      {new Date(`${report.startDate}T00:00:00`).toLocaleDateString(locale, {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                      })}{" "}
+                      -{" "}
+                      {new Date(`${report.endDate}T00:00:00`).toLocaleDateString(locale, {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                      })}
                     </td>
                     <td className="py-4 px-4 hidden sm:table-cell">
                       {getProjectName(report.project)}
@@ -368,7 +350,7 @@ export default function Reports() {
                           variant="link"
                           size="sm"
                           className="text-primary h-auto p-0"
-                          onClick={navigateToReportView}
+                          onClick={() => navigateToReportView(report.id)}
                         >
                           {t("reports.view")}
                         </Button>
@@ -376,6 +358,7 @@ export default function Reports() {
                           variant="ghost"
                           size="icon"
                           className="text-destructive hover:text-destructive h-8 w-8"
+                          onClick={() => deleteReport(report.id)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
