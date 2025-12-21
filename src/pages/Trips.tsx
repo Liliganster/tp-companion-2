@@ -11,6 +11,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { AddTripModal } from "@/components/trips/AddTripModal";
 import { BulkUploadModal } from "@/components/trips/BulkUploadModal";
 import { TripDetailModal } from "@/components/trips/TripDetailModal";
+import { useUserProfile } from "@/contexts/UserProfileContext";
+import { parseLocaleNumber, roundTo } from "@/lib/number";
 interface Trip {
   id: string;
   date: string;
@@ -20,11 +22,10 @@ interface Trip {
   passengers: number;
   warnings?: string[];
   co2: number;
-  reimbursement: number;
   distance: number;
+  ratePerKmOverride?: number | null;
 }
 const calculateCO2 = (distance: number) => Math.round(distance * 0.12 * 10) / 10;
-const calculateReimbursement = (distance: number) => Math.round(distance * 0.30 * 100) / 100;
 const mockTripsData: Trip[] = [{
   id: "1",
   date: "2024-01-15",
@@ -34,7 +35,6 @@ const mockTripsData: Trip[] = [{
   passengers: 2,
   distance: 584,
   co2: calculateCO2(584),
-  reimbursement: calculateReimbursement(584)
 }, {
   id: "2",
   date: "2024-01-14",
@@ -44,7 +44,6 @@ const mockTripsData: Trip[] = [{
   passengers: 0,
   distance: 575,
   co2: calculateCO2(575),
-  reimbursement: calculateReimbursement(575)
 }, {
   id: "3",
   date: "2024-01-13",
@@ -54,7 +53,6 @@ const mockTripsData: Trip[] = [{
   passengers: 0,
   distance: 45,
   co2: calculateCO2(45),
-  reimbursement: calculateReimbursement(45)
 }, {
   id: "4",
   date: "2024-01-12",
@@ -65,7 +63,6 @@ const mockTripsData: Trip[] = [{
   warnings: ["Unusual distance"],
   distance: 289,
   co2: calculateCO2(289),
-  reimbursement: calculateReimbursement(289)
 }, {
   id: "5",
   date: "2024-01-11",
@@ -75,9 +72,9 @@ const mockTripsData: Trip[] = [{
   passengers: 0,
   distance: 289,
   co2: calculateCO2(289),
-  reimbursement: calculateReimbursement(289)
 }];
 export default function Trips() {
+  const { profile } = useUserProfile();
   const [selectedProject, setSelectedProject] = useState("all");
   const [selectedYear, setSelectedYear] = useState("2024");
   const [trips, setTrips] = useState<Trip[]>(mockTripsData);
@@ -101,6 +98,44 @@ export default function Trips() {
     toast({
       title: "Added to calendar",
       description: `Trip to ${trip.route[trip.route.length - 1]} on ${new Date(trip.date).toLocaleDateString("de-DE")} added to calendar.`
+    });
+  };
+
+  const settingsRatePerKm = parseLocaleNumber(profile.ratePerKm) ?? 0;
+  const settingsPassengerSurchargePerKm = parseLocaleNumber(profile.passengerSurcharge) ?? 0;
+
+  const calculateTripReimbursement = (trip: Trip) => {
+    const baseRate = trip.ratePerKmOverride ?? settingsRatePerKm;
+    return roundTo(trip.distance * baseRate + trip.distance * trip.passengers * settingsPassengerSurchargePerKm, 2);
+  };
+
+  type SavedTrip = {
+    id: string;
+    date: string;
+    route: string[];
+    project: string;
+    purpose: string;
+    passengers: number;
+    distance: number;
+    ratePerKmOverride?: number | null;
+  };
+
+  const handleSaveTrip = (data: SavedTrip) => {
+    setTrips((prev) => {
+      const nextTrip: Trip = {
+        id: data.id,
+        date: data.date,
+        route: data.route,
+        project: data.project,
+        purpose: data.purpose,
+        passengers: data.passengers,
+        distance: data.distance,
+        co2: calculateCO2(data.distance),
+        ratePerKmOverride: data.ratePerKmOverride ?? null,
+      };
+
+      const exists = prev.some((t) => t.id === data.id);
+      return exists ? prev.map((t) => (t.id === data.id ? { ...t, ...nextTrip } : t)) : [nextTrip, ...prev];
     });
   };
   const filteredTrips = trips.filter(trip => {
@@ -157,7 +192,7 @@ export default function Trips() {
             <AddTripModal trigger={<Button>
                   <Plus className="w-4 h-4" />
                   <span className="hidden sm:inline">Add Trip</span>
-                </Button>} />
+                </Button>} onSave={handleSaveTrip} />
           </div>
         </div>
 
@@ -237,7 +272,7 @@ export default function Trips() {
                       </div>
                       <div className="flex justify-between md:flex-col md:gap-0.5">
                         <span className="text-muted-foreground text-center">Reembolso:</span>
-                        <span className="text-primary font-medium text-center">{trip.reimbursement.toFixed(2)} €</span>
+                        <span className="text-primary font-medium text-center">{calculateTripReimbursement(trip).toFixed(2)} €</span>
                       </div>
                       <div className="flex justify-between md:flex-col md:gap-0.5">
                         <span className="text-muted-foreground text-center">Pasajeros:</span>
@@ -326,7 +361,7 @@ export default function Trips() {
                     </TableCell>
                     <TableCell className="text-right text-emerald-500 whitespace-nowrap">{trip.co2} kg</TableCell>
                     <TableCell className="text-right text-muted-foreground hidden lg:table-cell">{trip.passengers || "-"}</TableCell>
-                    <TableCell className="text-right text-primary font-medium whitespace-nowrap">{trip.reimbursement.toFixed(2)} €</TableCell>
+                    <TableCell className="text-right text-primary font-medium whitespace-nowrap">{calculateTripReimbursement(trip).toFixed(2)} €</TableCell>
                     <TableCell className="text-right font-semibold whitespace-nowrap">{trip.distance} km</TableCell>
                     <TableCell>
                       <DropdownMenu>
@@ -381,6 +416,7 @@ export default function Trips() {
           trip={tripToEdit} 
           open={editModalOpen} 
           onOpenChange={setEditModalOpen} 
+          onSave={handleSaveTrip}
         />
       </div>
     </MainLayout>;

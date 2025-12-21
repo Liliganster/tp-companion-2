@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, GripVertical, X, MapPin, Calendar, Home, Route } from "lucide-react";
 import {
   DndContext,
@@ -23,6 +23,8 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import tripHeaderImage from "@/assets/trip-modal-header.jpg";
+import { useUserProfile } from "@/contexts/UserProfileContext";
+import { formatLocaleNumber, parseLocaleNumber } from "@/lib/number";
 
 interface Stop {
   id: string;
@@ -133,6 +135,7 @@ interface TripData {
   purpose?: string;
   passengers?: number;
   distance?: number;
+  ratePerKmOverride?: number | null;
 }
 
 interface AddTripModalProps {
@@ -140,10 +143,13 @@ interface AddTripModalProps {
   trip?: TripData | null;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  onSave?: (trip: Required<Pick<TripData, "id" | "date" | "route" | "project" | "purpose" | "passengers" | "distance">> & Pick<TripData, "ratePerKmOverride">) => void;
 }
 
-export function AddTripModal({ trigger, trip, open, onOpenChange }: AddTripModalProps) {
+export function AddTripModal({ trigger, trip, open, onOpenChange, onSave }: AddTripModalProps) {
   const isEditing = !!trip;
+  const { profile } = useUserProfile();
+  const settingsRateLabel = useMemo(() => profile.ratePerKm, [profile.ratePerKm]);
   
   const getInitialStops = (): Stop[] => {
     if (trip?.route && trip.route.length >= 2) {
@@ -159,14 +165,32 @@ export function AddTripModal({ trigger, trip, open, onOpenChange }: AddTripModal
     ];
   };
 
-  const [stops, setStops] = useState<Stop[]>(getInitialStops());
-  const [date, setDate] = useState(trip?.date || "");
-  const [distance, setDistance] = useState(trip?.distance?.toString() || "");
-  const [passengers, setPassengers] = useState(trip?.passengers?.toString() || "0");
-  const [project, setProject] = useState(trip?.project || "");
-  const [purpose, setPurpose] = useState(trip?.purpose || "");
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = open !== undefined && !!onOpenChange;
+  const isOpen = isControlled ? open : internalOpen;
+  const setIsOpen = isControlled ? onOpenChange! : setInternalOpen;
+
+  const [stops, setStops] = useState<Stop[]>(() => getInitialStops());
+  const [date, setDate] = useState("");
+  const [distance, setDistance] = useState("");
+  const [passengers, setPassengers] = useState("0");
+  const [project, setProject] = useState("");
+  const [purpose, setPurpose] = useState("");
   const [specialOrigin, setSpecialOrigin] = useState("base");
-  const [tripRate, setTripRate] = useState("0,5");
+  const [tripRate, setTripRate] = useState("");
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    setStops(getInitialStops());
+    setDate(trip?.date || "");
+    setDistance(trip?.distance?.toString() || "");
+    setPassengers(trip?.passengers?.toString() || "0");
+    setProject(trip?.project || "");
+    setPurpose(trip?.purpose || "");
+    setSpecialOrigin("base");
+    setTripRate(trip?.ratePerKmOverride != null ? formatLocaleNumber(trip.ratePerKmOverride) : "");
+  }, [isOpen, trip]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -368,8 +392,12 @@ export function AddTripModal({ trigger, trip, open, onOpenChange }: AddTripModal
                 type="text" 
                 value={tripRate}
                 onChange={(e) => setTripRate(e.target.value)}
+                placeholder={settingsRateLabel}
                 className="bg-secondary/50" 
               />
+              <p className="text-xs text-muted-foreground">
+                Deja este campo en blanco para usar la tarifa de Ajustes.
+              </p>
             </div>
           </div>
 
@@ -384,27 +412,42 @@ export function AddTripModal({ trigger, trip, open, onOpenChange }: AddTripModal
             />
           </div>
 
-          <Button variant="save" className="w-full mt-2">
-            {isEditing ? "Update Trip" : "Save Trip"}
-          </Button>
+          <DialogClose asChild>
+            <Button
+              variant="save"
+              className="w-full mt-2"
+              onClick={() => {
+                const distanceValue = parseLocaleNumber(distance) ?? 0;
+                const passengersValue = parseLocaleNumber(passengers) ?? 0;
+                const rateOverride = parseLocaleNumber(tripRate);
+
+                const routeValues = stops.map((s) => s.value.trim()).filter(Boolean);
+
+                const id = trip?.id || (globalThis.crypto?.randomUUID?.() ?? String(Date.now()));
+
+                onSave?.({
+                  id,
+                  date,
+                  route: routeValues,
+                  project,
+                  purpose,
+                  passengers: Math.max(0, Math.floor(passengersValue)),
+                  distance: Math.max(0, distanceValue),
+                  ratePerKmOverride: rateOverride == null ? null : Math.max(0, rateOverride),
+                });
+              }}
+            >
+              {isEditing ? "Update Trip" : "Save Trip"}
+            </Button>
+          </DialogClose>
         </div>
       </div>
     </DialogContent>
   );
 
-  // If controlled (open/onOpenChange provided), use controlled Dialog
-  if (open !== undefined && onOpenChange) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        {dialogContent}
-      </Dialog>
-    );
-  }
-
-  // Otherwise use trigger-based Dialog
   return (
-    <Dialog>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      {!isControlled && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       {dialogContent}
     </Dialog>
   );

@@ -23,8 +23,8 @@ interface Trip {
   passengers: number;
   warnings?: string[];
   co2: number;
-  reimbursement: number;
   distance: number;
+  ratePerKmOverride?: number | null;
 }
 
 interface TripDetailModalProps {
