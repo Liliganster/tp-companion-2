@@ -10,7 +10,8 @@
   "framework": "vite",
   "functions": {
     "api/**/*.ts": {
-      "runtime": "nodejs20.x"
+      "runtime": "nodejs20.x",
+      "includeFiles": "src/**"
     }
   },
   "rewrites": [
@@ -19,7 +20,7 @@
       "destination": "/api/$1"
     },
     {
-      "source": "/[^.]+",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
