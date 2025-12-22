@@ -10,7 +10,6 @@
   "framework": "vite",
   "functions": {
     "api/**/*.ts": {
-      "runtime": "nodejs20.x",
       "includeFiles": "src/**"
     }
   },
