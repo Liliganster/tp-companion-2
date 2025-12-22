@@ -1,15 +1,19 @@
 import { supabaseAdmin } from "../src/lib/supabaseServer.js";
-import type { default as PDFParser } from "pdf-parse";
-// @ts-ignore - pdf-parse doesn't have proper ES module types
-const pdflib: typeof PDFParser = require("pdf-parse");
 import { generateContent, generateContentFromPDF } from "../src/lib/ai/geminiClient.js";
 import { buildUniversalExtractorPrompt } from "../src/lib/ai/prompts.js";
 import { geocodeAddress } from "../src/lib/geocodingServer.js";
 import { extractionSchema } from "../src/lib/ai/schema.js";
 
+// Dynamic import for pdf-parse to avoid TypeScript issues
+const getPdfParser = async () => {
+  const pdfParse = await import("pdf-parse");
+  return pdfParse.default;
+};
+
 // Helper to determine if native text
 async function detectPdfKind(buffer: Buffer): Promise<"native_text" | "scanned"> {
   try {
+    const pdflib = await getPdfParser();
     const data = await pdflib(buffer);
     const text = data.text;
     const pageCount = data.numpages;
@@ -95,6 +99,7 @@ export default async function handler(req: any, res: any) {
         
         if (kind === "native_text") {
             // Extract text first to save tokens/use Flash-Lite
+            const pdflib = await getPdfParser();
             const pdfData = await pdflib(buffer);
             const textContent = pdfData.text;
             const fullPrompt = buildUniversalExtractorPrompt(textContent);
