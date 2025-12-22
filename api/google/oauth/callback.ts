@@ -1,5 +1,5 @@
-import { exchangeCodeForTokens, getGoogleAccountEmail, verifySignedState } from "../../_utils/googleOAuth";
-import { sendJson, supabaseGetGoogleConnection, supabaseUpsertGoogleConnection } from "../../_utils/supabase";
+import { exchangeCodeForTokens, getGoogleAccountEmail, verifySignedState } from "../../_utils/googleOAuth.js";
+import { sendJson, supabaseGetGoogleConnection, supabaseUpsertGoogleConnection } from "../../_utils/supabase.js";
 
 export default async function handler(req: any, res: any) {
   if (req.method !== "GET") {

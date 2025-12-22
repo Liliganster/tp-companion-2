@@ -1,5 +1,5 @@
-import { requireSupabaseUser, sendJson } from "../../_utils/supabase";
-import { getGoogleAccessTokenForUser } from "../_utils";
+import { requireSupabaseUser, sendJson } from "../../_utils/supabase.js";
+import { getGoogleAccessTokenForUser } from "../_utils.js";
 
 function readBody(req: any) {
   if (req?.body == null) return null;

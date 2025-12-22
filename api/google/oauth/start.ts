@@ -1,5 +1,5 @@
-import { requireSupabaseUser, sendJson } from "../../_utils/supabase";
-import { buildGoogleAuthUrl, buildSignedState } from "../../_utils/googleOAuth";
+import { requireSupabaseUser, sendJson } from "../../_utils/supabase.js";
+import { buildGoogleAuthUrl, buildSignedState } from "../../_utils/googleOAuth.js";
 
 function readBody(req: any) {
   if (req?.body == null) return null;

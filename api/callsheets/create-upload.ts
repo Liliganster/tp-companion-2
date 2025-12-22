@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "../../src/lib/supabaseServer";
+import { supabaseAdmin } from "../../src/lib/supabaseServer.js";
 
 export default async function handler(req: any, res: any) {
   if (req.method !== "POST") {

@@ -1,4 +1,4 @@
-import { requireSupabaseUser, sendJson, supabaseGetGoogleConnection } from "../../_utils/supabase";
+import { requireSupabaseUser, sendJson, supabaseGetGoogleConnection } from "../../_utils/supabase.js";
 
 export default async function handler(req: any, res: any) {
   if (req.method !== "GET") {

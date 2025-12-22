@@ -1,5 +1,5 @@
-import { refreshAccessToken } from "../_utils/googleOAuth";
-import { supabaseGetGoogleConnection } from "../_utils/supabase";
+import { refreshAccessToken } from "../_utils/googleOAuth.js";
+import { supabaseGetGoogleConnection } from "../_utils/supabase.js";
 
 export async function getGoogleAccessTokenForUser(userId: string) {
   const row = await supabaseGetGoogleConnection(userId);

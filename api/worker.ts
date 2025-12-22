@@ -1,10 +1,10 @@
-import { supabaseAdmin } from "../src/lib/supabaseServer";
+import { supabaseAdmin } from "../src/lib/supabaseServer.js";
 // @ts-ignore
 import pdflib from "pdf-parse";
-import { generateContent, generateContentFromPDF } from "../src/lib/ai/geminiClient";
-import { buildUniversalExtractorPrompt } from "../src/lib/ai/prompts";
-import { geocodeAddress } from "../src/lib/geocodingServer";
-import { extractionSchema } from "../src/lib/ai/schema";
+import { generateContent, generateContentFromPDF } from "../src/lib/ai/geminiClient.js";
+import { buildUniversalExtractorPrompt } from "../src/lib/ai/prompts.js";
+import { geocodeAddress } from "../src/lib/geocodingServer.js";
+import { extractionSchema } from "../src/lib/ai/schema.js";
 
 // Helper to determine if native text
 async function detectPdfKind(buffer: Buffer): Promise<"native_text" | "scanned"> {
