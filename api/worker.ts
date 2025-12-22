@@ -3,14 +3,12 @@ import { generateContent, generateContentFromPDF } from "../src/lib/ai/geminiCli
 import { buildUniversalExtractorPrompt } from "../src/lib/ai/prompts.js";
 import { geocodeAddress } from "../src/lib/geocodingServer.js";
 import { extractionSchema } from "../src/lib/ai/schema.js";
-
-// @ts-expect-error - pdf-parse has CommonJS default export
-import pdfParse from "pdf-parse";
+import { parsePdf } from "./_utils/pdf-parser.js";
 
 // Helper to determine if native text
 async function detectPdfKind(buffer: Buffer): Promise<"native_text" | "scanned"> {
   try {
-    const data = await pdfParse(buffer);
+    const data = await parsePdf(buffer);
     const text = data.text;
     const pageCount = data.numpages;
     
@@ -95,7 +93,7 @@ export default async function handler(req: any, res: any) {
         
         if (kind === "native_text") {
             // Extract text first to save tokens/use Flash-Lite
-            const pdfData = await pdfParse(buffer);
+            const pdfData = await parsePdf(buffer);
             const textContent = pdfData.text;
             const fullPrompt = buildUniversalExtractorPrompt(textContent);
             
