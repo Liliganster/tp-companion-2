@@ -1,22 +1,210 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload, Sparkles, FileSpreadsheet, CloudUpload } from "lucide-react";
+import { Upload, Sparkles, FileSpreadsheet, CloudUpload, Loader2, Link, MapPin, Calendar, Building2, CheckCircle, Save } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useI18n } from "@/hooks/use-i18n";
+import { supabase } from "@/lib/supabaseClient";
+import { toast } from "sonner";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+
+interface SavedTrip {
+  id: string;
+  date: string;
+  route: string[];
+  project: string;
+  purpose: string;
+  passengers: number;
+  invoice?: string;
+  distance: number;
+  ratePerKmOverride?: number | null;
+  specialOrigin?: "base" | "continue" | "return";
+}
 
 interface BulkUploadModalProps {
   trigger: React.ReactNode;
+  onSave?: (data: SavedTrip) => void;
 }
 
-export function BulkUploadModal({ trigger }: BulkUploadModalProps) {
+export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const [open, setOpen] = useState(false);
   const [csvText, setCsvText] = useState("");
+  
+  // AI Tab State
+  const [aiStep, setAiStep] = useState<"upload" | "processing" | "review">("upload");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [extractedData, setExtractedData] = useState<any>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Review form state
+  const [reviewDate, setReviewDate] = useState("");
+  const [reviewProject, setReviewProject] = useState("");
+  const [reviewProducer, setReviewProducer] = useState("");
+  const [reviewLocations, setReviewLocations] = useState<string[]>([]);
+  
   const { t } = useI18n();
-
   const exampleText = t("bulk.examplePlaceholder");
+
+  // Reset state when modal closes or tab changes
+  useEffect(() => {
+    if (!open) {
+      resetAiState();
+    }
+  }, [open]);
+
+  const resetAiState = () => {
+    setAiStep("upload");
+    setSelectedFile(null);
+    setJobId(null);
+    setExtractedData(null);
+    setAiLoading(false);
+    setReviewDate("");
+    setReviewProject("");
+    setReviewProducer("");
+    setReviewLocations([]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== "application/pdf") {
+      toast.error("Solo se permiten archivos PDF para la extracción AI");
+      return;
+    }
+    setSelectedFile(file);
+  };
+
+  const startAiProcess = async () => {
+    if (!selectedFile) return;
+    
+    setAiLoading(true);
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) throw new Error("No estás autenticado");
+
+      // 1. Create Job
+      const { data: job, error: jobError } = await supabase
+        .from("callsheet_jobs")
+        .insert({
+          user_id: user.id,
+          storage_path: "pending", 
+          status: "created",
+        })
+        .select()
+        .single();
+
+      if (jobError) throw jobError;
+      setJobId(job.id);
+
+      // 2. Upload File
+      const filePath = `${user.id}/${job.id}/${selectedFile.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from("callsheets")
+        .upload(filePath, selectedFile);
+
+      if (uploadError) throw uploadError;
+
+      // 3. Queue Job
+      const { error: updateError } = await supabase
+        .from("callsheet_jobs")
+        .update({ storage_path: filePath, status: "queued" })
+        .eq("id", job.id);
+
+      if (updateError) throw updateError;
+
+      setAiStep("processing");
+      // Polling starts automatically via useEffect due to aiStep === 'processing'
+
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Error al subir documento");
+      setAiLoading(false);
+    }
+  };
+
+  // Polling Effect
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    if (aiStep === "processing" && jobId) {
+      const checkStatus = async () => {
+        try {
+          const { data: job } = await supabase
+            .from("callsheet_jobs")
+            .select("*")
+            .eq("id", jobId)
+            .single();
+
+          if (job.status === "done") {
+             // Fetch results
+             const { data: result } = await supabase
+                .from("callsheet_results")
+                .select("*")
+                .eq("job_id", jobId)
+                .single();
+             
+             const { data: locs } = await supabase
+                .from("callsheet_locations")
+                .select("*")
+                .eq("job_id", jobId);
+
+             if (result) {
+                setExtractedData({ result, locations: locs || [] });
+                
+                // Pre-fill review form
+                setReviewDate(result.date_value || "");
+                setReviewProject(result.project_value || "");
+                setReviewProducer(result.producer_value || "");
+                setReviewLocations((locs || []).map((l: any) => l.formatted_address || l.address_raw));
+                
+                setAiStep("review");
+                setAiLoading(false);
+                clearInterval(interval);
+             }
+          } else if (job.status === "failed") {
+              toast.error("Error en la extracción AI: " + job.error);
+              setAiStep("upload");
+              setAiLoading(false);
+              clearInterval(interval);
+          }
+        } catch (e) {
+          console.error("Polling error", e);
+        }
+      };
+
+      interval = setInterval(checkStatus, 2000);
+    }
+
+    return () => clearInterval(interval);
+  }, [aiStep, jobId]);
+
+  const handleSaveTrip = () => {
+    if (!onSave) return;
+
+    // Create trip object
+    const newTrip: SavedTrip = {
+        id: crypto.randomUUID(),
+        date: reviewDate,
+        project: reviewProject,
+        purpose: "Rodaje: " + reviewProducer, // Default purpose
+        route: reviewLocations, // Use extracted locations
+        passengers: 0,
+        distance: 0, // Default to 0, let user update in edit if needed
+        specialOrigin: "base"
+    };
+
+    onSave(newTrip);
+    toast.success("Viaje guardado correctamente");
+    setOpen(false);
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -39,6 +227,7 @@ export function BulkUploadModal({ trigger }: BulkUploadModalProps) {
           </TabsList>
 
           <TabsContent value="csv" className="space-y-6">
+             {/* CSV Config logic remains same ... */}
             <div className="rounded-lg border border-border/50 bg-secondary/30 p-4 space-y-3">
               <h4 className="font-semibold text-sm uppercase tracking-wide">{t("bulk.csvInstructionsTitle")}</h4>
               <ul className="text-sm text-muted-foreground space-y-2 list-disc list-inside">
@@ -89,23 +278,124 @@ export function BulkUploadModal({ trigger }: BulkUploadModalProps) {
           </TabsContent>
 
           <TabsContent value="ai" className="space-y-6">
-            <div className="border-2 border-dashed border-border/50 rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer">
-              <Sparkles className="w-12 h-12 text-primary mx-auto mb-4" />
-              <p className="font-medium text-lg">{t("bulk.aiDropTitle")}</p>
-              <p className="text-sm text-muted-foreground mt-2">{t("bulk.aiDropSubtitle")}</p>
-            </div>
+            <input 
+                type="file" 
+                ref={fileInputRef} 
+                className="hidden" 
+                accept="application/pdf"
+                onChange={handleFileSelect}
+            />
+            
+            {aiStep === "upload" && (
+                <>
+                    <div 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="border-2 border-dashed border-border/50 rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
+                    >
+                    <Sparkles className="w-12 h-12 text-primary mx-auto mb-4" />
+                    <p className="font-medium text-lg">{selectedFile ? selectedFile.name : t("bulk.aiDropTitle")}</p>
+                    <p className="text-sm text-muted-foreground mt-2">{selectedFile ? "Click para cambiar archivo" : t("bulk.aiDropSubtitle")}</p>
+                    </div>
 
-            <p className="text-sm text-muted-foreground text-center">{t("bulk.aiDescription")}</p>
+                    <p className="text-sm text-muted-foreground text-center">
+                        Suba sus hojas de rodaje (Call Sheets) en PDF. Nuestra IA extraerá automáticamente fechas, lugares, producción y proyectos.
+                    </p>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setOpen(false)}>
-                {t("bulk.cancel")}
-              </Button>
-              <Button variant="add" className="gap-2">
-                <Sparkles className="w-4 h-4" />
-                {t("bulk.aiProcess")}
-              </Button>
-            </div>
+                    <div className="flex justify-end gap-2 pt-2">
+                    <Button variant="outline" onClick={() => setOpen(false)}>
+                        {t("bulk.cancel")}
+                    </Button>
+                    <Button 
+                        variant="add" 
+                        className="gap-2" 
+                        onClick={startAiProcess} 
+                        disabled={!selectedFile || aiLoading}
+                    >
+                        {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                        {t("bulk.aiProcess")}
+                    </Button>
+                    </div>
+                </>
+            )}
+
+            {aiStep === "processing" && (
+                <div className="text-center py-12 space-y-4">
+                    <Loader2 className="w-16 h-16 text-primary animate-spin mx-auto" />
+                    <div>
+                        <h3 className="text-lg font-medium">Analizando documento...</h3>
+                        <p className="text-muted-foreground">Esto puede tomar unos segundos.</p>
+                    </div>
+                </div>
+            )}
+
+            {aiStep === "review" && (
+                <div className="space-y-6 animate-fade-in">
+                    <div className="flex items-center gap-2 text-green-500 mb-4">
+                        <CheckCircle className="w-5 h-5" />
+                        <span className="font-medium">Datos extraídos exitosamente</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Proyecto</Label>
+                            <Input 
+                                value={reviewProject} 
+                                onChange={(e) => setReviewProject(e.target.value)} 
+                                className="bg-secondary/30"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Fecha</Label>
+                            <div className="relative">
+                                <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input 
+                                    value={reviewDate} 
+                                    onChange={(e) => setReviewDate(e.target.value)} 
+                                    className="pl-9 bg-secondary/30"
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-2 col-span-2">
+                            <Label>Productora</Label>
+                            <div className="relative">
+                                <Building2 className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input 
+                                    value={reviewProducer} 
+                                    onChange={(e) => setReviewProducer(e.target.value)} 
+                                    className="pl-9 bg-secondary/30"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>Ubicaciones / Ruta ({reviewLocations.length})</Label>
+                        <Card className="bg-secondary/20">
+                            <CardContent className="p-3 max-h-48 overflow-y-auto space-y-2">
+                                {reviewLocations.map((loc, idx) => (
+                                    <div key={idx} className="flex items-start gap-2 text-sm p-2 bg-background rounded border border-border/50">
+                                        <MapPin className="w-4 h-4 mt-0.5 text-primary shrink-0" />
+                                        <span>{loc}</span>
+                                    </div>
+                                ))}
+                                {reviewLocations.length === 0 && (
+                                    <p className="text-sm text-muted-foreground italic">No se encontraron ubicaciones.</p>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-4">
+                        <Button variant="outline" onClick={resetAiState}>
+                            Volver
+                        </Button>
+                        <Button onClick={handleSaveTrip} className="gap-2">
+                            <Save className="w-4 h-4" />
+                            Guardar Viaje
+                        </Button>
+                    </div>
+                </div>
+            )}
           </TabsContent>
         </Tabs>
       </DialogContent>

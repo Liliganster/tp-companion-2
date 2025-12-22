@@ -165,6 +165,7 @@ export default function Trips() {
     project: string;
     purpose: string;
     passengers: number;
+    invoice?: string;
     distance: number;
     ratePerKmOverride?: number | null;
     specialOrigin?: "base" | "continue" | "return";
@@ -179,6 +180,7 @@ export default function Trips() {
         project: data.project,
         purpose: data.purpose,
         passengers: data.passengers,
+        invoice: data.invoice,
         distance: data.distance,
         co2: calculateCO2(data.distance),
         ratePerKmOverride: data.ratePerKmOverride ?? null,
@@ -204,7 +206,7 @@ export default function Trips() {
   });
 
   const tripWarnings = computeTripWarnings(trips);
- 
+
   const visibleTrips = [...filteredTrips].sort((a, b) => {
     const diff = getTripTime(a) - getTripTime(b);
     if (diff !== 0) return dateSort === "asc" ? diff : -diff;
@@ -237,368 +239,373 @@ export default function Trips() {
   const isAllSelected = visibleTrips.length > 0 && selectedIds.size === visibleTrips.length;
   const isSomeSelected = selectedIds.size > 0;
   return <MainLayout>
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">
-              {t("trips.title")}
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              {t("trips.subtitle")}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {isSomeSelected && <Button variant="destructive" onClick={handleDeleteSelected}>
-                <Trash2 className="w-4 h-4" />
-                <span className="hidden sm:inline">{t("trips.delete")} ({selectedIds.size})</span>
-              </Button>}
-            <BulkUploadModal trigger={<Button variant="upload">
-                  <Upload className="w-4 h-4" />
-                  <span className="hidden sm:inline">{t("trips.bulkUpload")}</span>
-                </Button>} />
-            <AddTripModal trigger={<Button>
-                  <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">{t("trips.addTrip")}</span>
-                </Button>} onSave={handleSaveTrip} previousDestination={addPreviousDestination} />
-          </div>
+    <div className="max-w-7xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold">
+            {t("trips.title")}
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            {t("trips.subtitle")}
+          </p>
         </div>
-
-        {/* Filters */}
-        <div className="glass-card p-4 animate-fade-in animation-delay-100">
-          <div className="flex flex-col sm:flex-row sm:justify-end gap-3">
-            <Select value={selectedProject} onValueChange={setSelectedProject}>
-              <SelectTrigger className="w-full sm:w-48 bg-secondary/50">
-                <Filter className="w-4 h-4 mr-2" />
-                <SelectValue placeholder={t("trips.project")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("trips.allProjects")}</SelectItem>
-                <SelectItem value="Film Production XY">Film Production XY</SelectItem>
-                <SelectItem value="Client ABC">Client ABC</SelectItem>
-                <SelectItem value="Internal">Internal</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={selectedYear} onValueChange={setSelectedYear}>
-              <SelectTrigger className="w-full sm:w-32 bg-secondary/50">
-                <Calendar className="w-4 h-4 mr-2" />
-                <SelectValue placeholder={t("trips.year")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="2024">2024</SelectItem>
-                <SelectItem value="2023">2023</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="flex items-center gap-2">
+          {isSomeSelected && <Button variant="destructive" onClick={handleDeleteSelected}>
+            <Trash2 className="w-4 h-4" />
+            <span className="hidden sm:inline">{t("trips.delete")} ({selectedIds.size})</span>
+          </Button>}
+          <BulkUploadModal 
+            trigger={<Button variant="upload">
+              <Upload className="w-4 h-4" />
+              <span className="hidden sm:inline">{t("trips.bulkUpload")}</span>
+            </Button>} 
+            onSave={handleSaveTrip}
+          />
+          <AddTripModal trigger={<Button>
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">{t("trips.addTrip")}</span>
+          </Button>} onSave={handleSaveTrip} previousDestination={addPreviousDestination} />
         </div>
+      </div>
 
-        {/* Mobile & Tablet Cards View */}
-        <div className="lg:hidden space-y-3 animate-fade-in animation-delay-200">
-          {visibleTrips.map((trip, index) => <div key={trip.id} className={`glass-card p-3 sm:p-4 animate-slide-up ${selectedIds.has(trip.id) ? 'ring-2 ring-primary' : ''}`} style={{
+      {/* Filters */}
+      <div className="glass-card p-4 animate-fade-in animation-delay-100">
+        <div className="flex flex-col sm:flex-row sm:justify-end gap-3">
+          <Select value={selectedProject} onValueChange={setSelectedProject}>
+            <SelectTrigger className="w-full sm:w-48 bg-secondary/50">
+              <Filter className="w-4 h-4 mr-2" />
+              <SelectValue placeholder={t("trips.project")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("trips.allProjects")}</SelectItem>
+              <SelectItem value="Film Production XY">Film Production XY</SelectItem>
+              <SelectItem value="Client ABC">Client ABC</SelectItem>
+              <SelectItem value="Internal">Internal</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={selectedYear} onValueChange={setSelectedYear}>
+            <SelectTrigger className="w-full sm:w-32 bg-secondary/50">
+              <Calendar className="w-4 h-4 mr-2" />
+              <SelectValue placeholder={t("trips.year")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="2024">2024</SelectItem>
+              <SelectItem value="2023">2023</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Mobile & Tablet Cards View */}
+      <div className="lg:hidden space-y-3 animate-fade-in animation-delay-200">
+        {visibleTrips.map((trip, index) => <div key={trip.id} className={`glass-card p-3 sm:p-4 animate-slide-up ${selectedIds.has(trip.id) ? 'ring-2 ring-primary' : ''}`} style={{
           animationDelay: `${index * 50}ms`
         }}>
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0">
-                  <Checkbox
-                    checked={selectedIds.has(trip.id)}
-                    onCheckedChange={() => toggleSelect(trip.id)}
-                    aria-label={tf("trips.selectTrip", { id: trip.id })}
-                    className="mt-0.5 shrink-0"
-                  />
-                  <div className="flex-1 min-w-0 overflow-hidden">
-                    {/* Date and Project */}
-                    <div className="flex flex-col xs:flex-row xs:items-center gap-1 xs:gap-2 mb-2">
-                      <span className="text-sm sm:text-base font-medium shrink-0">
-                        {new Date(trip.date).toLocaleDateString(locale, {
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0">
+              <Checkbox
+                checked={selectedIds.has(trip.id)}
+                onCheckedChange={() => toggleSelect(trip.id)}
+                aria-label={tf("trips.selectTrip", { id: trip.id })}
+                className="mt-0.5 shrink-0"
+              />
+              <div className="flex-1 min-w-0 overflow-hidden">
+                {/* Date and Project */}
+                <div className="flex flex-col xs:flex-row xs:items-center gap-1 xs:gap-2 mb-2">
+                  <span className="text-sm sm:text-base font-medium shrink-0">
+                    {new Date(trip.date).toLocaleDateString(locale, {
                       day: "2-digit",
                       month: "2-digit",
                       year: "numeric"
                     })}
-                      </span>
-                      {(tripWarnings.byId[trip.id]?.length ?? 0) > 0 && (
-                        <AlertTriangle
-                          className="h-4 w-4 shrink-0 text-warning"
-                          title={(tripWarnings.byId[trip.id] ?? []).map((w) => w.title).join("\n")}
-                        />
-                      )}
-                      {trip.specialOrigin === "continue" && (
-                        <Badge variant="secondary" className="w-fit text-[10px] sm:text-xs">
-                          Continuación
-                        </Badge>
-                      )}
-                      {trip.specialOrigin === "return" && (
-                        <Badge variant="secondary" className="w-fit text-[10px] sm:text-xs">
-                          Fin continuación
-                        </Badge>
-                      )}
-                      <span className="text-[10px] sm:text-xs text-primary truncate max-w-[150px] sm:max-w-none">
-                        {trip.project}
-                      </span>
-                    </div>
-                    
-                    {/* Route - Better tablet layout */}
-                    <div className="text-xs sm:text-sm text-muted-foreground mb-2 sm:mb-3">
-                      <div className="flex flex-wrap items-center gap-1">
-                        <span className="font-medium text-foreground">{trip.route[0]}</span>
-                        <span className="text-primary">→</span>
-                        {trip.route.length > 2 && <span className="hidden md:inline text-muted-foreground">
-                            {trip.route.slice(1, -1).join(" → ")} →
-                          </span>}
-                        <span className="font-medium text-foreground">{trip.route[trip.route.length - 1]}</span>
-                        {trip.route.length > 2 && <span className="md:hidden text-[10px] sm:text-xs text-muted-foreground ml-1">(+{trip.route.length - 2})</span>}
-                      </div>
-                    </div>
+                  </span>
+                  {(tripWarnings.byId[trip.id]?.length ?? 0) > 0 && (
+                    <AlertTriangle
+                      className="h-4 w-4 shrink-0 text-warning"
+                      title={(tripWarnings.byId[trip.id] ?? []).map((w) => w.title).join("\n")}
+                    />
+                  )}
+                  {trip.specialOrigin === "continue" && (
+                    <Badge variant="secondary" className="w-fit text-[10px] sm:text-xs">
+                      Continuación
+                    </Badge>
+                  )}
+                  {trip.specialOrigin === "return" && (
+                    <Badge variant="secondary" className="w-fit text-[10px] sm:text-xs">
+                      Fin continuación
+                    </Badge>
+                  )}
+                  <span className="text-[10px] sm:text-xs text-primary truncate max-w-[150px] sm:max-w-none">
+                    {trip.project}
+                  </span>
+                </div>
 
-                    {/* Stats Grid - Better responsive grid */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1 sm:gap-2 text-xs sm:text-sm">
-                      <div className="flex justify-between md:flex-col md:gap-0.5">
-                        <span className="text-muted-foreground">Distancia:</span>
-                        <span className="font-medium">{trip.distance} km</span>
-                      </div>
-                      <div className="flex justify-between md:flex-col md:gap-0.5">
-                        <span className="text-muted-foreground text-center">CO₂:</span>
-                        <span className="text-emerald-500 font-medium text-center">{trip.co2} kg</span>
-                      </div>
-                      <div className="flex justify-between md:flex-col md:gap-0.5">
-                        <span className="text-muted-foreground text-center">Reembolso:</span>
-                        <span className="text-primary font-medium text-center">{calculateTripReimbursement(trip).toFixed(2)} €</span>
-                      </div>
-                      <div className="flex justify-between md:flex-col md:gap-0.5">
-                        <span className="text-muted-foreground text-center">Pasajeros:</span>
-                        <span className="font-medium text-center">{trip.passengers || "-"}</span>
-                      </div>
-                    </div>
+                {/* Route - Better tablet layout */}
+                <div className="text-xs sm:text-sm text-muted-foreground mb-2 sm:mb-3">
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="font-medium text-foreground">{trip.route[0]}</span>
+                    <span className="text-primary">→</span>
+                    {trip.route.length > 2 && <span className="hidden md:inline text-muted-foreground">
+                      {trip.route.slice(1, -1).join(" → ")} →
+                    </span>}
+                    <span className="font-medium text-foreground">{trip.route[trip.route.length - 1]}</span>
+                    {trip.route.length > 2 && <span className="md:hidden text-[10px] sm:text-xs text-muted-foreground ml-1">(+{trip.route.length - 2})</span>}
                   </div>
                 </div>
-                
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 shrink-0">
-                      <MoreVertical className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="end"
-                    className="bg-popover"
-                    onClick={(e) => e.stopPropagation()}
-                    onPointerDown={(e) => e.stopPropagation()}
-                  >
-                    <DropdownMenuItem
-                      onSelect={(e) => {
-                        handleViewMap(trip);
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Map className="w-4 h-4 mr-2" />
-                      {t("trips.viewMap")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={(e) => {
-                        handleAddToCalendar(trip);
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <CalendarPlus className="w-4 h-4 mr-2" />
-                      {t("trips.addToCalendar")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={(e) => {
-                        handleEditTrip(trip);
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Pencil className="w-4 h-4 mr-2" />
-                      {t("trips.edit")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="text-destructive">
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      {t("trips.delete")}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </div>)}
-        </div>
 
-        {/* Desktop Table View - Only on large screens */}
-        <div className="hidden lg:block glass-card overflow-hidden animate-fade-in animation-delay-200">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent border-border/50">
-                  <TableHead className="w-10">
-                    <Checkbox checked={isAllSelected} onCheckedChange={toggleSelectAll} aria-label={t("projects.selectAll")} />
-                  </TableHead>
-                  <TableHead className="text-foreground font-semibold whitespace-nowrap">
-                    <button
-                      type="button"
-                      onClick={() => setDateSort((prev) => (prev === "asc" ? "desc" : "asc"))}
-                      className="inline-flex items-center gap-1 hover:text-foreground"
-                      aria-label={tf("trips.sortByDate", {
-                        order: dateSort === "asc" ? t("trips.sortAsc") : t("trips.sortDesc"),
-                      })}
-                      title={t("trips.date")}
-                    >
-                      {t("trips.date")}
-                      <span className="flex flex-col leading-none">
-                        <ChevronUp className={`h-3 w-3 ${dateSort === "asc" ? "text-foreground" : "text-muted-foreground/50"}`} />
-                        <ChevronDown className={`-mt-1 h-3 w-3 ${dateSort === "desc" ? "text-foreground" : "text-muted-foreground/50"}`} />
-                      </span>
-                    </button>
-                  </TableHead>
-                  <TableHead className="text-foreground font-semibold whitespace-nowrap">{t("trips.route")}</TableHead>
-                  <TableHead className="text-foreground font-semibold whitespace-nowrap">{t("trips.project")}</TableHead>
-                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.co2")}</TableHead>
-                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("trips.passengers")}</TableHead>
-                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.reimbursement")}</TableHead>
-                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.distance")}</TableHead>
-                  <TableHead className="w-10"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visibleTrips.map((trip, index) => <TableRow
-                  key={trip.id}
-                  className={`hover:bg-secondary/30 border-border/30 animate-slide-up cursor-pointer ${selectedIds.has(trip.id) ? 'bg-primary/10' : ''}`}
-                  style={{
+                {/* Stats Grid - Better responsive grid */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1 sm:gap-2 text-xs sm:text-sm">
+                  <div className="flex justify-between md:flex-col md:gap-0.5">
+                    <span className="text-muted-foreground">Distancia:</span>
+                    <span className="font-medium">{trip.distance} km</span>
+                  </div>
+                  <div className="flex justify-between md:flex-col md:gap-0.5">
+                    <span className="text-muted-foreground text-center">CO₂:</span>
+                    <span className="text-emerald-500 font-medium text-center">{trip.co2} kg</span>
+                  </div>
+                  <div className="flex justify-between md:flex-col md:gap-0.5">
+                    <span className="text-muted-foreground text-center">Reembolso:</span>
+                    <span className="text-primary font-medium text-center">{calculateTripReimbursement(trip).toFixed(2)} €</span>
+                  </div>
+                  <div className="flex justify-between md:flex-col md:gap-0.5">
+                    <span className="text-muted-foreground text-center">Pasajeros:</span>
+                    <span className="font-medium text-center">{trip.passengers || "-"}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 shrink-0">
+                  <MoreVertical className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="bg-popover"
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    handleViewMap(trip);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Map className="w-4 h-4 mr-2" />
+                  {t("trips.viewMap")}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    handleAddToCalendar(trip);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <CalendarPlus className="w-4 h-4 mr-2" />
+                  {t("trips.addToCalendar")}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    handleEditTrip(trip);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Pencil className="w-4 h-4 mr-2" />
+                  {t("trips.edit")}
+                </DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive">
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  {t("trips.delete")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>)}
+      </div>
+
+      {/* Desktop Table View - Only on large screens */}
+      <div className="hidden lg:block glass-card overflow-hidden animate-fade-in animation-delay-200">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent border-border/50">
+                <TableHead className="w-10">
+                  <Checkbox checked={isAllSelected} onCheckedChange={toggleSelectAll} aria-label={t("projects.selectAll")} />
+                </TableHead>
+                <TableHead className="text-foreground font-semibold whitespace-nowrap">
+                  <button
+                    type="button"
+                    onClick={() => setDateSort((prev) => (prev === "asc" ? "desc" : "asc"))}
+                    className="inline-flex items-center gap-1 hover:text-foreground"
+                    aria-label={tf("trips.sortByDate", {
+                      order: dateSort === "asc" ? t("trips.sortAsc") : t("trips.sortDesc"),
+                    })}
+                    title={t("trips.date")}
+                  >
+                    {t("trips.date")}
+                    <span className="flex flex-col leading-none">
+                      <ChevronUp className={`h-3 w-3 ${dateSort === "asc" ? "text-foreground" : "text-muted-foreground/50"}`} />
+                      <ChevronDown className={`-mt-1 h-3 w-3 ${dateSort === "desc" ? "text-foreground" : "text-muted-foreground/50"}`} />
+                    </span>
+                  </button>
+                </TableHead>
+                <TableHead className="text-foreground font-semibold whitespace-nowrap">{t("trips.route")}</TableHead>
+                <TableHead className="text-foreground font-semibold whitespace-nowrap">{t("trips.project")}</TableHead>
+                <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.co2")}</TableHead>
+                <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">Factura</TableHead>
+                <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("trips.passengers")}</TableHead>
+                <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.reimbursement")}</TableHead>
+                <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.distance")}</TableHead>
+                <TableHead className="w-10"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {visibleTrips.map((trip, index) => <TableRow
+                key={trip.id}
+                className={`hover:bg-secondary/30 border-border/30 animate-slide-up cursor-pointer ${selectedIds.has(trip.id) ? 'bg-primary/10' : ''}`}
+                style={{
                   animationDelay: `${index * 50}ms`
                 }}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => openTripDetails(trip)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      openTripDetails(trip);
-                    }
-                  }}
-                >
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedIds.has(trip.id)}
-                        onCheckedChange={() => toggleSelect(trip.id)}
-                        aria-label={tf("trips.selectTrip", { id: trip.id })}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <span>
-                          {new Date(trip.date).toLocaleDateString(locale, {
+                role="button"
+                tabIndex={0}
+                onClick={() => openTripDetails(trip)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openTripDetails(trip);
+                  }
+                }}
+              >
+                <TableCell>
+                  <Checkbox
+                    checked={selectedIds.has(trip.id)}
+                    onCheckedChange={() => toggleSelect(trip.id)}
+                    aria-label={tf("trips.selectTrip", { id: trip.id })}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </TableCell>
+                <TableCell className="font-medium whitespace-nowrap">
+                  <div className="flex items-center gap-2">
+                    <span>
+                      {new Date(trip.date).toLocaleDateString(locale, {
                         day: "2-digit",
                         month: "2-digit",
                         year: "numeric"
                       })}
-                        </span>
-                        {(tripWarnings.byId[trip.id]?.length ?? 0) > 0 && (
-                          <AlertTriangle
-                            className="h-4 w-4 shrink-0 text-warning"
-                            title={(tripWarnings.byId[trip.id] ?? []).map((w) => w.title).join("\n")}
-                          />
-                        )}
-                        {trip.specialOrigin === "continue" && <Badge variant="secondary">Continuación</Badge>}
-                        {trip.specialOrigin === "return" && <Badge variant="secondary">Fin continuación</Badge>}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1 flex-wrap">
-                        {trip.route.map((stop, i) => <span key={i} className="flex items-center">
-                            <span className={i === 0 || i === trip.route.length - 1 ? "font-medium" : "text-muted-foreground"}>
-                              {stop}
-                            </span>
-                            {i < trip.route.length - 1 && <span className="mx-1 text-primary">→</span>}
-                          </span>)}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-xs text-primary whitespace-nowrap">
-                        {trip.project}
+                    </span>
+                    {(tripWarnings.byId[trip.id]?.length ?? 0) > 0 && (
+                      <AlertTriangle
+                        className="h-4 w-4 shrink-0 text-warning"
+                        title={(tripWarnings.byId[trip.id] ?? []).map((w) => w.title).join("\n")}
+                      />
+                    )}
+                    {trip.specialOrigin === "continue" && <Badge variant="secondary">Continuación</Badge>}
+                    {trip.specialOrigin === "return" && <Badge variant="secondary">Fin continuación</Badge>}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {trip.route.map((stop, i) => <span key={i} className="flex items-center">
+                      <span className={i === 0 || i === trip.route.length - 1 ? "font-medium" : "text-muted-foreground"}>
+                        {stop}
                       </span>
-                    </TableCell>
-                    <TableCell className="text-right text-emerald-500 whitespace-nowrap">{trip.co2} kg</TableCell>
-                    <TableCell className="text-right text-muted-foreground hidden lg:table-cell">{trip.passengers || "-"}</TableCell>
-                    <TableCell className="text-right text-primary font-medium whitespace-nowrap">{calculateTripReimbursement(trip).toFixed(2)} €</TableCell>
-                    <TableCell className="text-right font-semibold whitespace-nowrap">{trip.distance} km</TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <MoreVertical className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="end"
-                          className="bg-popover"
-                          onClick={(e) => e.stopPropagation()}
-                          onPointerDown={(e) => e.stopPropagation()}
-                        >
-                          <DropdownMenuItem
-                            onSelect={(e) => {
-                              handleViewMap(trip);
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Map className="w-4 h-4 mr-2" />
-                            {t("trips.viewMap")}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onSelect={(e) => {
-                              handleAddToCalendar(trip);
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <CalendarPlus className="w-4 h-4 mr-2" />
-                            {t("trips.addToCalendar")}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onSelect={(e) => {
-                              handleEditTrip(trip);
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Pencil className="w-4 h-4 mr-2" />
-                            {t("trips.edit")}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive">
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            {t("trips.delete")}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>)}
-              </TableBody>
-            </Table>
-          </div>
+                      {i < trip.route.length - 1 && <span className="mx-1 text-primary">→</span>}
+                    </span>)}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <span className="text-xs text-primary whitespace-nowrap">
+                    {trip.project}
+                  </span>
+                </TableCell>
+                <TableCell className="text-right text-emerald-500 whitespace-nowrap">{trip.co2} kg</TableCell>
+                <TableCell className="text-right whitespace-nowrap">{trip.invoice || "-"}</TableCell>
+                <TableCell className="text-right text-muted-foreground hidden lg:table-cell">{trip.passengers || "-"}</TableCell>
+                <TableCell className="text-right text-primary font-medium whitespace-nowrap">{calculateTripReimbursement(trip).toFixed(2)} €</TableCell>
+                <TableCell className="text-right font-semibold whitespace-nowrap">{trip.distance} km</TableCell>
+                <TableCell>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      className="bg-popover"
+                      onClick={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      <DropdownMenuItem
+                        onSelect={(e) => {
+                          handleViewMap(trip);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Map className="w-4 h-4 mr-2" />
+                        {t("trips.viewMap")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={(e) => {
+                          handleAddToCalendar(trip);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <CalendarPlus className="w-4 h-4 mr-2" />
+                        {t("trips.addToCalendar")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={(e) => {
+                          handleEditTrip(trip);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Pencil className="w-4 h-4 mr-2" />
+                        {t("trips.edit")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="text-destructive">
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        {t("trips.delete")}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+              </TableRow>)}
+            </TableBody>
+          </Table>
         </div>
-
-        {/* Summary */}
-        <div className="glass-card p-4 animate-fade-in">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">
-              {tf("trips.showing", { count: visibleTrips.length })}
-            </span>
-            <span className="font-medium">
-              {tf("trips.total", { km: visibleTrips.reduce((acc, trip) => acc + trip.distance, 0).toLocaleString(locale) })}
-            </span>
-          </div>
-        </div>
-
-        {/* Trip Detail Modal */}
-        <TripDetailModal trip={selectedTrip} open={detailModalOpen} onOpenChange={setDetailModalOpen} />
-        
-        {/* Edit Trip Modal */}
-        <AddTripModal 
-          trip={tripToEdit} 
-          open={editModalOpen} 
-          onOpenChange={setEditModalOpen} 
-          onSave={handleSaveTrip}
-          previousDestination={editPreviousDestination}
-        />
       </div>
-    </MainLayout>;
+
+      {/* Summary */}
+      <div className="glass-card p-4 animate-fade-in">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">
+            {tf("trips.showing", { count: visibleTrips.length })}
+          </span>
+          <span className="font-medium">
+            {tf("trips.total", { km: visibleTrips.reduce((acc, trip) => acc + trip.distance, 0).toLocaleString(locale) })}
+          </span>
+        </div>
+      </div>
+
+      {/* Trip Detail Modal */}
+      <TripDetailModal trip={selectedTrip} open={detailModalOpen} onOpenChange={setDetailModalOpen} />
+
+      {/* Edit Trip Modal */}
+      <AddTripModal
+        trip={tripToEdit}
+        open={editModalOpen}
+        onOpenChange={setEditModalOpen}
+        onSave={handleSaveTrip}
+        previousDestination={editPreviousDestination}
+      />
+    </div>
+  </MainLayout>;
 }

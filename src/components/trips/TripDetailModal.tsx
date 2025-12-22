@@ -8,6 +8,7 @@ import { useI18n } from "@/hooks/use-i18n";
 import { tf } from "@/lib/i18n";
 import { TripGoogleMap } from "@/components/trips/TripGoogleMap";
 import { Trip, useTrips } from "@/contexts/TripsContext";
+import { useProjects } from "@/contexts/ProjectsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
@@ -20,6 +21,7 @@ interface TripDetailModalProps {
 export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalProps) {
   const { t, locale, language } = useI18n();
   const { setTrips } = useTrips();
+  const { setProjects } = useProjects();
   const { getAccessToken } = useAuth();
   const { toast } = useToast();
 
@@ -67,11 +69,6 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ name: file.name, dataUrl }),
     });
-    const data: any = await response.json().catch(() => null);
-    if (!response.ok || !data?.fileId) {
-      toast({ title: "Drive", description: t("trips.calendarNotConnected"), variant: "destructive" });
-      return;
-    }
 
     setTrips((prev) =>
       prev.map((t0) => {
@@ -86,8 +83,18 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
             createdAt: new Date().toISOString(),
           },
         ];
-        return { ...t0, documents: nextDocs };
+        return { ...t0, documents: nextDocs, invoice: data.name ?? file.name };
       }),
+    );
+
+    // Update Project Invoice Count
+    setProjects((prev) =>
+      prev.map((p) => {
+        if (p.name === trip.project) {
+          return { ...p, invoices: (p.invoices || 0) + 1 };
+        }
+        return p;
+      })
     );
 
     toast({ title: "Drive", description: t("tripDetail.attachDocument") });
@@ -157,9 +164,8 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
                   <div key={index} className="flex items-start gap-3">
                     <div className="flex flex-col items-center">
                       <CircleDot
-                        className={`w-4 h-4 ${
-                          index === 0 || index === trip.route.length - 1 ? "text-primary" : "text-muted-foreground"
-                        }`}
+                        className={`w-4 h-4 ${index === 0 || index === trip.route.length - 1 ? "text-primary" : "text-muted-foreground"
+                          }`}
                       />
                       {index < trip.route.length - 1 && <div className="w-0.5 h-6 bg-border" />}
                     </div>

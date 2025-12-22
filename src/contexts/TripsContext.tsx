@@ -7,6 +7,7 @@ export type Trip = {
   project: string;
   purpose: string;
   passengers: number;
+  invoice?: string;
   warnings?: string[];
   co2: number;
   distance: number;
