@@ -32,6 +32,7 @@ import {
   Eye,
   FolderKanban,
   Calendar,
+  Receipt,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -217,6 +218,7 @@ export default function Projects() {
                   <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("projects.tableTrips")}</TableHead>
                   <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden md:table-cell">{t("projects.tableTotalKm")}</TableHead>
                   <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("projects.tableDocuments")}</TableHead>
+                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("projects.tableInvoices")}</TableHead>
                   <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("projects.tableCost")}</TableHead>
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
@@ -275,12 +277,18 @@ export default function Projects() {
                     <TableCell className="text-right font-medium hidden md:table-cell">
                       {project.totalKm.toLocaleString()} km
                     </TableCell>
-                    <TableCell className="text-right hidden lg:table-cell">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <FileText className="w-4 h-4 text-info" />
-                        <span>{project.documents}</span>
-                      </div>
-                    </TableCell>
+	                    <TableCell className="text-right hidden lg:table-cell">
+	                      <div className="flex items-center justify-end gap-1.5">
+	                        <FileText className="w-4 h-4 text-info" />
+	                        <span>{project.documents}</span>
+	                      </div>
+	                    </TableCell>
+	                    <TableCell className="text-right hidden lg:table-cell">
+	                      <div className="flex items-center justify-end gap-1.5">
+	                        <Receipt className="w-4 h-4 text-warning" />
+	                        <span>{project.invoices ?? 0}</span>
+	                      </div>
+	                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1.5 text-success font-medium">
                         <Euro className="w-4 h-4" />

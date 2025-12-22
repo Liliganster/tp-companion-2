@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 import { useI18n } from "@/hooks/use-i18n";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import tripHeaderImage from "@/assets/trip-modal-header.jpg";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function Auth() {
   const { t } = useI18n();
@@ -17,15 +19,20 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [showVerifyEmailNotice, setShowVerifyEmailNotice] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setShowVerifyEmailNotice(false);
     try {
       if (isLogin) {
         await signInWithPassword(email, password);
       } else {
         await signUpWithPassword(email, password, name);
+        setIsLogin(true);
+        setPassword("");
+        setShowVerifyEmailNotice(true);
       }
     } catch (err: any) {
       toast({
@@ -39,64 +46,48 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left side - Image/Branding */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-background to-accent/20" />
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiMyMjI4M2IiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMiIvPjwvZz48L2c+PC9zdmc+')] opacity-50" />
-        
-        <div className="relative z-10 flex flex-col justify-center px-12">
-          <div className="flex items-center gap-3 mb-8">
-            <img src="/logo.svg" alt="Fahrtenbuch Pro" className="w-12 h-12 rounded-xl" />
-            <div>
-              <h1 className="text-2xl font-bold gradient-text">Fahrtenbuch Pro</h1>
-              <p className="text-sm text-muted-foreground">{t("auth.tagline")}</p>
-            </div>
-          </div>
-
-          <div className="space-y-6 max-w-md">
-            <div className="glass-card p-4 animate-fade-in">
-              <h3 className="font-medium mb-2">{t("auth.featureTrips")}</h3>
-              <p className="text-sm text-muted-foreground">
-                {t("auth.featureTripsBody")}
-              </p>
-            </div>
-            <div className="glass-card p-4 animate-fade-in animation-delay-100">
-              <h3 className="font-medium mb-2">{t("auth.featureReports")}</h3>
-              <p className="text-sm text-muted-foreground">
-                {t("auth.featureReportsBody")}
-              </p>
-            </div>
-            <div className="glass-card p-4 animate-fade-in animation-delay-200">
-              <h3 className="font-medium mb-2">{t("auth.featureImport")}</h3>
-              <p className="text-sm text-muted-foreground">
-                {t("auth.featureImportBody")}
-              </p>
-            </div>
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Top background image (NOT full-width; fades down) */}
+      <div className="absolute inset-x-0 top-0 pointer-events-none">
+        <div className="mx-auto w-full max-w-6xl px-6 pt-10">
+          <div className="relative h-[320px] overflow-hidden rounded-2xl">
+            <img
+              src={tripHeaderImage}
+              alt=""
+              className="w-full h-full object-cover opacity-80 scale-105"
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-background/0 via-background/20 to-background" />
+            <div className="absolute inset-0 bg-gradient-to-r from-background/50 via-background/0 to-background/50" />
           </div>
         </div>
       </div>
 
-      {/* Right side - Auth form */}
-      <div className="flex-1 flex items-center justify-center p-6 lg:p-12">
-        <div className="w-full max-w-md">
-          {/* Mobile logo */}
-          <div className="lg:hidden flex items-center gap-3 mb-8 justify-center">
-            <img src="/logo.svg" alt="Fahrtenbuch Pro" className="w-10 h-10 rounded-xl" />
-            <span className="text-xl font-bold gradient-text">Fahrtenbuch Pro</span>
-          </div>
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-background to-accent/10" />
+      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiMyMjI4M2IiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMiIvPjwvZz48L2c+PC9zdmc+')] opacity-50" />
 
+      <div className="relative mx-auto w-full max-w-6xl px-6 min-h-screen flex items-center justify-center">
+        <div className="w-full max-w-md">
           <div className="glass-card p-8 animate-scale-in">
-            {/* Toggle */}
+            <div className="text-center mb-6">
+              <h1 className="text-3xl font-semibold tracking-tight">Fahrtenbuch Pro</h1>
+              <p className="mt-2 text-sm text-muted-foreground">{t("auth.tagline")}</p>
+            </div>
+
+            {showVerifyEmailNotice && (
+              <Alert className="mb-6 bg-secondary/20 border-border/60">
+                <AlertTitle>{t("auth.verifyEmailTitle")}</AlertTitle>
+                <AlertDescription>{t("auth.verifyEmailBody")}</AlertDescription>
+              </Alert>
+            )}
+
             <div className="flex p-1 rounded-lg bg-secondary/50 mb-6">
               <button
                 onClick={() => setIsLogin(true)}
                 className={cn(
                   "flex-1 py-2 text-sm font-medium rounded-md transition-colors",
-                  isLogin
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
+                  isLogin ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
+                type="button"
               >
                 {t("auth.login")}
               </button>
@@ -104,10 +95,9 @@ export default function Auth() {
                 onClick={() => setIsLogin(false)}
                 className={cn(
                   "flex-1 py-2 text-sm font-medium rounded-md transition-colors",
-                  !isLogin
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
+                  !isLogin ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
+                type="button"
               >
                 {t("auth.signUp")}
               </button>
@@ -126,6 +116,7 @@ export default function Auth() {
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       className="pl-10 bg-secondary/50"
+                      autoComplete="name"
                     />
                   </div>
                 </div>
@@ -142,6 +133,7 @@ export default function Auth() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10 bg-secondary/50"
+                    autoComplete="email"
                   />
                 </div>
               </div>
@@ -157,27 +149,20 @@ export default function Auth() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10 bg-secondary/50"
+                    autoComplete={isLogin ? "current-password" : "new-password"}
                   />
                 </div>
               </div>
 
               {isLogin && (
                 <div className="flex justify-end">
-                  <button
-                    type="button"
-                    className="text-xs text-primary hover:underline"
-                  >
+                  <button type="button" className="text-xs text-primary hover:underline">
                     {t("auth.forgotPassword")}
                   </button>
                 </div>
               )}
 
-              <Button
-                type="submit"
-                className="w-full"
-                variant="add"
-                disabled={isLoading}
-              >
+              <Button type="submit" className="w-full" variant="add" disabled={isLoading}>
                 {isLoading ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
@@ -194,19 +179,12 @@ export default function Auth() {
                 <div className="w-full border-t border-border" />
               </div>
               <div className="relative flex justify-center text-xs">
-                <span className="px-2 bg-card text-muted-foreground">
-                  {t("auth.orContinueWith")}
-                </span>
+                <span className="px-2 bg-card text-muted-foreground">{t("auth.orContinueWith")}</span>
               </div>
             </div>
 
-            <Button
-              variant="outline"
-              className="w-full"
-              type="button"
-              onClick={() => signInWithGoogle()}
-            >
-              <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
+            <Button variant="outline" className="w-full" type="button" onClick={() => signInWithGoogle()}>
+              <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   fill="currentColor"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"

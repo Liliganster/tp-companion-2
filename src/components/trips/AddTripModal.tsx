@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, GripVertical, X, MapPin, Calendar, Home, Route } from "lucide-react";
+import { Plus, GripVertical, X, MapPin, Calendar, Home, Route, Loader2 } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -25,6 +25,7 @@ import { CSS } from "@dnd-kit/utilities";
 import tripHeaderImage from "@/assets/trip-modal-header.jpg";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { formatLocaleNumber, parseLocaleNumber } from "@/lib/number";
+import { getCountryCode } from "@/lib/country-mapping";
 import { useI18n } from "@/hooks/use-i18n";
 
 interface Stop {
@@ -37,12 +38,206 @@ interface SortableStopProps {
   stop: Stop;
   onRemove: (id: string) => void;
   onChange: (id: string, value: string) => void;
+  onDraftChange?: (id: string, value: string) => void;
   canRemove: boolean;
   disabled?: boolean;
   placeholder?: string;
+  country?: string;
+  locationBias?: { lat: number; lng: number };
 }
 
-function SortableStop({ stop, onRemove, onChange, canRemove, disabled, placeholder }: SortableStopProps) {
+type PlacePrediction = { description: string; placeId: string };
+
+function AddressAutocompleteInput({
+  value,
+  onCommit,
+  onDraftChange,
+  placeholder,
+  disabled,
+  className,
+  country,
+  locationBias,
+}: {
+  value: string;
+  onCommit: (value: string) => void;
+  onDraftChange?: (value: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  className?: string;
+  country?: string;
+  locationBias?: { lat: number; lng: number };
+}) {
+  const { locale } = useI18n();
+  const language = useMemo(() => locale.split("-")[0] ?? "en", [locale]);
+
+  // Use robust country mapping
+  const countryCode = useMemo(() => getCountryCode(country), [country]);
+
+  const [draft, setDraft] = useState(value);
+  const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
+  const [loading, setLoading] = useState(false);
+  const lastFetched = useRef<string>("");
+  const cache = useRef<Map<string, PlacePrediction[]>>(new Map());
+  const [hasFocus, setHasFocus] = useState(false);
+
+  useEffect(() => {
+    if (hasFocus) return;
+    setDraft(value);
+  }, [value, hasFocus]);
+
+  useEffect(() => {
+    if (disabled) return;
+    if (!hasFocus) return;
+
+    const query = draft.trim();
+    if (query.length < 4) {
+      setPredictions([]);
+      setLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      if (lastFetched.current === query) return;
+      lastFetched.current = query;
+
+      const cached = cache.current.get(query);
+      if (cached) {
+        setPredictions(cached);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const body: any = { input: query, language };
+        if (countryCode) {
+          body.components = `country:${countryCode}`;
+          console.log(`[Autocomplete] Country: "${country}" -> Code: "${countryCode}" -> Components: "${body.components}"`);
+        } else {
+          console.warn(`[Autocomplete] No country code found for: "${country}"`);
+        }
+
+        const response = await fetch("/api/google/places-autocomplete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+
+        const data = (await response.json().catch(() => null)) as { predictions?: PlacePrediction[] } | null;
+        if (!response.ok || !data || !Array.isArray(data.predictions)) {
+          setPredictions([]);
+          return;
+        }
+        const next = data.predictions.filter((p) => p?.description);
+        cache.current.set(query, next);
+        setPredictions(next);
+      } catch (err: any) {
+        if (err?.name === "AbortError") return;
+        setPredictions([]);
+      } finally {
+        setLoading(false);
+      }
+    }, 450);
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [draft, language, disabled, hasFocus, countryCode]);
+
+  const showDropdown = hasFocus && !disabled && (loading || predictions.length > 0);
+
+  return (
+    <div className="relative">
+      <Input
+        value={draft}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          onDraftChange?.(e.target.value);
+        }}
+        onFocus={() => setHasFocus(true)}
+        onBlur={() => {
+          setHasFocus(false);
+          setPredictions([]);
+          onCommit(draft.trim());
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            (e.target as HTMLInputElement).blur();
+          }
+          if (e.key === "Escape") {
+            e.preventDefault();
+            setDraft(value);
+            setHasFocus(false);
+            setPredictions([]);
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+        placeholder={placeholder}
+        disabled={disabled}
+        className={className}
+      />
+      {loading && (
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        </div>
+      )}
+
+      {showDropdown && (
+        <div className="absolute left-0 right-0 top-full mt-1 z-[60] rounded-md border bg-popover p-1 shadow-md">
+          <div className="max-h-56 overflow-auto">
+            {predictions.map((p) => (
+              <button
+                key={p.placeId || p.description}
+                type="button"
+                className="w-full text-left rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={async () => {
+                  setHasFocus(false);
+                  setPredictions([]);
+
+                  // 1. Optimistic update
+                  setDraft(p.description);
+                  onDraftChange?.(p.description);
+
+                  // 2. Fetch full details to get postal code
+                  setLoading(true);
+                  try {
+                    const res = await fetch("/api/google/place-details", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ placeId: p.placeId, language }),
+                    });
+                    const data = await res.json();
+
+                    if (res.ok && data?.formattedAddress) {
+                      setDraft(data.formattedAddress);
+                      onDraftChange?.(data.formattedAddress);
+                      onCommit(data.formattedAddress);
+                    } else {
+                      onCommit(p.description);
+                    }
+                  } catch (e) {
+                    onCommit(p.description);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+              >
+                {p.description}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SortableStop({ stop, onRemove, onChange, onDraftChange, canRemove, disabled, placeholder, country, locationBias }: SortableStopProps) {
   const { t } = useI18n();
   const {
     attributes,
@@ -110,12 +305,15 @@ function SortableStop({ stop, onRemove, onChange, canRemove, disabled, placehold
         {getIcon()}
         <div className="flex-1">
           <span className="text-xs text-muted-foreground">{getLabel()}</span>
-          <Input
+          <AddressAutocompleteInput
             value={stop.value}
-            onChange={(e) => onChange(stop.id, e.target.value)}
+            onCommit={(value) => onChange(stop.id, value)}
+            onDraftChange={(value) => onDraftChange?.(stop.id, value)}
             placeholder={placeholder ?? getPlaceholder()}
             disabled={disabled}
             className="bg-secondary/50 h-8 mt-1"
+            country={country}
+            locationBias={locationBias}
           />
         </div>
       </div>
@@ -156,8 +354,51 @@ interface AddTripModalProps {
 export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestination, onSave }: AddTripModalProps) {
   const isEditing = !!trip;
   const { profile } = useUserProfile();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const settingsRateLabel = useMemo(() => profile.ratePerKm, [profile.ratePerKm]);
+  const googleLanguage = useMemo(() => locale.split("-")[0] ?? "en", [locale]);
+
+  const googleRegion = useMemo(() => {
+    const normalized = profile.country.trim().toLowerCase();
+    const countryMap: Record<string, string> = {
+      "austria": "at",
+      "österreich": "at",
+      "germany": "de",
+      "deutschland": "de",
+      "spain": "es",
+      "españa": "es",
+      "italy": "it",
+      "italia": "it",
+      "france": "fr",
+      "switzerland": "ch",
+      "schweiz": "ch",
+      "suisse": "ch",
+      "svizzera": "ch",
+      "belgium": "be",
+      "belgique": "be",
+      "belgië": "be",
+      "netherlands": "nl",
+      "nederland": "nl",
+      "portugal": "pt",
+      "uk": "gb",
+      "united kingdom": "gb",
+      "poland": "pl",
+      "polska": "pl",
+      "czech republic": "cz",
+      "czechia": "cz",
+      "česko": "cz",
+      "hungary": "hu",
+      "magyarország": "hu",
+      "slovakia": "sk",
+      "slovensko": "sk",
+      "slovenia": "si",
+      "slovenija": "si",
+      "croatia": "hr",
+      "hrvatska": "hr",
+    };
+    return countryMap[normalized];
+  }, [profile.country]);
+
   const baseLocation = useMemo(() => {
     const parts = [profile.baseAddress, profile.city, profile.country].map((p) => p.trim()).filter(Boolean);
     return parts.join(", ");
@@ -166,7 +407,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
     const value = (previousDestination ?? "").trim();
     return value || baseLocation;
   }, [previousDestination, baseLocation]);
-  
+
   const getInitialStops = (): Stop[] => {
     const defaultSpecialOrigin: TripData["specialOrigin"] = trip?.specialOrigin ?? "base";
 
@@ -214,15 +455,44 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
   const setIsOpen = isControlled ? onOpenChange! : setInternalOpen;
 
   const [stops, setStops] = useState<Stop[]>(() => getInitialStops());
+  const stopDraftsRef = useRef<Record<string, string>>({});
   const [date, setDate] = useState("");
   const [distance, setDistance] = useState("");
   const [passengers, setPassengers] = useState("");
   const [project, setProject] = useState("");
   const [purpose, setPurpose] = useState("");
-  const [specialOrigin, setSpecialOrigin] = useState("base");
+  const [specialOrigin, setSpecialOrigin] = useState<NonNullable<TripData["specialOrigin"]>>("base");
   const [originTouched, setOriginTouched] = useState(false);
   const [destinationTouched, setDestinationTouched] = useState(false);
   const [tripRate, setTripRate] = useState("");
+  const [distanceLoading, setDistanceLoading] = useState(false);
+  const [locationBias, setLocationBias] = useState<{ lat: number; lng: number } | undefined>(undefined);
+
+  // Fetch coordinates for Base City to use as Autocomplete Bias
+  useEffect(() => {
+    if (!profile.city || !profile.country) return;
+
+    // Simple caching mechanism in memory for the session could be added if needed,
+    // but for now we interact with the API.
+    const fetchBaseLocation = async () => {
+      try {
+        const query = `${profile.city}, ${profile.country}`;
+        const res = await fetch("/api/google/geocode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address: query, language: googleLanguage }),
+        });
+        const data = await res.json();
+        if (res.ok && data?.location) {
+          setLocationBias(data.location);
+        }
+      } catch (e) {
+        // ignore errors
+      }
+    };
+
+    fetchBaseLocation();
+  }, [profile.city, profile.country, googleLanguage]);
 
   type SpecialOrigin = NonNullable<TripData["specialOrigin"]>;
 
@@ -261,6 +531,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
     const defaultSpecialOrigin: TripData["specialOrigin"] = trip?.specialOrigin ?? "base";
 
     setStops(getInitialStops());
+    stopDraftsRef.current = {};
     setDate(trip?.date || "");
     setDistance(trip?.distance?.toString() || "");
     setPassengers(trip?.passengers?.toString() || "");
@@ -272,6 +543,10 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
     setTripRate(trip?.ratePerKmOverride != null ? formatLocaleNumber(trip.ratePerKmOverride) : "");
   }, [isOpen, trip, baseLocation, previousDestinationEffective]);
 
+  const handleStopDraftChange = useCallback((id: string, value: string) => {
+    stopDraftsRef.current[id] = value;
+  }, []);
+
   const originPlaceholder = useMemo(() => {
     const fallback = specialOrigin === "base" ? baseLocation : previousDestinationEffective;
     return fallback || t("tripModal.originPlaceholder");
@@ -280,6 +555,52 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
   const destinationPlaceholder = useMemo(() => {
     return baseLocation || t("tripModal.destinationPlaceholder");
   }, [baseLocation, t]);
+
+  const getEffectiveRouteValues = useCallback(() => {
+    const trimmedStops = stops.map((stop) => (stopDraftsRef.current[stop.id] ?? stop.value).trim());
+    const originFallback = specialOrigin === "base" ? baseLocation : previousDestinationEffective;
+
+    const origin = trimmedStops[0] || originFallback;
+    const destination =
+      specialOrigin === "return" ? baseLocation : trimmedStops[trimmedStops.length - 1] || baseLocation;
+
+    const waypoints = trimmedStops.slice(1, -1).filter(Boolean);
+    const routeValues = [origin, ...waypoints, destination].filter(Boolean);
+    return { origin, destination, waypoints, routeValues };
+  }, [stops, specialOrigin, baseLocation, previousDestinationEffective]);
+
+  const calculateDistance = useCallback(async () => {
+    if (!isOpen) return;
+
+    const { origin, destination, waypoints } = getEffectiveRouteValues();
+    if (!origin || !destination) return;
+
+    setDistanceLoading(true);
+    try {
+      const response = await fetch("/api/google/directions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          origin,
+          destination,
+          waypoints,
+          language: googleLanguage,
+          region: googleRegion,
+        }),
+      });
+
+      const data = (await response.json().catch(() => null)) as { totalDistanceMeters?: number } | null;
+      const meters = typeof data?.totalDistanceMeters === "number" ? data.totalDistanceMeters : null;
+      if (!response.ok || meters == null) return;
+
+      const km = Math.round((meters / 1000) * 10) / 10;
+      setDistance(String(km));
+    } catch {
+      // ignore
+    } finally {
+      setDistanceLoading(false);
+    }
+  }, [getEffectiveRouteValues, googleLanguage, googleRegion, isOpen]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -296,7 +617,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
         const oldIndex = items.findIndex((i) => i.id === active.id);
         const newIndex = items.findIndex((i) => i.id === over.id);
         const newItems = arrayMove(items, oldIndex, newIndex);
-        
+
         // Update types based on position
         return newItems.map((item, index) => ({
           ...item,
@@ -312,6 +633,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
       value: "",
       type: "stop",
     };
+    stopDraftsRef.current[newStop.id] = "";
     // Insert before destination
     setStops((prev) => {
       const newStops = [...prev];
@@ -321,6 +643,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
   };
 
   const removeStop = (id: string) => {
+    delete stopDraftsRef.current[id];
     setStops((prev) => {
       const filtered = prev.filter((s) => s.id !== id);
       // Update types
@@ -334,6 +657,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
   const updateStop = (id: string, value: string) => {
     if (id === "origin") setOriginTouched(true);
     if (id === "destination") setDestinationTouched(true);
+    stopDraftsRef.current[id] = value;
     setStops((prev) =>
       prev.map((s) => (s.id === id ? { ...s, value } : s))
     );
@@ -360,12 +684,12 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="date">{t("tripModal.date")}</Label>
-              <Input 
-                id="date" 
-                type="date" 
+              <Input
+                id="date"
+                type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="bg-secondary/50 [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:order-first [&::-webkit-calendar-picker-indicator]:mr-2" 
+                className="bg-secondary/50 [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:order-first [&::-webkit-calendar-picker-indicator]:mr-2"
               />
             </div>
             <div className="grid gap-2">
@@ -383,52 +707,54 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
             </div>
           </div>
 
-            {/* Draggable Route Stops */}
-            <div className="grid gap-2">
-              <div className="flex items-center justify-between">
-                <Label>{t("tripModal.route")}</Label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={addStop}
-                  className="h-7 text-xs"
-                >
-                  <Plus className="w-3 h-3 mr-1" />
-                  {t("tripModal.addStop")}
-                </Button>
-              </div>
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
+          {/* Draggable Route Stops */}
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between">
+              <Label>{t("tripModal.route")}</Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={addStop}
+                className="h-7 text-xs"
               >
-                <SortableContext
-                  items={stops.map((s) => s.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <div className="space-y-2">
-                    {stops.map((stop) => (
-                      <SortableStop
-                        key={stop.id}
-                        stop={stop}
-                        onRemove={removeStop}
-                        onChange={updateStop}
-                        canRemove={stops.length > 2}
-                        placeholder={
-                          stop.type === "origin"
-                            ? originPlaceholder
-                            : stop.type === "destination"
-                              ? destinationPlaceholder
-                              : undefined
-                        }
-                        disabled={stop.type === "destination" && specialOrigin === "return"}
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-              </DndContext>
+                <Plus className="w-3 h-3 mr-1" />
+                {t("tripModal.addStop")}
+              </Button>
             </div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={stops.map((s) => s.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="space-y-2">
+                  {stops.map((stop) => (
+                    <SortableStop
+                      key={stop.id}
+                      stop={stop}
+                      onRemove={removeStop}
+                      onChange={updateStop}
+                      onDraftChange={handleStopDraftChange}
+                      canRemove={stops.length > 2}
+                      placeholder={
+                        stop.type === "origin"
+                          ? originPlaceholder
+                          : stop.type === "destination"
+                            ? destinationPlaceholder
+                            : undefined
+                      }
+                      disabled={stop.type === "destination" && specialOrigin === "return"}
+                      country={profile.country}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
@@ -446,13 +772,13 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
             </div>
             <div className="grid gap-2">
               <Label htmlFor="passengers">{t("tripModal.passengers")}</Label>
-              <Input 
-                id="passengers" 
-                type="number" 
-                placeholder="0" 
+              <Input
+                id="passengers"
+                type="number"
+                placeholder="0"
                 value={passengers}
                 onChange={(e) => setPassengers(e.target.value)}
-                className="bg-secondary/50" 
+                className="bg-secondary/50"
               />
             </div>
           </div>
@@ -460,13 +786,13 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
           <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
             <div className="grid gap-2">
               <Label htmlFor="distance">{t("tripModal.distance")}</Label>
-              <Input 
-                id="distance" 
-                type="number" 
-                placeholder="0" 
+              <Input
+                id="distance"
+                type="number"
+                placeholder="0"
                 value={distance}
                 onChange={(e) => setDistance(e.target.value)}
-                className="bg-secondary/50" 
+                className="bg-secondary/50"
               />
             </div>
             <Button
@@ -474,34 +800,32 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
               variant="ghost"
               size="icon"
               className="h-10 w-10 shrink-0"
-              onClick={() => {
-                // TODO: Calculate distance from route
-                setDistance("100");
-              }}
+              onClick={() => void calculateDistance()}
+              disabled={distanceLoading}
             >
-              <Route className="w-5 h-5" />
+              {distanceLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Route className="w-5 h-5" />}
             </Button>
             <div className="grid gap-2">
               <Label htmlFor="tripRate">{t("tripModal.rate")}</Label>
-              <Input 
-                id="tripRate" 
-                type="text" 
+              <Input
+                id="tripRate"
+                type="text"
                 value={tripRate}
                 onChange={(e) => setTripRate(e.target.value)}
                 placeholder={settingsRateLabel}
-                className="bg-secondary/50" 
+                className="bg-secondary/50"
               />
             </div>
           </div>
 
           <div className="grid gap-2">
             <Label htmlFor="purpose">{t("tripModal.purpose")}</Label>
-            <Input 
-              id="purpose" 
-              placeholder={t("tripModal.purposePlaceholder")} 
+            <Input
+              id="purpose"
+              placeholder={t("tripModal.purposePlaceholder")}
               value={purpose}
               onChange={(e) => setPurpose(e.target.value)}
-              className="bg-secondary/50" 
+              className="bg-secondary/50"
             />
           </div>
 
@@ -513,15 +837,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
                 const distanceValue = parseLocaleNumber(distance) ?? 0;
                 const passengersValue = parseLocaleNumber(passengers) ?? 0;
                 const rateOverride = parseLocaleNumber(tripRate);
-                const trimmedStops = stops.map((s) => s.value.trim());
-                const originFallback = specialOrigin === "base" ? baseLocation : previousDestinationEffective;
-                const origin = trimmedStops[0] || originFallback;
-                const destination =
-                  specialOrigin === "return"
-                    ? baseLocation
-                    : trimmedStops[trimmedStops.length - 1] || baseLocation;
-                const middleStops = trimmedStops.slice(1, -1).filter(Boolean);
-                const routeValues = [origin, ...middleStops, destination].filter(Boolean);
+                const { routeValues } = getEffectiveRouteValues();
 
                 const id = trip?.id || (globalThis.crypto?.randomUUID?.() ?? String(Date.now()));
 

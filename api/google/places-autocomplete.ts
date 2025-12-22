@@ -37,6 +37,11 @@ export default async function handler(req: any, res: any) {
   const body = getBody(req);
   const input = body?.input;
   const language = typeof body?.language === "string" ? body.language : undefined;
+  const components = typeof body?.components === "string" ? body.components : undefined;
+  const sessiontoken = typeof body?.sessiontoken === "string" ? body.sessiontoken : undefined;
+  const location = typeof body?.location === "string" ? body.location : undefined;
+  const radius = typeof body?.radius === "number" ? body.radius : undefined;
+  const strictbounds = body?.strictbounds === true;
 
   if (typeof input !== "string" || !input.trim()) return badRequest(res, "input is required");
   if (input.length > 120) return badRequest(res, "input too long");
@@ -47,6 +52,11 @@ export default async function handler(req: any, res: any) {
     types: "address",
   });
   if (language) params.set("language", language);
+  if (components) params.set("components", components);
+  if (sessiontoken) params.set("sessiontoken", sessiontoken);
+  if (location) params.set("location", location);
+  if (radius) params.set("radius", String(radius));
+  if (strictbounds) params.set("strictbounds", "true");
 
   const url = `${GOOGLE_BASE}/place/autocomplete/json?${params.toString()}`;
   const response = await fetch(url);

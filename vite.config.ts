@@ -65,12 +65,18 @@ function googleApiProxy(serverKey: string | undefined): Plugin {
           if (!response.ok || !data) return send(res, 502, { error: "Failed to contact Google Directions API" });
           if (data.status !== "OK" || !data.routes?.[0]) return send(res, 400, { error: data.status ?? "UNKNOWN", message: data.error_message });
 
-          const route = data.routes[0];
-          const legs = Array.isArray(route.legs)
-            ? route.legs.map((leg: any) => ({ startLocation: leg?.start_location, endLocation: leg?.end_location }))
-            : [];
-          return send(res, 200, { overviewPolyline: route?.overview_polyline?.points ?? "", bounds: route?.bounds ?? null, legs });
-        }
+	          const route = data.routes[0];
+	          const legs = Array.isArray(route.legs)
+	            ? route.legs.map((leg: any) => ({
+	                startLocation: leg?.start_location,
+	                endLocation: leg?.end_location,
+	                distanceMeters: typeof leg?.distance?.value === "number" ? leg.distance.value : null,
+	                durationSeconds: typeof leg?.duration?.value === "number" ? leg.duration.value : null,
+	              }))
+	            : [];
+	          const totalDistanceMeters = legs.reduce((acc: number, leg: any) => acc + (typeof leg?.distanceMeters === "number" ? leg.distanceMeters : 0), 0);
+	          return send(res, 200, { overviewPolyline: route?.overview_polyline?.points ?? "", bounds: route?.bounds ?? null, legs, totalDistanceMeters });
+	        }
 
         if (req.url.startsWith("/api/google/geocode")) {
           const address = body?.address;

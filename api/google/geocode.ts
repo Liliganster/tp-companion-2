@@ -37,12 +37,16 @@ export default async function handler(req: any, res: any) {
   const body = getBody(req);
   const address = body?.address;
   const language = typeof body?.language === "string" ? body.language : undefined;
+  const region = typeof body?.region === "string" ? body.region : undefined;
+  const components = typeof body?.components === "string" ? body.components : undefined;
 
   if (typeof address !== "string" || !address.trim()) return badRequest(res, "address is required");
   if (address.length > 220) return badRequest(res, "address too long");
 
   const params = new URLSearchParams({ address, key });
   if (language) params.set("language", language);
+  if (region) params.set("region", region);
+  if (components) params.set("components", components);
 
   const url = `${GOOGLE_BASE}/geocode/json?${params.toString()}`;
   const response = await fetch(url);

@@ -26,22 +26,32 @@ const DEFAULT_PROFILE: UserProfile = {
   country: "Austria",
 };
 
+function detectBrowserLanguage(): UserProfile["language"] {
+  if (typeof navigator === "undefined") return "es";
+  const lang = (navigator.language ?? "").toLowerCase();
+  if (lang.startsWith("de")) return "de";
+  if (lang.startsWith("en")) return "en";
+  if (lang.startsWith("es")) return "es";
+  return "es";
+}
+
 function readStoredProfile(): UserProfile {
   if (typeof window === "undefined") return DEFAULT_PROFILE;
 
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_PROFILE;
+    const baseProfile: UserProfile = { ...DEFAULT_PROFILE, language: detectBrowserLanguage() };
+    if (!raw) return baseProfile;
 
     const parsed = JSON.parse(raw) as Partial<UserProfile> | null;
-    if (!parsed || typeof parsed !== "object") return DEFAULT_PROFILE;
+    if (!parsed || typeof parsed !== "object") return baseProfile;
 
     return {
-      ...DEFAULT_PROFILE,
+      ...baseProfile,
       ...parsed,
     };
   } catch {
-    return DEFAULT_PROFILE;
+    return { ...DEFAULT_PROFILE, language: detectBrowserLanguage() };
   }
 }
 

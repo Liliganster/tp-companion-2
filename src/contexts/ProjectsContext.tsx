@@ -10,6 +10,7 @@ export type Project = {
   trips: number;
   totalKm: number;
   documents: number;
+  invoices: number;
   estimatedCost: number;
   shootingDays: number;
   kmPerDay: number;
@@ -29,6 +30,7 @@ const DEFAULT_PROJECTS: Project[] = [
     trips: 24,
     totalKm: 4850,
     documents: 12,
+    invoices: 3,
     estimatedCost: 1697.5,
     shootingDays: 15,
     kmPerDay: 323.3,
@@ -44,6 +46,7 @@ const DEFAULT_PROJECTS: Project[] = [
     trips: 8,
     totalKm: 1520,
     documents: 4,
+    invoices: 1,
     estimatedCost: 456,
     shootingDays: 5,
     kmPerDay: 304,
@@ -59,6 +62,7 @@ const DEFAULT_PROJECTS: Project[] = [
     trips: 15,
     totalKm: 890,
     documents: 0,
+    invoices: 0,
     estimatedCost: 267,
     shootingDays: 10,
     kmPerDay: 89,
@@ -74,6 +78,7 @@ const DEFAULT_PROJECTS: Project[] = [
     trips: 6,
     totalKm: 650,
     documents: 3,
+    invoices: 2,
     estimatedCost: 208,
     shootingDays: 3,
     kmPerDay: 216.7,
@@ -88,7 +93,10 @@ function readStoredProjects(): Project[] {
     if (!raw) return DEFAULT_PROJECTS;
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return DEFAULT_PROJECTS;
-    return parsed as Project[];
+    return (parsed as Partial<Project>[]).map((item) => ({
+      ...item,
+      invoices: typeof item?.invoices === "number" ? item.invoices : 0,
+    })) as Project[];
   } catch {
     return DEFAULT_PROJECTS;
   }
@@ -141,4 +149,3 @@ export function useProjects() {
   if (!ctx) throw new Error("useProjects must be used within a ProjectsProvider");
   return ctx;
 }
-

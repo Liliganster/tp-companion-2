@@ -1,162 +1,272 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { GoogleMap, MarkerF, PolylineF, useLoadScript, type Libraries } from "@react-google-maps/api";
-import { MapPin } from "lucide-react";
+import { MapPin, Loader2 } from "lucide-react";
 import { useI18n } from "@/hooks/use-i18n";
-
-type LatLng = { lat: number; lng: number };
-
-type DirectionsResponse = {
-  overviewPolyline?: string;
-  bounds?: { northeast?: LatLng; southwest?: LatLng } | null;
-  legs?: Array<{ startLocation?: LatLng; endLocation?: LatLng }>;
-  error?: string;
-  message?: string;
-};
+import { useUserProfile } from "@/contexts/UserProfileContext";
 
 function TripGoogleMapLoaded({ route, open, browserKey }: { route: string[]; open: boolean; browserKey: string }) {
   const { t, locale } = useI18n();
+  const language = useMemo(() => locale.split("-")[0] ?? "en", [locale]);
+  const { profile } = useUserProfile();
+  
+  const googleRegion = useMemo(() => {
+    const normalized = profile.country.trim().toLowerCase();
+    const countryMap: Record<string, string> = {
+      "austria": "at",
+      "österreich": "at",
+      "germany": "de",
+      "deutschland": "de",
+      "spain": "es",
+      "españa": "es",
+      "italy": "it",
+      "italia": "it",
+      "france": "fr",
+      "switzerland": "ch",
+      "schweiz": "ch",
+      "suisse": "ch",
+      "svizzera": "ch",
+      "belgium": "be",
+      "belgique": "be",
+      "belgië": "be",
+      "netherlands": "nl",
+      "nederland": "nl",
+      "portugal": "pt",
+      "uk": "gb",
+      "united kingdom": "gb",
+      "poland": "pl",
+      "polska": "pl",
+      "czech republic": "cz",
+      "czechia": "cz",
+      "česko": "cz",
+      "hungary": "hu",
+      "magyarország": "hu",
+      "slovakia": "sk",
+      "slovensko": "sk",
+      "slovenia": "si",
+      "slovenija": "si",
+      "croatia": "hr",
+      "hrvatska": "hr",
+    };
+    return countryMap[normalized];
+  }, [profile.country]);
 
-  const libraries = useMemo<Libraries>(() => ["places", "geometry"], []);
-  const { isLoaded, loadError } = useLoadScript({
-    googleMapsApiKey: browserKey,
-    libraries,
-    language: locale,
-  });
+  const mapRef = useRef<HTMLDivElement>(null);
+  const googleMapRef = useRef<google.maps.Map | null>(null);
+  const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
+  // markersRef removed as we use default markers
 
-  const mapRef = useRef<google.maps.Map | null>(null);
-  const [path, setPath] = useState<LatLng[] | null>(null);
-  const [markers, setMarkers] = useState<LatLng[] | null>(null);
-  const [bounds, setBounds] = useState<{ northeast: LatLng; southwest: LatLng } | null>(null);
+  
+  const [scriptLoaded, setScriptLoaded] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [requestError, setRequestError] = useState<string | null>(null);
 
-  const origin = route[0];
-  const destination = route[route.length - 1];
-  const waypoints = route.slice(1, -1);
+  const normalizedRoute = useMemo(() => route.map((s) => (s ?? "").trim()).filter(Boolean), [route]);
+  const origin = normalizedRoute[0];
+  const destination = normalizedRoute[normalizedRoute.length - 1];
+  const waypoints = useMemo(() => normalizedRoute.slice(1, -1), [normalizedRoute]);
+  const routeKey = useMemo(() => normalizedRoute.join(" | "), [normalizedRoute]);
 
+  // Cargar el script de Google Maps
   useEffect(() => {
-    if (!open) return;
-    if (!isLoaded) return;
-    if (!origin || !destination || route.length < 2) return;
+    if (scriptLoaded || !open || !browserKey) return;
 
-    const controller = new AbortController();
-    setRequestError(null);
-    setPath(null);
-    setMarkers(null);
-    setBounds(null);
+    const checkGoogleMaps = () => {
+      if (window.google?.maps) {
+        setScriptLoaded(true);
+        return true;
+      }
+      return false;
+    };
+
+    // Si ya está cargado
+    if (checkGoogleMaps()) return;
+
+    // Verificar si el script ya existe
+    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
+    if (existingScript) {
+      console.log('Google Maps script already exists, waiting for load...');
+      const checkInterval = setInterval(() => {
+        if (checkGoogleMaps()) {
+          clearInterval(checkInterval);
+        }
+      }, 100);
+      
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        if (!window.google?.maps) {
+          setLoadError(t("tripDetail.mapLoadError"));
+        }
+      }, 10000); // timeout después de 10 segundos
+      
+      return () => clearInterval(checkInterval);
+    }
+
+    // Cargar el script
+    console.log('Loading Google Maps script...');
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${browserKey}&libraries=places,geometry&v=weekly`;
+    script.async = true;
+    script.defer = true;
+    
+    script.onload = () => {
+      console.log('Google Maps script loaded successfully');
+      setScriptLoaded(true);
+    };
+    
+    script.onerror = () => {
+      console.error('Error loading Google Maps script');
+      setLoadError(t("tripDetail.mapLoadError"));
+    };
+
+    document.head.appendChild(script);
+
+    return () => {
+      // No remover el script para evitar recargas
+    };
+  }, [open, browserKey, t, scriptLoaded]);
+
+  // Inicializar el mapa
+  useEffect(() => {
+    if (!mapRef.current || !open || !scriptLoaded || mapReady) return;
+
+    let mounted = true;
+
+    const initMap = async () => {
+      try {
+        if (!window.google?.maps) {
+          console.error('Google Maps not available after script load');
+          setLoadError(t("tripDetail.mapLoadError"));
+          return;
+        }
+
+        // Crear el mapa si no existe
+        if (!googleMapRef.current && mapRef.current) {
+          googleMapRef.current = new google.maps.Map(mapRef.current, {
+            center: { lat: 48.2082, lng: 16.3738 },
+            zoom: 12,
+            streetViewControl: false,
+            mapTypeControl: false,
+            fullscreenControl: false,
+            zoomControl: true,
+          });
+          console.log('Map created successfully');
+          setMapReady(true);
+        }
+      } catch (error) {
+        console.error("Error creating map:", error);
+        if (mounted) {
+          setLoadError(t("tripDetail.mapLoadError"));
+        }
+      }
+    };
+
+    initMap();
+
+    return () => {
+      mounted = false;
+    };
+  }, [open, scriptLoaded, mapReady, t]);
+
+  // Calcular y renderizar la ruta
+  useEffect(() => {
+    if (!googleMapRef.current || !open || !mapReady || !scriptLoaded) return;
+    if (!origin || !destination || normalizedRoute.length < 2) return;
+
+    let mounted = true;
 
     (async () => {
       try {
-        const response = await fetch("/api/google/directions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            origin,
-            destination,
-            waypoints,
-            language: locale,
-          }),
-          signal: controller.signal,
+        setRequestError(null);
+
+        // Limpiar marcadores anteriores
+        // Limpiar marcadores anteriores (Managed by DirectionsRenderer now)
+
+
+        // Limpiar renderer anterior
+        if (directionsRendererRef.current) {
+          directionsRendererRef.current.setMap(null);
+        }
+
+        if (!window.google?.maps) return;
+
+        if (!mounted) return;
+
+        // Crear DirectionsService y DirectionsRenderer
+        const directionsService = new google.maps.DirectionsService();
+        const directionsRenderer = new google.maps.DirectionsRenderer({
+          map: googleMapRef.current,
+          suppressMarkers: false,
+          polylineOptions: {
+            strokeColor: "#2563eb",
+            strokeOpacity: 0.8,
+            strokeWeight: 5,
+          },
         });
 
-        const data = (await response.json().catch(() => null)) as DirectionsResponse | null;
-        if (!response.ok || !data) {
-          setRequestError(t("tripDetail.mapLoadError"));
-          return;
-        }
+        directionsRendererRef.current = directionsRenderer;
 
-        if (!data.overviewPolyline) {
-          setRequestError(t("tripDetail.mapNoRoute"));
-          return;
-        }
+        // Preparar waypoints
+        const waypointsFormatted = waypoints.map(location => ({
+          location,
+          stopover: true,
+        }));
 
-        if ((window as any).google?.maps?.geometry?.encoding?.decodePath) {
-          const decoded = (window as any).google.maps.geometry.encoding.decodePath(data.overviewPolyline);
-          const points = decoded.map((p: any) => ({ lat: p.lat(), lng: p.lng() })) as LatLng[];
-          setPath(points);
-        }
+        // Calcular la ruta
+        const request: google.maps.DirectionsRequest = {
+          origin,
+          destination,
+          waypoints: waypointsFormatted,
+          travelMode: google.maps.TravelMode.DRIVING,
+          region: googleRegion,
+          language,
+        };
 
-        const legMarkers: LatLng[] = [];
-        const legs = Array.isArray(data.legs) ? data.legs : [];
-        if (legs.length) {
-          const first = legs[0]?.startLocation;
-          if (first) legMarkers.push(first);
-          for (const leg of legs) {
-            if (leg?.endLocation) legMarkers.push(leg.endLocation);
+        directionsService.route(request, (result, status) => {
+          if (!mounted) return;
+
+          if (status === google.maps.DirectionsStatus.OK && result) {
+            // Renderizar la ruta
+            directionsRenderer.setDirections(result);
+          } else {
+            console.error("Directions request failed:", status);
+            setRequestError(t("tripDetail.mapNoRoute"));
           }
+        });
+      } catch (error) {
+        console.error("Error rendering route:", error);
+        if (mounted) {
+          setRequestError(t("tripDetail.mapLoadError"));
         }
-        setMarkers(legMarkers.length ? legMarkers : null);
-
-        const b = data.bounds?.northeast && data.bounds?.southwest ? { northeast: data.bounds.northeast, southwest: data.bounds.southwest } : null;
-        setBounds(b);
-      } catch (err: any) {
-        if (err?.name === "AbortError") return;
-        setRequestError(t("tripDetail.mapLoadError"));
       }
     })();
 
-    return () => controller.abort();
-  }, [open, isLoaded, origin, destination, locale, waypoints, route.length, t]);
+    return () => {
+      mounted = false;
+    };
+  }, [origin, destination, waypoints, open, mapReady, scriptLoaded, routeKey, t, language, googleRegion]);
 
-  useEffect(() => {
-    if (!mapRef.current || !bounds) return;
-    const sw = new google.maps.LatLng(bounds.southwest.lat, bounds.southwest.lng);
-    const ne = new google.maps.LatLng(bounds.northeast.lat, bounds.northeast.lng);
-    mapRef.current.fitBounds(new google.maps.LatLngBounds(sw, ne), 48);
-  }, [bounds]);
-
-  if (loadError) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full p-8 space-y-4 bg-secondary/20">
-        <MapPin className="w-12 h-12 text-muted-foreground" />
-        <div className="text-center space-y-2 max-w-md">
-          <h3 className="font-semibold">{t("tripDetail.mapLoadErrorTitle")}</h3>
-          <p className="text-sm text-muted-foreground">{t("tripDetail.mapLoadError")}</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isLoaded) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full p-8 space-y-4 bg-secondary/20">
-        <MapPin className="w-12 h-12 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">{t("tripDetail.mapLoading")}</p>
-      </div>
-    );
-  }
+  const isLoading = !scriptLoaded || !mapReady;
 
   return (
     <div className="relative w-full h-full">
-      <GoogleMap
-        mapContainerClassName="w-full h-full"
-        onLoad={(m) => (mapRef.current = m)}
-        options={{
-          streetViewControl: false,
-          mapTypeControl: false,
-          fullscreenControl: false,
-          clickableIcons: false,
-        }}
-        zoom={10}
-        center={{ lat: 48.2082, lng: 16.3738 }}
-      >
-        {markers?.map((pos, idx) => (
-          <MarkerF
-            key={`${pos.lat}_${pos.lng}_${idx}`}
-            position={pos}
-            label={idx === 0 ? "A" : idx === markers.length - 1 ? "B" : String(idx)}
-          />
-        ))}
-        {path && (
-          <PolylineF
-            path={path}
-            options={{
-              strokeColor: "#2563eb",
-              strokeOpacity: 0.9,
-              strokeWeight: 4,
-            }}
-          />
-        )}
-      </GoogleMap>
+      <div ref={mapRef} className="w-full h-full" />
+
+      {loadError && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center h-full p-8 space-y-4 bg-secondary/20">
+          <MapPin className="w-12 h-12 text-muted-foreground" />
+          <div className="text-center space-y-2 max-w-md">
+            <h3 className="font-semibold">{t("tripDetail.mapLoadErrorTitle")}</h3>
+            <p className="text-sm text-muted-foreground">{loadError}</p>
+          </div>
+        </div>
+      )}
+
+      {!loadError && isLoading && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center h-full p-8 space-y-4 bg-secondary/20">
+          <Loader2 className="w-12 h-12 text-muted-foreground animate-spin" />
+          <p className="text-sm text-muted-foreground">{t("tripDetail.mapLoading")}</p>
+        </div>
+      )}
 
       {requestError && (
         <div className="absolute top-3 left-3 right-3 pointer-events-none">

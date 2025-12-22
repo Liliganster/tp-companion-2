@@ -39,6 +39,7 @@ export default async function handler(req: any, res: any) {
   const destination = body?.destination;
   const waypoints = Array.isArray(body?.waypoints) ? body.waypoints : [];
   const language = typeof body?.language === "string" ? body.language : undefined;
+  const region = typeof body?.region === "string" ? body.region : undefined;
 
   if (typeof origin !== "string" || !origin.trim()) return badRequest(res, "origin is required");
   if (typeof destination !== "string" || !destination.trim()) return badRequest(res, "destination is required");
@@ -52,8 +53,10 @@ export default async function handler(req: any, res: any) {
     destination,
     key,
     mode: "driving",
+    units: "metric",
   });
   if (language) params.set("language", language);
+  if (region) params.set("region", region);
   if (waypoints.length) params.set("waypoints", waypoints.join("|"));
 
   const url = `${GOOGLE_BASE}/directions/json?${params.toString()}`;
@@ -79,8 +82,12 @@ export default async function handler(req: any, res: any) {
     ? route.legs.map((leg: any) => ({
         startLocation: leg?.start_location,
         endLocation: leg?.end_location,
+        distanceMeters: typeof leg?.distance?.value === "number" ? leg.distance.value : null,
+        durationSeconds: typeof leg?.duration?.value === "number" ? leg.duration.value : null,
       }))
     : [];
+
+  const totalDistanceMeters = legs.reduce((acc: number, leg: any) => acc + (typeof leg?.distanceMeters === "number" ? leg.distanceMeters : 0), 0);
 
   res.statusCode = 200;
   res.setHeader("Content-Type", "application/json");
@@ -89,7 +96,7 @@ export default async function handler(req: any, res: any) {
       overviewPolyline: route?.overview_polyline?.points ?? "",
       bounds: route?.bounds ?? null,
       legs,
+      totalDistanceMeters,
     }),
   );
 }
-
