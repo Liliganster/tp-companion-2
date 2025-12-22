@@ -1,4 +1,6 @@
 {
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "crons": [
     {
       "path": "/api/worker",
@@ -9,11 +11,5 @@
     "api/**/*.ts": {
       "includeFiles": "src/**"
     }
-  },
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ]
+  }
 }
