@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { getProfileInitial, useUserProfile } from "@/contexts/UserProfileContext";
 import { useI18n } from "@/hooks/use-i18n";
+import { useAuth } from "@/contexts/AuthContext";
 interface SidebarProps {
   onSettingsClick: () => void;
 }
@@ -14,6 +15,7 @@ export function Sidebar({
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const { profile } = useUserProfile();
+  const { signOut } = useAuth();
   const { t } = useI18n();
   const profileInitial = getProfileInitial(profile.fullName);
   const navigation = [{
@@ -82,7 +84,7 @@ export function Sidebar({
           <Settings className="w-5 h-5 shrink-0" />
           {!collapsed && <span>{t("nav.settings")}</span>}
         </button>
-        <button className={cn("nav-item w-full text-destructive hover:text-destructive hover:bg-destructive/10", collapsed && "justify-center px-2")} title={collapsed ? t("nav.logout") : undefined}>
+        <button onClick={() => signOut()} className={cn("nav-item w-full text-destructive hover:text-destructive hover:bg-destructive/10", collapsed && "justify-center px-2")} title={collapsed ? t("nav.logout") : undefined}>
           <LogOut className="w-5 h-5 shrink-0" />
           {!collapsed && <span>{t("nav.logout")}</span>}
         </button>

@@ -5,9 +5,13 @@ import { Label } from "@/components/ui/label";
 import { Mail, Lock, User, ArrowRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/hooks/use-i18n";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Auth() {
   const { t } = useI18n();
+  const { signInWithPassword, signUpWithPassword, signInWithGoogle } = useAuth();
+  const { toast } = useToast();
   const [isLogin, setIsLogin] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState("");
@@ -17,8 +21,21 @@ export default function Auth() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate loading
-    setTimeout(() => setIsLoading(false), 1500);
+    try {
+      if (isLogin) {
+        await signInWithPassword(email, password);
+      } else {
+        await signUpWithPassword(email, password, name);
+      }
+    } catch (err: any) {
+      toast({
+        title: "Auth error",
+        description: err?.message ?? "Unexpected error",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -183,7 +200,12 @@ export default function Auth() {
               </div>
             </div>
 
-            <Button variant="outline" className="w-full">
+            <Button
+              variant="outline"
+              className="w-full"
+              type="button"
+              onClick={() => signInWithGoogle()}
+            >
               <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
                 <path
                   fill="currentColor"

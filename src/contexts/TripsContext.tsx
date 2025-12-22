@@ -12,6 +12,13 @@ export type Trip = {
   distance: number;
   ratePerKmOverride?: number | null;
   specialOrigin?: "base" | "continue" | "return";
+  documents?: Array<{
+    id: string;
+    name: string;
+    mimeType: string;
+    driveFileId: string;
+    createdAt: string; // ISO
+  }>;
 };
 
 const STORAGE_KEY = "trips";

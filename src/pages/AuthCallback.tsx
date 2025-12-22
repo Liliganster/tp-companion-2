@@ -1,18 +1,21 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function AuthCallback() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Handle OAuth callback
-    // This would process the callback from Supabase Auth
-    const timer = setTimeout(() => {
+    let mounted = true;
+    (async () => {
+      await supabase?.auth.getSession();
+      if (!mounted) return;
       navigate("/");
-    }, 2000);
-
-    return () => clearTimeout(timer);
+    })();
+    return () => {
+      mounted = false;
+    };
   }, [navigate]);
 
   return (

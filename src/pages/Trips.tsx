@@ -17,6 +17,7 @@ import { parseLocaleNumber, roundTo } from "@/lib/number";
 import { Badge } from "@/components/ui/badge";
 import { computeTripWarnings } from "@/lib/trip-warnings";
 import { useI18n } from "@/hooks/use-i18n";
+import { useAuth } from "@/contexts/AuthContext";
 const calculateCO2 = (distance: number) => Math.round(distance * 0.12 * 10) / 10;
 const mockTripsData: Trip[] = [{
   id: "1",
@@ -68,6 +69,7 @@ const mockTripsData: Trip[] = [{
 export default function Trips() {
   const { profile } = useUserProfile();
   const { t, tf, locale } = useI18n();
+  const { getAccessToken } = useAuth();
   const [selectedProject, setSelectedProject] = useState("all");
   const [selectedYear, setSelectedYear] = useState("2024");
   const { trips, setTrips } = useTrips();
@@ -92,13 +94,49 @@ export default function Trips() {
     setEditModalOpen(true);
   };
   const handleAddToCalendar = (trip: Trip) => {
-    toast({
-      title: t("trips.toastAddedToCalendarTitle"),
-      description: tf("trips.toastAddedToCalendarBody", {
-        destination: trip.route[trip.route.length - 1],
-        date: new Date(trip.date).toLocaleDateString(locale),
-      }),
-    });
+    (async () => {
+      const token = await getAccessToken();
+      if (!token) return;
+
+      const start = new Date(`${trip.date}T09:00:00`);
+      const end = new Date(`${trip.date}T10:00:00`);
+      const summary = `${trip.project} — ${trip.purpose || "Trip"}`;
+      const location = trip.route[trip.route.length - 1] ?? "";
+      const description = `${t("trips.route")}: ${trip.route.join(" -> ")}\n${t("trips.distance")}: ${trip.distance} km`;
+
+      const response = await fetch("/api/google/calendar/create-event", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          summary,
+          description,
+          location,
+          start: start.toISOString(),
+          end: end.toISOString(),
+        }),
+      });
+      const data: any = await response.json().catch(() => null);
+      if (!response.ok) {
+        toast({
+          title: t("trips.toastAddedToCalendarTitle"),
+          description: t("trips.calendarNotConnected"),
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: t("trips.toastAddedToCalendarTitle"),
+        description: tf("trips.toastAddedToCalendarBody", {
+          destination: location,
+          date: new Date(trip.date).toLocaleDateString(locale),
+        }),
+      });
+
+      if (data?.htmlLink) {
+        window.open(data.htmlLink, "_blank", "noopener,noreferrer");
+      }
+    })();
   };
 
   const settingsRatePerKm = parseLocaleNumber(profile.ratePerKm) ?? 0;

@@ -3,23 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { MapPin, FileText, Paperclip, CircleDot } from "lucide-react";
+import { MapPin, FileText, Paperclip, CircleDot, Download, Upload } from "lucide-react";
 import { useI18n } from "@/hooks/use-i18n";
 import { tf } from "@/lib/i18n";
 import { TripGoogleMap } from "@/components/trips/TripGoogleMap";
-
-interface Trip {
-  id: string;
-  date: string;
-  route: string[];
-  project: string;
-  purpose: string;
-  passengers: number;
-  warnings?: string[];
-  co2: number;
-  distance: number;
-  ratePerKmOverride?: number | null;
-}
+import { Trip, useTrips } from "@/contexts/TripsContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 interface TripDetailModalProps {
   trip: Trip | null;
@@ -29,6 +19,9 @@ interface TripDetailModalProps {
 
 export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalProps) {
   const { t, locale, language } = useI18n();
+  const { setTrips } = useTrips();
+  const { getAccessToken } = useAuth();
+  const { toast } = useToast();
 
   if (!trip) return null;
 
@@ -49,6 +42,79 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })} €`;
+
+  const tripDocuments = trip.documents ?? [];
+
+  const uploadDocument = async (file: File) => {
+    if (file.size > 3_000_000) {
+      toast({ title: "Drive", description: "File too large (max 3MB).", variant: "destructive" });
+      return;
+    }
+
+    const token = await getAccessToken();
+    if (!token) return;
+
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+      reader.onerror = () => reject(new Error("read_failed"));
+      reader.readAsDataURL(file);
+    });
+    if (!dataUrl) return;
+
+    const response = await fetch("/api/google/drive/upload", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ name: file.name, dataUrl }),
+    });
+    const data: any = await response.json().catch(() => null);
+    if (!response.ok || !data?.fileId) {
+      toast({ title: "Drive", description: t("trips.calendarNotConnected"), variant: "destructive" });
+      return;
+    }
+
+    setTrips((prev) =>
+      prev.map((t0) => {
+        if (t0.id !== trip.id) return t0;
+        const nextDocs = [
+          ...(t0.documents ?? []),
+          {
+            id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
+            name: data.name ?? file.name,
+            mimeType: data.mimeType ?? file.type ?? "application/octet-stream",
+            driveFileId: data.fileId,
+            createdAt: new Date().toISOString(),
+          },
+        ];
+        return { ...t0, documents: nextDocs };
+      }),
+    );
+
+    toast({ title: "Drive", description: t("tripDetail.attachDocument") });
+  };
+
+  const downloadDocument = async (doc: NonNullable<Trip["documents"]>[number]) => {
+    const token = await getAccessToken();
+    if (!token) return;
+
+    const response = await fetch(
+      `/api/google/drive/download?fileId=${encodeURIComponent(doc.driveFileId)}&name=${encodeURIComponent(doc.name)}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) {
+      toast({ title: "Drive", description: t("tripDetail.mapLoadError"), variant: "destructive" });
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = doc.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -135,14 +201,51 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
                   <TripGoogleMap route={trip.route} open={open} />
                 </TabsContent>
 
-                <TabsContent value="document" className="absolute inset-0 m-0 flex items-center justify-center bg-secondary/20">
-                  <div className="text-center space-y-2">
-                    <FileText className="w-12 h-12 text-muted-foreground mx-auto" />
-                    <p className="text-muted-foreground">{t("tripDetail.noDocuments")}</p>
-                    <Button variant="outline" size="sm">
-                      <Paperclip className="w-4 h-4 mr-2" />
-                      {t("tripDetail.attachDocument")}
-                    </Button>
+                <TabsContent value="document" className="absolute inset-0 m-0 bg-secondary/20">
+                  <div className="w-full h-full p-6 overflow-auto">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-muted-foreground" />
+                        <h3 className="font-medium">{t("tripDetail.tabDocument")}</h3>
+                      </div>
+                      <label className="inline-flex">
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/*,application/pdf"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) uploadDocument(file);
+                            e.currentTarget.value = "";
+                          }}
+                        />
+                        <Button variant="outline" size="sm" type="button">
+                          <Upload className="w-4 h-4 mr-2" />
+                          {t("tripDetail.attachDocument")}
+                        </Button>
+                      </label>
+                    </div>
+
+                    {tripDocuments.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-[70%] text-center space-y-2">
+                        <p className="text-muted-foreground">{t("tripDetail.noDocuments")}</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {tripDocuments.map((doc) => (
+                          <div key={doc.id} className="glass-card p-3 flex items-center justify-between">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">{doc.name}</p>
+                              <p className="text-xs text-muted-foreground truncate">{doc.mimeType}</p>
+                            </div>
+                            <Button variant="outline" size="sm" type="button" onClick={() => downloadDocument(doc)}>
+                              <Download className="w-4 h-4 mr-2" />
+                              {t("reports.view")}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </TabsContent>
               </div>

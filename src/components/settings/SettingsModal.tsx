@@ -28,6 +28,8 @@ import { cn } from "@/lib/utils";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useI18n } from "@/hooks/use-i18n";
 import { useAppearance } from "@/contexts/AppearanceContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 interface SettingsModalProps {
   open: boolean;
@@ -37,9 +39,11 @@ interface SettingsModalProps {
 export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState("profile");
   const { t } = useI18n();
+  const { toast } = useToast();
 
   const { profile, saveProfile } = useUserProfile();
   const { appearance, saveAppearance, previewAppearance, resetPreview } = useAppearance();
+  const { getAccessToken } = useAuth();
 
   // Draft form state for profile
   const [profileData, setProfileData] = useState(profile);
@@ -91,6 +95,55 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     { id: "help", label: t("settings.tabHelp"), icon: HelpCircle },
   ];
 
+  const [googleStatus, setGoogleStatus] = useState<{ loading: boolean; connected: boolean; email: string | null }>({
+    loading: false,
+    connected: false,
+    email: null,
+  });
+
+  const refreshGoogleStatus = async () => {
+    setGoogleStatus((prev) => ({ ...prev, loading: true }));
+    try {
+      const token = await getAccessToken();
+      if (!token) {
+        setGoogleStatus({ loading: false, connected: false, email: null });
+        return;
+      }
+      const response = await fetch("/api/google/oauth/status", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data: any = await response.json().catch(() => null);
+      if (!response.ok || !data) {
+        setGoogleStatus({ loading: false, connected: false, email: null });
+        return;
+      }
+      setGoogleStatus({ loading: false, connected: Boolean(data.connected), email: data.email ?? null });
+    } catch {
+      setGoogleStatus({ loading: false, connected: false, email: null });
+    }
+  };
+
+  const connectGoogle = async () => {
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      const response = await fetch("/api/google/oauth/start", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ scopes: ["calendar", "drive"], returnTo: "/" }),
+      });
+      const data: any = await response.json().catch(() => null);
+      if (!response.ok || !data?.authUrl) throw new Error(data?.error || "OAuth start failed");
+      window.location.href = data.authUrl;
+    } catch (err: any) {
+      toast({
+        title: "Google",
+        description: err?.message ?? "No se pudo iniciar la conexión",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSave = () => {
     saveProfile(profileData);
     saveAppearance(draftAppearance);
@@ -106,6 +159,13 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     if (!nextOpen) resetPreview();
     onOpenChange(nextOpen);
   };
+
+  useEffect(() => {
+    if (!open) return;
+    if (activeTab !== "apis") return;
+    refreshGoogleStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, activeTab]);
 
   const handleSelectBackgroundFile = (file: File) => {
     if (!file.type.startsWith("image/")) return;
@@ -310,7 +370,19 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         <h3 className="font-medium">Google Calendar</h3>
                         <p className="text-sm text-muted-foreground">{t("settings.apisGoogleCalendarBody")}</p>
                       </div>
-                      <Button variant="outline" size="sm">{t("settings.apisConnect")}</Button>
+                      <div className="flex items-center gap-3">
+                        <span className={cn("text-xs", googleStatus.connected ? "text-success" : "text-muted-foreground")}>
+                          {googleStatus.connected ? (googleStatus.email ?? t("settings.apisActive")) : t("settings.apisConnect")}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => (googleStatus.connected ? refreshGoogleStatus() : connectGoogle())}
+                          disabled={googleStatus.loading}
+                        >
+                          {googleStatus.connected ? t("settings.refresh") : t("settings.apisConnect")}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
