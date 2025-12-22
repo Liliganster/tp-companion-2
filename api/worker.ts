@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "../src/lib/supabaseServer.js";
-// @ts-ignore
-import pdflib from "pdf-parse";
+import type { default as PDFParser } from "pdf-parse";
+// @ts-ignore - pdf-parse doesn't have proper ES module types
+const pdflib: typeof PDFParser = require("pdf-parse");
 import { generateContent, generateContentFromPDF } from "../src/lib/ai/geminiClient.js";
 import { buildUniversalExtractorPrompt } from "../src/lib/ai/prompts.js";
 import { geocodeAddress } from "../src/lib/geocodingServer.js";
