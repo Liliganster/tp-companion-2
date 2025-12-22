@@ -13,13 +13,12 @@ type DirectionsResponse = {
   message?: string;
 };
 
-export function TripGoogleMap({ route, open }: { route: string[]; open: boolean }) {
+function TripGoogleMapLoaded({ route, open, browserKey }: { route: string[]; open: boolean; browserKey: string }) {
   const { t, locale } = useI18n();
-  const browserKey = import.meta.env.VITE_GOOGLE_MAPS_BROWSER_KEY as string | undefined;
 
   const libraries = useMemo<Libraries>(() => ["places", "geometry"], []);
   const { isLoaded, loadError } = useLoadScript({
-    googleMapsApiKey: browserKey ?? "",
+    googleMapsApiKey: browserKey,
     libraries,
     language: locale,
   });
@@ -105,18 +104,6 @@ export function TripGoogleMap({ route, open }: { route: string[]; open: boolean 
     mapRef.current.fitBounds(new google.maps.LatLngBounds(sw, ne), 48);
   }, [bounds]);
 
-  if (!browserKey) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full p-8 space-y-4 bg-secondary/20">
-        <MapPin className="w-12 h-12 text-muted-foreground" />
-        <div className="text-center space-y-2 max-w-md">
-          <h3 className="font-semibold">{t("tripDetail.mapNotConfiguredTitle")}</h3>
-          <p className="text-sm text-muted-foreground">{t("tripDetail.mapNotConfiguredBody")}</p>
-        </div>
-      </div>
-    );
-  }
-
   if (loadError) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 space-y-4 bg-secondary/20">
@@ -180,4 +167,23 @@ export function TripGoogleMap({ route, open }: { route: string[]; open: boolean 
       )}
     </div>
   );
+}
+
+export function TripGoogleMap({ route, open }: { route: string[]; open: boolean }) {
+  const { t } = useI18n();
+  const browserKey = import.meta.env.VITE_GOOGLE_MAPS_BROWSER_KEY as string | undefined;
+
+  if (!browserKey?.trim()) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-8 space-y-4 bg-secondary/20">
+        <MapPin className="w-12 h-12 text-muted-foreground" />
+        <div className="text-center space-y-2 max-w-md">
+          <h3 className="font-semibold">{t("tripDetail.mapNotConfiguredTitle")}</h3>
+          <p className="text-sm text-muted-foreground">{t("tripDetail.mapNotConfiguredBody")}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return <TripGoogleMapLoaded route={route} open={open} browserKey={browserKey} />;
 }

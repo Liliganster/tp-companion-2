@@ -11,14 +11,15 @@ export function MainLayout({ children }: MainLayoutProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-background overflow-x-hidden">
+    <div className="relative min-h-screen bg-background overflow-x-hidden">
       {/* Background gradient effects */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none app-background-effects z-0">
+        <div className="absolute inset-0 app-background-image" />
         <div className="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-radial from-primary/5 via-transparent to-transparent" />
         <div className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-radial from-accent/5 via-transparent to-transparent" />
       </div>
 
-      <div className="relative flex min-h-screen">
+      <div className="relative z-10 flex min-h-screen">
         <Sidebar onSettingsClick={() => setSettingsOpen(true)} />
         <MobileHeader onSettingsClick={() => setSettingsOpen(true)} />
         

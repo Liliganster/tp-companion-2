@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -33,15 +32,17 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
 
   if (!trip) return null;
 
-  const formattedDate = useMemo(
-    () =>
-      new Date(trip.date).toLocaleDateString(locale, {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      }),
-    [trip.date, locale],
-  );
+  const formattedDate = (() => {
+    const raw = trip.date?.trim?.() ?? "";
+    const time = Date.parse(raw);
+    if (!raw) return "-";
+    if (!Number.isFinite(time)) return raw;
+    return new Date(time).toLocaleDateString(locale, {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  })();
 
   const documentedTotal = 0;
   const documentedTotalLabel = `${documentedTotal.toLocaleString(locale, {

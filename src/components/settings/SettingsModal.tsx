@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useI18n } from "@/hooks/use-i18n";
+import { useAppearance } from "@/contexts/AppearanceContext";
 
 interface SettingsModalProps {
   open: boolean;
@@ -38,6 +39,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const { t } = useI18n();
 
   const { profile, saveProfile } = useUserProfile();
+  const { appearance, saveAppearance, previewAppearance, resetPreview } = useAppearance();
 
   // Draft form state for profile
   const [profileData, setProfileData] = useState(profile);
@@ -48,10 +50,37 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   }, [open, profile]);
 
   // Personalization state
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
-  const [uiOpacity, setUiOpacity] = useState([0]);
-  const [uiBlur, setUiBlur] = useState([16]);
-  const [bgBlur, setBgBlur] = useState([0]);
+  const [theme, setTheme] = useState<"light" | "dark">(appearance.theme);
+  const [uiOpacity, setUiOpacity] = useState([appearance.uiOpacity]);
+  const [uiBlur, setUiBlur] = useState([appearance.uiBlur]);
+  const [bgBlur, setBgBlur] = useState([appearance.backgroundBlur]);
+  const [backgroundImage, setBackgroundImage] = useState(appearance.backgroundImage);
+  const backgroundInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setTheme(appearance.theme);
+    setUiOpacity([appearance.uiOpacity]);
+    setUiBlur([appearance.uiBlur]);
+    setBgBlur([appearance.backgroundBlur]);
+    setBackgroundImage(appearance.backgroundImage);
+  }, [open, appearance]);
+
+  const draftAppearance = useMemo(
+    () => ({
+      theme,
+      uiOpacity: uiOpacity[0] ?? appearance.uiOpacity,
+      uiBlur: uiBlur[0] ?? appearance.uiBlur,
+      backgroundBlur: bgBlur[0] ?? appearance.backgroundBlur,
+      backgroundImage: backgroundImage ?? appearance.backgroundImage,
+    }),
+    [theme, uiOpacity, uiBlur, bgBlur, backgroundImage, appearance],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    previewAppearance(draftAppearance);
+  }, [open, draftAppearance, previewAppearance]);
 
   const navItems = [
     { id: "profile", label: t("settings.tabProfile"), icon: User },
@@ -64,11 +93,34 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
   const handleSave = () => {
     saveProfile(profileData);
+    saveAppearance(draftAppearance);
     onOpenChange(false);
   };
 
+  const handleClose = () => {
+    resetPreview();
+    onOpenChange(false);
+  };
+
+  const handleDialogOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) resetPreview();
+    onOpenChange(nextOpen);
+  };
+
+  const handleSelectBackgroundFile = (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    if (file.size > 2_000_000) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      if (result) setBackgroundImage(result);
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent className="max-w-3xl w-[800px] h-[600px] p-0 gap-0 overflow-hidden flex flex-col">
         <DialogHeader className="px-6 py-4 border-b border-border shrink-0">
           <DialogTitle className="text-xl font-semibold">{t("settings.title")}</DialogTitle>
@@ -313,25 +365,70 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   {/* Background Image */}
                   <div className="space-y-3">
                     <Label>{t("settings.backgroundImage")}</Label>
-                    <Button variant="upload" className="gap-2">
+                    <input
+                      ref={backgroundInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleSelectBackgroundFile(file);
+                        e.currentTarget.value = "";
+                      }}
+                    />
+                    <div className="flex items-center gap-3">
+                      <Button
+                        variant="upload"
+                        size="sm"
+                        className="gap-2"
+                        type="button"
+                        onClick={() => backgroundInputRef.current?.click()}
+                      >
                       <Upload className="w-4 h-4" />
                       {t("settings.uploadFromComputer")}
-                    </Button>
+                      </Button>
+                      {backgroundImage ? (
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div
+                            className="h-9 w-14 rounded-md border border-border bg-cover bg-center shrink-0"
+                            style={{ backgroundImage: `url(${backgroundImage})` }}
+                          />
+                          <Button variant="outline" size="sm" type="button" onClick={() => setBackgroundImage("")}>
+                            {t("settings.remove")}
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">{t("settings.none")}</p>
+                      )}
+                    </div>
                   </div>
 
                   {/* Preset Backgrounds */}
                   <div className="space-y-3">
                     <Label>{t("settings.presetBackgrounds")}</Label>
                     <div className="flex gap-3">
-                      <button className="w-24 h-16 rounded-lg bg-gradient-to-br from-gray-400 to-gray-600 border-2 border-transparent hover:border-primary/50 transition-colors overflow-hidden">
-                        <div className="w-full h-full bg-[url('https://images.unsplash.com/photo-1501691223387-dd0500403074?w=200')] bg-cover bg-center" />
-                      </button>
-                      <button className="w-24 h-16 rounded-lg bg-gradient-to-br from-gray-400 to-gray-600 border-2 border-transparent hover:border-primary/50 transition-colors overflow-hidden">
-                        <div className="w-full h-full bg-[url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=200')] bg-cover bg-center" />
-                      </button>
-                      <button className="w-24 h-16 rounded-lg bg-gradient-to-br from-purple-600 to-purple-900 border-2 border-transparent hover:border-primary/50 transition-colors overflow-hidden">
-                        <div className="w-full h-full bg-[url('https://images.unsplash.com/photo-1507400492013-162706c8c05e?w=200')] bg-cover bg-center" />
-                      </button>
+                      {(() => {
+                        const presets = [
+                          "https://images.unsplash.com/photo-1501691223387-dd0500403074?w=1200&auto=format&fit=crop",
+                          "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&auto=format&fit=crop",
+                          "https://images.unsplash.com/photo-1507400492013-162706c8c05e?w=1200&auto=format&fit=crop",
+                        ];
+                        return presets.map((url) => (
+                          <button
+                            key={url}
+                            type="button"
+                            onClick={() => setBackgroundImage(url)}
+                            className={cn(
+                              "w-24 h-16 rounded-lg border-2 transition-colors overflow-hidden bg-cover bg-center",
+                              backgroundImage === url
+                                ? "border-primary"
+                                : "border-transparent hover:border-primary/50",
+                            )}
+                            style={{ backgroundImage: `url(${url})` }}
+                            aria-label={t("settings.backgroundImage")}
+                          />
+                        ));
+                      })()}
                     </div>
                   </div>
 
@@ -452,7 +549,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
             {t("settings.build")} 1fded46 @ 2025-12-20T20:43:47.046Z
           </p>
           <div className="flex items-center gap-3">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <Button variant="outline" onClick={handleClose}>
               {t("settings.cancel")}
             </Button>
             <Button variant="save" onClick={handleSave}>
