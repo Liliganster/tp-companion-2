@@ -7,7 +7,7 @@ function TripGoogleMapLoaded({ route, open, browserKey }: { route: string[]; ope
   const { t, locale } = useI18n();
   const language = useMemo(() => locale.split("-")[0] ?? "en", [locale]);
   const { profile } = useUserProfile();
-  
+
   const googleRegion = useMemo(() => {
     const normalized = profile.country.trim().toLowerCase();
     const countryMap: Record<string, string> = {
@@ -54,7 +54,7 @@ function TripGoogleMapLoaded({ route, open, browserKey }: { route: string[]; ope
   const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
   // markersRef removed as we use default markers
 
-  
+
   const [scriptLoaded, setScriptLoaded] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -84,35 +84,32 @@ function TripGoogleMapLoaded({ route, open, browserKey }: { route: string[]; ope
     // Verificar si el script ya existe
     const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
     if (existingScript) {
-      console.log('Google Maps script already exists, waiting for load...');
       const checkInterval = setInterval(() => {
         if (checkGoogleMaps()) {
           clearInterval(checkInterval);
         }
       }, 100);
-      
+
       setTimeout(() => {
         clearInterval(checkInterval);
         if (!window.google?.maps) {
           setLoadError(t("tripDetail.mapLoadError"));
         }
       }, 10000); // timeout después de 10 segundos
-      
+
       return () => clearInterval(checkInterval);
     }
 
     // Cargar el script
-    console.log('Loading Google Maps script...');
     const script = document.createElement('script');
     script.src = `https://maps.googleapis.com/maps/api/js?key=${browserKey}&libraries=places,geometry&v=weekly`;
     script.async = true;
     script.defer = true;
-    
+
     script.onload = () => {
-      console.log('Google Maps script loaded successfully');
       setScriptLoaded(true);
     };
-    
+
     script.onerror = () => {
       console.error('Error loading Google Maps script');
       setLoadError(t("tripDetail.mapLoadError"));
@@ -149,7 +146,6 @@ function TripGoogleMapLoaded({ route, open, browserKey }: { route: string[]; ope
             fullscreenControl: false,
             zoomControl: true,
           });
-          console.log('Map created successfully');
           setMapReady(true);
         }
       } catch (error) {
