@@ -4,17 +4,13 @@ import { buildUniversalExtractorPrompt } from "../src/lib/ai/prompts.js";
 import { geocodeAddress } from "../src/lib/geocodingServer.js";
 import { extractionSchema } from "../src/lib/ai/schema.js";
 
-// Dynamic import for pdf-parse to avoid TypeScript issues
-const getPdfParser = async () => {
-  const pdfParse = await import("pdf-parse");
-  return pdfParse.default;
-};
+// @ts-expect-error - pdf-parse has CommonJS default export
+import pdfParse from "pdf-parse";
 
 // Helper to determine if native text
 async function detectPdfKind(buffer: Buffer): Promise<"native_text" | "scanned"> {
   try {
-    const pdflib = await getPdfParser();
-    const data = await pdflib(buffer);
+    const data = await pdfParse(buffer);
     const text = data.text;
     const pageCount = data.numpages;
     
@@ -99,8 +95,7 @@ export default async function handler(req: any, res: any) {
         
         if (kind === "native_text") {
             // Extract text first to save tokens/use Flash-Lite
-            const pdflib = await getPdfParser();
-            const pdfData = await pdflib(buffer);
+            const pdfData = await pdfParse(buffer);
             const textContent = pdfData.text;
             const fullPrompt = buildUniversalExtractorPrompt(textContent);
             
