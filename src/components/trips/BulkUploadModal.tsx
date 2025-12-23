@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { getCountryCode } from "@/lib/country-mapping";
 import { useProjects } from "@/contexts/ProjectsContext";
+import { uuidv4 } from "@/lib/utils";
 
 interface SavedTrip {
   id: string;
@@ -322,7 +323,7 @@ interface SavedTrip {
             projectIdToUse = existingProject.id;
         } else {
             // New Project
-            const newProjectId = crypto.randomUUID();
+            const newProjectId = uuidv4();
             projectIdToUse = newProjectId;
             
             await addProject({
@@ -347,7 +348,7 @@ interface SavedTrip {
 
     // Create trip object
     const newTrip: SavedTrip = {
-        id: crypto.randomUUID(),
+        id: uuidv4(),
         date: reviewDate,
         project: trimmedProjectName,
         projectId: projectIdToUse, // Pass the ID

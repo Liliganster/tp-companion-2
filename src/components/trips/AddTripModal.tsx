@@ -7,7 +7,7 @@ import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle, DialogTr
 import { Plus, GripVertical, X, MapPin, Calendar, Home, Route, Loader2, Check, ChevronsUpDown } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { cn, uuidv4 } from "@/lib/utils";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { useTrips } from "@/contexts/TripsContext";
 import { toast } from "sonner";
@@ -339,6 +339,7 @@ interface TripData {
   date?: string;
   route?: string[];
   project?: string;
+  projectId?: string; // Added
   purpose?: string;
   passengers?: number;
   distance?: number;
@@ -352,7 +353,7 @@ interface AddTripModalProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   previousDestination?: string;
-  onSave?: (trip: Required<Pick<TripData, "id" | "date" | "route" | "project" | "purpose" | "passengers" | "distance">> & Pick<TripData, "ratePerKmOverride" | "specialOrigin">) => void;
+  onSave?: (trip: Required<Pick<TripData, "id" | "date" | "route" | "project" | "purpose" | "passengers" | "distance">> & Pick<TripData, "ratePerKmOverride" | "specialOrigin" | "projectId">) => void;
 }
 
 export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestination, onSave }: AddTripModalProps) {
@@ -939,25 +940,55 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
           </div>
 
           <DialogClose asChild>
-            <Button
               variant="save"
               className="w-full mt-2"
-              onClick={() => {
+              onClick={async () => {
                 const distanceValue = parseLocaleNumber(distance) ?? 0;
                 const passengersValue = parseLocaleNumber(passengers) ?? 0;
                 const rateOverride = parseLocaleNumber(tripRate);
                 const { routeValues } = getEffectiveRouteValues();
 
-                const id = trip?.id || (globalThis.crypto?.randomUUID?.() ?? String(Date.now()));
+                // 1. Resolve Trip ID
+                const id = trip?.id || uuidv4();
 
+                // 2. Resolve Project ID
                 const trimmedProject = project.trim();
-                if (trimmedProject) createProjectIfNeeded(trimmedProject);
+                let projectId: string | undefined = undefined;
 
+                if (trimmedProject) {
+                  const existing = projects.find(p => p.name.trim().toLowerCase() === trimmedProject.toLowerCase());
+                  if (existing) {
+                    projectId = existing.id;
+                  } else {
+                    // Create new project synchronously
+                    projectId = uuidv4();
+                    await addProject({
+                        id: projectId,
+                        name: trimmedProject,
+                        producer: "",
+                        description: "Created via Trip",
+                        ratePerKm: 0.3,
+                        starred: false,
+                        trips: 0,
+                        totalKm: 0,
+                        documents: 0,
+                        invoices: 0,
+                        estimatedCost: 0,
+                        shootingDays: 0,
+                        kmPerDay: 0,
+                        co2Emissions: 0,
+                    });
+                    toast.success(`Proyecto "${trimmedProject}" creado`);
+                  }
+                }
+
+                // 3. Save Trip
                 onSave?.({
                   id,
                   date,
                   route: routeValues,
                   project: trimmedProject,
+                  projectId, // Added correct ID
                   purpose,
                   passengers: Math.max(0, Math.floor(passengersValue)),
                   distance: Math.max(0, distanceValue),
