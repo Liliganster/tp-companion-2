@@ -71,7 +71,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         if (data) {
           const mapped: Trip[] = data.map((t: any) => ({
             id: t.id,
-            date: t.trip_date || "",
+            date: t.trip_date || t.date_value || "",
             route: t.route || [],
             project: t.projects?.name || "Unknown", // Fallback if join null (e.g. deleted project)
             projectId: t.project_id,
@@ -114,6 +114,8 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       id: trip.id,
       user_id: user.id,
       project_id: trip.projectId || null, // Important
+      // Some Supabase schemas include both columns; keep them in sync.
+      date_value: trip.date,
       trip_date: trip.date,
       purpose: trip.purpose,
       passengers: trip.passengers,
@@ -141,7 +143,10 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     setTrips(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
 
     const dbPatch: any = {};
-    if (patch.date !== undefined) dbPatch.trip_date = patch.date;
+    if (patch.date !== undefined) {
+      dbPatch.trip_date = patch.date;
+      dbPatch.date_value = patch.date;
+    }
     if (patch.purpose !== undefined) dbPatch.purpose = patch.purpose;
     if (patch.passengers !== undefined) dbPatch.passengers = patch.passengers;
     if (patch.distance !== undefined) dbPatch.distance_km = patch.distance;
