@@ -11,7 +11,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Badge } from "@/components/ui/badge";
+
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { getCountryCode } from "@/lib/country-mapping";
 import { useProjects } from "@/contexts/ProjectsContext";

@@ -909,11 +909,36 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
 
                 const id = trip?.id || (globalThis.crypto?.randomUUID?.() ?? String(Date.now()));
 
+                // Check and create project if needed
+                const trimmedProject = project.trim();
+                const existingProject = projects.find(p => p.name.toLowerCase() === trimmedProject.toLowerCase());
+                
+                if (!existingProject && trimmedProject) {
+                    const newProject = {
+                        id: crypto.randomUUID(),
+                        name: trimmedProject,
+                        producer: "", // No producer info
+                        description: "Created via Trip Edit",
+                        ratePerKm: 0.30,
+                        starred: false,
+                        trips: 0,
+                        totalKm: 0,
+                        documents: 0,
+                        invoices: 0,
+                        estimatedCost: 0,
+                        shootingDays: 0,
+                        kmPerDay: 0,
+                        co2Emissions: 0
+                    };
+                    setProjects(prev => [...prev, newProject]);
+                    toast.success(`Proyecto "${trimmedProject}" creado`);
+                }
+
                 onSave?.({
                   id,
                   date,
                   route: routeValues,
-                  project,
+                  project: trimmedProject,
                   purpose,
                   passengers: Math.max(0, Math.floor(passengersValue)),
                   distance: Math.max(0, distanceValue),
