@@ -1,9 +1,38 @@
 import { supabaseAdmin } from "../src/lib/supabaseServer.js";
 import { generateContent, generateContentFromPDF } from "../src/lib/ai/geminiClient.js";
 import { buildUniversalExtractorPrompt } from "../src/lib/ai/prompts.js";
-import { geocodeAddress } from "../src/lib/geocodingServer.js";
 import { extractionSchema } from "../src/lib/ai/schema.js";
 import { parsePdf } from "./_utils/pdf-parser.js";
+
+// Geocoding function with direct access to env vars
+async function geocodeAddress(address: string) {
+  const apiKey = process.env.GOOGLE_MAPS_SERVER_KEY;
+  if (!apiKey) {
+    console.error("Missing GOOGLE_MAPS_SERVER_KEY");
+    return null;
+  }
+
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`;
+    const response = await fetch(url);
+    const data: any = await response.json();
+
+    if (data.status === "OK" && data.results && data.results.length > 0) {
+      const result = data.results[0];
+      return {
+        formatted_address: result.formatted_address,
+        lat: result.geometry.location.lat,
+        lng: result.geometry.location.lng,
+        place_id: result.place_id,
+        quality: result.geometry.location_type
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error("Geocoding error:", error);
+    return null;
+  }
+}
 
 // Helper to determine if native text
 async function detectPdfKind(buffer: Buffer): Promise<"native_text" | "scanned"> {
