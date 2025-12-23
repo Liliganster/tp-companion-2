@@ -1,8 +1,7 @@
 import { supabaseAdmin } from "../src/lib/supabaseServer.js";
-import { generateContent, generateContentFromPDF } from "../src/lib/ai/geminiClient.js";
+import { generateContentFromPDF } from "../src/lib/ai/geminiClient.js";
 import { buildUniversalExtractorPrompt } from "../src/lib/ai/prompts.js";
 import { extractionSchema } from "../src/lib/ai/schema.js";
-import { parsePdf } from "./_utils/pdf-parser.js";
 
 // Geocoding function with direct access to env vars
 async function geocodeAddress(address: string) {
@@ -31,24 +30,6 @@ async function geocodeAddress(address: string) {
   } catch (error) {
     console.error("Geocoding error:", error);
     return null;
-  }
-}
-
-// Helper to determine if native text
-async function detectPdfKind(buffer: Buffer): Promise<"native_text" | "scanned"> {
-  try {
-    const data = await parsePdf(buffer);
-    const text = data.text;
-    const pageCount = data.numpages;
-    
-    // Heuristic: Average characters per page
-    const avgChars = text.length / pageCount;
-    
-    // If average chars < 50, likely scanned or heavy graphics
-    return avgChars > 50 ? "native_text" : "scanned";
-  } catch (e) {
-    console.error("PDF detection failed, defaulting to scanned", e);
-    return "scanned";
   }
 }
 
@@ -107,56 +88,27 @@ export default async function handler(req: any, res: any) {
         const arrayBuffer = await fileData.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
-        // B. Detect Kind
-        const kind = await detectPdfKind(buffer);
-        console.log(`Job ${job.id} detected as ${kind}`);
-
-        await supabaseAdmin
-          .from("callsheet_jobs")
-          .update({ pdf_kind: kind })
-          .eq("id", job.id);
-
-        // C. Extract with Gemini
-        // C. Extract with Gemini
-        let extractedJson: any = null;
+        // B. Process PDF directly with Gemini Vision (simplified - no pdf-parse)
+        console.log(`Processing Job ${job.id} with Gemini Vision`);
         
-        if (kind === "native_text") {
-            // Extract text first to save tokens/use Flash-Lite
-            const pdfData = await parsePdf(buffer);
-            const textContent = pdfData.text;
-            const fullPrompt = buildUniversalExtractorPrompt(textContent);
-            
-            // Use Flash-Lite
-            const resultText = await generateContent(
-                "gemini-2.0-flash-lite-preview-02-05", 
-                fullPrompt,
-                extractionSchema
-            );
-            // Verify if resultText is JSON or stringified JSON
-            try {
-                extractedJson = JSON.parse(resultText);
-            } catch (e) {
-                // Fallback if model returns code blocks
-               extractedJson = JSON.parse(resultText.replace(/```json|```/g, "").trim());
-            }
-            console.log("Extracted via Flash-Lite (Native)");
-        } else {
-            // Scanned -> Use Flash 2.0 with PDF
-             const systemInstruction = buildUniversalExtractorPrompt("[PDF CONTENT ATTACHED]");
-             const resultText = await generateContentFromPDF(
-                "gemini-2.0-flash", 
-                systemInstruction, 
-                buffer, 
-                "application/pdf",
-                extractionSchema
-            );
-             try {
-                extractedJson = JSON.parse(resultText);
-            } catch (e) {
-               extractedJson = JSON.parse(resultText.replace(/```json|```/g, "").trim());
-            }
-             console.log("Extracted via Flash (Vision)");
+        const systemInstruction = buildUniversalExtractorPrompt("[PDF CONTENT ATTACHED]");
+        const resultText = await generateContentFromPDF(
+            "gemini-1.5-flash", 
+            systemInstruction, 
+            buffer, 
+            "application/pdf",
+            extractionSchema
+        );
+        
+        let extractedJson: any = null;
+        try {
+            extractedJson = JSON.parse(resultText);
+        } catch (e) {
+            // Fallback if model returns code blocks
+            extractedJson = JSON.parse(resultText.replace(/```json|```/g, "").trim());
         }
+        
+        console.log("Extracted via Gemini Flash with Vision");
 
         // D. Save Results
         if (extractedJson) {
