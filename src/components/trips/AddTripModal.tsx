@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, GripVertical, X, MapPin, Calendar, Home, Route, Loader2, Check, ChevronsUpDown } from "lucide-react";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { useProjects } from "@/contexts/ProjectsContext";
@@ -718,60 +718,44 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
                       value={project}
                       onValueChange={setProject}
                     />
-                    <CommandEmpty>
-                        <div className="p-2">
-                           <p className="text-sm text-muted-foreground mb-2">No encontrado.</p>
-                           <Button 
-                             variant="secondary" 
-                             size="sm" 
-                             className="w-full" 
-                             onClick={() => setProjectOpen(false)}
-                           >
-                            Crear "{project}"
-                           </Button>
-                        </div>
-                    </CommandEmpty>
-                    {/* 
-                       Since Shadcn Command is tricky with "Creation" without controlled input state, 
-                       let's use a simplified approach: 
-                       List existing projects, and if user types something, we can capture it? 
-                       Actually, CommandInput doesn't expose value easily. 
-                       Better approach: Just show the list. If they want to create, maybe a "+ New" item at the top 
-                       that turns the button into an Input?
-                       
-                       OR: Use the standard Radix/Shadcn pattern but control the `value` of CommandInput?
-                       Use `onValueChange` on CommandInput?
-                    */}
-                    <CommandGroup>
-                      {projects.map((p) => (
-                        <CommandItem
-                          key={p.id}
-                          value={p.name}
-                          onSelect={(currentValue) => {
-                            setProject(currentValue);
-                            setProjectOpen(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              project === p.name ? "opacity-100" : "opacity-0"
-                            )}
-                          />
-                          {p.name}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
+                    <CommandList>
+                      <CommandEmpty>
+                          <div className="p-2">
+                             <p className="text-sm text-muted-foreground mb-2">No encontrado.</p>
+                             <Button 
+                               variant="secondary" 
+                               size="sm" 
+                               className="w-full" 
+                               onClick={() => setProjectOpen(false)}
+                             >
+                              Crear "{project}"
+                             </Button>
+                          </div>
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {projects.map((p) => (
+                          <CommandItem
+                            key={p.id}
+                            value={p.name}
+                            onSelect={(currentValue) => {
+                              setProject(currentValue);
+                              setProjectOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                project === p.name ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {p.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
                   </Command>
                 </PopoverContent>
               </Popover>
-              {/* Fallback Input for manual override/creation if the above feels restrictive? 
-                  Actually, let's just make it an Input with a Datalist style behavior or accept the fact that 
-                  creating via Combobox is complex. 
-                  
-                  Let's try a simpler robust approach:
-                  An Input that has a suggestion dropdown (Popover) that opens on focus.
-              */}
             </div>
           </div>
 
