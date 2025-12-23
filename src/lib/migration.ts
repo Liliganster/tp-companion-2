@@ -12,11 +12,37 @@ const KEYS = {
   MIGRATED: "migration-completed-v1"
 };
 
-export async function checkAndMigrateData(userId: string) {
+type MigrationResult =
+  | { ok: true; migrated: { projects: number; trips: number; reports: number; profile: boolean } }
+  | { ok: false; reason: "supabase-not-configured" | "no-local-data" | "failed"; error?: string };
+
+function isUuid(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function safeUuid() {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    // Very unlikely in modern browsers, but keep a fallback.
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;
+  }
+}
+
+function normalizeKey(value: string) {
+  return value.trim().toLowerCase();
+}
+
+export async function checkAndMigrateData(userId: string): Promise<MigrationResult> {
   if (typeof window === "undefined") return;
+
+  if (!supabase) {
+    return { ok: false, reason: "supabase-not-configured" };
+  }
   
   const isMigrated = localStorage.getItem(KEYS.MIGRATED);
-  if (isMigrated) return;
+  if (isMigrated) return { ok: true, migrated: { projects: 0, trips: 0, reports: 0, profile: false } };
 
   const rawProfile = localStorage.getItem(KEYS.PROFILE);
   const rawProjects = localStorage.getItem(KEYS.PROJECTS);
@@ -25,14 +51,19 @@ export async function checkAndMigrateData(userId: string) {
 
   if (!rawProfile && !rawProjects && !rawTrips && !rawReports) {
     localStorage.setItem(KEYS.MIGRATED, "true");
-    return;
+    return { ok: false, reason: "no-local-data" };
   }
 
   try {
+    let migratedProfile = false;
+    let migratedProjects = 0;
+    let migratedTrips = 0;
+    let migratedReports = 0;
+
     // 1. Migrate Profile
     if (rawProfile) {
       const profile = JSON.parse(rawProfile) as UserProfile;
-      await supabase.from("user_profiles").upsert({
+      const { error: profileError } = await supabase.from("user_profiles").upsert({
         id: userId,
         full_name: profile.fullName,
         vat_id: profile.vatId,
@@ -50,10 +81,12 @@ export async function checkAndMigrateData(userId: string) {
         // email_notifications: profile.emailNotifications, // Not in UserProfile type
         // marketing_emails: profile.marketingEmails // Not in UserProfile type
       }, { onConflict: "id" });
+      if (profileError) throw new Error(`Profile migration failed: ${profileError.message}`);
+      migratedProfile = true;
     }
 
     // 2. Migrate Projects
-    const projectMap = new Map<string, string>(); // Old Name -> New UUID
+    const projectMap = new Map<string, string>(); // normalized old name -> project UUID
     if (rawProjects) {
         const projects = JSON.parse(rawProjects) as Project[];
         for (const p of projects) {
@@ -70,12 +103,14 @@ export async function checkAndMigrateData(userId: string) {
           // Strategy: Insert Project -> Get ID -> Store in Map -> Use for Trips.
           
           // Check if project exists by name
-          const { data: existing } = await supabase
+          const { data: existing, error: existingError } = await supabase
             .from("projects")
             .select("id")
             .eq("user_id", userId)
             .eq("name", p.name)
             .maybeSingle();
+
+          if (existingError) throw new Error(`Project lookup failed: ${existingError.message}`);
 
           let projectId = existing?.id;
 
@@ -87,19 +122,17 @@ export async function checkAndMigrateData(userId: string) {
                description: p.description,
                rate_per_km: p.ratePerKm,
                starred: p.starred,
-               trips_count: p.trips,
-               total_km: p.totalKm,
-               documents_count: p.documents,
-               invoices_count: p.invoices,
-               estimated_cost: p.estimatedCost,
-               co2_emissions: p.co2Emissions
             }).select("id").single();
             
-            if (newProject) projectId = newProject.id;
+            if (error) throw new Error(`Project insert failed: ${error.message}`);
+            if (newProject) {
+              projectId = newProject.id;
+              migratedProjects += 1;
+            }
           }
 
           if (projectId) {
-            projectMap.set(p.name, projectId);
+            projectMap.set(normalizeKey(p.name), projectId);
           }
         }
     }
@@ -107,10 +140,20 @@ export async function checkAndMigrateData(userId: string) {
     // 3. Migrate Trips
     if (rawTrips) {
       const trips = JSON.parse(rawTrips) as Trip[];
-      const tripsToInsert = trips.map(t => ({
-        id: t.id, // Try to keep ID
+      const tripIdMap = new Map<string, string>();
+      const tripsToInsert = trips.map((t) => {
+        const sourceId = typeof t.id === "string" ? t.id : "";
+        const nextId = isUuid(sourceId) ? sourceId : safeUuid();
+        if (sourceId) tripIdMap.set(sourceId, nextId);
+
+        const projectId = projectMap.get(normalizeKey(t.project)) || null;
+
+        return {
+        id: nextId,
         user_id: userId,
-        project_id: projectMap.get(t.project) || null, // Map name to ID
+        project_id: projectId,
+        // Keep both columns in sync (some schemas still have date_value required)
+        date_value: t.date,
         trip_date: t.date,
         purpose: t.purpose,
         passengers: t.passengers,
@@ -121,39 +164,62 @@ export async function checkAndMigrateData(userId: string) {
         special_origin: t.specialOrigin,
         invoice_number: t.invoice,
         documents: t.documents
-      }));
+      };
+      });
 
       // Batch insert (chunking might be needed if too many, but assume manageable for now)
-      const { error } = await supabase.from("trips").upsert(tripsToInsert, { onConflict: "id" });
-      if (error) console.error("Error migrating trips:", error);
-    }
+      const { error: tripsError } = await supabase.from("trips").upsert(tripsToInsert, { onConflict: "id" });
+      if (tripsError) throw new Error(`Trips migration failed: ${tripsError.message}`);
+      migratedTrips = tripsToInsert.length;
 
-    // 4. Migrate Reports
-    if (rawReports) {
-      const reports = JSON.parse(rawReports) as SavedReport[];
-      const reportsToInsert = reports.map(r => ({
-        id: r.id,
-        user_id: userId,
-        month: r.month,
-        year: r.year,
-        project_filter: r.project,
-        trip_ids: r.tripIds, // JSONB
-        start_date: r.startDate,
-        end_date: r.endDate,
-        total_km: r.totalDistanceKm,
-        trips_count: r.tripsCount,
-        driver: r.driver,
-        address: r.address,
-        license_plate: r.licensePlate,
-        created_at: r.createdAt
-      }));
-      
-      const { error } = await supabase.from("reports").upsert(reportsToInsert, { onConflict: "id" });
-      if (error) console.error("Error migrating reports:", error);
+      // 4. Migrate Reports (needs trip ID mapping)
+      if (rawReports) {
+        const reports = JSON.parse(rawReports) as SavedReport[];
+        const reportsToInsert = reports.map((r) => {
+          const sourceId = typeof r.id === "string" ? r.id : "";
+          const nextId = isUuid(sourceId) ? sourceId : safeUuid();
+          const mappedTripIds = Array.isArray(r.tripIds)
+            ? r.tripIds
+                .map((id) => (tripIdMap.get(id) ?? (isUuid(id) ? id : null)))
+                .filter((id): id is string => Boolean(id))
+            : [];
+
+          return {
+            id: nextId,
+            user_id: userId,
+            month: r.month,
+            year: r.year,
+            project_filter: r.project,
+            trip_ids: mappedTripIds,
+            start_date: r.startDate,
+            end_date: r.endDate,
+            total_km: r.totalDistanceKm,
+            trips_count: r.tripsCount,
+            driver: r.driver,
+            address: r.address,
+            license_plate: r.licensePlate,
+            created_at: r.createdAt,
+          };
+        });
+
+        const { error: reportsError } = await supabase.from("reports").upsert(reportsToInsert, { onConflict: "id" });
+        if (reportsError) throw new Error(`Reports migration failed: ${reportsError.message}`);
+        migratedReports = reportsToInsert.length;
+      }
     }
 
     // Success
     localStorage.setItem(KEYS.MIGRATED, "true");
+
+    return {
+      ok: true,
+      migrated: {
+        projects: migratedProjects,
+        trips: migratedTrips,
+        reports: migratedReports,
+        profile: migratedProfile,
+      },
+    };
     
     // Optional: Clear old data to avoid confusion?
     // localStorage.removeItem(KEYS.PROFILE);
@@ -164,5 +230,6 @@ export async function checkAndMigrateData(userId: string) {
 
   } catch (error) {
     console.error("Migration failed:", error);
+    return { ok: false, reason: "failed", error: (error as any)?.message ?? String(error) };
   }
 }

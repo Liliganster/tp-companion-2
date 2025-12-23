@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { checkAndMigrateData } from "@/lib/migration";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 export function DataMigration() {
   const { user, loading: authLoading } = useAuth();
@@ -12,7 +13,14 @@ export function DataMigration() {
 
     const runMigration = async () => {
         setMigrating(true);
-        await checkAndMigrateData(user.id);
+        const result = await checkAndMigrateData(user.id);
+        if (result && result.ok === false) {
+          if (result.reason === "supabase-not-configured") {
+            toast.error("Supabase no está configurado (faltan variables VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).");
+          } else if (result.reason === "failed") {
+            toast.error(`La migración a la nube falló: ${result.error ?? "error desconocido"}`);
+          }
+        }
         setMigrating(false);
     };
 
