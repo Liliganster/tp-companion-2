@@ -11,6 +11,7 @@ import { Trip, useTrips } from "@/contexts/TripsContext";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabaseClient";
 
 interface TripDetailModalProps {
   trip: Trip | null;
@@ -101,11 +102,36 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
   };
 
   const downloadDocument = async (doc: NonNullable<Trip["documents"]>[number]) => {
+    // Handle Supabase Storage files
+    if (doc.storagePath) {
+      try {
+        const { data, error } = await supabase.storage
+          .from("callsheets")
+          .download(doc.storagePath);
+
+        if (error) throw error;
+
+        const url = URL.createObjectURL(data);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = doc.name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        console.error("Download error:", e);
+        toast({ title: "Error", description: "No se pudo descargar el archivo.", variant: "destructive" });
+      }
+      return;
+    }
+
+    // Handle Google Drive files
     const token = await getAccessToken();
     if (!token) return;
 
     const response = await fetch(
-      `/api/google/drive/download?fileId=${encodeURIComponent(doc.driveFileId)}&name=${encodeURIComponent(doc.name)}`,
+      `/api/google/drive/download?fileId=${encodeURIComponent(doc.driveFileId!)}&name=${encodeURIComponent(doc.name)}`,
       { headers: { Authorization: `Bearer ${token}` } },
     );
     if (!response.ok) {

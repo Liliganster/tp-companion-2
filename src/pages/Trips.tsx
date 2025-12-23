@@ -169,6 +169,7 @@ export default function Trips() {
     distance: number;
     ratePerKmOverride?: number | null;
     specialOrigin?: "base" | "continue" | "return";
+    documents?: Trip["documents"];
   };
 
   const handleSaveTrip = (data: SavedTrip) => {
@@ -185,6 +186,7 @@ export default function Trips() {
         co2: calculateCO2(data.distance),
         ratePerKmOverride: data.ratePerKmOverride ?? null,
         specialOrigin: data.specialOrigin ?? "base",
+        documents: data.documents,
       };
 
       const exists = prev.some((t) => t.id === data.id);

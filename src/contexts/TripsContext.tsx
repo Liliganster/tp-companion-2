@@ -17,7 +17,8 @@ export type Trip = {
     id: string;
     name: string;
     mimeType: string;
-    driveFileId: string;
+    driveFileId?: string;
+    storagePath?: string;
     createdAt: string; // ISO
   }>;
 };

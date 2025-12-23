@@ -26,6 +26,7 @@ interface SavedTrip {
   distance: number;
   ratePerKmOverride?: number | null;
   specialOrigin?: "base" | "continue" | "return";
+  documents?: any[];
 }
 
 interface BulkUploadModalProps {
@@ -43,6 +44,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const [jobId, setJobId] = useState<string | null>(null);
   const [extractedData, setExtractedData] = useState<any>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [uploadedFilePath, setUploadedFilePath] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Review form state
@@ -77,6 +79,9 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     setReviewProducer("");
     setReviewLocations([]);
     setReviewDistance("0");
+    setReviewLocations([]);
+    setReviewDistance("0");
+    setUploadedFilePath(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -120,6 +125,8 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         .upload(filePath, selectedFile);
 
       if (uploadError) throw uploadError;
+      
+      setUploadedFilePath(filePath);
 
       // 3. Queue Job
       const { error: updateError } = await supabase
@@ -299,7 +306,15 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         route: fullRoute, 
         passengers: 0,
         distance: parseFloat(reviewDistance) || 0,
-        specialOrigin: "base"
+        distance: parseFloat(reviewDistance) || 0,
+        specialOrigin: "base",
+        documents: uploadedFilePath ? [{
+            id: crypto.randomUUID(),
+            name: selectedFile?.name || "Documento Original",
+            mimeType: selectedFile?.type || "application/pdf",
+            storagePath: uploadedFilePath,
+            createdAt: new Date().toISOString()
+        }] : undefined
     };
 
     onSave(newTrip);
