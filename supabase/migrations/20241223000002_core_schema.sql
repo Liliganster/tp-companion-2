@@ -78,8 +78,6 @@ CREATE TABLE IF NOT EXISTS public.trips (
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     project_id UUID REFERENCES public.projects(id) ON DELETE SET NULL,
     
-    date_value DATE NOT NULL, -- Renamed from 'date' to avoid reservation/parsing issues, or allow simple 'date'
-    -- Actually 'date' is a reserved word in SQL standard but allowed in Postgres. Let's strictly use 'date_value' or just 'date' quoted. 
     -- App uses 'date' string. Let's use 'trip_date' to be safe.
     trip_date DATE NOT NULL,
     

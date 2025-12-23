@@ -116,7 +116,6 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       user_id: user.id,
       project_id: trip.projectId || null, // Important
       // Some Supabase schemas include both columns; keep them in sync.
-      date_value: trip.date,
       trip_date: trip.date,
       purpose: trip.purpose,
       passengers: trip.passengers,
@@ -146,7 +145,6 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     const dbPatch: any = {};
     if (patch.date !== undefined) {
       dbPatch.trip_date = patch.date;
-      dbPatch.date_value = patch.date;
     }
     if (patch.purpose !== undefined) dbPatch.purpose = patch.purpose;
     if (patch.passengers !== undefined) dbPatch.passengers = patch.passengers;
