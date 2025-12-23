@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +45,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { ProjectDetailModal } from "@/components/projects/ProjectDetailModal";
 import { Project, useProjects } from "@/contexts/ProjectsContext";
+import { useTrips } from "@/contexts/TripsContext";
 import { useI18n } from "@/hooks/use-i18n";
 
 export default function Projects() {
@@ -52,10 +53,63 @@ export default function Projects() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedYear, setSelectedYear] = useState("2024");
   const { projects, setProjects, toggleStar } = useProjects();
+  const { trips } = useTrips();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const { toast } = useToast();
+
+  const getProjectKey = (name: string) => name.trim().toLowerCase();
+
+  type AggregatedTripStats = {
+    trips: number;
+    totalKm: number;
+    documents: number;
+    invoices: number;
+    co2Emissions: number;
+    overrideCost: number;
+    distanceAtDefaultRate: number;
+  };
+
+  const statsByProjectKey = useMemo(() => {
+    const map = new Map<string, AggregatedTripStats>();
+
+    for (const trip of trips) {
+      const key = getProjectKey(trip.project ?? "");
+      if (!key) continue;
+
+      const distance = Number.isFinite(trip.distance) ? trip.distance : 0;
+      const documents = trip.documents?.length ?? 0;
+      const invoices = trip.invoice?.trim() ? 1 : 0;
+      const co2 = Number.isFinite(trip.co2) ? trip.co2 : 0;
+
+      const current = map.get(key) ?? {
+        trips: 0,
+        totalKm: 0,
+        documents: 0,
+        invoices: 0,
+        co2Emissions: 0,
+        overrideCost: 0,
+        distanceAtDefaultRate: 0,
+      };
+
+      current.trips += 1;
+      current.totalKm += distance;
+      current.documents += documents;
+      current.invoices += invoices;
+      current.co2Emissions += co2;
+
+      if (typeof trip.ratePerKmOverride === "number" && Number.isFinite(trip.ratePerKmOverride)) {
+        current.overrideCost += distance * trip.ratePerKmOverride;
+      } else {
+        current.distanceAtDefaultRate += distance;
+      }
+
+      map.set(key, current);
+    }
+
+    return map;
+  }, [trips]);
 
   const openProjectDetails = (project: Project) => {
     setSelectedProject(project);
@@ -67,6 +121,11 @@ export default function Projects() {
       project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       project.producer?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const selectedProjectStats = useMemo(() => {
+    if (!selectedProject) return null;
+    return statsByProjectKey.get(getProjectKey(selectedProject.name)) ?? null;
+  }, [selectedProject, statsByProjectKey]);
 
   const toggleSelectAll = () => {
     if (selectedIds.size === filteredProjects.length) {
@@ -225,6 +284,16 @@ export default function Projects() {
               </TableHeader>
               <TableBody>
                 {filteredProjects.map((project, index) => (
+                  (() => {
+                    const stats = statsByProjectKey.get(getProjectKey(project.name)) ?? null;
+                    const tripsCount = stats?.trips ?? 0;
+                    const totalKm = stats?.totalKm ?? 0;
+                    const documents = stats?.documents ?? 0;
+                    const invoices = stats?.invoices ?? 0;
+                    const estimatedCost =
+                      (stats?.overrideCost ?? 0) + (stats?.distanceAtDefaultRate ?? 0) * (Number.isFinite(project.ratePerKm) ? project.ratePerKm : 0);
+
+                    return (
                   <TableRow
                     key={project.id}
                     className={`hover:bg-secondary/30 border-border/30 animate-slide-up cursor-pointer ${selectedIds.has(project.id) ? 'bg-primary/10' : ''}`}
@@ -271,28 +340,28 @@ export default function Projects() {
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <Car className="w-4 h-4 text-primary" />
-                        <span>{project.trips}</span>
+                        <span>{tripsCount}</span>
                       </div>
                     </TableCell>
                     <TableCell className="text-right font-medium hidden md:table-cell">
-                      {project.totalKm.toLocaleString()} km
+                      {totalKm.toLocaleString(locale)} km
                     </TableCell>
 	                    <TableCell className="text-right hidden lg:table-cell">
 	                      <div className="flex items-center justify-end gap-1.5">
 	                        <FileText className="w-4 h-4 text-info" />
-	                        <span>{project.documents}</span>
+	                        <span>{documents}</span>
 	                      </div>
 	                    </TableCell>
 	                    <TableCell className="text-right hidden lg:table-cell">
 	                      <div className="flex items-center justify-end gap-1.5">
 	                        <Receipt className="w-4 h-4 text-warning" />
-	                        <span>{project.invoices ?? 0}</span>
+	                        <span>{invoices}</span>
 	                      </div>
 	                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1.5 text-success font-medium">
                         <Euro className="w-4 h-4" />
-                        <span>€{project.estimatedCost.toFixed(2)}</span>
+							<span>€{estimatedCost.toFixed(2)}</span>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -326,6 +395,8 @@ export default function Projects() {
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
+                    );
+                  })()
                 ))}
               </TableBody>
             </Table>
@@ -352,7 +423,10 @@ export default function Projects() {
               {tf("projects.summaryCount", { count: filteredProjects.length })}
             </span>
             <span className="font-medium">
-              {tf("projects.summaryTotal", { km: filteredProjects.reduce((acc, p) => acc + p.totalKm, 0).toLocaleString(locale) })}
+					{tf("projects.summaryTotal", { km: filteredProjects.reduce((acc, p) => {
+						const stats = statsByProjectKey.get(getProjectKey(p.name));
+						return acc + (stats?.totalKm ?? 0);
+					}, 0).toLocaleString(locale) })}
             </span>
           </div>
         </div>
@@ -364,10 +438,10 @@ export default function Projects() {
           project={selectedProject ? {
             id: selectedProject.id,
             name: selectedProject.name,
-            totalKm: selectedProject.totalKm,
+				totalKm: selectedProjectStats?.totalKm ?? 0,
             shootingDays: selectedProject.shootingDays,
-            kmPerDay: selectedProject.kmPerDay,
-            co2Emissions: selectedProject.co2Emissions,
+				kmPerDay: selectedProject.shootingDays > 0 ? (selectedProjectStats?.totalKm ?? 0) / selectedProject.shootingDays : 0,
+				co2Emissions: selectedProjectStats?.co2Emissions ?? 0,
             callSheets: [
               { id: "1", name: "FUNDBOX_Dispo DT 4.pdf", type: "call-sheet" },
               { id: "2", name: "FUNDBOX_Dispo DT 4.pdf", type: "call-sheet" },
