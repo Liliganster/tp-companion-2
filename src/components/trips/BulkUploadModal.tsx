@@ -306,7 +306,6 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         route: fullRoute, 
         passengers: 0,
         distance: parseFloat(reviewDistance) || 0,
-        distance: parseFloat(reviewDistance) || 0,
         specialOrigin: "base",
         documents: uploadedFilePath ? [{
             id: crypto.randomUUID(),
