@@ -193,18 +193,6 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
                   <div className="w-full h-full p-6 overflow-auto">
                     {previewUrl ? (
                         <div className="flex flex-col h-full">
-                            <div className="flex items-center justify-between mb-2">
-                                <Button variant="ghost" size="sm" onClick={() => setPreviewUrl(null)} className="-ml-2 gap-1">
-                                    <ArrowLeft className="w-4 h-4" />
-                                    Volver
-                                </Button>
-                                <span className="text-sm font-medium truncate max-w-[200px]">{previewDocName}</span>
-                                <Button variant="ghost" size="icon" asChild>
-                                    <a href={previewUrl} download={previewDocName}>
-                                        <Download className="w-4 h-4" />
-                                    </a>
-                                </Button>
-                            </div>
                             <div className="flex-1 bg-background rounded border border-border/50 overflow-hidden">
                                 {previewDocName.toLowerCase().endsWith(".pdf") || previewDocName.toLowerCase().endsWith(".jpg") || previewDocName.toLowerCase().endsWith(".png") ? (
                                      <iframe src={previewUrl} className="w-full h-full" title="Vista previa" />
