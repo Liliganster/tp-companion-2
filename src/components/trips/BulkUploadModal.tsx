@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Badge } from "@/components/ui/badge";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { getCountryCode } from "@/lib/country-mapping";
+import { useProjects } from "@/contexts/ProjectsContext";
 
 interface SavedTrip {
   id: string;
@@ -283,6 +284,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   };
 
   const { profile } = useUserProfile();
+  const { projects, setProjects } = useProjects();
 
   const handleSaveTrip = () => {
     if (!onSave) return;
@@ -315,6 +317,46 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
             createdAt: new Date().toISOString()
         }] : undefined
     };
+
+    // Auto-create project if it doesn't exist
+    if (newTrip.project) {
+        const projectExists = projects.some(p => p.name.toLowerCase() === newTrip.project.toLowerCase());
+        
+        if (!projectExists) {
+            setProjects(prev => [...prev, {
+                id: crypto.randomUUID(),
+                name: newTrip.project,
+                producer: reviewProducer,
+                description: `Created from AI Upload: ${selectedFile?.name}`,
+                ratePerKm: 0.30, // Default rate
+                starred: false,
+                trips: 1,
+                totalKm: newTrip.distance,
+                documents: newTrip.documents ? 1 : 0,
+                invoices: 0,
+                estimatedCost: newTrip.distance * 0.30,
+                shootingDays: 1, // Assumption
+                kmPerDay: newTrip.distance,
+                co2Emissions: Math.round(newTrip.distance * 0.12 * 10) / 10
+            }]);
+            toast.success(`Proyecto "${newTrip.project}" creado automáticamente`);
+        } else {
+            // Update existing project stats
+             setProjects(prev => prev.map(p => {
+                if (p.name.toLowerCase() === newTrip.project.toLowerCase()) {
+                    return {
+                        ...p,
+                        trips: p.trips + 1,
+                        totalKm: p.totalKm + newTrip.distance,
+                        documents: p.documents + (newTrip.documents ? 1 : 0),
+                        estimatedCost: p.estimatedCost + (newTrip.distance * p.ratePerKm),
+                        co2Emissions: p.co2Emissions + (Math.round(newTrip.distance * 0.12 * 10) / 10)
+                    };
+                }
+                return p;
+            }));
+        }
+    }
 
     onSave(newTrip);
     toast.success("Viaje guardado correctamente");
