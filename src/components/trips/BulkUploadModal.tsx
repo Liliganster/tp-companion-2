@@ -11,6 +11,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useUserProfile } from "@/contexts/UserProfileContext";
 
 interface SavedTrip {
   id: string;
@@ -186,8 +187,20 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     return () => clearInterval(interval);
   }, [aiStep, jobId]);
 
+  const { profile } = useUserProfile();
+
   const handleSaveTrip = () => {
     if (!onSave) return;
+    
+    // Use base address for Origin and Destination
+    const baseAddress = profile.baseAddress || "";
+    
+    // Construct route: Origin -> [Extracted Stops] -> Destination
+    // Only add base address if it exists, otherwise just use extracted locations (though strictly user wants base -> stops -> base)
+    // If baseAddress is empty, we might want to prompt or just leave it. Assuming it exists or user is fine with empty for now if not set.
+    const fullRoute = baseAddress 
+        ? [baseAddress, ...reviewLocations, baseAddress]
+        : reviewLocations;
 
     // Create trip object
     const newTrip: SavedTrip = {
@@ -195,7 +208,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         date: reviewDate,
         project: reviewProject,
         purpose: "Rodaje: " + reviewProducer, // Default purpose
-        route: reviewLocations, // Use extracted locations
+        route: fullRoute, 
         passengers: 0,
         distance: 0, // Default to 0, let user update in edit if needed
         specialOrigin: "base"
@@ -370,6 +383,12 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
                     <div className="space-y-2">
                         <Label>Ubicaciones / Ruta ({reviewLocations.length})</Label>
+                        
+                        <div className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                           <MapPin className="w-3 h-3 text-green-500" />
+                           <span className="font-semibold">Origen:</span> {profile.baseAddress || "No definido"}
+                        </div>
+
                         <Card className="bg-secondary/20">
                             <CardContent className="p-3 max-h-48 overflow-y-auto space-y-2">
                                 {reviewLocations.map((loc, idx) => (
@@ -383,6 +402,11 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                                 )}
                             </CardContent>
                         </Card>
+
+                        <div className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5">
+                           <MapPin className="w-3 h-3 text-red-500" />
+                           <span className="font-semibold">Destino:</span> {profile.baseAddress || "No definido"}
+                        </div>
                     </div>
 
                     <div className="flex justify-end gap-2 pt-4">
