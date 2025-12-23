@@ -3,7 +3,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Filter, Upload, Calendar, MoreVertical, Pencil, Trash2, Map, CalendarPlus, ChevronUp, ChevronDown, AlertTriangle } from "lucide-react";
+import { Plus, Filter, Upload, Calendar, MoreVertical, Pencil, Trash2, Map as MapIcon, CalendarPlus, ChevronUp, ChevronDown, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -466,10 +466,9 @@ export default function Trips() {
                     })}
                   </span>
                   {(tripWarnings.byId[trip.id]?.length ?? 0) > 0 && (
-                    <AlertTriangle
-                      className="h-4 w-4 shrink-0 text-warning"
-                      title={(tripWarnings.byId[trip.id] ?? []).map((w) => w.title).join("\n")}
-                    />
+                    <span title={(tripWarnings.byId[trip.id] ?? []).map((w) => w.title).join("\n")}>
+                      <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
+                    </span>
                   )}
                   {trip.specialOrigin === "continue" && (
                     <Badge variant="secondary" className="w-fit text-[10px] sm:text-xs">
@@ -539,7 +538,7 @@ export default function Trips() {
                   }}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <Map className="w-4 h-4 mr-2" />
+                  <MapIcon className="w-4 h-4 mr-2" />
                   {t("trips.viewMap")}
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -572,9 +571,9 @@ export default function Trips() {
 
       {/* Desktop Table View - Only on large screens */}
       <div className="hidden lg:block glass-card overflow-hidden animate-fade-in animation-delay-200">
-        <div className={visibleTrips.length > 40 ? "overflow-x-auto overflow-y-auto max-h-[70vh]" : "overflow-x-auto"}>
+        <div className={visibleTrips.length > 8 ? "overflow-x-auto overflow-y-auto max-h-[32rem]" : "overflow-x-auto"}>
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow className="hover:bg-transparent border-border/50">
                 <TableHead className="w-10">
                   <Checkbox checked={isAllSelected} onCheckedChange={toggleSelectAll} aria-label={t("projects.selectAll")} />
@@ -641,10 +640,9 @@ export default function Trips() {
                       })}
                     </span>
                     {(tripWarnings.byId[trip.id]?.length ?? 0) > 0 && (
-                      <AlertTriangle
-                        className="h-4 w-4 shrink-0 text-warning"
-                        title={(tripWarnings.byId[trip.id] ?? []).map((w) => w.title).join("\n")}
-                      />
+                      <span title={(tripWarnings.byId[trip.id] ?? []).map((w) => w.title).join("\n")}>
+                        <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
+                      </span>
                     )}
                     {trip.specialOrigin === "continue" && <Badge variant="secondary">Continuación</Badge>}
                     {trip.specialOrigin === "return" && <Badge variant="secondary">Fin continuación</Badge>}
@@ -694,7 +692,7 @@ export default function Trips() {
                         }}
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <Map className="w-4 h-4 mr-2" />
+                        <MapIcon className="w-4 h-4 mr-2" />
                         {t("trips.viewMap")}
                       </DropdownMenuItem>
                       <DropdownMenuItem

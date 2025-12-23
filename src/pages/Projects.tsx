@@ -261,7 +261,7 @@ export default function Projects() {
 
         {/* Projects Table */}
         <div className="glass-card overflow-hidden animate-fade-in animation-delay-200">
-          <div className={filteredProjects.length > 40 ? "overflow-x-auto overflow-y-auto max-h-[70vh]" : "overflow-x-auto"}>
+          <div className={filteredProjects.length > 8 ? "overflow-x-auto overflow-y-auto max-h-[32rem]" : "overflow-x-auto"}>
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent border-border/50">
