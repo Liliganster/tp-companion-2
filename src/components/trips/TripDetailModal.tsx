@@ -33,8 +33,11 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
     if (!open) {
       setPreviewUrl(null);
       setPreviewDocName("");
+    } else if (trip?.documents && trip.documents.length > 0) {
+        // Auto-load the first document
+        viewDocument(trip.documents[0]);
     }
-  }, [open]);
+  }, [open, trip]);
 
   if (!trip) return null;
 
@@ -58,58 +61,6 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
 
   const tripDocuments = trip.documents ?? [];
 
-  const uploadDocument = async (file: File) => {
-    if (file.size > 3_000_000) {
-      toast({ title: "Drive", description: "File too large (max 3MB).", variant: "destructive" });
-      return;
-    }
-
-    const token = await getAccessToken();
-    if (!token) return;
-
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
-      reader.onerror = () => reject(new Error("read_failed"));
-      reader.readAsDataURL(file);
-    });
-    if (!dataUrl) return;
-
-    const response = await fetch("/api/google/drive/upload", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ name: file.name, dataUrl }),
-    });
-
-    setTrips((prev) =>
-      prev.map((t0) => {
-        if (t0.id !== trip.id) return t0;
-        const nextDocs = [
-          ...(t0.documents ?? []),
-          {
-            id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
-            name: data.name ?? file.name,
-            mimeType: data.mimeType ?? file.type ?? "application/octet-stream",
-            driveFileId: data.fileId,
-            createdAt: new Date().toISOString(),
-          },
-        ];
-        return { ...t0, documents: nextDocs, invoice: data.name ?? file.name };
-      }),
-    );
-
-    // Update Project Invoice Count
-    setProjects((prev) =>
-      prev.map((p) => {
-        if (p.name === trip.project) {
-          return { ...p, invoices: (p.invoices || 0) + 1 };
-        }
-        return p;
-      })
-    );
-
-    toast({ title: "Drive", description: t("tripDetail.attachDocument") });
-  };
 
   const viewDocument = async (doc: NonNullable<Trip["documents"]>[number]) => {
     // Handle Supabase Storage files
@@ -277,23 +228,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
                             <FileText className="w-5 h-5 text-muted-foreground" />
                             <h3 className="font-medium">{t("tripDetail.tabDocument")}</h3>
                         </div>
-                        <label className="inline-flex">
-                            <input
-                            type="file"
-                            className="hidden"
-                            accept="image/*,application/pdf"
-                            onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) uploadDocument(file);
-                                e.currentTarget.value = "";
-                            }}
-                            />
-                            <Button variant="outline" size="sm" type="button">
-                            <Upload className="w-4 h-4 mr-2" />
-                            {t("tripDetail.attachDocument")}
-                            </Button>
-                        </label>
-                        </div>
+                    </div>
 
                         {tripDocuments.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-[70%] text-center space-y-2">
