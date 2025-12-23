@@ -13,6 +13,7 @@ import { useProjects } from "@/contexts/ProjectsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import { useUserProfile } from "@/contexts/UserProfileContext";
 
 interface TripDetailModalProps {
   trip: Trip | null;
@@ -22,6 +23,7 @@ interface TripDetailModalProps {
 
 export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalProps) {
   const { t, locale, language } = useI18n();
+  const { profile } = useUserProfile();
   // removed unused contexts
   const { getAccessToken } = useAuth();
   const { toast } = useToast();
@@ -125,7 +127,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
 
             <div>
               <Label className="text-xs uppercase tracking-wide text-muted-foreground">{t("tripDetail.driver")}</Label>
-              <p className="font-semibold">{t("tripDetail.currentUser")}</p>
+              <p className="font-semibold">{profile.fullName || t("tripDetail.currentUser")}</p>
             </div>
 
             <div>
