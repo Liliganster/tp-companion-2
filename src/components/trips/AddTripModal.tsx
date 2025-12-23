@@ -9,6 +9,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { useProjects } from "@/contexts/ProjectsContext";
+import { useTrips } from "@/contexts/TripsContext";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -359,10 +360,65 @@ interface AddTripModalProps {
 export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestination, onSave }: AddTripModalProps) {
   const { profile } = useUserProfile();
   const { projects, setProjects } = useProjects();
+  const { trips } = useTrips();
   const { t, locale } = useI18n();
+  const isEditing = Boolean(trip);
   const [projectOpen, setProjectOpen] = useState(false);
   const settingsRateLabel = useMemo(() => profile.ratePerKm, [profile.ratePerKm]);
   const googleLanguage = useMemo(() => locale.split("-")[0] ?? "en", [locale]);
+
+  const projectOptions = useMemo(() => {
+    const byLower = new Map<string, string>();
+
+    for (const p of projects) {
+      const name = (p?.name ?? "").trim();
+      if (!name) continue;
+      byLower.set(name.toLowerCase(), name);
+    }
+
+    for (const tripItem of trips) {
+      const name = (tripItem?.project ?? "").trim();
+      if (!name) continue;
+      if (!byLower.has(name.toLowerCase())) byLower.set(name.toLowerCase(), name);
+    }
+
+    return Array.from(byLower.values()).sort((a, b) => a.localeCompare(b, locale, { sensitivity: "base" }));
+  }, [projects, trips, locale]);
+
+  const createProjectIfNeeded = useCallback(
+    (rawName: string) => {
+      const trimmedName = rawName.trim();
+      if (!trimmedName) return;
+
+      const lower = trimmedName.toLowerCase();
+      const exists = projects.some((p) => (p?.name ?? "").trim().toLowerCase() === lower);
+      if (exists) return;
+
+      const newProject = {
+        id: globalThis.crypto?.randomUUID?.() ?? String(Date.now()),
+        name: trimmedName,
+        producer: "",
+        description: "Created via Trip",
+        ratePerKm: 0.3,
+        starred: false,
+        trips: 0,
+        totalKm: 0,
+        documents: 0,
+        invoices: 0,
+        estimatedCost: 0,
+        shootingDays: 0,
+        kmPerDay: 0,
+        co2Emissions: 0,
+      };
+
+      setProjects((prev) => {
+        const alreadyExists = prev.some((p) => (p?.name ?? "").trim().toLowerCase() === lower);
+        return alreadyExists ? prev : [...prev, newProject];
+      });
+      toast.success(`Proyecto "${trimmedName}" creado`);
+    },
+    [projects, setProjects]
+  );
 
   const googleRegion = useMemo(() => {
     const normalized = profile.country.trim().toLowerCase();
@@ -727,29 +783,34 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
                                variant="secondary" 
                                size="sm" 
                                className="w-full" 
-                               onClick={() => setProjectOpen(false)}
+                               disabled={!project.trim()}
+                               onClick={() => {
+                                 createProjectIfNeeded(project);
+                                 setProject(project.trim());
+                                 setProjectOpen(false);
+                               }}
                              >
                               Crear "{project}"
                              </Button>
                           </div>
                       </CommandEmpty>
                       <CommandGroup>
-                        {projects.map((p) => (
+                        {projectOptions.map((name) => (
                           <CommandItem
-                            key={p.id}
-                            value={p.name}
-                            onSelect={(currentValue) => {
-                              setProject(currentValue);
+                            key={name.toLowerCase()}
+                            value={name}
+                            onSelect={() => {
+                              setProject(name);
                               setProjectOpen(false);
                             }}
                           >
                             <Check
                               className={cn(
                                 "mr-2 h-4 w-4",
-                                project === p.name ? "opacity-100" : "opacity-0"
+                                project.trim().toLowerCase() === name.toLowerCase() ? "opacity-100" : "opacity-0"
                               )}
                             />
-                            {p.name}
+                            {name}
                           </CommandItem>
                         ))}
                       </CommandGroup>
@@ -894,30 +955,8 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
 
                 const id = trip?.id || (globalThis.crypto?.randomUUID?.() ?? String(Date.now()));
 
-                // Check and create project if needed
                 const trimmedProject = project.trim();
-                const existingProject = projects.find(p => p.name.toLowerCase() === trimmedProject.toLowerCase());
-                
-                if (!existingProject && trimmedProject) {
-                    const newProject = {
-                        id: crypto.randomUUID(),
-                        name: trimmedProject,
-                        producer: "", // No producer info
-                        description: "Created via Trip Edit",
-                        ratePerKm: 0.30,
-                        starred: false,
-                        trips: 0,
-                        totalKm: 0,
-                        documents: 0,
-                        invoices: 0,
-                        estimatedCost: 0,
-                        shootingDays: 0,
-                        kmPerDay: 0,
-                        co2Emissions: 0
-                    };
-                    setProjects(prev => [...prev, newProject]);
-                    toast.success(`Proyecto "${trimmedProject}" creado`);
-                }
+                if (trimmedProject) createProjectIfNeeded(trimmedProject);
 
                 onSave?.({
                   id,
