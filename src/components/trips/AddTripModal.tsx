@@ -940,6 +940,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
           </div>
 
           <DialogClose asChild>
+            <Button
               variant="save"
               className="w-full mt-2"
               onClick={async () => {
