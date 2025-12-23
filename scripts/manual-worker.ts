@@ -84,7 +84,7 @@ async function runWorker() {
             // Prompt
             const prompt = `Extrae información: date (YYYY-MM-DD), projectName, productionCompanies (array), locations (array). JSON only.\n\n${textContent.slice(0, 10000)}`;
             
-            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite-preview-02-05", generationConfig: { responseMimeType: "application/json" } });
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite", generationConfig: { responseMimeType: "application/json" } });
             
             console.log("   🤖 Asking Gemini...");
             const result = await model.generateContent(prompt);
