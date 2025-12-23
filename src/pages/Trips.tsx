@@ -572,7 +572,7 @@ export default function Trips() {
 
       {/* Desktop Table View - Only on large screens */}
       <div className="hidden lg:block glass-card overflow-hidden animate-fade-in animation-delay-200">
-        <div className="overflow-x-auto">
+        <div className={visibleTrips.length > 40 ? "overflow-x-auto overflow-y-auto max-h-[70vh]" : "overflow-x-auto"}>
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent border-border/50">

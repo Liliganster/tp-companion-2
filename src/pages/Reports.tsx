@@ -294,7 +294,7 @@ export default function Reports() {
 
         {/* Reports Table */}
         <div className="glass-card overflow-hidden animate-fade-in animation-delay-200">
-          <div className="overflow-x-auto">
+          <div className={reports.length > 40 ? "overflow-x-auto overflow-y-auto max-h-[70vh]" : "overflow-x-auto"}>
             <table className="w-full min-w-[500px]">
               <thead>
                 <tr className="border-b border-border bg-secondary/30">
