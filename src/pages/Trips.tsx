@@ -12,6 +12,7 @@ import { AddTripModal } from "@/components/trips/AddTripModal";
 import { BulkUploadModal } from "@/components/trips/BulkUploadModal";
 import { TripDetailModal } from "@/components/trips/TripDetailModal";
 import { useUserProfile } from "@/contexts/UserProfileContext";
+import { Project, useProjects } from "@/contexts/ProjectsContext";
 import { Trip, useTrips } from "@/contexts/TripsContext";
 import { parseLocaleNumber, roundTo } from "@/lib/number";
 import { Badge } from "@/components/ui/badge";
@@ -73,6 +74,7 @@ export default function Trips() {
   const [selectedProject, setSelectedProject] = useState("all");
   const [selectedYear, setSelectedYear] = useState("2024");
   const { trips, setTrips } = useTrips();
+  const { setProjects } = useProjects();
   const [dateSort, setDateSort] = useState<"desc" | "asc">("desc");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
@@ -172,25 +174,143 @@ export default function Trips() {
     documents?: Trip["documents"];
   };
 
-  const handleSaveTrip = (data: SavedTrip) => {
-    setTrips((prev) => {
-      const nextTrip: Trip = {
-        id: data.id,
-        date: data.date,
-        route: data.route,
-        project: data.project,
-        purpose: data.purpose,
-        passengers: data.passengers,
-        invoice: data.invoice,
-        distance: data.distance,
-        co2: calculateCO2(data.distance),
-        ratePerKmOverride: data.ratePerKmOverride ?? null,
-        specialOrigin: data.specialOrigin ?? "base",
-        documents: data.documents,
-      };
+  type ProjectStatsDelta = {
+    trips: number;
+    totalKm: number;
+    documents: number;
+    invoices: number;
+    estimatedCost: number;
+    co2Emissions: number;
+  };
 
+  const getProjectKey = (name: string) => name.trim().toLowerCase();
+
+  const getTripContribution = (trip: Pick<Trip, "distance" | "documents" | "invoice" | "ratePerKmOverride" | "co2">, projectRatePerKm: number): ProjectStatsDelta => {
+    const distance = Number.isFinite(trip.distance) ? trip.distance : 0;
+    const documents = trip.documents?.length ?? 0;
+    const invoices = trip.invoice?.trim() ? 1 : 0;
+    const rate = typeof trip.ratePerKmOverride === "number" ? trip.ratePerKmOverride : projectRatePerKm;
+    const estimatedCost = distance * rate;
+    const co2Emissions = Number.isFinite(trip.co2) ? trip.co2 : calculateCO2(distance);
+
+    return { trips: 1, totalKm: distance, documents, invoices, estimatedCost, co2Emissions };
+  };
+
+  const negateDelta = (delta: ProjectStatsDelta): ProjectStatsDelta => ({
+    trips: -delta.trips,
+    totalKm: -delta.totalKm,
+    documents: -delta.documents,
+    invoices: -delta.invoices,
+    estimatedCost: -delta.estimatedCost,
+    co2Emissions: -delta.co2Emissions,
+  });
+
+  const diffDelta = (next: ProjectStatsDelta, prev: ProjectStatsDelta): ProjectStatsDelta => ({
+    trips: next.trips - prev.trips,
+    totalKm: next.totalKm - prev.totalKm,
+    documents: next.documents - prev.documents,
+    invoices: next.invoices - prev.invoices,
+    estimatedCost: next.estimatedCost - prev.estimatedCost,
+    co2Emissions: next.co2Emissions - prev.co2Emissions,
+  });
+
+  const applyDeltaToProject = (project: Project, delta: ProjectStatsDelta): Project => ({
+    ...project,
+    trips: Math.max(0, project.trips + delta.trips),
+    totalKm: Math.max(0, project.totalKm + delta.totalKm),
+    documents: Math.max(0, project.documents + delta.documents),
+    invoices: Math.max(0, project.invoices + delta.invoices),
+    estimatedCost: Math.max(0, project.estimatedCost + delta.estimatedCost),
+    co2Emissions: Math.max(0, project.co2Emissions + delta.co2Emissions),
+  });
+
+  const handleSaveTrip = (data: SavedTrip) => {
+    const existingTrip = trips.find((t) => t.id === data.id) ?? null;
+    const trimmedProject = data.project.trim();
+    const trimmedInvoice = data.invoice?.trim() ? data.invoice.trim() : undefined;
+
+    const nextTrip: Trip = {
+      id: data.id,
+      date: data.date,
+      route: data.route,
+      project: trimmedProject,
+      purpose: data.purpose,
+      passengers: data.passengers,
+      invoice: trimmedInvoice,
+      distance: data.distance,
+      co2: calculateCO2(data.distance),
+      ratePerKmOverride: data.ratePerKmOverride ?? null,
+      specialOrigin: data.specialOrigin ?? "base",
+      documents: data.documents,
+    };
+
+    setTrips((prev) => {
       const exists = prev.some((t) => t.id === data.id);
       return exists ? prev.map((t) => (t.id === data.id ? { ...t, ...nextTrip } : t)) : [nextTrip, ...prev];
+    });
+
+    if (!trimmedProject) return;
+
+    setProjects((prevProjects) => {
+      const nextProjects = [...prevProjects];
+      const newProjectKey = getProjectKey(trimmedProject);
+
+      const ensureProjectIndex = (name: string) => {
+        const key = getProjectKey(name);
+        const index = nextProjects.findIndex((p) => getProjectKey(p.name) === key);
+        if (index !== -1) return index;
+
+        const newProject: Project = {
+          id: globalThis.crypto?.randomUUID?.() ?? String(Date.now()),
+          name: name.trim(),
+          producer: "",
+          description: "Created via Trip",
+          ratePerKm: 0.3,
+          starred: false,
+          trips: 0,
+          totalKm: 0,
+          documents: 0,
+          invoices: 0,
+          estimatedCost: 0,
+          shootingDays: 0,
+          kmPerDay: 0,
+          co2Emissions: 0,
+        };
+
+        nextProjects.push(newProject);
+        return nextProjects.length - 1;
+      };
+
+      const newIndex = ensureProjectIndex(trimmedProject);
+      const newProject = nextProjects[newIndex];
+      const newContribution = getTripContribution(nextTrip, newProject.ratePerKm);
+
+      if (!existingTrip) {
+        nextProjects[newIndex] = applyDeltaToProject(newProject, newContribution);
+        return nextProjects;
+      }
+
+      const oldProjectKey = getProjectKey(existingTrip.project);
+      const projectChanged = oldProjectKey !== newProjectKey;
+
+      if (projectChanged) {
+        if (existingTrip.project.trim()) {
+          const oldIndex = nextProjects.findIndex((p) => getProjectKey(p.name) === oldProjectKey);
+          if (oldIndex !== -1) {
+            const oldProject = nextProjects[oldIndex];
+            const oldContribution = getTripContribution(existingTrip, oldProject.ratePerKm);
+            nextProjects[oldIndex] = applyDeltaToProject(oldProject, negateDelta(oldContribution));
+          }
+        }
+
+        nextProjects[newIndex] = applyDeltaToProject(nextProjects[newIndex], newContribution);
+        return nextProjects;
+      }
+
+      const oldContribution = getTripContribution(existingTrip, newProject.ratePerKm);
+      const delta = diffDelta(newContribution, oldContribution);
+      nextProjects[newIndex] = applyDeltaToProject(newProject, delta);
+      return nextProjects;
     });
   };
 
@@ -231,7 +351,30 @@ export default function Trips() {
     setSelectedIds(newSelected);
   };
   const handleDeleteSelected = () => {
+    const tripsToDelete = trips.filter((trip) => selectedIds.has(trip.id));
     setTrips(prev => prev.filter(t => !selectedIds.has(t.id)));
+
+    if (tripsToDelete.length > 0) {
+      setProjects((prevProjects) => {
+        const nextProjects = [...prevProjects];
+        const projectIndexByKey = new Map<string, number>();
+        nextProjects.forEach((project, index) => {
+          projectIndexByKey.set(getProjectKey(project.name), index);
+        });
+
+        for (const trip of tripsToDelete) {
+          const key = getProjectKey(trip.project);
+          const index = projectIndexByKey.get(key);
+          if (index === undefined) continue;
+          const project = nextProjects[index];
+          const contribution = getTripContribution(trip, project.ratePerKm);
+          nextProjects[index] = applyDeltaToProject(project, negateDelta(contribution));
+        }
+
+        return nextProjects;
+      });
+    }
+
     toast({
       title: t("trips.toastTripsDeletedTitle"),
       description: tf("trips.toastTripsDeletedBody", { count: selectedIds.size }),
