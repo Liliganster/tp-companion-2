@@ -9,6 +9,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { useProjects } from "@/contexts/ProjectsContext";
+import { toast } from "sonner";
 import {
   DndContext,
   closestCenter,
