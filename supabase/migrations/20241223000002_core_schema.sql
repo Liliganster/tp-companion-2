@@ -6,7 +6,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- 1. User Profiles
 -- Stores user configuration, plan details, and base location.
 -- Linked to auth.users via id.
-CREATE TABLE public.user_profiles (
+CREATE TABLE IF NOT EXISTS public.user_profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     full_name TEXT,
     vat_id TEXT,
@@ -24,6 +24,9 @@ CREATE TABLE public.user_profiles (
 
 -- RLS for user_profiles
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view own profile" ON public.user_profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON public.user_profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.user_profiles;
 CREATE POLICY "Users can view own profile" ON public.user_profiles
     FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "Users can update own profile" ON public.user_profiles
@@ -33,7 +36,7 @@ CREATE POLICY "Users can insert own profile" ON public.user_profiles
 
 -- 2. Projects
 -- Stores project definitions to group trips.
-CREATE TABLE public.projects (
+CREATE TABLE IF NOT EXISTS public.projects (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
@@ -55,6 +58,10 @@ CREATE TABLE public.projects (
 
 -- RLS for projects
 ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view own projects" ON public.projects;
+DROP POLICY IF EXISTS "Users can insert own projects" ON public.projects;
+DROP POLICY IF EXISTS "Users can update own projects" ON public.projects;
+DROP POLICY IF EXISTS "Users can delete own projects" ON public.projects;
 CREATE POLICY "Users can view own projects" ON public.projects
     FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert own projects" ON public.projects
@@ -66,7 +73,7 @@ CREATE POLICY "Users can delete own projects" ON public.projects
 
 -- 3. Trips
 -- The main ledger of trips.
-CREATE TABLE public.trips (
+CREATE TABLE IF NOT EXISTS public.trips (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- Client can generate this UUID
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     project_id UUID REFERENCES public.projects(id) ON DELETE SET NULL,
@@ -96,6 +103,10 @@ CREATE TABLE public.trips (
 
 -- RLS for trips
 ALTER TABLE public.trips ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view own trips" ON public.trips;
+DROP POLICY IF EXISTS "Users can insert own trips" ON public.trips;
+DROP POLICY IF EXISTS "Users can update own trips" ON public.trips;
+DROP POLICY IF EXISTS "Users can delete own trips" ON public.trips;
 CREATE POLICY "Users can view own trips" ON public.trips
     FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert own trips" ON public.trips
@@ -106,7 +117,7 @@ CREATE POLICY "Users can delete own trips" ON public.trips
     FOR DELETE USING (auth.uid() = user_id);
 
 -- 4. Reports (Optional history)
-CREATE TABLE public.reports (
+CREATE TABLE IF NOT EXISTS public.reports (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     
@@ -127,6 +138,9 @@ CREATE TABLE public.reports (
 
 -- RLS for reports
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view own reports" ON public.reports;
+DROP POLICY IF EXISTS "Users can insert own reports" ON public.reports;
+DROP POLICY IF EXISTS "Users can delete own reports" ON public.reports;
 CREATE POLICY "Users can view own reports" ON public.reports
     FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert own reports" ON public.reports
@@ -135,6 +149,6 @@ CREATE POLICY "Users can delete own reports" ON public.reports
     FOR DELETE USING (auth.uid() = user_id);
 
 -- Indexes for performance
-CREATE INDEX idx_trips_user_date ON public.trips(user_id, trip_date);
-CREATE INDEX idx_trips_project ON public.trips(project_id);
-CREATE INDEX idx_projects_user ON public.projects(user_id);
+CREATE INDEX IF NOT EXISTS idx_trips_user_date ON public.trips(user_id, trip_date);
+CREATE INDEX IF NOT EXISTS idx_trips_project ON public.trips(project_id);
+CREATE INDEX IF NOT EXISTS idx_projects_user ON public.projects(user_id);

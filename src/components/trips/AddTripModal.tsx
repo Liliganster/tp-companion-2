@@ -943,11 +943,24 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
             <Button
               variant="save"
               className="w-full mt-2"
-              onClick={async () => {
+              onClick={async (event) => {
                 const distanceValue = parseLocaleNumber(distance) ?? 0;
                 const passengersValue = parseLocaleNumber(passengers) ?? 0;
                 const rateOverride = parseLocaleNumber(tripRate);
                 const { routeValues } = getEffectiveRouteValues();
+
+                if (!date.trim()) {
+                  event.preventDefault();
+                  toast.error("Selecciona una fecha");
+                  return;
+                }
+
+                const routeNonEmpty = routeValues.map((v) => v.trim()).filter(Boolean);
+                if (routeNonEmpty.length < 2) {
+                  event.preventDefault();
+                  toast.error("Completa origen y destino");
+                  return;
+                }
 
                 // 1. Resolve Trip ID
                 const id = trip?.id || uuidv4();

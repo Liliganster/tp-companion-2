@@ -21,9 +21,19 @@ function includesAny(haystack: string, needles: string[]) {
 export function formatSupabaseError(err: unknown, fallback: string): string {
   const msg = getMessage(err);
   const code = (err as AnyErr)?.code;
+  const details = (err as AnyErr)?.details;
+  const hint = (err as AnyErr)?.hint;
+  const extra = [details, hint].filter(Boolean).join(" | ");
 
   // Missing schema / migrations not applied
-  if (code === "42P01" || /relation .* does not exist/i.test(msg)) {
+  if (
+    code === "42P01" ||
+    code === "PGRST205" ||
+    code === "PGRST204" ||
+    /relation .* does not exist/i.test(msg) ||
+    /schema cache/i.test(msg) ||
+    /could not find the .* table/i.test(msg)
+  ) {
     return "Tu proyecto de Supabase parece no tener las tablas/migraciones aplicadas. Revisa y ejecuta las migraciones en Supabase antes de continuar.";
   }
 
@@ -49,5 +59,6 @@ export function formatSupabaseError(err: unknown, fallback: string): string {
   }
 
   // Generic
-  return msg ? `${fallback}: ${msg}` : fallback;
+  if (!msg) return fallback;
+  return extra ? `${fallback}: ${msg} (${extra})` : `${fallback}: ${msg}`;
 }
