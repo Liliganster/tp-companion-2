@@ -9,5 +9,14 @@
     "api/**/*.ts": {
       "includeFiles": "src/**"
     }
-  }
+  },
+  "routes": [
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/.*",
+      "dest": "/index.html"
+    }
+  ]
 }
