@@ -49,7 +49,11 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const [reviewProducer, setReviewProducer] = useState("");
   const [reviewLocations, setReviewLocations] = useState<string[]>([]);
   
-  const { t } = useI18n();
+  const [reviewDistance, setReviewDistance] = useState("0");
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  
+  const { t, locale } = useI18n();
+  const googleLanguage = locale.split("-")[0] ?? "en";
   const exampleText = t("bulk.examplePlaceholder");
 
   // Reset state when modal closes or tab changes
@@ -65,10 +69,12 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     setJobId(null);
     setExtractedData(null);
     setAiLoading(false);
+    setIsOptimizing(false);
     setReviewDate("");
     setReviewProject("");
     setReviewProducer("");
     setReviewLocations([]);
+    setReviewDistance("0");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -145,6 +151,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
             .single();
 
           if (job.status === "done") {
+             clearInterval(interval);
              // Fetch results
              const { data: result } = await supabase
                 .from("callsheet_results")
@@ -160,15 +167,13 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
              if (result) {
                 setExtractedData({ result, locations: locs || [] });
                 
-                // Pre-fill review form
+                // Pre-fill basic fields
                 setReviewDate(result.date_value || "");
                 setReviewProject(result.project_value || "");
                 setReviewProducer(result.producer_value || "");
-                setReviewLocations((locs || []).map((l: any) => l.formatted_address || l.address_raw));
                 
-                setAiStep("review");
-                setAiLoading(false);
-                clearInterval(interval);
+                // Start optimization (Address Normalization + Distance)
+                optimizeRoute(locs || []);
              }
           } else if (job.status === "failed") {
               toast.error("Error en la extracción AI: " + job.error);
@@ -186,6 +191,78 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
     return () => clearInterval(interval);
   }, [aiStep, jobId]);
+
+  const optimizeRoute = async (rawLocations: any[]) => {
+      setIsOptimizing(true);
+      // Use raw strings if formatted_address is missing/null
+      let currentLocs = rawLocations.map(l => l.formatted_address || l.address_raw);
+
+      try {
+          // A. Multi-phase Normalization
+          const normalizedLocs = [];
+          
+          for (const locStr of currentLocs) {
+              let query = locStr;
+              // 1. Context Injection: if missing city/country (simple heuristic), append profile context
+              const hasContext = locStr.toLowerCase().includes(profile.city?.toLowerCase()) || locStr.toLowerCase().includes(profile.country?.toLowerCase());
+              
+              if (!hasContext && profile.city && profile.country) {
+                  query = `${locStr}, ${profile.city}, ${profile.country}`;
+              }
+
+              // 2. Google Validation
+              try {
+                  const res = await fetch("/api/google/geocode", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ address: query, language: googleLanguage })
+                  });
+                  const data = await res.json();
+                  if (res.ok && data.formattedAddress) {
+                      normalizedLocs.push(data.formattedAddress);
+                  } else {
+                      normalizedLocs.push(locStr); // Fallback
+                  }
+              } catch (e) {
+                  normalizedLocs.push(locStr); // Fallback
+              }
+          }
+
+          setReviewLocations(normalizedLocs);
+
+          // B. Auto-Distance Calculation
+          const origin = profile.baseAddress;
+          const destination = profile.baseAddress;
+
+          if (origin && destination) {
+              const res = await fetch("/api/google/directions", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                      origin,
+                      destination,
+                      waypoints: normalizedLocs,
+                      language: googleLanguage
+                  })
+              });
+              
+              const data = await res.json();
+              if (res.ok && typeof data.totalDistanceMeters === 'number') {
+                  const km = Math.round((data.totalDistanceMeters / 1000) * 10) / 10;
+                  setReviewDistance(String(km));
+              }
+          }
+
+      } catch (e) {
+          console.error("Optimization failed", e);
+          // Still create the trip with what we have
+          setReviewLocations(currentLocs);
+      } finally {
+          setIsOptimizing(false);
+          setAiLoading(false);
+          setAiStep("review");
+      }
+  };
 
   const { profile } = useUserProfile();
 
@@ -210,7 +287,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         purpose: "Rodaje: " + reviewProducer, // Default purpose
         route: fullRoute, 
         passengers: 0,
-        distance: 0, // Default to 0, let user update in edit if needed
+        distance: parseFloat(reviewDistance) || 0,
         specialOrigin: "base"
     };
 
@@ -335,7 +412,9 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                 <div className="text-center py-12 space-y-4">
                     <Loader2 className="w-16 h-16 text-primary animate-spin mx-auto" />
                     <div>
-                        <h3 className="text-lg font-medium">Analizando documento...</h3>
+                        <h3 className="text-lg font-medium">
+                            {isOptimizing ? "Optimizando ruta y direcciones..." : "Analizando documento..."}
+                        </h3>
                         <p className="text-muted-foreground">Esto puede tomar unos segundos.</p>
                     </div>
                 </div>
@@ -378,6 +457,16 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                                     className="pl-9 bg-secondary/30"
                                 />
                             </div>
+                        </div>
+
+                        <div className="space-y-2 col-span-2">
+                            <Label>Distancia (km)</Label>
+                            <Input 
+                                type="number"
+                                value={reviewDistance} 
+                                onChange={(e) => setReviewDistance(e.target.value)} 
+                                className="bg-secondary/30"
+                            />
                         </div>
                     </div>
 
