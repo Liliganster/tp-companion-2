@@ -97,7 +97,15 @@ export function TripsProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const addTrip = useCallback(async (trip: Trip) => {
-    if (!supabase || !user) return;
+    console.log("[TripsContext] addTrip called with:", trip);
+    if (!supabase) {
+      console.error("[TripsContext] Supabase client is missing");
+      return;
+    }
+    if (!user) {
+      console.error("[TripsContext] User is missing");
+      return;
+    }
 
     setTrips(prev => [trip, ...prev]);
 
@@ -127,13 +135,17 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       invoice_number: trip.invoice,
       documents: trip.documents
     };
+    
+    console.log("[TripsContext] Sending payload to Supabase:", dbPayload);
 
     const { error } = await supabase.from("trips").insert(dbPayload);
 
     if (error) {
-      console.error("Error adding trip:", error);
-      toast.error(formatSupabaseError(error, "Error guardando viaje"));
+      console.error("[TripsContext] Error adding trip:", error);
+      toast.error(formatSupabaseError(error, "Error guardando viaje: " + error.message));
       setTrips(prev => prev.filter(t => t.id !== trip.id));
+    } else {
+        console.log("[TripsContext] Trip saved successfully");
     }
   }, [user]);
 
