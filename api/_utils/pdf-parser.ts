@@ -1,13 +1,8 @@
 // Wrapper for pdf-parse to handle CommonJS/ESM compatibility
-let pdfParse: any;
+import * as pdfParseModule from "pdf-parse";
 
-try {
-  // Try ESM import
-  pdfParse = require("pdf-parse");
-} catch (e) {
-  // Fallback for different module systems
-  pdfParse = require("pdf-parse").default;
-}
+// Handle both default and named exports
+const pdfParse = (pdfParseModule as any).default || pdfParseModule;
 
 export async function parsePdf(buffer: Buffer): Promise<{
   text: string;
