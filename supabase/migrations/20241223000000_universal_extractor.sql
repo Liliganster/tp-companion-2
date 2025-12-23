@@ -1,9 +1,17 @@
--- Create enum types
-CREATE TYPE job_status AS ENUM ('created', 'queued', 'processing', 'done', 'failed', 'needs_review');
-CREATE TYPE pdf_kind AS ENUM ('native_text', 'scanned', 'unknown');
+DO $$ BEGIN
+    CREATE TYPE job_status AS ENUM ('created', 'queued', 'processing', 'done', 'failed', 'needs_review');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE pdf_kind AS ENUM ('native_text', 'scanned', 'unknown');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 -- Table: callsheet_jobs
-CREATE TABLE callsheet_jobs (
+CREATE TABLE IF NOT EXISTS callsheet_jobs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     storage_path TEXT NOT NULL,
@@ -17,7 +25,7 @@ CREATE TABLE callsheet_jobs (
 );
 
 -- Table: callsheet_results
-CREATE TABLE callsheet_results (
+CREATE TABLE IF NOT EXISTS callsheet_results (
     job_id UUID PRIMARY KEY REFERENCES callsheet_jobs(id) ON DELETE CASCADE,
     
     -- Date
@@ -42,7 +50,7 @@ CREATE TABLE callsheet_results (
 );
 
 -- Table: callsheet_locations
-CREATE TABLE callsheet_locations (
+CREATE TABLE IF NOT EXISTS callsheet_locations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     job_id UUID NOT NULL REFERENCES callsheet_jobs(id) ON DELETE CASCADE,
     
@@ -62,7 +70,7 @@ CREATE TABLE callsheet_locations (
 );
 
 -- Table: callsheet_excluded_blocks (Audit)
-CREATE TABLE callsheet_excluded_blocks (
+CREATE TABLE IF NOT EXISTS callsheet_excluded_blocks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     job_id UUID NOT NULL REFERENCES callsheet_jobs(id) ON DELETE CASCADE,
     label TEXT, -- PARKING, BASE, CATERING, etc.
@@ -72,7 +80,7 @@ CREATE TABLE callsheet_excluded_blocks (
 );
 
 -- Table: producer_mappings
-CREATE TABLE producer_mappings (
+CREATE TABLE IF NOT EXISTS producer_mappings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     project_key TEXT NOT NULL,
@@ -85,28 +93,35 @@ CREATE TABLE producer_mappings (
 
 -- callsheet_jobs
 ALTER TABLE callsheet_jobs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can insert their own jobs" ON callsheet_jobs;
 CREATE POLICY "Users can insert their own jobs" ON callsheet_jobs FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can view their own jobs" ON callsheet_jobs;
 CREATE POLICY "Users can view their own jobs" ON callsheet_jobs FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Service role can all" ON callsheet_jobs;
 CREATE POLICY "Service role can all" ON callsheet_jobs USING (true) WITH CHECK (true);
 
 -- callsheet_results
 ALTER TABLE callsheet_results ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view results for own jobs" ON callsheet_results;
 CREATE POLICY "Users can view results for own jobs" ON callsheet_results FOR SELECT USING (
     EXISTS (SELECT 1 FROM callsheet_jobs WHERE id = callsheet_results.job_id AND user_id = auth.uid())
 );
 
 -- callsheet_locations
 ALTER TABLE callsheet_locations ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view locations for own jobs" ON callsheet_locations;
 CREATE POLICY "Users can view locations for own jobs" ON callsheet_locations FOR SELECT USING (
     EXISTS (SELECT 1 FROM callsheet_jobs WHERE id = callsheet_locations.job_id AND user_id = auth.uid())
 );
 
 -- callsheet_excluded_blocks
 ALTER TABLE callsheet_excluded_blocks ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view audit for own jobs" ON callsheet_excluded_blocks;
 CREATE POLICY "Users can view audit for own jobs" ON callsheet_excluded_blocks FOR SELECT USING (
     EXISTS (SELECT 1 FROM callsheet_jobs WHERE id = callsheet_excluded_blocks.job_id AND user_id = auth.uid())
 );
 
 -- producer_mappings
 ALTER TABLE producer_mappings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage their mappings" ON producer_mappings;
 CREATE POLICY "Users can manage their mappings" ON producer_mappings USING (auth.uid() = user_id);

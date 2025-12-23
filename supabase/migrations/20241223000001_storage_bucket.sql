@@ -4,6 +4,7 @@ VALUES ('callsheets', 'callsheets', false)
 ON CONFLICT (id) DO NOTHING;
 
 -- RLS for Storage
+DROP POLICY IF EXISTS "Users can upload their own callsheets" ON storage.objects;
 CREATE POLICY "Users can upload their own callsheets"
 ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
@@ -11,6 +12,7 @@ WITH CHECK (
     (storage.foldername(name))[1] = auth.uid()::text
 );
 
+DROP POLICY IF EXISTS "Users can view their own callsheets" ON storage.objects;
 CREATE POLICY "Users can view their own callsheets"
 ON storage.objects FOR SELECT TO authenticated
 USING (
