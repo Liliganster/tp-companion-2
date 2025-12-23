@@ -72,7 +72,7 @@ export default function Trips() {
   const { t, tf, locale } = useI18n();
   const { getAccessToken } = useAuth();
   const [selectedProject, setSelectedProject] = useState("all");
-  const [selectedYear, setSelectedYear] = useState("2024");
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   // ... imports
   const { trips, addTrip, updateTrip, deleteTrip } = useTrips();
   // removed setProjects
