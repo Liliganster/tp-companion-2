@@ -283,6 +283,21 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const { profile } = useUserProfile();
   const { projects, addProject } = useProjects();
 
+interface SavedTrip {
+  id: string;
+  date: string;
+  route: string[];
+  project: string;
+  projectId?: string; // Added
+  purpose: string;
+  passengers: number;
+  invoice?: string;
+  distance: number;
+  ratePerKmOverride?: number | null;
+  specialOrigin?: "base" | "continue" | "return";
+  documents?: any[];
+}
+
   const handleSaveTrip = async () => {
     if (!onSave) return;
     
@@ -296,11 +311,46 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         ? [baseAddress, ...reviewLocations, baseAddress]
         : reviewLocations;
 
+    const trimmedProjectName = reviewProject.trim();
+    let projectIdToUse: string | undefined;
+
+    // 1. Resolve Project ID
+    if (trimmedProjectName) {
+        const existingProject = projects.find(p => p.name.trim().toLowerCase() === trimmedProjectName.toLowerCase());
+        
+        if (existingProject) {
+            projectIdToUse = existingProject.id;
+        } else {
+            // New Project
+            const newProjectId = crypto.randomUUID();
+            projectIdToUse = newProjectId;
+            
+            await addProject({
+                id: newProjectId,
+                name: trimmedProjectName,
+                producer: reviewProducer,
+                description: `Created from AI Upload: ${selectedFile?.name}`,
+                ratePerKm: 0.30, 
+                starred: false,
+                trips: 0,
+                totalKm: 0,
+                documents: 0,
+                invoices: 0,
+                estimatedCost: 0,
+                shootingDays: 0,
+                kmPerDay: 0,
+                co2Emissions: 0
+            });
+            toast.success(`Proyecto "${trimmedProjectName}" creado automáticamente`);
+        }
+    }
+
     // Create trip object
     const newTrip: SavedTrip = {
         id: crypto.randomUUID(),
         date: reviewDate,
-        project: reviewProject,
+        project: trimmedProjectName,
+        projectId: projectIdToUse, // Pass the ID
         purpose: "Rodaje: " + reviewProducer, // Default purpose
         route: fullRoute, 
         passengers: 0,
@@ -314,33 +364,6 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
             createdAt: new Date().toISOString()
         }] : undefined
     };
-
-    // Auto-create project if it doesn't exist
-    if (newTrip.project) {
-        const projectExists = projects.some(p => p.name.toLowerCase() === newTrip.project.toLowerCase());
-        
-        if (!projectExists) {
-            await addProject({
-                id: crypto.randomUUID(),
-                name: newTrip.project,
-                producer: reviewProducer,
-                description: `Created from AI Upload: ${selectedFile?.name}`,
-                ratePerKm: 0.30, // Default rate
-                starred: false,
-                trips: 0, // Initial 0, will be 1 once trip is saved and stats re-computed
-                totalKm: 0,
-                documents: 0,
-                invoices: 0,
-                estimatedCost: 0,
-                shootingDays: 0,
-                kmPerDay: 0,
-                co2Emissions: 0
-            });
-            toast.success(`Proyecto "${newTrip.project}" creado automáticamente`);
-        }
-        // No need to update existing project stats manually anymore; 
-        // Projects.tsx calculates them from the trips list.
-    }
 
     onSave(newTrip);
     toast.success("Viaje guardado correctamente");

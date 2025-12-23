@@ -165,6 +165,7 @@ export default function Trips() {
     date: string;
     route: string[];
     project: string;
+    projectId?: string; // Added
     purpose: string;
     passengers: number;
     invoice?: string;
@@ -183,6 +184,7 @@ export default function Trips() {
       date: data.date,
       route: data.route,
       project: trimmedProject,
+      projectId: data.projectId, // Propagate ID
       purpose: data.purpose,
       passengers: data.passengers,
       invoice: trimmedInvoice,
