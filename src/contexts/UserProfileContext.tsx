@@ -1,6 +1,7 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "./AuthContext";
+import { toast } from "sonner";
 
 export type UserProfile = {
   fullName: string;
@@ -73,6 +74,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
 
         if (error && error.code !== "PGRST116") { // PGRST116 = 0 rows
           console.error("Error fetching profile:", error);
+          toast.error("Error loading profile: " + error.message);
         }
 
         if (mounted) {

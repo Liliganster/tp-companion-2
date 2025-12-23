@@ -1,6 +1,7 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "./AuthContext";
+import { toast } from "sonner";
 
 export type Trip = {
   id: string;
@@ -63,6 +64,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error("Error fetching trips:", error);
+        toast.error("Error loading trips: " + error.message);
       }
 
       if (mounted) {
@@ -128,6 +130,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       console.error("Error adding trip:", error);
+      toast.error("Error saving trip: " + error.message);
       setTrips(prev => prev.filter(t => t.id !== trip.id));
     }
   }, [user]);

@@ -1,6 +1,7 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "./AuthContext";
+import { toast } from "sonner";
 
 export type Project = {
   id: string;
@@ -55,6 +56,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error("Error fetching projects:", error);
+        toast.error("Error loading projects: " + error.message);
       }
 
       if (mounted) {
@@ -119,6 +121,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       console.error("Error adding project:", error);
+      toast.error("Error creating project: " + error.message);
       // Revert optimistic update?
       setProjects(prev => prev.filter(p => p.id !== project.id));
     }
