@@ -140,6 +140,14 @@ export default function ReportView() {
   const address = savedReport?.address ?? (searchParams.get("address") || [profile.baseAddress, profile.city].filter(Boolean).join(", "));
   const licensePlate = savedReport?.licensePlate ?? (searchParams.get("licensePlate") || profile.licensePlate);
 
+  const getProjectKey = (value: string) => value.trim().toLowerCase();
+  const getProducerForProject = (projectName: string) => {
+    const key = getProjectKey(projectName);
+    if (!key) return "";
+    const found = projects.find((p) => getProjectKey(p.name) === key);
+    return found?.producer ?? "";
+  };
+
   const getTripTime = (date: string) => {
     const time = Date.parse(date);
     return Number.isFinite(time) ? time : 0;
@@ -166,20 +174,23 @@ export default function ReportView() {
     const dateLabel = time
       ? new Date(time).toLocaleDateString(locale, { day: "2-digit", month: "2-digit", year: "numeric" })
       : trip.date;
-    const producer = projects.find((p) => p.name === trip.project)?.producer ?? "";
+
+    const passengers = Number.isFinite(trip.passengers) ? trip.passengers : 0;
+    const distance = Number.isFinite(trip.distance) ? trip.distance : 0;
+    const producer = getProducerForProject(trip.project);
 
     return {
       date: dateLabel,
       project: trip.project,
       producer,
       route: trip.route,
-      passengers: trip.passengers,
-      distance: trip.distance,
+      passengers,
+      distance,
     };
   });
 
   const trips = reportTrips;
-  const totalDistance = trips.reduce((acc, trip) => acc + trip.distance, 0);
+  const totalDistance = trips.reduce((acc, trip) => acc + (Number.isFinite(trip.distance) ? trip.distance : 0), 0);
 
   const downloadTextFile = (content: string, fileName: string, mimeType: string) => {
     const blob = new Blob([content], { type: mimeType });
@@ -227,6 +238,7 @@ export default function ReportView() {
     t("reportView.colPassengersShort"),
     t("reportView.colDistanceKm"),
   ];
+
   const rows = trips.map((trip) => [
     trip.date,
     trip.project,

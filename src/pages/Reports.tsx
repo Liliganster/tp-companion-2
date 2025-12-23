@@ -157,6 +157,15 @@ export default function Reports() {
           })
         : trip.date;
 
+      if (!Number.isFinite(trip.distance) || trip.distance <= 0) {
+        nextWarnings.push({
+          tripId: trip.id,
+          date: formattedDate,
+          route: trip.route.join(" -> "),
+          warning: t("reports.warningZeroDistance"),
+        });
+      }
+
       if (trip.distance > 1500) {
         nextWarnings.push({
           tripId: trip.id,
