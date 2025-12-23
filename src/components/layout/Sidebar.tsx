@@ -43,7 +43,7 @@ export function Sidebar({
     href: "/advanced",
     icon: Sparkles
   }];
-  return <aside className={cn("hidden lg:flex flex-col h-screen glass border-r border-border/50 transition-all duration-300", collapsed ? "w-20" : "w-64")}>
+  return <aside className={cn("hidden lg:flex flex-col sticky top-0 h-screen shrink-0 glass border-r border-border/50 transition-all duration-300", collapsed ? "w-20" : "w-64")}>
       {/* Logo */}
       <div className="flex items-center justify-between h-16 px-4 border-b border-border/50">
         {!collapsed && <Link to="/" className="flex items-center gap-2">
