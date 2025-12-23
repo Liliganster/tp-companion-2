@@ -395,7 +395,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
       if (exists) return;
 
       const newProject = {
-        id: globalThis.crypto?.randomUUID?.() ?? String(Date.now()),
+        id: uuidv4(),
         name: trimmedName,
         producer: "",
         description: "Created via Trip",
