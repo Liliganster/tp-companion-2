@@ -93,7 +93,7 @@ export default async function handler(req: any, res: any) {
         
         const systemInstruction = buildUniversalExtractorPrompt("[PDF CONTENT ATTACHED]");
         const resultText = await generateContentFromPDF(
-            "gemini-1.5-pro", 
+            "gemini-1.5-flash-latest", 
             systemInstruction, 
             buffer, 
             "application/pdf",
