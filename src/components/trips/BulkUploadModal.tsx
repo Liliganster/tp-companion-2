@@ -11,7 +11,9 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
 import { useUserProfile } from "@/contexts/UserProfileContext";
+import { getCountryCode } from "@/lib/country-mapping";
 
 interface SavedTrip {
   id: string;
@@ -196,6 +198,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       setIsOptimizing(true);
       // Use raw strings if formatted_address is missing/null
       let currentLocs = rawLocations.map(l => l.formatted_address || l.address_raw);
+      const region = getCountryCode(profile.country);
 
       try {
           // A. Multi-phase Normalization
@@ -215,13 +218,20 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                   const res = await fetch("/api/google/geocode", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ address: query, language: googleLanguage })
+                      body: JSON.stringify({ 
+                          address: query, 
+                          language: googleLanguage,
+                          region: region // Essential for correct bias
+                      })
                   });
                   const data = await res.json();
                   if (res.ok && data.formattedAddress) {
                       normalizedLocs.push(data.formattedAddress);
                   } else {
-                      normalizedLocs.push(locStr); // Fallback
+                      // If geocoding failed even with context, keep original (as per instructions)
+                      // OR: if we added context, falling back to query might be better than raw?
+                      // User said: "Si Google no la encuentra, se mantiene la original como fallback."
+                      normalizedLocs.push(locStr);
                   }
               } catch (e) {
                   normalizedLocs.push(locStr); // Fallback
@@ -242,7 +252,8 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                       origin,
                       destination,
                       waypoints: normalizedLocs,
-                      language: googleLanguage
+                      language: googleLanguage,
+                      region: region
                   })
               });
               
