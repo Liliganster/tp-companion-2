@@ -213,7 +213,8 @@ export default function Trips() {
   })();
   const filteredTrips = trips.filter(trip => {
     const matchesProject = selectedProject === "all" || trip.project === selectedProject;
-    return matchesProject;
+    const matchesYear = selectedYear === "all" || trip.date.startsWith(selectedYear);
+    return matchesProject && matchesYear;
   });
 
   const tripWarnings = computeTripWarnings(trips);
@@ -301,6 +302,8 @@ export default function Trips() {
               <SelectValue placeholder={t("trips.year")} />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="all">Todo</SelectItem>
+              <SelectItem value="2025">2025</SelectItem>
               <SelectItem value="2024">2024</SelectItem>
               <SelectItem value="2023">2023</SelectItem>
             </SelectContent>
