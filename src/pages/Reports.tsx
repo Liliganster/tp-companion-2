@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -116,8 +117,19 @@ export default function Reports() {
   const { trips } = useTrips();
   const { reports, deleteReport } = useReports();
   const [selectedProject, setSelectedProject] = useState("all");
-  const [selectedMonth, setSelectedMonth] = useState("01");
-  const [selectedYear, setSelectedYear] = useState("2024");
+  const toDateInputValue = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  const now = new Date();
+  const defaultStart = toDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1));
+  const defaultEnd = toDateInputValue(now);
+
+  const [startDate, setStartDate] = useState<string>(defaultStart);
+  const [endDate, setEndDate] = useState<string>(defaultEnd);
   const [verificationModalOpen, setVerificationModalOpen] = useState(false);
   const [warnings, setWarnings] = useState<TripWarning[]>([]);
   const { toast } = useToast();
@@ -127,16 +139,46 @@ export default function Reports() {
     return Number.isFinite(time) ? time : 0;
   };
 
+  const getDateOnlyTime = (dateOnly: string, endOfDay: boolean) => {
+    if (!dateOnly) return null;
+    const isoLocal = `${dateOnly}T${endOfDay ? "23:59:59.999" : "00:00:00"}`;
+    const time = Date.parse(isoLocal);
+    return Number.isFinite(time) ? time : null;
+  };
+
+  const formatDateShort = (dateOnly: string) =>
+    new Date(`${dateOnly}T00:00:00`).toLocaleDateString(locale, {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+
+  const getSelectionRangeLabel = (rangeStart: string, rangeEnd: string) => {
+    if (rangeStart && rangeEnd) return `${formatDateShort(rangeStart)} - ${formatDateShort(rangeEnd)}`;
+    if (rangeStart && !rangeEnd) return `${formatDateShort(rangeStart)} - `;
+    if (!rangeStart && rangeEnd) return ` - ${formatDateShort(rangeEnd)}`;
+    return "";
+  };
+
+  const isRangeValid = () => {
+    const startTime = getDateOnlyTime(startDate, false);
+    const endTime = getDateOnlyTime(endDate, true);
+    if (startTime == null || endTime == null) return true;
+    return startTime <= endTime;
+  };
+
   const getTripsForSelection = () => {
-    const monthIndex = Math.max(0, Math.min(11, Number.parseInt(selectedMonth, 10) - 1));
-    const yearValue = Number.parseInt(selectedYear, 10);
+    const startTime = getDateOnlyTime(startDate, false);
+    const endTime = getDateOnlyTime(endDate, true);
 
     return trips
       .filter((t) => {
         const time = getTripTime(t.date);
         if (!time) return false;
-        const d = new Date(time);
-        const matchesPeriod = d.getFullYear() === yearValue && d.getMonth() === monthIndex;
+
+        const matchesPeriod =
+          (startTime == null || time >= startTime) &&
+          (endTime == null || time <= endTime);
         const matchesProject = selectedProject === "all" || t.project === selectedProject;
         return matchesPeriod && matchesProject;
       })
@@ -144,6 +186,14 @@ export default function Reports() {
   };
 
   const handleGenerateClick = () => {
+    if (!isRangeValid()) {
+      toast({
+        title: t("reports.toastInvalidRangeTitle"),
+        description: t("reports.toastInvalidRangeBody"),
+      });
+      return;
+    }
+
     const selectedTrips = getTripsForSelection();
     const nextWarnings: TripWarning[] = [];
 
@@ -191,24 +241,32 @@ export default function Reports() {
 
   const handleGenerateReport = () => {
     setVerificationModalOpen(false);
+    if (!isRangeValid()) {
+      toast({
+        title: t("reports.toastInvalidRangeTitle"),
+        description: t("reports.toastInvalidRangeBody"),
+      });
+      return;
+    }
+
     const selectedTrips = getTripsForSelection();
-    const monthIndex = Math.max(0, Math.min(11, Number.parseInt(selectedMonth, 10) - 1));
-    const yearValue = Number.parseInt(selectedYear, 10);
-    const start = new Date(yearValue, monthIndex, 1);
-    const end = new Date(yearValue, monthIndex + 1, 0);
+
+    const effectiveStartDate = startDate || (selectedTrips[0]?.date ? new Date(getTripTime(selectedTrips[0].date)).toISOString().slice(0, 10) : "");
+    const effectiveEndDate = endDate || (selectedTrips[selectedTrips.length - 1]?.date ? new Date(getTripTime(selectedTrips[selectedTrips.length - 1].date)).toISOString().slice(0, 10) : "");
+    const periodLabel = getSelectionRangeLabel(effectiveStartDate, effectiveEndDate);
 
     toast({
       title: t("reports.toastGeneratedTitle"),
       description: t("reports.toastGeneratedBody"),
     });
     const params = new URLSearchParams({
-      period: `${start.toLocaleDateString(locale, { day: "2-digit", month: "2-digit", year: "numeric" })} - ${end.toLocaleDateString(locale, { day: "2-digit", month: "2-digit", year: "numeric" })}`,
+      period: periodLabel,
       driver: profile.fullName,
       address: [profile.baseAddress, profile.city].filter(Boolean).join(", "),
       licensePlate: profile.licensePlate,
       project: selectedProject,
-      month: selectedMonth,
-      year: selectedYear,
+      startDate: effectiveStartDate,
+      endDate: effectiveEndDate,
       trips: String(selectedTrips.length),
     });
     navigate(`/reports/view?${params.toString()}`);
@@ -264,32 +322,23 @@ export default function Reports() {
             </div>
             
             <div className="space-y-2">
-              <Label>{t("reports.month")}</Label>
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger className="bg-secondary/50">
-                  <SelectValue placeholder={t("reports.month")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 12 }, (_, i) => (
-                    <SelectItem key={i} value={String(i + 1).padStart(2, "0")}>
-                      {new Date(2024, i).toLocaleString(locale, { month: "long" })}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>{t("reports.from")}</Label>
+              <Input
+                type="date"
+                className="bg-secondary/50"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
             </div>
             
             <div className="space-y-2">
-              <Label>{t("reports.year")}</Label>
-              <Select value={selectedYear} onValueChange={setSelectedYear}>
-                <SelectTrigger className="bg-secondary/50">
-                  <SelectValue placeholder={t("reports.year")} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="2024">2024</SelectItem>
-                  <SelectItem value="2023">2023</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>{t("reports.to")}</Label>
+              <Input
+                type="date"
+                className="bg-secondary/50"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
             </div>
 
             <div className="flex items-end">

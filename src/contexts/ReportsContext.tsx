@@ -3,8 +3,8 @@ import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, 
 export type SavedReport = {
   id: string;
   createdAt: string; // ISO
-  month: string; // "01".."12"
-  year: string; // "2024"
+  month: string; // "01".."12" (may be empty for custom ranges)
+  year: string; // "2024" (may be empty for custom ranges)
   project: string; // "all" or project name
   tripIds: string[];
   startDate: string; // YYYY-MM-DD

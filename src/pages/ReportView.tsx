@@ -119,6 +119,8 @@ export default function ReportView() {
   const rawProjectParam = searchParams.get("project") ?? "all";
   const selectedMonth = savedReport?.month ?? (searchParams.get("month") || "");
   const selectedYear = savedReport?.year ?? (searchParams.get("year") || "");
+  const queryStartDate = searchParams.get("startDate") || "";
+  const queryEndDate = searchParams.get("endDate") || "";
 
   const normalizeProjectParam = (value: string) => {
     const trimmed = value.trim();
@@ -135,7 +137,14 @@ export default function ReportView() {
   const formatDateShort = (dateOnly: string) =>
     new Date(`${dateOnly}T00:00:00`).toLocaleDateString(locale, { day: "2-digit", month: "2-digit", year: "numeric" });
 
-  const period = savedReport ? `${formatDateShort(savedReport.startDate)} - ${formatDateShort(savedReport.endDate)}` : (searchParams.get("period") || "");
+  const effectiveStartDate = savedReport?.startDate ?? queryStartDate;
+  const effectiveEndDate = savedReport?.endDate ?? queryEndDate;
+
+  const period = savedReport
+    ? `${formatDateShort(savedReport.startDate)} - ${formatDateShort(savedReport.endDate)}`
+    : effectiveStartDate && effectiveEndDate
+      ? `${formatDateShort(effectiveStartDate)} - ${formatDateShort(effectiveEndDate)}`
+      : (searchParams.get("period") || "");
   const driver = savedReport?.driver ?? (searchParams.get("driver") || profile.fullName);
   const address = savedReport?.address ?? (searchParams.get("address") || [profile.baseAddress, profile.city].filter(Boolean).join(", "));
   const licensePlate = savedReport?.licensePlate ?? (searchParams.get("licensePlate") || profile.licensePlate);
@@ -156,14 +165,21 @@ export default function ReportView() {
   const monthIndex = selectedMonth ? Math.max(0, Math.min(11, Number.parseInt(selectedMonth, 10) - 1)) : null;
   const yearValue = selectedYear ? Number.parseInt(selectedYear, 10) : null;
 
+  const rangeStartTime = effectiveStartDate ? Date.parse(`${effectiveStartDate}T00:00:00`) : 0;
+  const rangeEndTime = effectiveEndDate ? Date.parse(`${effectiveEndDate}T23:59:59.999`) : 0;
+  const hasValidRange = Boolean(effectiveStartDate && effectiveEndDate && Number.isFinite(rangeStartTime) && Number.isFinite(rangeEndTime));
+
   const filteredTrips = allTrips
     .filter((t) => {
       if (savedReport) return savedReport.tripIds.includes(t.id);
       const time = getTripTime(t.date);
       if (!time) return false;
       const d = new Date(time);
-      const matchesPeriod =
-        monthIndex == null || yearValue == null ? true : d.getFullYear() === yearValue && d.getMonth() === monthIndex;
+      const matchesPeriod = hasValidRange
+        ? time >= rangeStartTime && time <= rangeEndTime
+        : monthIndex == null || yearValue == null
+          ? true
+          : d.getFullYear() === yearValue && d.getMonth() === monthIndex;
       const matchesProject = effectiveProject === "all" || t.project === effectiveProject;
       return matchesPeriod && matchesProject;
     })
@@ -257,27 +273,47 @@ export default function ReportView() {
     trip.distance.toFixed(1),
   ]);
 
-  const canSave =
-    !savedReport &&
-    Boolean(selectedMonth) &&
-    Boolean(selectedYear) &&
-    filteredTrips.length > 0;
+  const canSave = !savedReport && filteredTrips.length > 0;
 
   const handleSave = () => {
     if (!canSave) return;
 
-    const monthIndexForSave = Math.max(0, Math.min(11, Number.parseInt(selectedMonth, 10) - 1));
-    const yearValueForSave = Number.parseInt(selectedYear, 10);
-    const start = new Date(yearValueForSave, monthIndexForSave, 1);
-    const end = new Date(yearValueForSave, monthIndexForSave + 1, 0);
+    const toDateOnlyLocal = (time: number) => {
+      const d = new Date(time);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    };
+
+    let startDateToSave = "";
+    let endDateToSave = "";
+
+    if (hasValidRange) {
+      startDateToSave = effectiveStartDate;
+      endDateToSave = effectiveEndDate;
+    } else if (selectedMonth && selectedYear) {
+      const monthIndexForSave = Math.max(0, Math.min(11, Number.parseInt(selectedMonth, 10) - 1));
+      const yearValueForSave = Number.parseInt(selectedYear, 10);
+      const start = new Date(yearValueForSave, monthIndexForSave, 1);
+      const end = new Date(yearValueForSave, monthIndexForSave + 1, 0);
+      startDateToSave = toDateOnlyLocal(start.getTime());
+      endDateToSave = toDateOnlyLocal(end.getTime());
+    } else {
+      const times = filteredTrips.map((t) => getTripTime(t.date)).filter(Boolean);
+      const minTime = Math.min(...times);
+      const maxTime = Math.max(...times);
+      startDateToSave = toDateOnlyLocal(minTime);
+      endDateToSave = toDateOnlyLocal(maxTime);
+    }
 
     const next = addReport({
-      month: selectedMonth,
-      year: selectedYear,
+      month: selectedMonth || "",
+      year: selectedYear || "",
       project: effectiveProject,
       tripIds: filteredTrips.map((t) => t.id),
-      startDate: start.toISOString().slice(0, 10),
-      endDate: end.toISOString().slice(0, 10),
+      startDate: startDateToSave,
+      endDate: endDateToSave,
       totalDistanceKm: totalDistance,
       tripsCount: filteredTrips.length,
       driver,
