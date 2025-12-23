@@ -162,11 +162,7 @@ export function useUserProfile() {
   return ctx;
 }
 
-export function useUserProfile() {
-  const ctx = useContext(UserProfileContext);
-  if (!ctx) throw new Error("useUserProfile must be used within a UserProfileProvider");
-  return ctx;
-}
+
 
 export function getProfileInitial(fullName: string) {
   const trimmed = fullName.trim();
