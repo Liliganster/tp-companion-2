@@ -1,5 +1,52 @@
 const GOOGLE_BASE = "https://maps.googleapis.com/maps/api";
 
+function normalizeRegion(value: unknown) {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim().toLowerCase();
+  return trimmed ? trimmed : undefined;
+}
+
+function regionFromComponents(components: unknown) {
+  if (typeof components !== "string") return undefined;
+  const match = components.toLowerCase().match(/(?:^|\|)country:([a-z]{2})(?:$|\|)/);
+  return match?.[1] ?? undefined;
+}
+
+function languageForRegion(region: string | undefined) {
+  switch ((region ?? "").toLowerCase()) {
+    case "at":
+    case "de":
+      return "de";
+    case "es":
+      return "es";
+    case "it":
+      return "it";
+    case "fr":
+      return "fr";
+    case "pt":
+      return "pt";
+    case "nl":
+      return "nl";
+    case "gb":
+    case "us":
+      return "en";
+    case "pl":
+      return "pl";
+    case "cz":
+      return "cs";
+    case "hu":
+      return "hu";
+    case "sk":
+      return "sk";
+    case "si":
+      return "sl";
+    case "hr":
+      return "hr";
+    default:
+      return undefined;
+  }
+}
+
 function getBody(req: any) {
   if (req?.body == null) return null;
   if (typeof req.body === "string") {
@@ -36,15 +83,15 @@ export default async function handler(req: any, res: any) {
 
   const body = getBody(req);
   const address = body?.address;
-  const language = typeof body?.language === "string" ? body.language : undefined;
-  const region = typeof body?.region === "string" ? body.region : undefined;
+  const region = normalizeRegion(body?.region) ?? regionFromComponents(body?.components);
   const components = typeof body?.components === "string" ? body.components : undefined;
 
   if (typeof address !== "string" || !address.trim()) return badRequest(res, "address is required");
   if (address.length > 220) return badRequest(res, "address too long");
 
   const params = new URLSearchParams({ address, key });
-  if (language) params.set("language", language);
+  const derivedLanguage = languageForRegion(region);
+  if (derivedLanguage) params.set("language", derivedLanguage);
   if (region) params.set("region", region);
   if (components) params.set("components", components);
 

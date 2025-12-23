@@ -1,5 +1,46 @@
 const GOOGLE_BASE = "https://maps.googleapis.com/maps/api";
 
+function normalizeRegion(value: unknown) {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim().toLowerCase();
+  return trimmed ? trimmed : undefined;
+}
+
+function languageForRegion(region: string | undefined) {
+  switch ((region ?? "").toLowerCase()) {
+    case "at":
+    case "de":
+      return "de";
+    case "es":
+      return "es";
+    case "it":
+      return "it";
+    case "fr":
+      return "fr";
+    case "pt":
+      return "pt";
+    case "nl":
+      return "nl";
+    case "gb":
+    case "us":
+      return "en";
+    case "pl":
+      return "pl";
+    case "cz":
+      return "cs";
+    case "hu":
+      return "hu";
+    case "sk":
+      return "sk";
+    case "si":
+      return "sl";
+    case "hr":
+      return "hr";
+    default:
+      return undefined;
+  }
+}
+
 function getBody(req: any) {
   if (req?.body == null) return null;
   if (typeof req.body === "string") {
@@ -38,8 +79,7 @@ export default async function handler(req: any, res: any) {
   const origin = body?.origin;
   const destination = body?.destination;
   const waypoints = Array.isArray(body?.waypoints) ? body.waypoints : [];
-  const language = typeof body?.language === "string" ? body.language : undefined;
-  const region = typeof body?.region === "string" ? body.region : undefined;
+  const region = normalizeRegion(body?.region);
 
   if (typeof origin !== "string" || !origin.trim()) return badRequest(res, "origin is required");
   if (typeof destination !== "string" || !destination.trim()) return badRequest(res, "destination is required");
@@ -55,7 +95,8 @@ export default async function handler(req: any, res: any) {
     mode: "driving",
     units: "metric",
   });
-  if (language) params.set("language", language);
+  const derivedLanguage = languageForRegion(region);
+  if (derivedLanguage) params.set("language", derivedLanguage);
   if (region) params.set("region", region);
   if (waypoints.length) params.set("waypoints", waypoints.join("|"));
 

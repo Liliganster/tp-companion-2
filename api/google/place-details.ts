@@ -1,5 +1,46 @@
 const GOOGLE_BASE = "https://maps.googleapis.com/maps/api";
 
+function normalizeRegion(value: unknown) {
+    if (typeof value !== "string") return undefined;
+    const trimmed = value.trim().toLowerCase();
+    return trimmed ? trimmed : undefined;
+}
+
+function languageForRegion(region: string | undefined) {
+    switch ((region ?? "").toLowerCase()) {
+        case "at":
+        case "de":
+            return "de";
+        case "es":
+            return "es";
+        case "it":
+            return "it";
+        case "fr":
+            return "fr";
+        case "pt":
+            return "pt";
+        case "nl":
+            return "nl";
+        case "gb":
+        case "us":
+            return "en";
+        case "pl":
+            return "pl";
+        case "cz":
+            return "cs";
+        case "hu":
+            return "hu";
+        case "sk":
+            return "sk";
+        case "si":
+            return "sl";
+        case "hr":
+            return "hr";
+        default:
+            return undefined;
+    }
+}
+
 function getBody(req: any) {
     if (req?.body == null) return null;
     if (typeof req.body === "string") {
@@ -36,7 +77,7 @@ export default async function handler(req: any, res: any) {
 
     const body = getBody(req);
     const placeId = body?.placeId;
-    const language = typeof body?.language === "string" ? body.language : undefined;
+    const region = normalizeRegion(body?.region);
 
     if (typeof placeId !== "string" || !placeId.trim()) return badRequest(res, "placeId is required");
 
@@ -45,7 +86,8 @@ export default async function handler(req: any, res: any) {
         key,
         fields: "formatted_address",
     });
-    if (language) params.set("language", language);
+    const derivedLanguage = languageForRegion(region);
+    if (derivedLanguage) params.set("language", derivedLanguage);
 
     const url = `${GOOGLE_BASE}/place/details/json?${params.toString()}`;
     const response = await fetch(url);

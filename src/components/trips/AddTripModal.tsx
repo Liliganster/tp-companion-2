@@ -73,9 +73,6 @@ function AddressAutocompleteInput({
   country?: string;
   locationBias?: { lat: number; lng: number };
 }) {
-  const { locale } = useI18n();
-  const language = useMemo(() => locale.split("-")[0] ?? "en", [locale]);
-
   // Use robust country mapping
   const countryCode = useMemo(() => getCountryCode(country), [country]);
 
@@ -116,9 +113,10 @@ function AddressAutocompleteInput({
 
       setLoading(true);
       try {
-        const body: any = { input: query, language };
+        const body: any = { input: query };
         if (countryCode) {
           body.components = `country:${countryCode}`;
+          body.region = countryCode;
           console.log(`[Autocomplete] Country: "${country}" -> Code: "${countryCode}" -> Components: "${body.components}"`);
         } else {
           console.warn(`[Autocomplete] No country code found for: "${country}"`);
@@ -151,7 +149,7 @@ function AddressAutocompleteInput({
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [draft, language, disabled, hasFocus, countryCode]);
+  }, [draft, disabled, hasFocus, countryCode, country]);
 
   const showDropdown = hasFocus && !disabled && (loading || predictions.length > 0);
 
@@ -215,7 +213,7 @@ function AddressAutocompleteInput({
                     const res = await fetch("/api/google/place-details", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ placeId: p.placeId, language }),
+                      body: JSON.stringify({ placeId: p.placeId, region: countryCode }),
                     });
                     const data = await res.json();
 
@@ -365,7 +363,6 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
   const isEditing = Boolean(trip);
   const [projectOpen, setProjectOpen] = useState(false);
   const settingsRateLabel = useMemo(() => profile.ratePerKm, [profile.ratePerKm]);
-  const googleLanguage = useMemo(() => locale.split("-")[0] ?? "en", [locale]);
 
   const projectOptions = useMemo(() => {
     const byLower = new Map<string, string>();
@@ -542,7 +539,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
         const res = await fetch("/api/google/geocode", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ address: query, language: googleLanguage }),
+          body: JSON.stringify({ address: query, region: googleRegion }),
         });
         const data = await res.json();
         if (res.ok && data?.location) {
@@ -554,7 +551,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
     };
 
     fetchBaseLocation();
-  }, [profile.city, profile.country, googleLanguage]);
+  }, [profile.city, profile.country, googleRegion]);
 
   type SpecialOrigin = NonNullable<TripData["specialOrigin"]>;
 
@@ -646,7 +643,6 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
           origin,
           destination,
           waypoints,
-          language: googleLanguage,
           region: googleRegion,
         }),
       });
@@ -662,7 +658,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
     } finally {
       setDistanceLoading(false);
     }
-  }, [getEffectiveRouteValues, googleLanguage, googleRegion, isOpen]);
+  }, [getEffectiveRouteValues, googleRegion, isOpen]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),

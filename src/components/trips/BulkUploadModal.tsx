@@ -58,7 +58,6 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const [isOptimizing, setIsOptimizing] = useState(false);
   
   const { t, locale } = useI18n();
-  const googleLanguage = locale.split("-")[0] ?? "en";
   const exampleText = t("bulk.examplePlaceholder");
 
   // Reset state when modal closes or tab changes
@@ -228,7 +227,6 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ 
                           address: query, 
-                          language: googleLanguage,
                           region: region // Essential for correct bias
                       })
                   });
@@ -260,7 +258,6 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                       origin,
                       destination,
                       waypoints: normalizedLocs,
-                      language: googleLanguage,
                       region: region
                   })
               });
