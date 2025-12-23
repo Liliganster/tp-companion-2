@@ -1,5 +1,6 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { formatSupabaseError } from "@/lib/supabaseErrors";
 import { useAuth } from "./AuthContext";
 import { toast } from "sonner";
 
@@ -64,7 +65,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error("Error fetching trips:", error);
-        toast.error("Error loading trips: " + error.message);
+        toast.error(formatSupabaseError(error, "Error cargando viajes"));
       }
 
       if (mounted) {
@@ -132,7 +133,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       console.error("Error adding trip:", error);
-      toast.error("Error saving trip: " + error.message);
+      toast.error(formatSupabaseError(error, "Error guardando viaje"));
       setTrips(prev => prev.filter(t => t.id !== trip.id));
     }
   }, [user]);
@@ -160,7 +161,10 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
     if (Object.keys(dbPatch).length > 0) {
       const { error } = await supabase.from("trips").update(dbPatch).eq("id", id);
-      if (error) console.error("Error updating trip:", error);
+      if (error) {
+        console.error("Error updating trip:", error);
+        toast.error(formatSupabaseError(error, "Error actualizando viaje"));
+      }
     }
   }, [user]);
 
@@ -172,6 +176,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.from("trips").delete().eq("id", id);
     if (error) {
       console.error("Error deleting trip:", error);
+      toast.error(formatSupabaseError(error, "Error borrando viaje"));
     }
   }, [user]);
 

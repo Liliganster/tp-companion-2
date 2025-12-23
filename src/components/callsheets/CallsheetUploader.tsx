@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { formatSupabaseError } from "@/lib/supabaseErrors";
 import { Button } from "@/components/ui/button";
 import { Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -24,6 +25,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
     }
 
     setUploading(true);
+    let createdJobId: string | null = null;
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError || !user) throw new Error("No estás autenticado");
@@ -40,6 +42,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
         .single();
 
       if (jobError) throw jobError;
+      createdJobId = job.id;
 
       // 2. Upload File
       const filePath = `${user.id}/${job.id}/${file.name}`;
@@ -65,7 +68,16 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
 
     } catch (err: any) {
       console.error(err);
-      toast.error(err.message || "Error al subir callsheet");
+      // Best-effort rollback so we don't leave stuck jobs when upload/update fails.
+      if (createdJobId) {
+        try {
+          await supabase.from("callsheet_jobs").delete().eq("id", createdJobId);
+        } catch {
+          // ignore rollback failures
+        }
+      }
+
+      toast.error(formatSupabaseError(err, "Error al subir callsheet"));
     } finally {
       setUploading(false);
       e.target.value = ""; // Reset input
