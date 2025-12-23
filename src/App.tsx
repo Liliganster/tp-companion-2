@@ -25,12 +25,15 @@ import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 
+import { DataMigration } from "@/components/DataMigration";
+
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AppearanceProvider>
       <AuthProvider>
+        <DataMigration />
         <UserProfileProvider>
           <ProjectsProvider>
             <TripsProvider>

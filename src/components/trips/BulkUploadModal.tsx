@@ -281,9 +281,9 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   };
 
   const { profile } = useUserProfile();
-  const { projects, setProjects } = useProjects();
+  const { projects, addProject } = useProjects();
 
-  const handleSaveTrip = () => {
+  const handleSaveTrip = async () => {
     if (!onSave) return;
     
     // Use base address for Origin and Destination
@@ -320,39 +320,26 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         const projectExists = projects.some(p => p.name.toLowerCase() === newTrip.project.toLowerCase());
         
         if (!projectExists) {
-            setProjects(prev => [...prev, {
+            await addProject({
                 id: crypto.randomUUID(),
                 name: newTrip.project,
                 producer: reviewProducer,
                 description: `Created from AI Upload: ${selectedFile?.name}`,
                 ratePerKm: 0.30, // Default rate
                 starred: false,
-                trips: 1,
-                totalKm: newTrip.distance,
-                documents: newTrip.documents ? 1 : 0,
+                trips: 0, // Initial 0, will be 1 once trip is saved and stats re-computed
+                totalKm: 0,
+                documents: 0,
                 invoices: 0,
-                estimatedCost: newTrip.distance * 0.30,
-                shootingDays: 1, // Assumption
-                kmPerDay: newTrip.distance,
-                co2Emissions: Math.round(newTrip.distance * 0.12 * 10) / 10
-            }]);
+                estimatedCost: 0,
+                shootingDays: 0,
+                kmPerDay: 0,
+                co2Emissions: 0
+            });
             toast.success(`Proyecto "${newTrip.project}" creado automáticamente`);
-        } else {
-            // Update existing project stats
-             setProjects(prev => prev.map(p => {
-                if (p.name.toLowerCase() === newTrip.project.toLowerCase()) {
-                    return {
-                        ...p,
-                        trips: p.trips + 1,
-                        totalKm: p.totalKm + newTrip.distance,
-                        documents: p.documents + (newTrip.documents ? 1 : 0),
-                        estimatedCost: p.estimatedCost + (newTrip.distance * p.ratePerKm),
-                        co2Emissions: p.co2Emissions + (Math.round(newTrip.distance * 0.12 * 10) / 10)
-                    };
-                }
-                return p;
-            }));
         }
+        // No need to update existing project stats manually anymore; 
+        // Projects.tsx calculates them from the trips list.
     }
 
     onSave(newTrip);

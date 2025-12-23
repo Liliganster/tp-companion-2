@@ -52,7 +52,7 @@ export default function Projects() {
   const { t, tf, locale } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedYear, setSelectedYear] = useState("2024");
-  const { projects, setProjects, toggleStar } = useProjects();
+  const { projects, deleteProject, toggleStar } = useProjects();
   const { trips } = useTrips();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -145,8 +145,8 @@ export default function Projects() {
     setSelectedIds(newSelected);
   };
 
-  const handleDeleteSelected = () => {
-    setProjects(prev => prev.filter(p => !selectedIds.has(p.id)));
+  const handleDeleteSelected = async () => {
+    await Promise.all(Array.from(selectedIds).map(id => deleteProject(id)));
     toast({
       title: t("projects.toastDeletedTitle"),
       description: tf("projects.toastDeletedBody", { count: selectedIds.size }),

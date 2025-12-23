@@ -22,8 +22,7 @@ interface TripDetailModalProps {
 
 export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalProps) {
   const { t, locale, language } = useI18n();
-  const { setTrips } = useTrips();
-  const { setProjects } = useProjects();
+  // removed unused contexts
   const { getAccessToken } = useAuth();
   const { toast } = useToast();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);

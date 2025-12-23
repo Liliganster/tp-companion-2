@@ -275,7 +275,7 @@ export default function ReportView() {
 
   const canSave = !savedReport && filteredTrips.length > 0;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!canSave) return;
 
     const toDateOnlyLocal = (time: number) => {
@@ -307,7 +307,7 @@ export default function ReportView() {
       endDateToSave = toDateOnlyLocal(maxTime);
     }
 
-    const next = addReport({
+    const next = await addReport({
       month: selectedMonth || "",
       year: selectedYear || "",
       project: effectiveProject,

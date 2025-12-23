@@ -357,7 +357,7 @@ interface AddTripModalProps {
 
 export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestination, onSave }: AddTripModalProps) {
   const { profile } = useUserProfile();
-  const { projects, setProjects } = useProjects();
+  const { projects, addProject } = useProjects();
   const { trips } = useTrips();
   const { t, locale } = useI18n();
   const isEditing = Boolean(trip);
@@ -373,6 +373,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
       byLower.set(name.toLowerCase(), name);
     }
 
+    // Include projects from trips that might not be in the project list (legacy/orphan)
     for (const tripItem of trips) {
       const name = (tripItem?.project ?? "").trim();
       if (!name) continue;
@@ -383,11 +384,12 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
   }, [projects, trips, locale]);
 
   const createProjectIfNeeded = useCallback(
-    (rawName: string) => {
+    async (rawName: string) => {
       const trimmedName = rawName.trim();
       if (!trimmedName) return;
 
       const lower = trimmedName.toLowerCase();
+      // Check against current projects list
       const exists = projects.some((p) => (p?.name ?? "").trim().toLowerCase() === lower);
       if (exists) return;
 
@@ -408,13 +410,10 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
         co2Emissions: 0,
       };
 
-      setProjects((prev) => {
-        const alreadyExists = prev.some((p) => (p?.name ?? "").trim().toLowerCase() === lower);
-        return alreadyExists ? prev : [...prev, newProject];
-      });
+      await addProject(newProject);
       toast.success(`Proyecto "${trimmedName}" creado`);
     },
-    [projects, setProjects]
+    [projects, addProject]
   );
 
   const googleRegion = useMemo(() => {

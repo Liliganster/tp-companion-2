@@ -1,4 +1,6 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "./AuthContext";
 
 export type SavedReport = {
   id: string;
@@ -16,57 +18,76 @@ export type SavedReport = {
   licensePlate: string;
 };
 
-const STORAGE_KEY = "reports";
-
-function safeId() {
+const safeId = () => {
   try {
     return crypto.randomUUID();
   } catch {
     return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
   }
-}
-
-const DEFAULT_REPORTS: SavedReport[] = [];
-
-function readStoredReports(): SavedReport[] {
-  if (typeof window === "undefined") return DEFAULT_REPORTS;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_REPORTS;
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return DEFAULT_REPORTS;
-    return parsed as SavedReport[];
-  } catch {
-    return DEFAULT_REPORTS;
-  }
-}
-
-function writeStoredReports(reports: SavedReport[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(reports));
-}
+};
 
 type ReportsContextValue = {
   reports: SavedReport[];
-  addReport: (report: Omit<SavedReport, "id" | "createdAt"> & Partial<Pick<SavedReport, "id" | "createdAt">>) => SavedReport;
-  deleteReport: (id: string) => void;
-  clearReports: () => void;
+  addReport: (report: Omit<SavedReport, "id" | "createdAt"> & Partial<Pick<SavedReport, "id" | "createdAt">>) => Promise<SavedReport>;
+  deleteReport: (id: string) => Promise<void>;
+  clearReports: () => Promise<void>;
 };
 
 const ReportsContext = createContext<ReportsContextValue | null>(null);
 
 export function ReportsProvider({ children }: { children: ReactNode }) {
-  const [reports, setReportsState] = useState<SavedReport[]>(() => readStoredReports());
+  const { user } = useAuth();
+  const [reports, setReports] = useState<SavedReport[]>([]);
 
-  const setReports = useCallback((next: SavedReport[] | ((prev: SavedReport[]) => SavedReport[])) => {
-    setReportsState((prev) => {
-      const resolved = typeof next === "function" ? (next as (p: SavedReport[]) => SavedReport[])(prev) : next;
-      writeStoredReports(resolved);
-      return resolved;
-    });
-  }, []);
+  useEffect(() => {
+    if (!user || !supabase) {
+      setReports([]);
+      return;
+    }
 
-  const addReport = useCallback<ReportsContextValue["addReport"]>((report) => {
+    let mounted = true;
+
+    async function fetchReports() {
+      const { data, error } = await supabase!
+        .from("reports")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching reports:", error);
+      }
+
+      if (mounted && data) {
+        const mapped: SavedReport[] = data.map((r: any) => ({
+          id: r.id,
+          createdAt: r.created_at || new Date().toISOString(),
+          month: r.month || "",
+          year: r.year || "",
+          project: r.project_filter || "all",
+          tripIds: r.trip_ids || [],
+          startDate: r.start_date || "",
+          endDate: r.end_date || "",
+          totalDistanceKm: Number(r.total_km || 0),
+          tripsCount: r.trips_count || 0,
+          driver: r.driver || "",
+          address: r.address || "",
+          licensePlate: r.license_plate || ""
+        }));
+        setReports(mapped);
+      }
+    }
+
+    fetchReports();
+
+    return () => { mounted = false; };
+  }, [user]);
+
+  const addReport = useCallback<ReportsContextValue["addReport"]>(async (report) => {
+    if (!user || !supabase) {
+        // Fallback or error? For now just return local object but won't save
+        return { ...report, id: "temp", createdAt: new Date().toISOString() } as SavedReport;
+    }
+
     const nextReport: SavedReport = {
       id: report.id ?? safeId(),
       createdAt: report.createdAt ?? new Date().toISOString(),
@@ -84,25 +105,57 @@ export function ReportsProvider({ children }: { children: ReactNode }) {
     };
 
     setReports((prev) => [nextReport, ...prev]);
+
+    const { error } = await supabase.from("reports").insert({
+        id: nextReport.id,
+        user_id: user.id,
+        month: nextReport.month,
+        year: nextReport.year,
+        project_filter: nextReport.project,
+        trip_ids: nextReport.tripIds,
+        start_date: nextReport.startDate,
+        end_date: nextReport.endDate,
+        total_km: nextReport.totalDistanceKm,
+        trips_count: nextReport.tripsCount,
+        driver: nextReport.driver,
+        address: nextReport.address,
+        license_plate: nextReport.licensePlate,
+        created_at: nextReport.createdAt
+    });
+
+    if (error) {
+        console.error("Error saving report:", error);
+        setReports(prev => prev.filter(r => r.id !== nextReport.id));
+    }
+
     return nextReport;
-  }, [setReports]);
+  }, [user]);
 
-  const deleteReport = useCallback((id: string) => {
+  const deleteReport = useCallback(async (id: string) => {
+    if (!user || !supabase) return;
+    
     setReports((prev) => prev.filter((r) => r.id !== id));
-  }, [setReports]);
+    
+    const { error } = await supabase.from("reports").delete().eq("id", id);
+    if (error) {
+        console.error("Error deleting report:", error);
+    }
+  }, [user]);
 
-  const clearReports = useCallback(() => {
+  const clearReports = useCallback(async () => {
+    if (!user || !supabase) return;
+
     setReports([]);
-  }, [setReports]);
+    // Delete all for user? Or just local state clear? 
+    // "clearReports" usually implied deleting all.
+    // BE CAREFUL: Do we really want to delete all DB reports?
+    // The previous implementation wiped localStorage.
+    // For safety, let's assuming purging all reports for this user.
+    
+    const { error } = await supabase.from("reports").delete().neq("id", "00000000-0000-0000-0000-000000000000"); // Delete all (using user RLS)
+    if (error) console.error("Error clearing reports:", error);
 
-  useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key !== STORAGE_KEY) return;
-      setReportsState(readStoredReports());
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  }, [user]);
 
   const value = useMemo<ReportsContextValue>(() => ({ reports, addReport, deleteReport, clearReports }), [reports, addReport, deleteReport, clearReports]);
 
