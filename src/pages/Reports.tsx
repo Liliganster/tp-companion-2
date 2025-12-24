@@ -325,7 +325,7 @@ export default function Reports() {
               <Label>{t("reports.from")}</Label>
               <Input
                 type="date"
-                className="bg-secondary/50"
+                className="bg-transparent border-b border-border text-left"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
               />
@@ -335,7 +335,7 @@ export default function Reports() {
               <Label>{t("reports.to")}</Label>
               <Input
                 type="date"
-                className="bg-secondary/50"
+                className="bg-transparent border-b border-border text-left"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
               />
