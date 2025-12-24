@@ -4,7 +4,7 @@ import { NotificationDropdown } from "@/components/dashboard/NotificationDropdow
 import { RecentTrips } from "@/components/dashboard/RecentTrips";
 import { ProjectChart } from "@/components/dashboard/ProjectChart";
 import { Button } from "@/components/ui/button";
-import { Plus, Settings, Sparkles } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Settings, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useProjects } from "@/contexts/ProjectsContext";
@@ -12,6 +12,30 @@ import { getProjectsForDashboard } from "@/lib/projects";
 import { useI18n } from "@/hooks/use-i18n";
 import { useTrips } from "@/contexts/TripsContext";
 import { calculateCO2KgFromKm } from "@/lib/emissions";
+
+function parseTripDate(value: string): Date | null {
+  if (!value) return null;
+
+  // Prefer parsing YYYY-MM-DD as local date to avoid timezone drift.
+  const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})/.exec(value);
+  if (m) {
+    const year = Number(m[1]);
+    const month = Number(m[2]);
+    const day = Number(m[3]);
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+    return new Date(year, month - 1, day);
+  }
+
+  const dt = new Date(value);
+  return Number.isFinite(dt.getTime()) ? dt : null;
+}
+
+function percentageChange(current: number, previous: number): number {
+  const cur = Number.isFinite(current) ? current : 0;
+  const prev = Number.isFinite(previous) ? previous : 0;
+  if (prev <= 0) return cur > 0 ? 100 : 0;
+  return Math.round(((cur - prev) / prev) * 100);
+}
 
 function sumKm(trips: Array<{ distance: number }>): number {
   return trips.reduce((acc, t) => acc + (Number.isFinite(Number(t.distance)) ? Number(t.distance) : 0), 0);
@@ -37,7 +61,34 @@ export default function Index() {
 
   const totalKm = sumKm(trips);
   const co2Kg = sumCo2(trips);
-  const co2Rating = co2Kg <= 500 ? "A" : co2Kg <= 1000 ? "B" : co2Kg <= 1500 ? "C" : "D";
+
+  const now = new Date();
+  const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+  const tripsThisMonth = trips.filter((trip) => {
+    const dt = parseTripDate(trip.date);
+    if (!dt) return false;
+    return dt >= startOfThisMonth && dt < startOfNextMonth;
+  });
+
+  const tripsPrevMonth = trips.filter((trip) => {
+    const dt = parseTripDate(trip.date);
+    if (!dt) return false;
+    return dt >= startOfPrevMonth && dt < startOfThisMonth;
+  });
+
+  const kmThisMonth = sumKm(tripsThisMonth);
+  const kmPrevMonth = sumKm(tripsPrevMonth);
+  const co2ThisMonth = sumCo2(tripsThisMonth);
+  const co2PrevMonth = sumCo2(tripsPrevMonth);
+  // Rating matches the month-over-month bubble context (monthly emissions).
+  const co2Rating = co2ThisMonth <= 500 ? "A" : co2ThisMonth <= 1000 ? "B" : co2ThisMonth <= 1500 ? "C" : "D";
+    const co2TrendValue = percentageChange(co2ThisMonth, co2PrevMonth);
+    const co2TrendPositive = co2TrendValue >= 0;
+    const Co2TrendIcon = co2TrendPositive ? ArrowUp : ArrowDown;
+    const co2TrendColor = co2TrendPositive ? "text-success" : "text-destructive";
   const co2RatingColor =
     co2Rating === "A"
       ? "text-success"
@@ -66,6 +117,11 @@ export default function Index() {
 
   const distanceBubbleTint = "34,197,94";
   const distanceBubbleStyle = getTintedBubbleStyle(distanceBubbleTint);
+
+  const distanceTrendValue = percentageChange(kmThisMonth, kmPrevMonth);
+  const distanceTrendLabel = t("dashboard.thisMonthVsPrevious");
+  const distanceTrendPositive = distanceTrendValue >= 0;
+  const distanceTrendTextColor = distanceTrendPositive ? "text-success" : "text-destructive";
 
   const co2BubbleTint =
     co2Rating === "A"
@@ -115,6 +171,14 @@ export default function Index() {
             icon={<div className={kpiTitleClassName}>{t("dashboard.totalDistance")}</div>}
             iconWrapperClassName={kpiTitleWrapperClassName}
             hideTitle
+            headerRight={<div className="absolute top-4 right-4 flex flex-col items-center text-center">
+              <div style={distanceBubbleStyle} className={bubbleBaseClassName}>
+                <div className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-br from-white/15 via-white/5 to-transparent" />
+                <div className="pointer-events-none absolute -top-3 -left-3 h-10 w-10 rounded-full bg-white/25 blur-xl" />
+                <div className={`${bubbleValueClassNameSmall} ${distanceTrendTextColor}`}>{Math.abs(distanceTrendValue)}%</div>
+              </div>
+              <div className="mt-2 text-[10px] leading-tight text-muted-foreground">{distanceTrendLabel}</div>
+            </div>}
             variant="primary"
             valueGradient={false}
             valueClassName="text-white"
@@ -143,7 +207,11 @@ export default function Index() {
                  <div className="pointer-events-none absolute -top-3 -left-3 h-10 w-10 rounded-full bg-white/25 blur-xl" />
                  <div className={`${bubbleValueClassName} ${co2RatingColor}`}>{co2Rating}</div>
                </div>
-               <div className="mt-2 text-[10px] leading-tight text-muted-foreground">&nbsp;</div>
+               <div className={`mt-2 flex items-center gap-1 text-xs font-medium ${co2TrendColor}`}>
+                 <Co2TrendIcon className="h-3 w-3" />
+                 <span>{Math.abs(co2TrendValue)}%</span>
+               </div>
+               <div className="text-[10px] leading-tight text-muted-foreground mt-0.5">{t("dashboard.vsLastMonth")}</div>
              </div>}
              action={<Link to="/advanced/emissions" className="text-xs text-primary hover:underline">{t("dashboard.viewCo2")}</Link>}
            />
