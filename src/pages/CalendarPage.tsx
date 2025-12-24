@@ -81,6 +81,7 @@ export default function CalendarPage() {
     startLocal: "",
     endLocal: "",
   });
+  const [needsReconnect, setNeedsReconnect] = useState(false);
 
   const daysInMonth = new Date(
     currentDate.getFullYear(),
@@ -237,12 +238,18 @@ export default function CalendarPage() {
     if (!token) return;
 
     setLoadingCalendars(true);
+    setNeedsReconnect(false);
     try {
       const response = await fetch("/api/google/calendar/list-calendars", {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data: any = await response.json().catch(() => null);
       if (!response.ok || !data) {
+        const status = response.status;
+        // 403 typically indicates insufficient permissions (scope issue)
+        if (status === 403) {
+          setNeedsReconnect(true);
+        }
         setCalendars([]);
         setEnabledCalendarIds(new Set());
         return;
@@ -453,6 +460,23 @@ export default function CalendarPage() {
             )}
           </div>
         </div>
+
+        {needsReconnect && isConnected && (
+          <div className="glass-card p-4 border-warning/30 bg-warning/5 animate-fade-in">
+            <h3 className="font-medium text-sm mb-2">Permisos insuficientes</h3>
+            <p className="text-xs text-muted-foreground mb-3">
+              Se necesita actualizar los permisos de Google Calendar para listar tus calendarios. Desconecta y vuelve a conectar.
+            </p>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={disconnectGoogle} disabled={loadingStatus}>
+                Desconectar
+              </Button>
+              <Button size="sm" onClick={connectGoogle} disabled={loadingStatus}>
+                Reconectar
+              </Button>
+            </div>
+          </div>
+        )}
 
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogContent>
