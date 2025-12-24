@@ -4,6 +4,7 @@ import { formatSupabaseError } from "@/lib/supabaseErrors";
 import { useAuth } from "./AuthContext";
 import { toast } from "sonner";
 import { cascadeDeleteTripById } from "@/lib/cascadeDelete";
+import { calculateCO2KgFromKm } from "@/lib/emissions";
 
 export type Trip = {
   id: string;
@@ -40,8 +41,6 @@ type TripsContextValue = {
 };
 
 const TripsContext = createContext<TripsContextValue | null>(null);
-
-const calculateCO2 = (distance: number) => Math.round(distance * 0.12 * 10) / 10;
 
 export function TripsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -81,7 +80,9 @@ export function TripsProvider({ children }: { children: ReactNode }) {
             passengers: t.passengers || 0,
             invoice: t.invoice_number,
             distance: t.distance_km || 0,
-            co2: t.co2_kg || calculateCO2(t.distance_km || 0),
+            co2: Number.isFinite(Number(t.co2_kg)) && Number(t.co2_kg) > 0
+              ? Number(t.co2_kg)
+              : calculateCO2KgFromKm(t.distance_km || 0),
             ratePerKmOverride: t.rate_per_km_override,
             specialOrigin: t.special_origin,
             documents: t.documents || []
@@ -108,7 +109,14 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    setTrips(prev => [trip, ...prev]);
+    const normalizedTrip: Trip = {
+      ...trip,
+      co2: Number.isFinite(Number(trip.co2)) && Number(trip.co2) > 0
+        ? Number(trip.co2)
+        : calculateCO2KgFromKm(trip.distance),
+    };
+
+    setTrips(prev => [normalizedTrip, ...prev]);
 
     // Lookup project_id if not provided but name exists?
     // This is risky. Better to rely on projectId if passed.
@@ -121,20 +129,20 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     // We need to fix AddTripModal to resolve ID from name.
 
     const dbPayload = {
-      id: trip.id,
+      id: normalizedTrip.id,
       user_id: user.id,
-      project_id: trip.projectId || null, // Important
+      project_id: normalizedTrip.projectId || null, // Important
       // Some Supabase schemas include both columns; keep them in sync.
-      trip_date: trip.date,
-      purpose: trip.purpose,
-      passengers: trip.passengers,
-      distance_km: trip.distance,
-      co2_kg: trip.co2,
-      route: trip.route,
-      rate_per_km_override: trip.ratePerKmOverride,
-      special_origin: trip.specialOrigin,
-      invoice_number: trip.invoice,
-      documents: trip.documents
+      trip_date: normalizedTrip.date,
+      purpose: normalizedTrip.purpose,
+      passengers: normalizedTrip.passengers,
+      distance_km: normalizedTrip.distance,
+      co2_kg: normalizedTrip.co2,
+      route: normalizedTrip.route,
+      rate_per_km_override: normalizedTrip.ratePerKmOverride,
+      special_origin: normalizedTrip.specialOrigin,
+      invoice_number: normalizedTrip.invoice,
+      documents: normalizedTrip.documents
     };
     
     console.log("[TripsContext] Sending payload to Supabase:", dbPayload);
@@ -144,7 +152,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     if (error) {
       console.error("[TripsContext] Error adding trip:", error);
       toast.error(formatSupabaseError(error, "Error guardando viaje: " + error.message));
-      setTrips(prev => prev.filter(t => t.id !== trip.id));
+      setTrips(prev => prev.filter(t => t.id !== normalizedTrip.id));
     } else {
         console.log("[TripsContext] Trip saved successfully");
     }

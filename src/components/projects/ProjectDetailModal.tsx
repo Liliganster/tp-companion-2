@@ -271,8 +271,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           }
       };
 
-      fetchCallSheets();
-      if (project.id) fetchProjectDocs();
+      Promise.all([fetchCallSheets(), fetchProjectDocs()]).catch(console.error);
     } else {
         setRealCallSheets([]);
         setProjectDocs([]);
