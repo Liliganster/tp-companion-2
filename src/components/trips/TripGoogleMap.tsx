@@ -208,6 +208,12 @@ function TripGoogleMapLoaded({ route, open, browserKey }: { route: string[]; ope
         }));
 
         // Calcular la ruta
+        // Evita pedir direcciones para rutas triviales (A -> A sin paradas), que suelen devolver NOT_FOUND.
+        if (origin.trim() === destination.trim() && waypointsFormatted.length === 0) {
+          setRequestError(t("tripDetail.mapNoRoute"));
+          return;
+        }
+
         const request: google.maps.DirectionsRequest = {
           origin,
           destination,

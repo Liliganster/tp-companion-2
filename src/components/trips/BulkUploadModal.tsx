@@ -13,7 +13,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 import { useUserProfile } from "@/contexts/UserProfileContext";
-import { getCountryCode } from "@/lib/country-mapping";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { uuidv4 } from "@/lib/utils";
 import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
@@ -155,27 +154,38 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     if (aiStep === "processing" && jobId) {
       const checkStatus = async () => {
         try {
-          const { data: job } = await supabase
+         const { data: job, error: jobError } = await supabase
             .from("callsheet_jobs")
             .select("*")
             .eq("id", jobId)
-            .single();
+          .maybeSingle();
+
+         // If the row is not visible yet (RLS / eventual consistency), keep polling.
+         if (jobError) {
+          // PostgREST returns 406 for .single() when 0 rows; maybeSingle() should reduce this,
+          // but keep it defensive.
+          return;
+         }
+
+         if (!job) return;
 
           if (job.status === "done") {
-             clearInterval(interval);
              // Fetch results
-             const { data: result } = await supabase
+           const { data: result, error: resultError } = await supabase
                 .from("callsheet_results")
                 .select("*")
                 .eq("job_id", jobId)
-                .single();
+             .maybeSingle();
              
-             const { data: locs } = await supabase
+           const { data: locs, error: locsError } = await supabase
                 .from("callsheet_locations")
                 .select("*")
                 .eq("job_id", jobId);
 
+           if (resultError || locsError) return;
+
              if (result) {
+             clearInterval(interval);
                 setExtractedData({ result, locations: locs || [] });
                 
                 // Pre-fill basic fields

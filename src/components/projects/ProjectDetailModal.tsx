@@ -48,10 +48,12 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const processedJobsRef = useRef<Set<string>>(new Set());
+  const inFlightJobsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     // Reset per-project session state
     processedJobsRef.current = new Set();
+    inFlightJobsRef.current = new Set();
   }, [project?.id, open]);
 
   const calculateCO2 = useCallback((distance: number) => Math.round(distance * 0.12 * 10) / 10, []);
@@ -73,6 +75,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       if (!project) return;
       if (!job?.id) return;
       if (processedJobsRef.current.has(job.id)) return;
+      if (inFlightJobsRef.current.has(job.id)) return;
 
       const storagePath = (job.storage_path ?? "").trim();
       if (!storagePath) return;
@@ -83,16 +86,17 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         return;
       }
 
-      processedJobsRef.current.add(job.id);
+      inFlightJobsRef.current.add(job.id);
 
       try {
         const [{ data: result, error: resultError }, { data: locs, error: locsError }] = await Promise.all([
-          supabase.from("callsheet_results").select("*").eq("job_id", job.id).single(),
+          supabase.from("callsheet_results").select("*").eq("job_id", job.id).maybeSingle(),
           supabase.from("callsheet_locations").select("*").eq("job_id", job.id),
         ]);
 
-        if (resultError) throw resultError;
-        if (locsError) throw locsError;
+        if (resultError) return;
+        if (locsError) return;
+        if (!result) return;
 
         const extractedProject = (result?.project_value ?? "").trim();
         if (extractedProject && normalizeProjectName(extractedProject) !== normalizeProjectName(project.name)) {
@@ -103,12 +107,19 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             .from("callsheet_jobs")
             .update({ status: "needs_review", needs_review_reason: reason })
             .eq("id", job.id);
+          processedJobsRef.current.add(job.id);
           return;
         }
 
         const date = (result?.date_value ?? "").toString().trim();
         if (!date) {
+          const reason = "Missing date_value in extracted result";
           toast.warning("No se pudo extraer la fecha. Revisa manualmente.");
+          await supabase
+            .from("callsheet_jobs")
+            .update({ status: "needs_review", needs_review_reason: reason })
+            .eq("id", job.id);
+          processedJobsRef.current.add(job.id);
           return;
         }
 
@@ -116,6 +127,17 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           .map((l: any) => (l?.formatted_address || l?.address_raw || l?.name_raw || "").toString())
           .map((s: string) => s.trim())
           .filter(Boolean);
+
+        if (rawLocations.length === 0) {
+          const reason = "Missing locations in extracted result";
+          toast.warning("No se pudieron extraer ubicaciones. Revisa manualmente.");
+          await supabase
+            .from("callsheet_jobs")
+            .update({ status: "needs_review", needs_review_reason: reason })
+            .eq("id", job.id);
+          processedJobsRef.current.add(job.id);
+          return;
+        }
 
         const { locations: normalizedLocs, distanceKm } = await optimizeCallsheetLocationsAndDistance({
           profile,
@@ -159,9 +181,13 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         await addTrip(nextTrip);
         toast.success("Viaje creado desde IA del proyecto");
 
+        processedJobsRef.current.add(job.id);
+
       } catch (e: any) {
         console.error(e);
         toast.error("Error creando viaje desde extracción: " + (e?.message ?? String(e)));
+      } finally {
+        inFlightJobsRef.current.delete(job.id);
       }
     },
     [addTrip, calculateCO2, hasTripForStoragePath, normalizeProjectName, profile, project]
