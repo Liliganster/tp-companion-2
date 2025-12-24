@@ -51,8 +51,25 @@ import { uuidv4 } from "@/lib/utils";
 
 export default function Projects() {
   const { t, tf, locale } = useI18n();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedYear, setSelectedYear] = useState("2024");
+
+  const PROJECTS_FILTERS_KEY = "filters:projects:v1";
+  const loadProjectsFilters = () => {
+    try {
+      if (typeof window === "undefined") return null;
+      const raw = window.localStorage.getItem(PROJECTS_FILTERS_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return null;
+      const searchQuery = typeof parsed.searchQuery === "string" ? parsed.searchQuery : null;
+      const selectedYear = typeof parsed.selectedYear === "string" ? parsed.selectedYear : null;
+      return { searchQuery, selectedYear };
+    } catch {
+      return null;
+    }
+  };
+
+  const [searchQuery, setSearchQuery] = useState(() => loadProjectsFilters()?.searchQuery ?? "");
+  const [selectedYear, setSelectedYear] = useState(() => loadProjectsFilters()?.selectedYear ?? "2024");
   const { projects, addProject, deleteProject, toggleStar } = useProjects();
   const { trips } = useTrips();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -91,6 +108,14 @@ export default function Projects() {
 
   // Fetch document counts for projects
   const [projectDocCounts, setProjectDocCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PROJECTS_FILTERS_KEY, JSON.stringify({ searchQuery, selectedYear }));
+    } catch {
+      // ignore
+    }
+  }, [searchQuery, selectedYear]);
 
   useEffect(() => {
     const fetchCounts = async () => {

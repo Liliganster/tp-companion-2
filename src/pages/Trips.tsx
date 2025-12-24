@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,8 +71,27 @@ export default function Trips() {
   const { profile } = useUserProfile();
   const { t, tf, locale } = useI18n();
   const { getAccessToken } = useAuth();
-  const [selectedProject, setSelectedProject] = useState("all");
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+
+  const TRIPS_FILTERS_KEY = "filters:trips:v1";
+  const loadTripsFilters = () => {
+    try {
+      if (typeof window === "undefined") return null;
+      const raw = window.localStorage.getItem(TRIPS_FILTERS_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return null;
+      const selectedProject = typeof parsed.selectedProject === "string" ? parsed.selectedProject : null;
+      const selectedYear = typeof parsed.selectedYear === "string" ? parsed.selectedYear : null;
+      return { selectedProject, selectedYear };
+    } catch {
+      return null;
+    }
+  };
+
+  const [selectedProject, setSelectedProject] = useState(() => loadTripsFilters()?.selectedProject ?? "all");
+  const [selectedYear, setSelectedYear] = useState(
+    () => loadTripsFilters()?.selectedYear ?? new Date().getFullYear().toString()
+  );
   // ... imports
   const { trips, addTrip, updateTrip, deleteTrip } = useTrips();
   // removed setProjects
@@ -83,6 +102,14 @@ export default function Trips() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [tripToEdit, setTripToEdit] = useState<Trip | null>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(TRIPS_FILTERS_KEY, JSON.stringify({ selectedProject, selectedYear }));
+    } catch {
+      // ignore
+    }
+  }, [selectedProject, selectedYear]);
 
   const openTripDetails = (trip: Trip) => {
     setSelectedTrip(trip);
