@@ -118,6 +118,27 @@ export async function supabaseGetGoogleConnection(userId: string) {
   return data?.[0] ?? null;
 }
 
+export async function supabaseDeleteGoogleConnection(userId: string) {
+  if (!SUPABASE_URL || !SERVICE_ROLE) throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/google_connections`);
+  url.searchParams.set("user_id", `eq.${userId}`);
+  url.searchParams.set("provider", "eq.google");
+
+  const response = await fetch(url.toString(), {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${SERVICE_ROLE}`,
+      apikey: SERVICE_ROLE,
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`Supabase delete failed: ${response.status} ${text}`);
+  }
+}
+
 export function sendJson(res: any, status: number, payload: unknown) {
   json(res, status, payload);
 }

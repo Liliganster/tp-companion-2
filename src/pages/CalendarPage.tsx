@@ -23,7 +23,14 @@ interface CalendarEvent {
   color: string;
 }
 
-const calendars = [{ id: "primary", name: "Google Calendar", color: "bg-primary", enabled: true }];
+type CalendarInfo = {
+  id: string;
+  name: string;
+  color: string;
+};
+
+const ENABLED_CALENDARS_STORAGE_KEY = "calendar.enabledIds";
+const CALENDAR_COLOR_CLASSES = ["bg-primary", "bg-accent", "bg-success"];
 
 function toISODateKey(value: string): string | null {
   if (!value) return null;
@@ -43,8 +50,11 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [isConnected, setIsConnected] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState(false);
+  const [loadingCalendars, setLoadingCalendars] = useState(false);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [calendars, setCalendars] = useState<CalendarInfo[]>([]);
+  const [enabledCalendarIds, setEnabledCalendarIds] = useState<Set<string>>(() => new Set());
 
   const daysInMonth = new Date(
     currentDate.getFullYear(),
@@ -89,6 +99,32 @@ export default function CalendarPage() {
     }
   };
 
+  const disconnectGoogle = async () => {
+    setLoadingStatus(true);
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+
+      await fetch("/api/google/oauth/disconnect", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      try {
+        window.localStorage.removeItem(ENABLED_CALENDARS_STORAGE_KEY);
+      } catch {
+        // ignore
+      }
+
+      setIsConnected(false);
+      setCalendars([]);
+      setEnabledCalendarIds(new Set());
+      setEvents([]);
+    } finally {
+      setLoadingStatus(false);
+    }
+  };
+
   const connectGoogle = async () => {
     const token = await getAccessToken();
     if (!token) return;
@@ -102,6 +138,87 @@ export default function CalendarPage() {
     window.location.href = data.authUrl;
   };
 
+  const refreshCalendars = async () => {
+    const token = await getAccessToken();
+    if (!token) return;
+
+    setLoadingCalendars(true);
+    try {
+      const response = await fetch("/api/google/calendar/list-calendars", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data: any = await response.json().catch(() => null);
+      if (!response.ok || !data) {
+        setCalendars([]);
+        setEnabledCalendarIds(new Set());
+        return;
+      }
+
+      const items = Array.isArray(data.items) ? data.items : [];
+      const sorted = [...items].sort((a: any, b: any) => {
+        const aPrimary = Boolean(a?.primary);
+        const bPrimary = Boolean(b?.primary);
+        if (aPrimary !== bPrimary) return aPrimary ? -1 : 1;
+        const aName = String(a?.summary ?? "");
+        const bName = String(b?.summary ?? "");
+        return aName.localeCompare(bName);
+      });
+
+      let nonPrimaryIndex = 0;
+      const mapped: CalendarInfo[] = sorted
+        .map((c: any) => {
+          const id = String(c?.id ?? "").trim();
+          if (!id) return null;
+
+          const isPrimary = Boolean(c?.primary);
+          const color = isPrimary
+            ? "bg-primary"
+            : CALENDAR_COLOR_CLASSES[(1 + (nonPrimaryIndex++ % Math.max(1, CALENDAR_COLOR_CLASSES.length - 1)))] ?? "bg-accent";
+          return {
+            id,
+            name: String(c?.summary ?? "Google Calendar") || "Google Calendar",
+            color,
+          } as CalendarInfo;
+        })
+        .filter(Boolean) as CalendarInfo[];
+
+      setCalendars(mapped);
+
+      let saved: string[] = [];
+      try {
+        const raw = window.localStorage.getItem(ENABLED_CALENDARS_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : null;
+        if (Array.isArray(parsed)) saved = parsed.filter((v) => typeof v === "string");
+      } catch {
+        // ignore
+      }
+
+      const setFromSaved = new Set<string>(saved);
+      const nextEnabled = new Set<string>();
+
+      if (setFromSaved.size === 0) {
+        for (const c of mapped) nextEnabled.add(c.id);
+      } else {
+        for (const c of mapped) {
+          if (setFromSaved.has(c.id)) nextEnabled.add(c.id);
+        }
+        // Default-enable any new calendars not present in saved.
+        for (const c of mapped) {
+          if (!setFromSaved.has(c.id)) nextEnabled.add(c.id);
+        }
+      }
+
+      setEnabledCalendarIds(nextEnabled);
+      try {
+        window.localStorage.setItem(ENABLED_CALENDARS_STORAGE_KEY, JSON.stringify(Array.from(nextEnabled)));
+      } catch {
+        // ignore
+      }
+    } finally {
+      setLoadingCalendars(false);
+    }
+  };
+
   const refreshEvents = async (forDate: Date) => {
     const token = await getAccessToken();
     if (!token) return;
@@ -111,36 +228,55 @@ export default function CalendarPage() {
 
     setLoadingEvents(true);
     try {
-      const url = new URL("/api/google/calendar/list-events", window.location.origin);
-      url.searchParams.set("timeMin", monthStart.toISOString());
-      url.searchParams.set("timeMax", monthEnd.toISOString());
-
-      const response = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data: any = await response.json().catch(() => null);
-      if (!response.ok || !data) {
+      const enabledIds = Array.from(enabledCalendarIds);
+      if (enabledIds.length === 0) {
         setEvents([]);
         return;
       }
 
-      const items = Array.isArray(data.items) ? data.items : [];
-      const mapped: CalendarEvent[] = items
-        .map((e: any) => {
+      const calendarById = new Map(calendars.map((c) => [c.id, c] as const));
+
+      const results = await Promise.allSettled(
+        enabledIds.map(async (calendarId) => {
+          const url = new URL("/api/google/calendar/list-events", window.location.origin);
+          url.searchParams.set("calendarId", calendarId);
+          url.searchParams.set("timeMin", monthStart.toISOString());
+          url.searchParams.set("timeMax", monthEnd.toISOString());
+
+          const response = await fetch(url.toString(), {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data: any = await response.json().catch(() => null);
+          if (!response.ok || !data) return { calendarId, items: [] };
+          const items = Array.isArray(data.items) ? data.items : [];
+          return { calendarId, items };
+        })
+      );
+
+      const mappedEvents: CalendarEvent[] = [];
+
+      for (const r of results) {
+        if (r.status !== "fulfilled") continue;
+        const calendarId = String(r.value.calendarId ?? "");
+        const cal = calendarById.get(calendarId);
+        const calendarName = cal?.name ?? "Google Calendar";
+        const calendarColor = cal?.color ?? "bg-primary";
+
+        for (const e of r.value.items ?? []) {
           const start = e?.start?.dateTime || e?.start?.date || "";
           const dateKey = toISODateKey(start);
-          if (!dateKey) return null;
-          return {
-            id: String(e?.id ?? ""),
+          if (!dateKey) continue;
+          mappedEvents.push({
+            id: `${calendarId}:${String(e?.id ?? "")}`,
             title: String(e?.summary ?? ""),
             date: dateKey,
-            calendar: "Google Calendar",
-            color: "bg-primary",
-          } as CalendarEvent;
-        })
-        .filter(Boolean) as CalendarEvent[];
+            calendar: calendarName,
+            color: calendarColor,
+          });
+        }
+      }
 
-      setEvents(mapped);
+      setEvents(mappedEvents);
     } finally {
       setLoadingEvents(false);
     }
@@ -159,11 +295,28 @@ export default function CalendarPage() {
   useEffect(() => {
     if (!isConnected) {
       setEvents([]);
+      setCalendars([]);
+      setEnabledCalendarIds(new Set());
       return;
     }
-    refreshEvents(currentDate);
+    refreshCalendars();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected, currentDate]);
+
+  useEffect(() => {
+    if (!isConnected) return;
+    if (calendars.length === 0) return;
+    refreshEvents(currentDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected, calendars, enabledCalendarIds, currentDate]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(ENABLED_CALENDARS_STORAGE_KEY, JSON.stringify(Array.from(enabledCalendarIds)));
+    } catch {
+      // ignore
+    }
+  }, [enabledCalendarIds]);
 
   return (
     <MainLayout>
@@ -183,6 +336,11 @@ export default function CalendarPage() {
               <RefreshCw className="w-4 h-4" />
               {t("calendar.refresh")}
             </Button>
+            {isConnected && (
+              <Button variant="outline" onClick={disconnectGoogle} disabled={loadingStatus}>
+                Desconectar
+              </Button>
+            )}
             {!isConnected && (
               <Button variant="add" onClick={connectGoogle} disabled={loadingStatus}>
                 <ExternalLink className="w-4 h-4" />
@@ -198,13 +356,26 @@ export default function CalendarPage() {
             <div className="glass-card p-4 animate-fade-in animation-delay-100">
               <h2 className="font-semibold mb-3">{t("calendar.calendars")}</h2>
               <div className="space-y-3">
+                {loadingCalendars ? (
+                  <div className="text-sm text-muted-foreground">Cargando...</div>
+                ) : null}
                 {calendars.map((cal) => (
                   <div key={cal.id} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className={cn("w-3 h-3 rounded-full", cal.color)} />
                       <span className="text-sm">{cal.name}</span>
                     </div>
-                    <Switch defaultChecked={cal.enabled} />
+                    <Switch
+                      checked={enabledCalendarIds.has(cal.id)}
+                      onCheckedChange={(checked) => {
+                        setEnabledCalendarIds((prev) => {
+                          const next = new Set(prev);
+                          if (checked) next.add(cal.id);
+                          else next.delete(cal.id);
+                          return next;
+                        });
+                      }}
+                    />
                   </div>
                 ))}
               </div>

@@ -12,23 +12,12 @@ export default async function handler(req: any, res: any) {
   const user = await requireSupabaseUser(req, res);
   if (!user) return;
 
-  const timeMin = typeof req.query?.timeMin === "string" ? req.query.timeMin : null;
-  const timeMax = typeof req.query?.timeMax === "string" ? req.query.timeMax : null;
-  const calendarId = typeof req.query?.calendarId === "string" && req.query.calendarId.trim()
-    ? req.query.calendarId.trim()
-    : "primary";
-
-  if (!timeMin || !timeMax) return sendJson(res, 400, { error: "timeMin/timeMax required" });
-
   try {
     const { accessToken } = await getGoogleAccessTokenForUser(user.id);
 
-    const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`);
-    url.searchParams.set("timeMin", timeMin);
-    url.searchParams.set("timeMax", timeMax);
-    url.searchParams.set("singleEvents", "true");
-    url.searchParams.set("orderBy", "startTime");
-    url.searchParams.set("maxResults", "2500");
+    const url = new URL("https://www.googleapis.com/calendar/v3/users/me/calendarList");
+    url.searchParams.set("maxResults", "250");
+    url.searchParams.set("minAccessRole", "reader");
 
     const response = await fetch(url.toString(), {
       headers: {
@@ -45,15 +34,11 @@ export default async function handler(req: any, res: any) {
     const items = Array.isArray(data?.items) ? data.items : [];
 
     return sendJson(res, 200, {
-      calendarId,
-      items: items.map((e: any) => ({
-        id: e?.id ?? "",
-        summary: e?.summary ?? "",
-        location: e?.location ?? "",
-        description: e?.description ?? "",
-        start: e?.start ?? null,
-        end: e?.end ?? null,
-        htmlLink: e?.htmlLink ?? null,
+      items: items.map((c: any) => ({
+        id: String(c?.id ?? ""),
+        summary: String(c?.summary ?? ""),
+        primary: Boolean(c?.primary),
+        accessRole: String(c?.accessRole ?? ""),
       })),
     });
   } catch (e: any) {

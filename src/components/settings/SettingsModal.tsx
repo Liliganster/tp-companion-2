@@ -144,6 +144,24 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     }
   };
 
+  const disconnectGoogle = async () => {
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      await fetch("/api/google/oauth/disconnect", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      await refreshGoogleStatus();
+    } catch (err: any) {
+      toast({
+        title: "Google",
+        description: err?.message ?? "No se pudo desconectar",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSave = () => {
     saveProfile(profileData);
     saveAppearance(draftAppearance);
@@ -382,6 +400,16 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         >
                           {googleStatus.connected ? t("settings.refresh") : t("settings.apisConnect")}
                         </Button>
+                        {googleStatus.connected ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={disconnectGoogle}
+                            disabled={googleStatus.loading}
+                          >
+                            Desconectar
+                          </Button>
+                        ) : null}
                       </div>
                     </div>
                   </div>
