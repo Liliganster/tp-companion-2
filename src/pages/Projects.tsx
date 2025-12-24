@@ -263,8 +263,21 @@ export default function Projects() {
 
   const selectedProjectStats = useMemo(() => {
     if (!selectedProject) return null;
-    return statsByProjectKey.get(getProjectKey(selectedProject.name)) ?? null;
-  }, [selectedProject, statsByProjectKey]);
+    const baseStats = statsByProjectKey.get(getProjectKey(selectedProject.name));
+    if (!baseStats) return null;
+
+    // Calculate shooting days from trips
+    const projectTrips = trips.filter((t) => getProjectKey(t.project ?? "") === getProjectKey(selectedProject.name));
+    const uniqueDates = new Set(projectTrips.map((t) => t.date).filter(Boolean));
+    const shootingDays = uniqueDates.size;
+    const kmPerDay = shootingDays > 0 ? baseStats.totalKm / shootingDays : 0;
+
+    return {
+      ...baseStats,
+      shootingDays,
+      kmPerDay,
+    };
+  }, [selectedProject, statsByProjectKey, trips, getProjectKey]);
 
   const toggleSelectAll = () => {
     if (selectedIds.size === filteredProjects.length) {
@@ -674,16 +687,16 @@ export default function Projects() {
         <ProjectDetailModal
           open={detailModalOpen}
           onOpenChange={setDetailModalOpen}
-          project={selectedProject ? {
+          project={selectedProject && selectedProjectStats ? {
             id: selectedProject.id,
             name: selectedProject.name,
-				totalKm: selectedProjectStats?.totalKm ?? 0,
-            shootingDays: selectedProject.shootingDays,
-				kmPerDay: selectedProject.shootingDays > 0 ? (selectedProjectStats?.totalKm ?? 0) / selectedProject.shootingDays : 0,
-				co2Emissions: selectedProjectStats?.co2Emissions ?? 0,
-            callSheets: selectedProjectStats?.callSheetDocs ?? [],
-            invoices: selectedProjectStats?.invoiceDocs ?? [],
-            totalInvoiced: selectedProjectStats?.overrideCost ? selectedProjectStats.overrideCost : (selectedProjectStats?.distanceAtDefaultRate ?? 0) * 0.45,
+            totalKm: selectedProjectStats.totalKm,
+            shootingDays: selectedProjectStats.shootingDays,
+            kmPerDay: selectedProjectStats.kmPerDay,
+            co2Emissions: selectedProjectStats.co2Emissions,
+            callSheets: selectedProjectStats.callSheetDocs ?? [],
+            invoices: selectedProjectStats.invoiceDocs ?? [],
+            totalInvoiced: selectedProjectStats.overrideCost ? selectedProjectStats.overrideCost : (selectedProjectStats.distanceAtDefaultRate ?? 0) * 0.45,
           } : null}
         />
       </div>
