@@ -52,9 +52,18 @@ export function ProjectInvoiceUploader({ onUploadComplete, projectId }: ProjectI
             storage_path: filePath,
             type: "invoice",
           });
-          if (dbError) throw dbError;
-
-          successCount += 1;
+          
+          if (dbError) {
+            // If UNIQUE constraint fails (duplicate storage_path), just warn and continue
+            if (dbError.code === '23505') {
+              console.warn(`Document ${filePath} already exists, skipping`);
+              failCount += 1;
+            } else {
+              throw dbError;
+            }
+          } else {
+            successCount += 1;
+          }
         } catch (err: any) {
           console.error(err);
           failCount += 1;

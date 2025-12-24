@@ -314,8 +314,9 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       return Array.from(map.values());
   }
 
-  const allCallSheets = uniqueDocuments([...(project.callSheets || []), ...realCallSheets]);
-  const allInvoices = uniqueDocuments([...(project.invoices || []), ...projectDocs]);
+  // Only use dynamically fetched data, not the props, to avoid duplicates
+  const allCallSheets = realCallSheets;
+  const allInvoices = projectDocs;
 
   const totalInvoicedLabel = `${project.totalInvoiced.toLocaleString(locale, {
     minimumFractionDigits: 2,

@@ -107,6 +107,26 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const addProject = useCallback(async (project: Project) => {
     if (!supabase || !user) return;
 
+    // Check if project already exists (by name)
+    const { data: existing, error: checkError } = await supabase
+      .from("projects")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("name", project.name)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error("Error checking for existing project:", checkError);
+      toast.error("Error: " + checkError.message);
+      return;
+    }
+
+    if (existing) {
+      console.warn(`Project "${project.name}" already exists, skipping insert`);
+      toast.info(`El proyecto "${project.name}" ya existe`);
+      return;
+    }
+
     // Optimistic update
     setProjects(prev => [project, ...prev]);
 
@@ -123,8 +143,15 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       console.error("Error adding project:", error);
-      toast.error("Error creating project: " + error.message);
-      // Revert optimistic update?
+      
+      // Handle UNIQUE constraint violation
+      if (error.code === '23505') {
+        toast.error(`El proyecto "${project.name}" ya existe`);
+      } else {
+        toast.error("Error creating project: " + error.message);
+      }
+      
+      // Revert optimistic update
       setProjects(prev => prev.filter(p => p.id !== project.id));
     }
   }, [user]);

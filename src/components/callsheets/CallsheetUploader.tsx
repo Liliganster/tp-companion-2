@@ -64,10 +64,19 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
             .from("callsheet_jobs")
             .update({ storage_path: filePath })
             .eq("id", job.id);
-          if (updateError) throw updateError;
-
-          successCount += 1;
-          onJobCreated?.(job.id);
+          
+          if (updateError) {
+            // If UNIQUE constraint fails (duplicate storage_path), log but continue
+            if (updateError.code === '23505') {
+              console.warn(`Storage path ${filePath} already exists, skipping update`);
+              failCount += 1;
+            } else {
+              throw updateError;
+            }
+          } else {
+            successCount += 1;
+            onJobCreated?.(job.id);
+          }
         } catch (err: any) {
           console.error(err);
           failCount += 1;
