@@ -69,6 +69,7 @@ export default function Projects() {
     co2Emissions: number;
     overrideCost: number;
     distanceAtDefaultRate: number;
+    invoiceDocs: { id: string; name: string; type: "invoice" }[];
   };
 
   const statsByProjectKey = useMemo(() => {
@@ -91,6 +92,7 @@ export default function Projects() {
         co2Emissions: 0,
         overrideCost: 0,
         distanceAtDefaultRate: 0,
+        invoiceDocs: [],
       };
 
       current.trips += 1;
@@ -98,6 +100,17 @@ export default function Projects() {
       current.documents += documents;
       current.invoices += invoices;
       current.co2Emissions += co2;
+
+      // Aggregate invoice documents
+      if (trip.documents && trip.documents.length > 0) {
+        trip.documents.forEach(doc => {
+          current.invoiceDocs.push({
+             id: doc.id,
+             name: doc.name,
+             type: "invoice"
+          });
+        });
+      }
 
       if (typeof trip.ratePerKmOverride === "number" && Number.isFinite(trip.ratePerKmOverride)) {
         current.overrideCost += distance * trip.ratePerKmOverride;
@@ -110,6 +123,9 @@ export default function Projects() {
 
     return map;
   }, [trips]);
+
+
+
 
   const openProjectDetails = (project: Project) => {
     setSelectedProject(project);
@@ -442,14 +458,8 @@ export default function Projects() {
             shootingDays: selectedProject.shootingDays,
 				kmPerDay: selectedProject.shootingDays > 0 ? (selectedProjectStats?.totalKm ?? 0) / selectedProject.shootingDays : 0,
 				co2Emissions: selectedProjectStats?.co2Emissions ?? 0,
-            callSheets: [
-              { id: "1", name: "FUNDBOX_Dispo DT 4.pdf", type: "call-sheet" },
-              { id: "2", name: "FUNDBOX_Dispo DT 4.pdf", type: "call-sheet" },
-              { id: "3", name: "FUNDBOX_Dispo DT 4.pdf", type: "call-sheet" },
-              { id: "4", name: "FUNDBOX_Dispo DT 4.pdf", type: "call-sheet" },
-              { id: "5", name: "FUNDBOX_Dispo DT 4.pdf", type: "call-sheet" },
-            ],
-            invoices: [],
+            callSheets: [],
+            invoices: selectedProjectStats?.invoiceDocs ?? [],
             totalInvoiced: 0,
           } : null}
         />

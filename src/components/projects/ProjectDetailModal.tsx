@@ -1,9 +1,11 @@
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Car, Calendar, Route, Leaf, FileText, Sparkles, Eye, Trash2, Upload, Receipt } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/hooks/use-i18n";
 import { tf } from "@/lib/i18n";
+import { supabase } from "@/lib/supabaseClient";
 
 interface ProjectDocument {
   id: string;
@@ -29,8 +31,47 @@ interface ProjectDetailModalProps {
 
 export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetailModalProps) {
   const { t, locale, language } = useI18n();
+  const [realCallSheets, setRealCallSheets] = useState<ProjectDocument[]>([]);
+
+  useEffect(() => {
+    if (open && project?.name) {
+      const fetchCallSheets = async () => {
+        const { data, error } = await supabase
+          .from("callsheet_results")
+          .select("job_id, project_value, callsheet_jobs!inner(id, storage_path, created_at)")
+          .ilike("project_value", project.name.trim());
+
+        if (error) {
+          console.error("Error fetching project callsheets:", error);
+          return;
+        }
+
+        const mapped: ProjectDocument[] = (data || []).map((item: any) => {
+           const job = item.callsheet_jobs;
+           const path = job.storage_path || "Unknown";
+           const name = path.split("/").pop() || path;
+           return {
+             id: job.id,
+             name: name,
+             type: "call-sheet"
+           };
+        });
+        
+        // Remove duplicates if any
+        const unique = mapped.filter((v, i, a) => a.findIndex(v2 => v2.id === v.id) === i);
+        setRealCallSheets(unique);
+      };
+
+      fetchCallSheets();
+    } else {
+        setRealCallSheets([]);
+    }
+  }, [open, project?.name]);
 
   if (!project) return null;
+
+  const allCallSheets = [...(project.callSheets || []), ...realCallSheets];
+  const uniqueCallSheets = allCallSheets.filter((v, i, a) => a.findIndex(v2 => v2.id === v.id) === i);
 
   const totalInvoicedLabel = `${project.totalInvoiced.toLocaleString(locale, {
     minimumFractionDigits: 2,
@@ -89,9 +130,9 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                 </Button>
               </div>
 
-              {project.callSheets.length > 0 ? (
+              {uniqueCallSheets.length > 0 ? (
                 <div className="space-y-2">
-                  {project.callSheets.map((doc) => (
+                  {uniqueCallSheets.map((doc) => (
                     <div
                       key={doc.id}
                       className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors"
