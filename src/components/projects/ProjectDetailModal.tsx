@@ -1,19 +1,21 @@
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Car, Calendar, Route, Leaf, FileText, Sparkles, Eye, Trash2, Upload, Receipt, Loader2, AlertCircle } from "lucide-react";
+import { Car, Calendar, Route, Leaf, FileText, Sparkles, Eye, Trash2, Upload, Receipt } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/hooks/use-i18n";
 import { tf } from "@/lib/i18n";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { CallsheetUploader } from "@/components/callsheets/CallsheetUploader";
+import { ProjectInvoiceUploader } from "@/components/projects/ProjectInvoiceUploader";
 
 interface ProjectDocument {
   id: string;
   name: string;
-  type: "call-sheet" | "invoice";
+  type: "call-sheet" | "invoice" | "other";
   status?: string;
+  storage_path?: string;
 }
 
 interface ProjectDetailModalProps {
@@ -35,6 +37,8 @@ interface ProjectDetailModalProps {
 export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetailModalProps) {
   const { t, locale, language } = useI18n();
   const [realCallSheets, setRealCallSheets] = useState<ProjectDocument[]>([]);
+  const [projectDocs, setProjectDocs] = useState<ProjectDocument[]>([]);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
     if (open && project?.name) {
@@ -68,7 +72,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                         id: job.id,
                         name: name,
                         type: "call-sheet",
-                        status: job.status
+                        status: job.status,
+                        storage_path: job.storage_path
                     });
                 }
             });
@@ -86,7 +91,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                         id: job.id,
                         name: name,
                         type: "call-sheet",
-                         status: job.status
+                        status: job.status,
+                        storage_path: job.storage_path
                     });
                 }
             });
@@ -95,64 +101,82 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         setRealCallSheets(allDocs);
       };
 
+      const fetchProjectDocs = async () => {
+          const { data, error } = await supabase
+            .from("project_documents")
+            .select("*")
+            .eq("project_id", project.id);
+            
+          if (data) {
+              setProjectDocs(data.map((d: any) => ({
+                  id: d.id,
+                  name: d.name,
+                  type: (d.type as any) || "invoice",
+                  storage_path: d.storage_path
+              })));
+          }
+      };
+
       fetchCallSheets();
+      if (project.id) fetchProjectDocs();
     } else {
         setRealCallSheets([]);
+        setProjectDocs([]);
     }
-  }, [open, project?.name, project?.id]);
+  }, [open, project?.name, project?.id, refreshTrigger]);
 
   if (!project) return null;
 
-  const allCallSheets = [...(project.callSheets || []), ...realCallSheets];
-  const uniqueCallSheets = allCallSheets.filter((v, i, a) => a.findIndex(v2 => v2.id === v.id) === i);
+  function uniqueDocuments(docs: ProjectDocument[]) {
+      const map = new Map<string, ProjectDocument>();
+      docs.forEach(d => map.set(d.id, d));
+      return Array.from(map.values());
+  }
+
+  const allCallSheets = uniqueDocuments([...(project.callSheets || []), ...realCallSheets]);
+  const allInvoices = uniqueDocuments([...(project.invoices || []), ...projectDocs]);
 
   const totalInvoicedLabel = `${project.totalInvoiced.toLocaleString(locale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })} €`;
 
-  const handleJobCreated = (jobId: string) => {
-    // Refresh callsheets
-    // Trigger re-fetch via effect dependency or manual function?
-    // Effect depends on project.name, so we can't trigger it easily without changing state.
-    // However, we can add a refresh trigger.
-    // For now, assume it will appear on next open or we can update local state.
-    toast.success("Hojas de llamada en cola. Aparecerán en breve.");
+  const handleJobCreated = () => {
+    setRefreshTrigger(p => p + 1);
+    toast.success("Documento subido.");
+  };
+  
+  const handleUploadComplete = () => {
+     setRefreshTrigger(p => p + 1);
   };
 
   const handleViewCallSheet = async (doc: ProjectDocument) => {
-    try {
-        // We know id is job.id, but name implies path
-        // We need the storage path to view.
-        // We fetched storage_path in useEffect. But mapped it to name.
-        // We need to store full path in ProjectDocument or fetch it again.
-        // Let's IMPROVE ProjectDocument interface in next step? NO, let's just fetch it again or query it.
-        // BETTER: update the effect to store storage_path in a custom property if we can't change interface easily.
-        // Actually interface is local, let's change it.
-        
-        // Wait, I can't change interface without updating Projects.tsx too or making it optional.
-        // Let's try to infer from name? No.
-        // Let's fetch the job to get the path.
-        const { data: job } = await supabase.from("callsheet_jobs").select("storage_path").eq("id", doc.id).single();
-        if (!job) throw new Error("Job not found");
-
-        const { data, error } = await supabase.storage.from("callsheets").download(job.storage_path);
-        if (error) throw error;
-        const url = URL.createObjectURL(data);
-        window.open(url, "_blank");
-    } catch (e: any) {
-        toast.error("Error al abrir documento: " + e.message);
-    }
+     if (doc.storage_path) {
+          try {
+            const { data, error } = await supabase.storage.from("callsheets").download(doc.storage_path);
+            if (error) throw error;
+            const url = URL.createObjectURL(data);
+            window.open(url, "_blank");
+          } catch (e: any) {
+            toast.error("Error al abrir PDF: " + e.message);
+          }
+     } else {
+         toast.error("Ruta del archivo no disponible.");
+     }
   };
 
   const handleDeleteCallSheet = async (doc: ProjectDocument) => {
-    if (!confirm("¿Eliminar hoja de llamada?")) return;
-    try {
-        // Delete job (cascade)
-        const { error } = await supabase.from("callsheet_jobs").delete().eq("id", doc.id);
+      if (!confirm("¿Estás seguro de eliminar esta hoja de llamada? Se borrarán los datos asociados.")) return;
+       try {
+        const { error } = await supabase
+            .from("callsheet_jobs")
+            .delete()
+            .eq("id", doc.id);
+            
         if (error) throw error;
+        
+        toast.success("Hoja de llamada eliminada");
         setRealCallSheets(prev => prev.filter(p => p.id !== doc.id));
-        toast.success("Eliminado");
     } catch (e: any) {
         toast.error("Error al eliminar: " + e.message);
     }
@@ -173,17 +197,47 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         if (error) throw error;
         
         toast.success("Extracción iniciada. El proceso comenzará en breve.");
-        // Optimistic update
         setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'queued' } : p));
     } catch (e: any) {
         toast.error("Error al iniciar extracción: " + e.message);
     }
   };
-  
-  const handleViewInvoice = (doc: ProjectDocument) => {
-      // Invoices from trips usually have a drive ID or storage path.
-      // Since we don't have it here, we should tell user to view it in the Trip.
-      toast.info("Para ver esta factura, ve al Viaje correspondiente.");
+
+  const handleViewInvoice = async (doc: ProjectDocument) => {
+      if (doc.storage_path) {
+          // Project document (Project Invoices)
+           try {
+            const { data, error } = await supabase.storage.from("project_documents").download(doc.storage_path);
+            if (error) throw error;
+            const url = URL.createObjectURL(data);
+            window.open(url, "_blank");
+          } catch (e: any) {
+            toast.error("Error al abrir documento: " + e.message);
+          }
+      } else {
+          // Trip Invoice (likely linked to a trip)
+          toast.info("Para ver esta factura, ve al Viaje correspondiente.");
+      }
+  };
+
+  const handleDeleteInvoice = async (doc: ProjectDocument) => {
+      if (doc.storage_path) {
+          // Project document
+           if (!confirm("¿Eliminar factura del proyecto?")) return;
+            try {
+                const { error } = await supabase.from("project_documents").delete().eq("id", doc.id);
+                if (error) throw error;
+                
+                await supabase.storage.from("project_documents").remove([doc.storage_path]);
+                
+                setProjectDocs(prev => prev.filter(p => p.id !== doc.id));
+                toast.success("Factura eliminada");
+            } catch (e: any) {
+                toast.error("Error al eliminar: " + e.message);
+            }
+      } else {
+          toast.warning("Esta factura pertenece a un viaje. Elimínala desde el viaje asociado.");
+      }
   };
 
   return (
@@ -195,6 +249,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
         <ScrollArea className="max-h-[calc(90vh-80px)]">
           <div className="px-6 pb-6 space-y-6">
+            {/* Stats Grid */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">{t("projectDetail.totalKm")}</p>
@@ -226,6 +281,44 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
               </div>
             </div>
 
+            {/* Invoices */}
+            <div className="glass-card p-4">
+               <div className="flex items-center justify-between mb-4">
+                 <div className="flex items-center gap-2">
+                   <Receipt className="w-5 h-5 text-muted-foreground" />
+                   <h3 className="font-medium">{t("projectDetail.invoicesTitle")}</h3>
+                 </div>
+                 <ProjectInvoiceUploader projectId={project.id} onUploadComplete={handleUploadComplete} />
+               </div>
+
+              <div className="space-y-2">
+                {allInvoices.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    {t("projectDetail.noInvoices")}
+                  </p>
+                ) : (
+                  allInvoices.map((doc) => (
+                    <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors group">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <FileText className="w-4 h-4 text-primary shrink-0" />
+                        <span className="text-sm truncate">{doc.name}</span>
+                        {!doc.storage_path && <span className="text-[10px] text-muted-foreground bg-secondary px-1 rounded">Viaje</span>}
+                      </div>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleViewInvoice(doc)}>
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                         <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDeleteInvoice(doc)}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Call Sheets */}
             <div className="glass-card p-4">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
@@ -235,77 +328,46 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                 <CallsheetUploader projectId={project.id} onJobCreated={handleJobCreated} />
               </div>
 
-              {uniqueCallSheets.length > 0 ? (
-                <div className="space-y-2">
-                  {uniqueCallSheets.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <FileText className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm">{doc.name}</span>
+              <div className="space-y-2">
+                {allCallSheets.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    {t("projectDetail.noCallSheets")}
+                  </p>
+                ) : (
+                  allCallSheets.map((sheet) => (
+                    <div key={sheet.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors group">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <FileText className="w-4 h-4 text-primary shrink-0" />
+                        <span className="text-sm truncate">{sheet.name}</span>
+                        {sheet.status && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full capitalize ${
+                                sheet.status === 'done' ? 'bg-green-500/20 text-green-500' :
+                                sheet.status === 'failed' ? 'bg-red-500/20 text-red-500' :
+                                sheet.status === 'queued' ? 'bg-yellow-500/20 text-yellow-500' :
+                                'bg-gray-500/20 text-gray-500'
+                            }`}>
+                                {sheet.status}
+                            </span>
+                        )}
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:text-primary" onClick={() => handleExtract(doc)}>
-                          <Sparkles className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-info hover:text-info" onClick={() => handleViewCallSheet(doc)}>
+                      
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {sheet.status !== 'done' && sheet.status !== 'queued' && sheet.status !== 'processing' && (
+                             <Button variant="ghost" size="icon" className="h-8 w-8 text-yellow-500 hover:text-yellow-400" onClick={() => handleExtract(sheet)} title="Extraer datos con IA">
+                                <Sparkles className="w-4 h-4" />
+                            </Button>
+                        )}
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleViewCallSheet(sheet)}>
                           <Eye className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDeleteCallSheet(doc)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDeleteCallSheet(sheet)}>
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground italic">{t("projectDetail.noCallSheets")}</p>
-              )}
-            </div>
-
-            <div className="glass-card p-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <Receipt className="w-5 h-5 text-muted-foreground" />
-                  <h3 className="font-medium">{t("projectDetail.invoicesTitle")}</h3>
-                </div>
-                <Button size="sm" className="bg-primary hover:bg-primary/90">
-                  <Upload className="w-4 h-4 mr-2" />
-                  {t("projectDetail.attachInvoice")}
-                </Button>
+                  ))
+                )}
               </div>
-
-              <p className="text-sm mb-3">
-                {tf(language, "tripDetail.totalDocumented", { amount: totalInvoicedLabel })}
-              </p>
-
-              {project.invoices.length > 0 ? (
-                <div className="space-y-2">
-                  {project.invoices.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <FileText className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm">{doc.name}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-info hover:text-info" onClick={() => handleViewInvoice(doc)}>
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => toast.warning("Elimina la factura desde el Viaje asociado.")}>
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground italic">{t("projectDetail.noInvoices")}</p>
-              )}
             </div>
           </div>
         </ScrollArea>

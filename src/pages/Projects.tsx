@@ -80,59 +80,46 @@ export default function Projects() {
     const fetchCounts = async () => {
         const counts: Record<string, number> = {};
         
-        // Count jobs by project_id
+        // 1. Count CallSheets (Jobs) by project_id
         const { data: jobs } = await supabase.from("callsheet_jobs").select("project_id").not("project_id", "is", null);
         jobs?.forEach((job: any) => {
              const pid = job.project_id;
              if (pid) counts[pid] = (counts[pid] || 0) + 1;
         });
+        
+        // 2. Count Project Invoices by project_id
+        const { data: invoices } = await supabase.from("project_documents").select("project_id");
+        invoices?.forEach((inv: any) => {
+             const pid = inv.project_id;
+             if (pid) counts[pid] = (counts[pid] || 0) + 1;
+        });
 
-        // Count results by project_value (name) - careful not to double count if they have project_id?
-        // Actually results are linked to jobs. If we count jobs by projectID, we cover manual uploads.
-        // But what about old results without project_id in job?
-        // We should merge them.
-        // It's tricky to map project_value to project_id without normalization.
-        // But the 'key' in statsByProjectKey is normalized name.
-        // So let's count by normalized NAME.
-        
-        // Strategy: 
-        // 1. Get all jobs with project_id, look up project name from projects list (we have 'projects' prop or state).
-        // 2. Get all results with project_value.
-        
-        // This effect depends on 'projects' array being loaded.
-        if (projects.length === 0) return;
-        
-        // Map ID to Name Key
-        const idToKey = new Map<string, string>();
-        projects.forEach(p => idToKey.set(p.id, getProjectKey(p.name)));
-        
-        // Count from Jobs (via project_id)
-        if (jobs) {
-            jobs.forEach((job: any) => {
-                const key = idToKey.get(job.project_id);
-                if (key) {
-                    counts[key] = (counts[key] || 0) + 1;
-                }
-            });
-        }
-        
-        // Count from Results (via project_value name)
-        // We only want to add those that are NOT already counted via project_id.
-        // But we don't know which job corresponds to which result easily here without join.
-        // Let's assume for now newly added ones have project_id.
-        // Let's also fetch results.
-         const { data: results } = await supabase.from("callsheet_results").select("project_value, job_id, callsheet_jobs!inner(project_id)");
-         
-         results?.forEach((res: any) => {
-             // If callsheet_jobs.project_id is NULL, then count it by name.
-             // If it is NOT NULL, it was already counted in the 'jobs' query above!
-             if (!res.callsheet_jobs?.project_id) {
-                 const key = getProjectKey(res.project_value);
-                 counts[key] = (counts[key] || 0) + 1;
+        // 3. Count Results by project_value (Name linking)
+        if (projects.length > 0) {
+             const idToKey = new Map<string, string>();
+             projects.forEach(p => idToKey.set(p.id, getProjectKey(p.name)));
+             
+             // Map existing ID counts to Keys
+             const keyCounts: Record<string, number> = {};
+             // Transfer ID counts to NAME keys for statsByProjectKey
+             for (const [pid, count] of Object.entries(counts)) {
+                 const key = idToKey.get(pid);
+                 if (key) {
+                     keyCounts[key] = (keyCounts[key] || 0) + count;
+                 }
              }
-         });
-         
-         setProjectDocCounts(counts);
+
+             const { data: results } = await supabase.from("callsheet_results").select("project_value, job_id, callsheet_jobs!inner(project_id)");
+             
+             results?.forEach((res: any) => {
+                 if (!res.callsheet_jobs?.project_id) {
+                     const key = getProjectKey(res.project_value);
+                     keyCounts[key] = (keyCounts[key] || 0) + 1;
+                 }
+             });
+             
+             setProjectDocCounts(keyCounts);
+        }
     };
     
     fetchCounts();
