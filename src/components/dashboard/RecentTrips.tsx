@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { MapPin, ArrowRight, Calendar, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/hooks/use-i18n";
+import { useTrips } from "@/contexts/TripsContext";
 
 interface Trip {
   id: string;
@@ -13,45 +14,26 @@ interface Trip {
   passengers?: number;
 }
 
-const mockTrips: Trip[] = [
-  {
-    id: "1",
-    date: "2024-01-15",
-    from: "Berlin HQ",
-    to: "München Studio",
-    distance: 584,
-    project: "Film Production XY",
-    passengers: 2,
-  },
-  {
-    id: "2",
-    date: "2024-01-14",
-    from: "München Studio",
-    to: "Köln Location",
-    distance: 575,
-    project: "Film Production XY",
-  },
-  {
-    id: "3",
-    date: "2024-01-13",
-    from: "Home Office",
-    to: "Berlin HQ",
-    distance: 45,
-    project: "Internal",
-  },
-  {
-    id: "4",
-    date: "2024-01-12",
-    from: "Berlin HQ",
-    to: "Hamburg Meeting",
-    distance: 289,
-    project: "Client ABC",
-    passengers: 1,
-  },
-];
+function toRecentTrip(trip: { id: string; date: string; route: string[]; distance: number; project: string; passengers: number; }): Trip {
+  const route = Array.isArray(trip.route) ? trip.route : [];
+  const from = route[0] || "-";
+  const to = route.length > 1 ? route[route.length - 1] : "-";
+
+  return {
+    id: trip.id,
+    date: trip.date,
+    from,
+    to,
+    distance: Number.isFinite(Number(trip.distance)) ? Number(trip.distance) : 0,
+    project: trip.project || "-",
+    passengers: Number.isFinite(Number(trip.passengers)) ? Number(trip.passengers) : undefined,
+  };
+}
 
 export function RecentTrips() {
   const { t, locale } = useI18n();
+  const { trips, loading } = useTrips();
+  const recentTrips = trips.slice(0, 4).map((trip) => toRecentTrip(trip));
   return (
     <div className="glass-card p-5 animate-fade-in animation-delay-200">
       <div className="flex items-center justify-between mb-4">
@@ -65,7 +47,11 @@ export function RecentTrips() {
       </div>
 
       <div className="space-y-3">
-        {mockTrips.map((trip, index) => (
+        {!loading && recentTrips.length === 0 ? (
+          <div className="text-sm text-muted-foreground">No hay viajes recientes.</div>
+        ) : null}
+
+        {recentTrips.map((trip, index) => (
           <div
             key={trip.id}
             className="p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors cursor-pointer group animate-slide-up"
@@ -89,7 +75,7 @@ export function RecentTrips() {
               </div>
               <div className="text-right shrink-0">
                 <p className="font-semibold text-sm">{trip.distance} km</p>
-                {trip.passengers && (
+                {typeof trip.passengers === "number" && trip.passengers > 0 && (
                   <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
                     <Users className="w-3 h-3" />
                     {trip.passengers}
