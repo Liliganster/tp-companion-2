@@ -285,12 +285,25 @@ export default function Projects() {
   };
 
   const handleDeleteSelected = async () => {
-    await Promise.all(Array.from(selectedIds).map(id => deleteProject(id)));
+    const ids = Array.from(selectedIds);
+    const results = await Promise.allSettled(ids.map((id) => deleteProject(id)));
+    const ok = results.filter((r) => r.status === "fulfilled").length;
+    const failed = results.length - ok;
+
+    if (failed === 0) {
+      toast({
+        title: t("projects.toastDeletedTitle"),
+        description: tf("projects.toastDeletedBody", { count: ids.length }),
+      });
+      setSelectedIds(new Set());
+      return;
+    }
+
     toast({
       title: t("projects.toastDeletedTitle"),
-      description: tf("projects.toastDeletedBody", { count: selectedIds.size }),
+      description: `Se borraron ${ok}/${ids.length}. ${failed} fallaron (no se borró todo lo asociado).`,
+      variant: "destructive",
     });
-    setSelectedIds(new Set());
   };
 
   const resetCreateProjectForm = () => {

@@ -2,6 +2,8 @@ import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, 
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "./AuthContext";
 import { toast } from "sonner";
+import { cascadeDeleteProjectById } from "@/lib/cascadeDelete";
+import { formatSupabaseError } from "@/lib/supabaseErrors";
 
 export type Project = {
   id: string;
@@ -153,12 +155,21 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const deleteProject = useCallback(async (id: string) => {
     if (!supabase || !user) return;
 
-    setProjects(prev => prev.filter(p => p.id !== id));
+    let removedProject: Project | undefined;
+    setProjects((prev) => {
+      removedProject = prev.find((p) => p.id === id);
+      return prev.filter((p) => p.id !== id);
+    });
 
-    const { error } = await supabase.from("projects").delete().eq("id", id);
-    if (error) {
-      console.error("Error deleting project:", error);
-       // Revert...
+    try {
+      await cascadeDeleteProjectById(supabase, id);
+    } catch (err) {
+      console.error("[ProjectsContext] Cascade delete failed:", err);
+      toast.error(formatSupabaseError(err, "No se pudo borrar el proyecto y sus datos asociados"));
+      if (removedProject) {
+        setProjects((prev) => (prev.some((p) => p.id === removedProject!.id) ? prev : [removedProject!, ...prev]));
+      }
+      throw err;
     }
   }, [user]);
 

@@ -268,12 +268,25 @@ export default function Trips() {
     setSelectedIds(newSelected);
   };
   const handleDeleteSelected = async () => {
-    await Promise.all(Array.from(selectedIds).map(id => deleteTrip(id)));
+    const ids = Array.from(selectedIds);
+    const results = await Promise.allSettled(ids.map((id) => deleteTrip(id)));
+    const ok = results.filter((r) => r.status === "fulfilled").length;
+    const failed = results.length - ok;
+
+    if (failed === 0) {
+      toast({
+        title: t("trips.toastTripsDeletedTitle"),
+        description: tf("trips.toastTripsDeletedBody", { count: ids.length }),
+      });
+      setSelectedIds(new Set());
+      return;
+    }
+
     toast({
       title: t("trips.toastTripsDeletedTitle"),
-      description: tf("trips.toastTripsDeletedBody", { count: selectedIds.size }),
+      description: `Se borraron ${ok}/${ids.length}. ${failed} fallaron (no se borró todo lo asociado).`,
+      variant: "destructive",
     });
-    setSelectedIds(new Set());
   };
   const isAllSelected = visibleTrips.length > 0 && selectedIds.size === visibleTrips.length;
   const isSomeSelected = selectedIds.size > 0;

@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/hooks/use-i18n";
 import { tf } from "@/lib/i18n";
 import { supabase } from "@/lib/supabaseClient";
+import { cascadeDeleteCallsheetJobById } from "@/lib/cascadeDelete";
 import { toast } from "sonner";
 import { CallsheetUploader } from "@/components/callsheets/CallsheetUploader";
 import { ProjectInvoiceUploader } from "@/components/projects/ProjectInvoiceUploader";
@@ -349,12 +350,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const handleDeleteCallSheet = async (doc: ProjectDocument) => {
       if (!confirm("¿Estás seguro de eliminar esta hoja de llamada? Se borrarán los datos asociados.")) return;
        try {
-        const { error } = await supabase
-            .from("callsheet_jobs")
-            .delete()
-            .eq("id", doc.id);
-            
-        if (error) throw error;
+      await cascadeDeleteCallsheetJobById(supabase, doc.id);
         
         toast.success("Hoja de llamada eliminada");
         setRealCallSheets(prev => prev.filter(p => p.id !== doc.id));
@@ -410,10 +406,11 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           // Project document
            if (!confirm("¿Eliminar factura del proyecto?")) return;
             try {
-                const { error } = await supabase.from("project_documents").delete().eq("id", doc.id);
-                if (error) throw error;
-                
-                await supabase.storage.from("project_documents").remove([doc.storage_path]);
+          const { error: storageError } = await supabase.storage.from("project_documents").remove([doc.storage_path]);
+          if (storageError) throw storageError;
+
+          const { error } = await supabase.from("project_documents").delete().eq("id", doc.id);
+          if (error) throw error;
                 
                 setProjectDocs(prev => prev.filter(p => p.id !== doc.id));
                 toast.success("Factura eliminada");
