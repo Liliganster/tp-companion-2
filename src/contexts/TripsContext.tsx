@@ -181,12 +181,108 @@ export function TripsProvider({ children }: { children: ReactNode }) {
   const deleteTrip = useCallback(async (id: string) => {
     if (!supabase || !user) return;
 
-    setTrips(prev => prev.filter(t => t.id !== id));
+    let removedTrip: Trip | undefined;
+    setTrips((prev) => {
+      removedTrip = prev.find((t) => t.id === id);
+      return prev.filter((t) => t.id !== id);
+    });
 
-    const { error } = await supabase.from("trips").delete().eq("id", id);
-    if (error) {
-      console.error("Error deleting trip:", error);
-      toast.error(formatSupabaseError(error, "Error borrando viaje"));
+    // Fetch documents from DB (in case local state is stale)
+    const { data: tripRow, error: tripFetchError } = await supabase
+      .from("trips")
+      .select("documents")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (tripFetchError) {
+      console.warn("[TripsContext] Could not fetch trip before delete:", tripFetchError);
+    }
+
+    const docsFromDb = (tripRow as any)?.documents;
+    const docsFromLocal = removedTrip?.documents;
+    const docs: any[] = Array.isArray(docsFromDb)
+      ? docsFromDb
+      : Array.isArray(docsFromLocal)
+        ? docsFromLocal
+        : [];
+
+    const storagePaths = Array.from(
+      new Set(
+        docs
+          .map((d) => {
+            const p = typeof d?.storagePath === "string" ? d.storagePath : typeof d?.path === "string" ? d.path : "";
+            const trimmed = (p ?? "").trim();
+            return trimmed ? trimmed : null;
+          })
+          .filter(Boolean) as string[]
+      )
+    );
+
+    // 1) Delete associated files from Storage (callsheets bucket)
+    if (storagePaths.length > 0) {
+      const { error: storageError } = await supabase.storage.from("callsheets").remove(storagePaths);
+      if (storageError) {
+        console.error("[TripsContext] Error deleting callsheet files:", storageError);
+        toast.error(
+          formatSupabaseError(
+            storageError,
+            "No se pudieron borrar los documentos del viaje (revisa políticas de Storage)"
+          )
+        );
+        // Restore local state since we couldn't fully delete associated data
+        if (removedTrip) {
+          setTrips((prev) => (prev.some((t) => t.id === removedTrip!.id) ? prev : [removedTrip!, ...prev]));
+        }
+        return;
+      }
+
+      // 2) Delete associated extractor DB rows (best-effort)
+      const { error: jobsDeleteError } = await supabase
+        .from("callsheet_jobs")
+        .delete()
+        .in("storage_path", storagePaths);
+
+      if (jobsDeleteError) {
+        console.warn("[TripsContext] Could not delete callsheet_jobs for deleted trip:", jobsDeleteError);
+        toast.error(formatSupabaseError(jobsDeleteError, "No se pudieron borrar algunos datos de IA asociados"));
+      }
+    }
+
+    // 3) Remove this trip from any saved reports (best-effort)
+    try {
+      const { data: affectedReports, error: reportsFetchError } = await supabase
+        .from("reports")
+        .select("id, trip_ids")
+        .contains("trip_ids", [id]);
+
+      if (reportsFetchError) {
+        console.warn("[TripsContext] Could not fetch affected reports:", reportsFetchError);
+      } else if (affectedReports && affectedReports.length > 0) {
+        await Promise.all(
+          affectedReports.map(async (r: any) => {
+            const currentIds: string[] = Array.isArray(r.trip_ids) ? r.trip_ids : [];
+            const nextIds = currentIds.filter((tid) => tid !== id);
+            if (nextIds.length === currentIds.length) return;
+            const { error: updateError } = await supabase.from("reports").update({ trip_ids: nextIds }).eq("id", r.id);
+            if (updateError) {
+              console.warn("[TripsContext] Could not update report trip_ids:", updateError);
+            }
+          })
+        );
+      }
+    } catch (err) {
+      console.warn("[TripsContext] Unexpected error cleaning reports:", err);
+    }
+
+    // 4) Delete the trip row itself
+    const { error: deleteError } = await supabase.from("trips").delete().eq("id", id);
+    if (deleteError) {
+      console.error("Error deleting trip:", deleteError);
+      toast.error(formatSupabaseError(deleteError, "Error borrando viaje"));
+      // Restore local state if DB deletion failed
+      if (removedTrip) {
+        setTrips((prev) => (prev.some((t) => t.id === removedTrip!.id) ? prev : [removedTrip!, ...prev]));
+      }
     }
   }, [user]);
 

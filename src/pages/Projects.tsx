@@ -8,7 +8,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -48,17 +47,25 @@ import { ProjectDetailModal } from "@/components/projects/ProjectDetailModal";
 import { Project, useProjects } from "@/contexts/ProjectsContext";
 import { useTrips } from "@/contexts/TripsContext";
 import { useI18n } from "@/hooks/use-i18n";
+import { uuidv4 } from "@/lib/utils";
 
 export default function Projects() {
   const { t, tf, locale } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedYear, setSelectedYear] = useState("2024");
-  const { projects, deleteProject, toggleStar } = useProjects();
+  const { projects, addProject, deleteProject, toggleStar } = useProjects();
   const { trips } = useTrips();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const { toast } = useToast();
+
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
+  const [newProjectProducer, setNewProjectProducer] = useState("");
+  const [newProjectDescription, setNewProjectDescription] = useState("");
+  const [newProjectRatePerKm, setNewProjectRatePerKm] = useState("0.30");
+  const [newProjectRatePerPassenger, setNewProjectRatePerPassenger] = useState("0.05");
 
   const getProjectKey = (name: string) => name.trim().toLowerCase();
 
@@ -261,6 +268,69 @@ export default function Projects() {
     setSelectedIds(new Set());
   };
 
+  const resetCreateProjectForm = () => {
+    setNewProjectName("");
+    setNewProjectProducer("");
+    setNewProjectDescription("");
+    setNewProjectRatePerKm("0.30");
+    setNewProjectRatePerPassenger("0.05");
+  };
+
+  const handleCreateProject = async () => {
+    const name = newProjectName.trim();
+    if (!name) {
+      toast({
+        title: t("projects.createNewProject"),
+        description: t("projects.projectName") + " es obligatorio",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const exists = projects.some((p) => p.name.trim().toLowerCase() === name.toLowerCase());
+    if (exists) {
+      toast({
+        title: t("projects.createNewProject"),
+        description: "Ya existe un proyecto con ese nombre",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const ratePerKm = Number.parseFloat(String(newProjectRatePerKm).replace(",", "."));
+    const normalizedRatePerKm = Number.isFinite(ratePerKm) ? ratePerKm : 0;
+
+    // NOTE: rate per passenger is not stored in `projects` table currently.
+    // Keep the input for now, but don't persist it.
+    void newProjectRatePerPassenger;
+
+    await addProject({
+      id: uuidv4(),
+      name,
+      producer: newProjectProducer.trim() || undefined,
+      description: newProjectDescription.trim() || undefined,
+      ratePerKm: normalizedRatePerKm,
+      starred: false,
+      archived: false,
+      trips: 0,
+      totalKm: 0,
+      documents: 0,
+      invoices: 0,
+      estimatedCost: 0,
+      shootingDays: 0,
+      kmPerDay: 0,
+      co2Emissions: 0,
+    });
+
+    toast({
+      title: t("projects.createProject"),
+      description: "Proyecto creado",
+    });
+
+    setCreateProjectOpen(false);
+    resetCreateProjectForm();
+  };
+
   const isAllSelected = filteredProjects.length > 0 && selectedIds.size === filteredProjects.length;
   const isSomeSelected = selectedIds.size > 0;
 
@@ -284,13 +354,17 @@ export default function Projects() {
                 <span className="hidden sm:inline">{t("projects.delete")} ({selectedIds.size})</span>
               </Button>
             )}
-            <Dialog>
-              <DialogTrigger asChild>
-              <Button>
-                  <Plus className="w-4 h-4" />
-                  {t("projects.newProject")}
-                </Button>
-              </DialogTrigger>
+            <Dialog
+              open={createProjectOpen}
+              onOpenChange={(open) => {
+                setCreateProjectOpen(open);
+                if (!open) resetCreateProjectForm();
+              }}
+            >
+              <Button onClick={() => setCreateProjectOpen(true)}>
+                <Plus className="w-4 h-4" />
+                {t("projects.newProject")}
+              </Button>
               <DialogContent className="glass max-w-lg">
                 <DialogHeader>
                   <DialogTitle>{t("projects.createNewProject")}</DialogTitle>
@@ -298,11 +372,23 @@ export default function Projects() {
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">
                     <Label htmlFor="name">{t("projects.projectName")}</Label>
-                    <Input id="name" placeholder="e.g., Film Production XY" className="bg-secondary/50" />
+                    <Input
+                      id="name"
+                      placeholder="e.g., Film Production XY"
+                      className="bg-secondary/50"
+                      value={newProjectName}
+                      onChange={(e) => setNewProjectName(e.target.value)}
+                    />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="producer">{t("projects.company")}</Label>
-                    <Input id="producer" placeholder={t("projects.companyPlaceholder")} className="bg-secondary/50" />
+                    <Input
+                      id="producer"
+                      placeholder={t("projects.companyPlaceholder")}
+                      className="bg-secondary/50"
+                      value={newProjectProducer}
+                      onChange={(e) => setNewProjectProducer(e.target.value)}
+                    />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="description">{t("projects.description")}</Label>
@@ -310,6 +396,8 @@ export default function Projects() {
                       id="description"
                       placeholder={t("projects.descriptionPlaceholder")}
                       className="bg-secondary/50 resize-none"
+                      value={newProjectDescription}
+                      onChange={(e) => setNewProjectDescription(e.target.value)}
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
@@ -321,6 +409,8 @@ export default function Projects() {
                         step="0.01"
                         placeholder="0.30"
                         className="bg-secondary/50"
+                        value={newProjectRatePerKm}
+                        onChange={(e) => setNewProjectRatePerKm(e.target.value)}
                       />
                     </div>
                     <div className="grid gap-2">
@@ -331,10 +421,14 @@ export default function Projects() {
                         step="0.01"
                         placeholder="0.05"
                         className="bg-secondary/50"
+                        value={newProjectRatePerPassenger}
+                        onChange={(e) => setNewProjectRatePerPassenger(e.target.value)}
                       />
                     </div>
                   </div>
-                  <Button className="w-full mt-2">{t("projects.createProject")}</Button>
+                  <Button className="w-full mt-2" onClick={handleCreateProject}>
+                    {t("projects.createProject")}
+                  </Button>
                 </div>
               </DialogContent>
             </Dialog>
