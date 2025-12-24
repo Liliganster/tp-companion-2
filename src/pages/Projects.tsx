@@ -62,6 +62,14 @@ export default function Projects() {
 
   const getProjectKey = (name: string) => name.trim().toLowerCase();
 
+  interface ProjectDocument {
+    id: string;
+    name: string;
+    type: "call-sheet" | "invoice" | "document" | "other";
+    status?: string;
+    storage_path?: string;
+  }
+
   type AggregatedTripStats = {
     trips: number;
     totalKm: number;
@@ -70,7 +78,8 @@ export default function Projects() {
     co2Emissions: number;
     overrideCost: number;
     distanceAtDefaultRate: number;
-    invoiceDocs: { id: string; name: string; type: "invoice" }[];
+    invoiceDocs: ProjectDocument[];
+    callSheetDocs: ProjectDocument[];
   };
 
   // Fetch document counts for projects
@@ -147,6 +156,7 @@ export default function Projects() {
         overrideCost: 0,
         distanceAtDefaultRate: 0,
         invoiceDocs: [],
+        callSheetDocs: [],
       };
 
       current.trips += 1;
@@ -155,15 +165,23 @@ export default function Projects() {
       current.invoices += invoices;
       current.co2Emissions += co2;
       
-      // ... (rest of logic)
+      // Aggregate invoice documents (Trip Invoices)
+      if (trip.invoice && trip.invoice.trim() !== "") {
+           current.invoiceDocs.push({
+               id: `${trip.id}-invoice`,
+               name: `Factura ${trip.id}`,
+               type: "invoice",
+               storage_path: trip.invoice
+           });
+      }
 
-      // Aggregate invoice documents
+      // Aggregate CallSheets (Trip Documents)
       if (trip.documents && trip.documents.length > 0) {
         trip.documents.forEach(doc => {
-          current.invoiceDocs.push({
+          current.callSheetDocs.push({
              id: doc.id,
              name: doc.name,
-             type: "invoice"
+             type: "call-sheet"
           });
         });
       }
@@ -177,20 +195,6 @@ export default function Projects() {
       map.set(key, current);
     }
     
-    // Add external callsheet counts
-    // Convert map to array to iterate? No, iterate existing keys in 'projects' or map?
-    // We should iterate over projectDocCounts and add to map (or create new entry if no trips but has docs).
-    // The current map only has entries for projects with trips.
-    // If a project has 0 trips but has callsheets, it won't be in 'map' yet if we loop 'trips'.
-    // BUT 'projects' list displays 'projects' array, and looks up stats.
-    // So if map doesn't have it, 'statsByProjectKey.get' returns null.
-    // We need to ensure map covers all projects or update the lookup logic.
-    // Let's update the map here for keys that exist.
-    // Wait, the main loop is 'projects.map(...)' in render. It accesses 'statsByProjectKey.get(key)'.
-    // If we want to show document count for a project with 0 trips, we can't rely on 'map' populated by 'trips'.
-    // But 'statsByProjectKey' is derived from trips.
-    // Maybe we should just merge 'projectDocCounts' into the result.
-    
     // Inject doc counts
     for (const [key, count] of Object.entries(projectDocCounts)) {
         const current = map.get(key) ?? {
@@ -202,6 +206,7 @@ export default function Projects() {
             overrideCost: 0,
             distanceAtDefaultRate: 0,
             invoiceDocs: [],
+            callSheetDocs: [],
         };
         current.documents += count; // Add callsheets to documents count
         map.set(key, current);
@@ -281,7 +286,7 @@ export default function Projects() {
             )}
             <Dialog>
               <DialogTrigger asChild>
-                <Button>
+              <Button>
                   <Plus className="w-4 h-4" />
                   {t("projects.newProject")}
                 </Button>
@@ -544,9 +549,9 @@ export default function Projects() {
             shootingDays: selectedProject.shootingDays,
 				kmPerDay: selectedProject.shootingDays > 0 ? (selectedProjectStats?.totalKm ?? 0) / selectedProject.shootingDays : 0,
 				co2Emissions: selectedProjectStats?.co2Emissions ?? 0,
-            callSheets: [],
+            callSheets: selectedProjectStats?.callSheetDocs ?? [],
             invoices: selectedProjectStats?.invoiceDocs ?? [],
-            totalInvoiced: 0,
+            totalInvoiced: selectedProjectStats?.overrideCost ? selectedProjectStats.overrideCost : (selectedProjectStats?.distanceAtDefaultRate ?? 0) * 0.45,
           } : null}
         />
       </div>

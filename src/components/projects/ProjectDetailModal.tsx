@@ -13,7 +13,7 @@ import { ProjectInvoiceUploader } from "@/components/projects/ProjectInvoiceUplo
 interface ProjectDocument {
   id: string;
   name: string;
-  type: "call-sheet" | "invoice" | "other";
+  type: "call-sheet" | "invoice" | "document" | "other";
   status?: string;
   storage_path?: string;
 }
