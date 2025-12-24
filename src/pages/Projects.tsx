@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { supabase } from "@/lib/supabaseClient";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,6 +73,72 @@ export default function Projects() {
     invoiceDocs: { id: string; name: string; type: "invoice" }[];
   };
 
+  // Fetch document counts for projects
+  const [projectDocCounts, setProjectDocCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    const fetchCounts = async () => {
+        const counts: Record<string, number> = {};
+        
+        // Count jobs by project_id
+        const { data: jobs } = await supabase.from("callsheet_jobs").select("project_id").not("project_id", "is", null);
+        jobs?.forEach((job: any) => {
+             const pid = job.project_id;
+             if (pid) counts[pid] = (counts[pid] || 0) + 1;
+        });
+
+        // Count results by project_value (name) - careful not to double count if they have project_id?
+        // Actually results are linked to jobs. If we count jobs by projectID, we cover manual uploads.
+        // But what about old results without project_id in job?
+        // We should merge them.
+        // It's tricky to map project_value to project_id without normalization.
+        // But the 'key' in statsByProjectKey is normalized name.
+        // So let's count by normalized NAME.
+        
+        // Strategy: 
+        // 1. Get all jobs with project_id, look up project name from projects list (we have 'projects' prop or state).
+        // 2. Get all results with project_value.
+        
+        // This effect depends on 'projects' array being loaded.
+        if (projects.length === 0) return;
+        
+        // Map ID to Name Key
+        const idToKey = new Map<string, string>();
+        projects.forEach(p => idToKey.set(p.id, getProjectKey(p.name)));
+        
+        // Count from Jobs (via project_id)
+        if (jobs) {
+            jobs.forEach((job: any) => {
+                const key = idToKey.get(job.project_id);
+                if (key) {
+                    counts[key] = (counts[key] || 0) + 1;
+                }
+            });
+        }
+        
+        // Count from Results (via project_value name)
+        // We only want to add those that are NOT already counted via project_id.
+        // But we don't know which job corresponds to which result easily here without join.
+        // Let's assume for now newly added ones have project_id.
+        // Let's also fetch results.
+         const { data: results } = await supabase.from("callsheet_results").select("project_value, job_id, callsheet_jobs!inner(project_id)");
+         
+         results?.forEach((res: any) => {
+             // If callsheet_jobs.project_id is NULL, then count it by name.
+             // If it is NOT NULL, it was already counted in the 'jobs' query above!
+             if (!res.callsheet_jobs?.project_id) {
+                 const key = getProjectKey(res.project_value);
+                 counts[key] = (counts[key] || 0) + 1;
+             }
+         });
+         
+         setProjectDocCounts(counts);
+    };
+    
+    fetchCounts();
+  }, [projects]);
+
+
   const statsByProjectKey = useMemo(() => {
     const map = new Map<string, AggregatedTripStats>();
 
@@ -100,6 +167,8 @@ export default function Projects() {
       current.documents += documents;
       current.invoices += invoices;
       current.co2Emissions += co2;
+      
+      // ... (rest of logic)
 
       // Aggregate invoice documents
       if (trip.documents && trip.documents.length > 0) {
@@ -120,9 +189,39 @@ export default function Projects() {
 
       map.set(key, current);
     }
+    
+    // Add external callsheet counts
+    // Convert map to array to iterate? No, iterate existing keys in 'projects' or map?
+    // We should iterate over projectDocCounts and add to map (or create new entry if no trips but has docs).
+    // The current map only has entries for projects with trips.
+    // If a project has 0 trips but has callsheets, it won't be in 'map' yet if we loop 'trips'.
+    // BUT 'projects' list displays 'projects' array, and looks up stats.
+    // So if map doesn't have it, 'statsByProjectKey.get' returns null.
+    // We need to ensure map covers all projects or update the lookup logic.
+    // Let's update the map here for keys that exist.
+    // Wait, the main loop is 'projects.map(...)' in render. It accesses 'statsByProjectKey.get(key)'.
+    // If we want to show document count for a project with 0 trips, we can't rely on 'map' populated by 'trips'.
+    // But 'statsByProjectKey' is derived from trips.
+    // Maybe we should just merge 'projectDocCounts' into the result.
+    
+    // Inject doc counts
+    for (const [key, count] of Object.entries(projectDocCounts)) {
+        const current = map.get(key) ?? {
+            trips: 0,
+            totalKm: 0,
+            documents: 0, // Base documents from trips
+            invoices: 0,
+            co2Emissions: 0,
+            overrideCost: 0,
+            distanceAtDefaultRate: 0,
+            invoiceDocs: [],
+        };
+        current.documents += count; // Add callsheets to documents count
+        map.set(key, current);
+    }
 
     return map;
-  }, [trips]);
+  }, [trips, projectDocCounts]);
 
 
 

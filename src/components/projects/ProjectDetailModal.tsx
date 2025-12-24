@@ -13,6 +13,7 @@ interface ProjectDocument {
   id: string;
   name: string;
   type: "call-sheet" | "invoice";
+  status?: string;
 }
 
 interface ProjectDetailModalProps {
@@ -38,37 +39,67 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   useEffect(() => {
     if (open && project?.name) {
       const fetchCallSheets = async () => {
-        const { data, error } = await supabase
+        // 1. Fetch by Project ID (Manual uploads linked to project)
+        const { data: jobs, error: jobsError } = await supabase
+            .from("callsheet_jobs")
+            .select("id, storage_path, created_at, status")
+            .eq("project_id", project.id);
+            
+        // 2. Fetch by Project Name (Legacy/Extracted results)
+        const { data: results, error: resultsError } = await supabase
           .from("callsheet_results")
-          .select("job_id, project_value, callsheet_jobs!inner(id, storage_path, created_at)")
+          .select("job_id, project_value, callsheet_jobs!inner(id, storage_path, created_at, status)")
           .ilike("project_value", project.name.trim());
 
-        if (error) {
-          console.error("Error fetching project callsheets:", error);
-          return;
+        if (jobsError) console.error("Error fetching project jobs:", jobsError);
+        if (resultsError) console.error("Error fetching project results:", resultsError);
+
+        const allDocs: ProjectDocument[] = [];
+        const seenIds = new Set<string>();
+
+        // Process jobs (manual uploads)
+        if (jobs) {
+            jobs.forEach((job: any) => {
+                if (!seenIds.has(job.id)) {
+                    seenIds.add(job.id);
+                    const path = job.storage_path || "Unknown";
+                    const name = path.split("/").pop() || path;
+                    allDocs.push({
+                        id: job.id,
+                        name: name,
+                        type: "call-sheet",
+                        status: job.status
+                    });
+                }
+            });
         }
 
-        const mapped: ProjectDocument[] = (data || []).map((item: any) => {
-           const job = item.callsheet_jobs;
-           const path = job.storage_path || "Unknown";
-           const name = path.split("/").pop() || path;
-           return {
-             id: job.id,
-             name: name,
-             type: "call-sheet"
-           };
-        });
+        // Process results (extracted)
+        if (results) {
+            results.forEach((item: any) => {
+                const job = item.callsheet_jobs;
+                if (!seenIds.has(job.id)) {
+                    seenIds.add(job.id);
+                    const path = job.storage_path || "Unknown";
+                    const name = path.split("/").pop() || path;
+                    allDocs.push({
+                        id: job.id,
+                        name: name,
+                        type: "call-sheet",
+                         status: job.status
+                    });
+                }
+            });
+        }
         
-        // Remove duplicates if any
-        const unique = mapped.filter((v, i, a) => a.findIndex(v2 => v2.id === v.id) === i);
-        setRealCallSheets(unique);
+        setRealCallSheets(allDocs);
       };
 
       fetchCallSheets();
     } else {
         setRealCallSheets([]);
     }
-  }, [open, project?.name]);
+  }, [open, project?.name, project?.id]);
 
   if (!project) return null;
 
@@ -128,7 +159,25 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   };
   
   const handleExtract = async (doc: ProjectDocument) => {
-    toast.info("La extracción IA se ejecuta automáticamente al subir. Estado del trabajo: Completado."); // Placeholder
+    if (doc.status === 'queued' || doc.status === 'processing' || doc.status === 'done') {
+        toast.info(`El documento ya está en estado: ${doc.status}`);
+        return;
+    }
+    
+    try {
+        const { error } = await supabase
+            .from("callsheet_jobs")
+            .update({ status: "queued" })
+            .eq("id", doc.id);
+            
+        if (error) throw error;
+        
+        toast.success("Extracción iniciada. El proceso comenzará en breve.");
+        // Optimistic update
+        setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'queued' } : p));
+    } catch (e: any) {
+        toast.error("Error al iniciar extracción: " + e.message);
+    }
   };
   
   const handleViewInvoice = (doc: ProjectDocument) => {

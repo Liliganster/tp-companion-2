@@ -37,6 +37,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
           user_id: user.id,
           storage_path: "pending", 
           status: "created",
+          project_id: projectId || null
         })
         .select()
         .single();
@@ -52,18 +53,20 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
 
       if (uploadError) throw uploadError;
 
-      // 3. Update Job (Queue it)
+      // 3. Update Job (Ready for manual extraction or queue)
+      // User requested Manual extraction trigger, so we keep it as 'created' (or explicit status if needed, but 'created' is fine as initial state)
+      // Actually we just need to update storage_path.
       const { error: updateError } = await supabase
         .from("callsheet_jobs")
         .update({ 
           storage_path: filePath,
-          status: "queued" 
+          // status: "queued" // REMOVED: extraction is now manual via UI
         })
         .eq("id", job.id);
 
       if (updateError) throw updateError;
 
-      toast.success("Callsheet subida. Esperando procesamiento...");
+      toast.success("Callsheet subida. Lista para extraer.");
       if (onJobCreated) onJobCreated(job.id);
 
     } catch (err: any) {

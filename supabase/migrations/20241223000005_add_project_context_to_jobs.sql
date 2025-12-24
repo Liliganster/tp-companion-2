@@ -1,0 +1,2 @@
+ALTER TABLE callsheet_jobs
+ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id) ON DELETE SET NULL;
