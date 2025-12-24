@@ -2,11 +2,36 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recha
 import { useProjects } from "@/contexts/ProjectsContext";
 import { getProjectsForDashboard } from "@/lib/projects";
 import { useI18n } from "@/hooks/use-i18n";
+import { useTrips } from "@/contexts/TripsContext";
 
 export function ProjectChart() {
   const { projects } = useProjects();
+  const { trips } = useTrips();
   const dashboardProjects = getProjectsForDashboard(projects);
-  const data = dashboardProjects.map((p) => ({ name: p.name, km: p.totalKm }));
+  const kmByProjectId = new Map<string, number>();
+  const kmByProjectName = new Map<string, number>();
+
+  for (const trip of trips) {
+    const distance = Number(trip.distance);
+    if (!Number.isFinite(distance) || distance <= 0) continue;
+
+    if (trip.projectId) {
+      kmByProjectId.set(trip.projectId, (kmByProjectId.get(trip.projectId) ?? 0) + distance);
+      continue;
+    }
+
+    const nameKey = (trip.project ?? "").trim().toLowerCase();
+    if (!nameKey) continue;
+    kmByProjectName.set(nameKey, (kmByProjectName.get(nameKey) ?? 0) + distance);
+  }
+
+  const data = dashboardProjects
+    .map((p) => {
+      const nameKey = (p.name ?? "").trim().toLowerCase();
+      const km = kmByProjectId.get(p.id) ?? (nameKey ? kmByProjectName.get(nameKey) : undefined) ?? 0;
+      return { name: p.name, km: Math.round(km * 10) / 10 };
+    })
+    .sort((a, b) => b.km - a.km || a.name.localeCompare(b.name));
   const { t } = useI18n();
 
   return (
@@ -14,6 +39,11 @@ export function ProjectChart() {
       <h2 className="font-semibold text-lg mb-4 text-foreground">{t("chart.kmByProject")}</h2>
       
       <div className="h-64">
+        {data.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+            No hay datos para mostrar.
+          </div>
+        ) : (
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
             <XAxis 
@@ -51,6 +81,7 @@ export function ProjectChart() {
             />
           </BarChart>
         </ResponsiveContainer>
+        )}
       </div>
 
     </div>
