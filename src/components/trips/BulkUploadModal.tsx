@@ -16,6 +16,7 @@ import { useUserProfile } from "@/contexts/UserProfileContext";
 import { getCountryCode } from "@/lib/country-mapping";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { uuidv4 } from "@/lib/utils";
+import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
 
 interface SavedTrip {
   id: string;
@@ -206,69 +207,15 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       setIsOptimizing(true);
       // Use raw strings if formatted_address is missing/null
       let currentLocs = rawLocations.map(l => l.formatted_address || l.address_raw);
-      const region = getCountryCode(profile.country);
 
       try {
-          // A. Multi-phase Normalization
-          const normalizedLocs = [];
-          
-          for (const locStr of currentLocs) {
-              let query = locStr;
-              // 1. Context Injection: if missing city/country (simple heuristic), append profile context
-              const hasContext = locStr.toLowerCase().includes(profile.city?.toLowerCase()) || locStr.toLowerCase().includes(profile.country?.toLowerCase());
-              
-              if (!hasContext && profile.city && profile.country) {
-                  query = `${locStr}, ${profile.city}, ${profile.country}`;
-              }
+        const { locations: normalizedLocs, distanceKm } = await optimizeCallsheetLocationsAndDistance({
+        profile,
+        rawLocations: currentLocs,
+        });
 
-              // 2. Google Validation
-              try {
-                  const res = await fetch("/api/google/geocode", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ 
-                          address: query, 
-                          region: region // Essential for correct bias
-                      })
-                  });
-                  const data = await res.json();
-                  if (res.ok && data.formattedAddress) {
-                      normalizedLocs.push(data.formattedAddress);
-                  } else {
-                      // If geocoding failed even with context, keep original (as per instructions)
-                      // OR: if we added context, falling back to query might be better than raw?
-                      // User said: "Si Google no la encuentra, se mantiene la original como fallback."
-                      normalizedLocs.push(locStr);
-                  }
-              } catch (e) {
-                  normalizedLocs.push(locStr); // Fallback
-              }
-          }
-
-          setReviewLocations(normalizedLocs);
-
-          // B. Auto-Distance Calculation
-          const origin = profile.baseAddress;
-          const destination = profile.baseAddress;
-
-          if (origin && destination) {
-              const res = await fetch("/api/google/directions", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                      origin,
-                      destination,
-                      waypoints: normalizedLocs,
-                      region: region
-                  })
-              });
-              
-              const data = await res.json();
-              if (res.ok && typeof data.totalDistanceMeters === 'number') {
-                  const km = Math.round((data.totalDistanceMeters / 1000) * 10) / 10;
-                  setReviewDistance(String(km));
-              }
-          }
+        setReviewLocations(normalizedLocs);
+        if (typeof distanceKm === "number") setReviewDistance(String(distanceKm));
 
       } catch (e) {
           console.error("Optimization failed", e);

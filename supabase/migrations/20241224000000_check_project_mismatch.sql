@@ -27,11 +27,6 @@ BEGIN
                 SET status = 'needs_review',
                     needs_review_reason = 'Project mismatch: AI extracted "' || NEW.project_value || '" but file is in project "' || job_project_name || '"'
                 WHERE id = NEW.job_id;
-                
-                -- Optionally mark result as needing review
-                NEW.project_needs_review := TRUE; -- Assuming this column exists or we modify callsheet_results?
-                -- Schema shows producer_needs_review, but not generic needs_review. 
-                -- We rely on job status 'needs_review'
             END IF;
         END IF;
     END IF;

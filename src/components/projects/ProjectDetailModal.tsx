@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Car, Calendar, Route, Leaf, FileText, Sparkles, Eye, Trash2, Upload, Receipt } from "lucide-react";
@@ -9,6 +9,10 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { CallsheetUploader } from "@/components/callsheets/CallsheetUploader";
 import { ProjectInvoiceUploader } from "@/components/projects/ProjectInvoiceUploader";
+import { useUserProfile } from "@/contexts/UserProfileContext";
+import { useTrips, type Trip } from "@/contexts/TripsContext";
+import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
+import { uuidv4 } from "@/lib/utils";
 
 interface ProjectDocument {
   id: string;
@@ -37,9 +41,131 @@ interface ProjectDetailModalProps {
 
 export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetailModalProps) {
   const { t, locale, language } = useI18n();
+  const { profile } = useUserProfile();
+  const { trips, addTrip } = useTrips();
   const [realCallSheets, setRealCallSheets] = useState<ProjectDocument[]>([]);
   const [projectDocs, setProjectDocs] = useState<ProjectDocument[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const processedJobsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    // Reset per-project session state
+    processedJobsRef.current = new Set();
+  }, [project?.id, open]);
+
+  const calculateCO2 = useCallback((distance: number) => Math.round(distance * 0.12 * 10) / 10, []);
+
+  const hasTripForStoragePath = useCallback(
+    (storagePath: string | undefined) => {
+      if (!storagePath) return false;
+      return trips.some((trip) =>
+        (trip.documents ?? []).some((d) => d?.storagePath === storagePath)
+      );
+    },
+    [trips]
+  );
+
+  const normalizeProjectName = useCallback((value: string) => value.trim().toLowerCase(), []);
+
+  const materializeTripFromJob = useCallback(
+    async (job: { id: string; storage_path?: string | null; status?: string | null }) => {
+      if (!project) return;
+      if (!job?.id) return;
+      if (processedJobsRef.current.has(job.id)) return;
+
+      const storagePath = (job.storage_path ?? "").trim();
+      if (!storagePath) return;
+
+      // Avoid duplicates if the trip already exists
+      if (hasTripForStoragePath(storagePath)) {
+        processedJobsRef.current.add(job.id);
+        return;
+      }
+
+      processedJobsRef.current.add(job.id);
+
+      try {
+        const [{ data: result, error: resultError }, { data: locs, error: locsError }] = await Promise.all([
+          supabase.from("callsheet_results").select("*").eq("job_id", job.id).single(),
+          supabase.from("callsheet_locations").select("*").eq("job_id", job.id),
+        ]);
+
+        if (resultError) throw resultError;
+        if (locsError) throw locsError;
+
+        const extractedProject = (result?.project_value ?? "").trim();
+        if (extractedProject && normalizeProjectName(extractedProject) !== normalizeProjectName(project.name)) {
+          const reason = `Project mismatch: AI extracted "${extractedProject}" but file is in project "${project.name}"`;
+          toast.warning("Documento no coincide con el proyecto. Revisa manualmente.");
+          // Best-effort persist (requires UPDATE policy on callsheet_jobs)
+          await supabase
+            .from("callsheet_jobs")
+            .update({ status: "needs_review", needs_review_reason: reason })
+            .eq("id", job.id);
+          return;
+        }
+
+        const date = (result?.date_value ?? "").toString().trim();
+        if (!date) {
+          toast.warning("No se pudo extraer la fecha. Revisa manualmente.");
+          return;
+        }
+
+        const rawLocations = (locs ?? [])
+          .map((l: any) => (l?.formatted_address || l?.address_raw || l?.name_raw || "").toString())
+          .map((s: string) => s.trim())
+          .filter(Boolean);
+
+        const { locations: normalizedLocs, distanceKm } = await optimizeCallsheetLocationsAndDistance({
+          profile,
+          rawLocations,
+        });
+
+        const base = (profile.baseAddress ?? "").trim();
+        const route = base ? [base, ...normalizedLocs, base] : normalizedLocs;
+
+        const distance = typeof distanceKm === "number" ? distanceKm : 0;
+        const producer = (result?.producer_value ?? "").trim();
+        const purpose = producer ? `Rodaje: ${producer}` : "Rodaje";
+
+        const filename = storagePath.split("/").pop() || storagePath;
+        const nowIso = new Date().toISOString();
+
+        const nextTrip: Trip = {
+          id: uuidv4(),
+          date,
+          route,
+          project: project.name,
+          projectId: project.id,
+          purpose,
+          passengers: 0,
+          invoice: undefined,
+          distance,
+          co2: calculateCO2(distance),
+          ratePerKmOverride: null,
+          specialOrigin: "base",
+          documents: [
+            {
+              id: job.id,
+              name: filename,
+              mimeType: "application/pdf",
+              storagePath,
+              createdAt: nowIso,
+            },
+          ],
+        };
+
+        await addTrip(nextTrip);
+        toast.success("Viaje creado desde IA del proyecto");
+
+      } catch (e: any) {
+        console.error(e);
+        toast.error("Error creando viaje desde extracción: " + (e?.message ?? String(e)));
+      }
+    },
+    [addTrip, calculateCO2, hasTripForStoragePath, normalizeProjectName, profile, project]
+  );
 
   useEffect(() => {
     if (open && project?.name) {
@@ -126,6 +252,34 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     }
   }, [open, project?.name, project?.id, refreshTrigger]);
 
+  // While modal is open, poll for completed extractions and materialize trips.
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (!open || !project?.id) return;
+
+    const tick = async () => {
+      try {
+        const { data: jobs } = await supabase
+          .from("callsheet_jobs")
+          .select("id, storage_path, status")
+          .eq("project_id", project.id)
+          .in("status", ["done", "needs_review"]);
+
+        const doneJobs = (jobs ?? []).filter((j: any) => j.status === "done");
+        await Promise.all(doneJobs.map((j: any) => materializeTripFromJob(j)));
+      } catch {
+        // silent polling failure
+      }
+    };
+
+    interval = setInterval(tick, 2000);
+    void tick();
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [open, project?.id, materializeTripFromJob]);
+
   if (!project) return null;
 
   function uniqueDocuments(docs: ProjectDocument[]) {
@@ -192,7 +346,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     try {
         const { error } = await supabase
             .from("callsheet_jobs")
-            .update({ status: "queued" })
+        .update({ status: "queued", project_id: project?.id ?? null })
             .eq("id", doc.id);
             
         if (error) throw error;
