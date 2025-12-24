@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   Check,
   Trash2,
+  Calendar,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
@@ -116,6 +117,18 @@ export default function Reports() {
   const { t, tf, locale } = useI18n();
   const { trips } = useTrips();
   const { reports, deleteReport } = useReports();
+
+  const startDateRef = useRef<HTMLInputElement | null>(null);
+  const endDateRef = useRef<HTMLInputElement | null>(null);
+
+  const openDatePicker = (ref: React.RefObject<HTMLInputElement | null>) => {
+    const el = ref.current;
+    if (!el) return;
+    // showPicker() exists in Chromium-based browsers.
+    (el as any).showPicker?.();
+    el.focus();
+  };
+
   const [selectedProject, setSelectedProject] = useState("all");
   const toDateInputValue = (d: Date) => {
     const y = d.getFullYear();
@@ -323,22 +336,44 @@ export default function Reports() {
             
             <div className="space-y-2">
               <Label>{t("reports.from")}</Label>
-              <Input
-                type="date"
-                className="bg-transparent border-b border-border text-left"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
+              <div className="relative">
+                <button
+                  type="button"
+                  aria-label={t("reports.from")}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 text-white"
+                  onClick={() => openDatePicker(startDateRef)}
+                >
+                  <Calendar className="w-4 h-4" />
+                </button>
+                <Input
+                  ref={startDateRef}
+                  type="date"
+                  className="bg-transparent border-b border-border text-left pl-9 [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </div>
             </div>
             
             <div className="space-y-2">
               <Label>{t("reports.to")}</Label>
-              <Input
-                type="date"
-                className="bg-transparent border-b border-border text-left"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
+              <div className="relative">
+                <button
+                  type="button"
+                  aria-label={t("reports.to")}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 text-white"
+                  onClick={() => openDatePicker(endDateRef)}
+                >
+                  <Calendar className="w-4 h-4" />
+                </button>
+                <Input
+                  ref={endDateRef}
+                  type="date"
+                  className="bg-transparent border-b border-border text-left pl-9 [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </div>
             </div>
 
             <div className="flex items-end">
