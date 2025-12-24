@@ -16,6 +16,7 @@ interface ProjectDocument {
   type: "call-sheet" | "invoice" | "document" | "other";
   status?: string;
   storage_path?: string;
+  needs_review_reason?: string;
 }
 
 interface ProjectDetailModalProps {
@@ -46,13 +47,13 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         // 1. Fetch by Project ID (Manual uploads linked to project)
         const { data: jobs, error: jobsError } = await supabase
             .from("callsheet_jobs")
-            .select("id, storage_path, created_at, status")
+            .select("id, storage_path, created_at, status, needs_review_reason")
             .eq("project_id", project.id);
             
         // 2. Fetch by Project Name (Legacy/Extracted results)
         const { data: results, error: resultsError } = await supabase
           .from("callsheet_results")
-          .select("job_id, project_value, callsheet_jobs!inner(id, storage_path, created_at, status)")
+          .select("job_id, project_value, callsheet_jobs!inner(id, storage_path, created_at, status, needs_review_reason)")
           .ilike("project_value", project.name.trim());
 
         if (jobsError) console.error("Error fetching project jobs:", jobsError);
@@ -340,13 +341,14 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                         <FileText className="w-4 h-4 text-primary shrink-0" />
                         <span className="text-sm truncate">{sheet.name}</span>
                         {sheet.status && (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full capitalize ${
+                            <span title={sheet.needs_review_reason} className={`text-[10px] px-1.5 py-0.5 rounded-full capitalize cursor-help ${
                                 sheet.status === 'done' ? 'bg-green-500/20 text-green-500' :
                                 sheet.status === 'failed' ? 'bg-red-500/20 text-red-500' :
                                 sheet.status === 'queued' ? 'bg-yellow-500/20 text-yellow-500' :
+                                sheet.status === 'needs_review' ? 'bg-orange-500/20 text-orange-500' :
                                 'bg-gray-500/20 text-gray-500'
                             }`}>
-                                {sheet.status}
+                                {sheet.status === 'needs_review' ? 'Revisar' : sheet.status}
                             </span>
                         )}
                       </div>
