@@ -19,7 +19,9 @@ import { Badge } from "@/components/ui/badge";
 import { computeTripWarnings } from "@/lib/trip-warnings";
 import { useI18n } from "@/hooks/use-i18n";
 import { useAuth } from "@/contexts/AuthContext";
-const calculateCO2 = (distance: number) => Math.round(distance * 0.12 * 10) / 10;
+import { calculateCO2KgFromKm } from "@/lib/emissions";
+
+const calculateCO2 = (distance: number) => calculateCO2KgFromKm(distance);
 const mockTripsData: Trip[] = [{
   id: "1",
   date: "2024-01-15",
