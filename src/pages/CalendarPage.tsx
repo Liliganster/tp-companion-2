@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
   Calendar,
@@ -14,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/hooks/use-i18n";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 interface CalendarEvent {
   id: string;
@@ -29,8 +34,20 @@ type CalendarInfo = {
   color: string;
 };
 
+type CreateEventForm = {
+  calendarId: string;
+  title: string;
+  startLocal: string;
+  endLocal: string;
+};
+
 const ENABLED_CALENDARS_STORAGE_KEY = "calendar.enabledIds";
 const CALENDAR_COLOR_CLASSES = ["bg-primary", "bg-accent", "bg-success"];
+
+function toLocalDateTimeInputValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 
 function toISODateKey(value: string): string | null {
   if (!value) return null;
@@ -55,6 +72,15 @@ export default function CalendarPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [calendars, setCalendars] = useState<CalendarInfo[]>([]);
   const [enabledCalendarIds, setEnabledCalendarIds] = useState<Set<string>>(() => new Set());
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createForm, setCreateForm] = useState<CreateEventForm>({
+    calendarId: "primary",
+    title: "",
+    startLocal: "",
+    endLocal: "",
+  });
 
   const daysInMonth = new Date(
     currentDate.getFullYear(),
@@ -136,6 +162,74 @@ export default function CalendarPage() {
     const data: any = await response.json().catch(() => null);
     if (!response.ok || !data?.authUrl) return;
     window.location.href = data.authUrl;
+  };
+
+  const openCreateForDate = (date: Date) => {
+    const base = new Date(date);
+    base.setHours(9, 0, 0, 0);
+    const end = new Date(base.getTime() + 60 * 60 * 1000);
+
+    const defaultCalendarId =
+      calendars.find((c) => c.color === "bg-primary")?.id ?? calendars[0]?.id ?? "primary";
+
+    setCreateForm({
+      calendarId: defaultCalendarId,
+      title: "",
+      startLocal: toLocalDateTimeInputValue(base),
+      endLocal: toLocalDateTimeInputValue(end),
+    });
+    setCreateOpen(true);
+  };
+
+  const createEvent = async () => {
+    const token = await getAccessToken();
+    if (!token) return;
+
+    const title = createForm.title.trim();
+    if (!title) {
+      toast.error("Escribe un título para el evento");
+      return;
+    }
+
+    const start = new Date(createForm.startLocal);
+    const end = new Date(createForm.endLocal);
+    if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) {
+      toast.error("Revisa la fecha y hora de inicio/fin");
+      return;
+    }
+    if (end.getTime() <= start.getTime()) {
+      toast.error("La hora de fin debe ser posterior a la de inicio");
+      return;
+    }
+
+    setCreateBusy(true);
+    try {
+      const response = await fetch("/api/google/calendar/create-event", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          calendarId: createForm.calendarId,
+          summary: title,
+          start: start.toISOString(),
+          end: end.toISOString(),
+        }),
+      });
+
+      const data: any = await response.json().catch(() => null);
+      if (!response.ok) {
+        toast.error(String(data?.error ?? "No se pudo crear el evento"));
+        return;
+      }
+
+      toast.success("Evento creado");
+      setCreateOpen(false);
+      await refreshEvents(currentDate);
+    } finally {
+      setCreateBusy(false);
+    }
   };
 
   const refreshCalendars = async () => {
@@ -336,6 +430,16 @@ export default function CalendarPage() {
               <RefreshCw className="w-4 h-4" />
               {t("calendar.refresh")}
             </Button>
+            {isConnected && calendars.length > 0 && (
+              <Button
+                variant="add"
+                onClick={() => openCreateForDate(new Date())}
+                disabled={loadingCalendars || loadingStatus}
+              >
+                <Plus className="w-4 h-4" />
+                Crear evento
+              </Button>
+            )}
             {isConnected && (
               <Button variant="outline" onClick={disconnectGoogle} disabled={loadingStatus}>
                 Desconectar
@@ -349,6 +453,75 @@ export default function CalendarPage() {
             )}
           </div>
         </div>
+
+        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Crear evento</DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="event-title">Título</Label>
+                <Input
+                  id="event-title"
+                  value={createForm.title}
+                  onChange={(e) => setCreateForm((s) => ({ ...s, title: e.target.value }))}
+                  placeholder="Reunión / viaje / recordatorio"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Calendario</Label>
+                <Select
+                  value={createForm.calendarId}
+                  onValueChange={(v) => setCreateForm((s) => ({ ...s, calendarId: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona un calendario" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {calendars.map((cal) => (
+                      <SelectItem key={cal.id} value={cal.id}>
+                        {cal.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="event-start">Inicio</Label>
+                  <Input
+                    id="event-start"
+                    type="datetime-local"
+                    value={createForm.startLocal}
+                    onChange={(e) => setCreateForm((s) => ({ ...s, startLocal: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="event-end">Fin</Label>
+                  <Input
+                    id="event-end"
+                    type="datetime-local"
+                    value={createForm.endLocal}
+                    onChange={(e) => setCreateForm((s) => ({ ...s, endLocal: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={createBusy}>
+                Cancelar
+              </Button>
+              <Button onClick={createEvent} disabled={createBusy}>
+                {createBusy ? "Creando..." : "Crear"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Calendars sidebar */}
@@ -451,6 +624,8 @@ export default function CalendarPage() {
                   currentDate.getMonth() === today.getMonth() &&
                   currentDate.getFullYear() === today.getFullYear();
 
+                const dayDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+
                 return (
                   <div
                     key={day}
@@ -458,6 +633,10 @@ export default function CalendarPage() {
                       "aspect-square p-1 rounded-lg border border-transparent hover:border-border/50 hover:bg-secondary/30 transition-colors cursor-pointer group",
                       isToday && "border-primary/50 bg-primary/5"
                     )}
+                    onClick={() => {
+                      if (!isConnected || calendars.length === 0) return;
+                      openCreateForDate(dayDate);
+                    }}
                   >
                     <div className="flex flex-col h-full">
                       <span

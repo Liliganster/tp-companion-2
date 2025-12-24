@@ -25,6 +25,7 @@ export default async function handler(req: any, res: any) {
   if (!user) return;
 
   const body = readBody(req);
+  const calendarId = typeof body?.calendarId === "string" && body.calendarId.trim() ? body.calendarId.trim() : "primary";
   const summary = typeof body?.summary === "string" ? body.summary : "";
   const description = typeof body?.description === "string" ? body.description : "";
   const location = typeof body?.location === "string" ? body.location : "";
@@ -36,7 +37,7 @@ export default async function handler(req: any, res: any) {
   try {
     const { accessToken } = await getGoogleAccessTokenForUser(user.id);
 
-    const response = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+    const response = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,

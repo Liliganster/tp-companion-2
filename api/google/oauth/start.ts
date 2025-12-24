@@ -36,7 +36,12 @@ export default async function handler(req: any, res: any) {
 
   // Minimal scopes
   const googleScopes = ["openid", "email", "profile"];
-  if (requested.has("calendar")) googleScopes.push("https://www.googleapis.com/auth/calendar.events");
+  if (requested.has("calendar")) {
+    // Needed for calendarList + reading events across calendars
+    googleScopes.push("https://www.googleapis.com/auth/calendar.readonly");
+    // Needed to create events
+    googleScopes.push("https://www.googleapis.com/auth/calendar.events");
+  }
   if (requested.has("drive")) googleScopes.push("https://www.googleapis.com/auth/drive.file");
 
   const state = buildSignedState({
