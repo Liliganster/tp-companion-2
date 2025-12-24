@@ -15,71 +15,77 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
   const [uploading, setUploading] = useState(false);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
 
-    // Validate PDF
-    if (file.type !== "application/pdf") {
-      toast.error("Solo se permiten archivos PDF");
+    if (files.length > 20) {
+      toast.error("Máximo 20 documentos por vez");
+      e.target.value = "";
       return;
     }
 
+    for (const file of files) {
+      if (file.type !== "application/pdf") {
+        toast.error("Solo se permiten archivos PDF");
+        e.target.value = "";
+        return;
+      }
+    }
+
     setUploading(true);
-    let createdJobId: string | null = null;
+    let successCount = 0;
+    let failCount = 0;
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError || !user) throw new Error("No estás autenticado");
 
-      // 1. Create Job ID first (optimistic)
-      const { data: job, error: jobError } = await supabase
-        .from("callsheet_jobs")
-        .insert({
-          user_id: user.id,
-          storage_path: "pending", 
-          status: "created",
-          project_id: projectId || null
-        })
-        .select()
-        .single();
-
-      if (jobError) throw jobError;
-      createdJobId = job.id;
-
-      // 2. Upload File
-      const filePath = `${user.id}/${job.id}/${file.name}`;
-      const { error: uploadError } = await supabase.storage
-        .from("callsheets")
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      // 3. Update Job (Ready for manual extraction or queue)
-      // User requested Manual extraction trigger, so we keep it as 'created' (or explicit status if needed, but 'created' is fine as initial state)
-      // Actually we just need to update storage_path.
-      const { error: updateError } = await supabase
-        .from("callsheet_jobs")
-        .update({ 
-          storage_path: filePath,
-          // status: "queued" // REMOVED: extraction is now manual via UI
-        })
-        .eq("id", job.id);
-
-      if (updateError) throw updateError;
-
-      toast.success("Callsheet subida. Lista para extraer.");
-      if (onJobCreated) onJobCreated(job.id);
-
-    } catch (err: any) {
-      console.error(err);
-      // Best-effort rollback so we don't leave stuck jobs when upload/update fails.
-      if (createdJobId) {
+      for (const file of files) {
+        let createdJobId: string | null = null;
         try {
-          await supabase.from("callsheet_jobs").delete().eq("id", createdJobId);
-        } catch {
-          // ignore rollback failures
+          const { data: job, error: jobError } = await supabase
+            .from("callsheet_jobs")
+            .insert({
+              user_id: user.id,
+              storage_path: "pending",
+              status: "created",
+              project_id: projectId || null,
+            })
+            .select()
+            .single();
+
+          if (jobError) throw jobError;
+          createdJobId = job.id;
+
+          const filePath = `${user.id}/${job.id}/${file.name}`;
+          const { error: uploadError } = await supabase.storage.from("callsheets").upload(filePath, file);
+          if (uploadError) throw uploadError;
+
+          const { error: updateError } = await supabase
+            .from("callsheet_jobs")
+            .update({ storage_path: filePath })
+            .eq("id", job.id);
+          if (updateError) throw updateError;
+
+          successCount += 1;
+          onJobCreated?.(job.id);
+        } catch (err: any) {
+          console.error(err);
+          failCount += 1;
+          if (createdJobId) {
+            try {
+              await supabase.from("callsheet_jobs").delete().eq("id", createdJobId);
+            } catch {
+              // ignore
+            }
+          }
         }
       }
 
+      if (successCount > 0) toast.success(`Se subieron ${successCount} documentos`);
+      if (failCount > 0) toast.error(`Fallaron ${failCount} documentos`);
+
+    } catch (err: any) {
+      console.error(err);
       toast.error(formatSupabaseError(err, "Error al subir callsheet"));
     } finally {
       setUploading(false);
@@ -94,6 +100,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
         accept="application/pdf"
         id="callsheet-upload"
         className="hidden"
+        multiple
         onChange={handleFileChange}
         disabled={uploading}
       />

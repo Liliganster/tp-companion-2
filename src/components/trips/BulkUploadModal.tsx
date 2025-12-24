@@ -42,11 +42,16 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   
   // AI Tab State
   const [aiStep, setAiStep] = useState<"upload" | "processing" | "review">("upload");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [jobId, setJobId] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [jobIds, setJobIds] = useState<string[]>([]);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [jobMetaById, setJobMetaById] = useState<
+    Record<string, { fileName: string; mimeType: string; storagePath: string }>
+  >({});
   const [extractedData, setExtractedData] = useState<any>(null);
   const [aiLoading, setAiLoading] = useState(false);
-  const [uploadedFilePath, setUploadedFilePath] = useState<string | null>(null);
+  const [processingTotal, setProcessingTotal] = useState(0);
+  const [processingDone, setProcessingDone] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Review form state
@@ -70,11 +75,15 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
   const resetAiState = () => {
     setAiStep("upload");
-    setSelectedFile(null);
-    setJobId(null);
+    setSelectedFiles([]);
+    setJobIds([]);
+    setCurrentJobId(null);
+    setJobMetaById({});
     setExtractedData(null);
     setAiLoading(false);
     setIsOptimizing(false);
+    setProcessingTotal(0);
+    setProcessingDone(0);
     setReviewDate("");
     setReviewProject("");
     setReviewProducer("");
@@ -82,67 +91,109 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     setReviewDistance("0");
     setReviewLocations([]);
     setReviewDistance("0");
-    setUploadedFilePath(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
 
-    if (file.type !== "application/pdf") {
-      toast.error("Solo se permiten archivos PDF para la extracción AI");
+    if (files.length > 20) {
+      toast.error("Máximo 20 documentos por vez");
+      e.target.value = "";
       return;
     }
-    setSelectedFile(file);
+
+    for (const file of files) {
+      if (file.type !== "application/pdf") {
+        toast.error("Solo se permiten archivos PDF para la extracción AI");
+        e.target.value = "";
+        return;
+      }
+    }
+
+    setSelectedFiles(files);
   };
 
   const startAiProcess = async () => {
-    if (!selectedFile) return;
+    if (selectedFiles.length === 0) return;
     
     setAiLoading(true);
+    setAiStep("processing");
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError || !user) throw new Error("No estás autenticado");
 
-      // 1. Create Job
-      const { data: job, error: jobError } = await supabase
-        .from("callsheet_jobs")
-        .insert({
-          user_id: user.id,
-          storage_path: "pending", 
-          status: "created",
-        })
-        .select()
-        .single();
+      const createdJobIds: string[] = [];
+      const metaById: Record<string, { fileName: string; mimeType: string; storagePath: string }> = {};
+      let successCount = 0;
+      let failCount = 0;
 
-      if (jobError) throw jobError;
-      setJobId(job.id);
+      for (const file of selectedFiles) {
+        let createdJobId: string | null = null;
+        try {
+          // 1. Create Job
+          const { data: job, error: jobError } = await supabase
+            .from("callsheet_jobs")
+            .insert({
+              user_id: user.id,
+              storage_path: "pending",
+              status: "created",
+            })
+            .select()
+            .single();
 
-      // 2. Upload File
-      const filePath = `${user.id}/${job.id}/${selectedFile.name}`;
-      const { error: uploadError } = await supabase.storage
-        .from("callsheets")
-        .upload(filePath, selectedFile);
+          if (jobError) throw jobError;
+          createdJobId = job.id;
 
-      if (uploadError) throw uploadError;
-      
-      setUploadedFilePath(filePath);
+          // 2. Upload File
+          const filePath = `${user.id}/${job.id}/${file.name}`;
+          const { error: uploadError } = await supabase.storage.from("callsheets").upload(filePath, file);
+          if (uploadError) throw uploadError;
 
-      // 3. Queue Job
-      const { error: updateError } = await supabase
-        .from("callsheet_jobs")
-        .update({ storage_path: filePath, status: "queued" })
-        .eq("id", job.id);
+          // 3. Queue Job
+          const { error: updateError } = await supabase
+            .from("callsheet_jobs")
+            .update({ storage_path: filePath, status: "queued" })
+            .eq("id", job.id);
+          if (updateError) throw updateError;
 
-      if (updateError) throw updateError;
+          createdJobIds.push(job.id);
+          metaById[job.id] = { fileName: file.name, mimeType: file.type, storagePath: filePath };
+          successCount += 1;
+        } catch (err) {
+          console.error(err);
+          failCount += 1;
+          if (createdJobId) {
+            try {
+              await supabase.from("callsheet_jobs").delete().eq("id", createdJobId);
+            } catch {
+              // ignore
+            }
+          }
+        }
+      }
 
-      setAiStep("processing");
-      // Polling starts automatically via useEffect due to aiStep === 'processing'
+      if (successCount === 0) {
+        setAiStep("upload");
+        toast.error("No se pudo subir ningún documento");
+        return;
+      }
+
+      if (successCount > 0) toast.success(`Se subieron ${successCount} documentos`);
+      if (failCount > 0) toast.error(`Fallaron ${failCount} documentos`);
+
+      setJobIds(createdJobIds);
+      setJobMetaById(metaById);
+      setCurrentJobId(null);
+      setProcessingTotal(createdJobIds.length);
+      setProcessingDone(0);
 
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || "Error al subir documento");
+    }
+    finally {
       setAiLoading(false);
     }
   };
@@ -151,56 +202,62 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
-    if (aiStep === "processing" && jobId) {
+    if (aiStep === "processing" && jobIds.length > 0) {
       const checkStatus = async () => {
         try {
-         const { data: job, error: jobError } = await supabase
+          const { data: jobs, error: jobsError } = await supabase
             .from("callsheet_jobs")
-            .select("*")
-            .eq("id", jobId)
-          .maybeSingle();
+            .select("id, status, error")
+            .in("id", jobIds);
 
-         // If the row is not visible yet (RLS / eventual consistency), keep polling.
-         if (jobError) {
-          // PostgREST returns 406 for .single() when 0 rows; maybeSingle() should reduce this,
-          // but keep it defensive.
-          return;
-         }
+          if (jobsError || !jobs) return;
 
-         if (!job) return;
+          const doneIds = jobs.filter((j: any) => j.status === "done").map((j: any) => j.id);
+          const failedJobs = jobs.filter((j: any) => j.status === "failed");
+          const failedIds = failedJobs.map((j: any) => j.id);
 
-          if (job.status === "done") {
-             // Fetch results
-           const { data: result, error: resultError } = await supabase
-                .from("callsheet_results")
-                .select("*")
-                .eq("job_id", jobId)
-             .maybeSingle();
-             
-           const { data: locs, error: locsError } = await supabase
-                .from("callsheet_locations")
-                .select("*")
-                .eq("job_id", jobId);
+          setProcessingDone(doneIds.length);
 
-           if (resultError || locsError) return;
+          if (failedIds.length > 0) {
+            // Remove failed jobs from the queue so we don't keep polling them.
+            setJobIds((prev) => prev.filter((id) => !failedIds.includes(id)));
+            setJobMetaById((prev) => {
+              const next = { ...prev };
+              failedIds.forEach((id) => {
+                delete next[id];
+              });
+              return next;
+            });
 
-             if (result) {
-             clearInterval(interval);
-                setExtractedData({ result, locations: locs || [] });
-                
-                // Pre-fill basic fields
-                setReviewDate(result.date_value || "");
-                setReviewProject(result.project_value || "");
-                setReviewProducer(result.producer_value || "");
-                
-                // Start optimization (Address Normalization + Distance)
-                optimizeRoute(locs || []);
-             }
-          } else if (job.status === "failed") {
-              toast.error("Error en la extracción AI: " + job.error);
-              setAiStep("upload");
-              setAiLoading(false);
-              clearInterval(interval);
+            // Show a single aggregated message.
+            toast.error(`Fallaron ${failedIds.length} documentos`);
+          }
+
+          // If a job is done, move to review for the first completed one.
+          const nextReadyJobId = doneIds[0];
+          if (nextReadyJobId) {
+            clearInterval(interval);
+            setCurrentJobId(nextReadyJobId);
+
+            const { data: result, error: resultError } = await supabase
+              .from("callsheet_results")
+              .select("*")
+              .eq("job_id", nextReadyJobId)
+              .maybeSingle();
+
+            const { data: locs, error: locsError } = await supabase
+              .from("callsheet_locations")
+              .select("*")
+              .eq("job_id", nextReadyJobId);
+
+            if (resultError || locsError) return;
+            if (!result) return;
+
+            setExtractedData({ result, locations: locs || [] });
+            setReviewDate(result.date_value || "");
+            setReviewProject(result.project_value || "");
+            setReviewProducer(result.producer_value || "");
+            optimizeRoute(locs || []);
           }
         } catch (e) {
           console.error("Polling error", e);
@@ -208,10 +265,11 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       };
 
       interval = setInterval(checkStatus, 2000);
+      void checkStatus();
     }
 
     return () => clearInterval(interval);
-  }, [aiStep, jobId]);
+  }, [aiStep, jobIds]);
 
   const optimizeRoute = async (rawLocations: any[]) => {
       setIsOptimizing(true);
@@ -258,6 +316,9 @@ interface SavedTrip {
 
   const handleSaveTrip = async () => {
     if (!onSave) return;
+    if (!currentJobId) return;
+    const currentMeta = jobMetaById[currentJobId];
+    if (!currentMeta) return;
     
     // Use base address for Origin and Destination
     const baseAddress = profile.baseAddress || "";
@@ -287,7 +348,7 @@ interface SavedTrip {
                 id: newProjectId,
                 name: trimmedProjectName,
                 producer: reviewProducer,
-                description: `Created from AI Upload: ${selectedFile?.name}`,
+              description: `Created from AI Upload: ${currentMeta.fileName}`,
                 ratePerKm: 0.30, 
                 starred: false,
                 trips: 0,
@@ -314,18 +375,44 @@ interface SavedTrip {
         passengers: 0,
         distance: parseFloat(reviewDistance) || 0,
         specialOrigin: "base",
-        documents: uploadedFilePath ? [{
+        documents: currentMeta.storagePath ? [{
             id: crypto.randomUUID(),
-            name: selectedFile?.name || "Documento Original",
-            mimeType: selectedFile?.type || "application/pdf",
-            storagePath: uploadedFilePath,
+            name: currentMeta.fileName || "Documento Original",
+            mimeType: currentMeta.mimeType || "application/pdf",
+            storagePath: currentMeta.storagePath,
             createdAt: new Date().toISOString()
         }] : undefined
     };
 
     onSave(newTrip);
     toast.success("Viaje guardado correctamente");
-    setOpen(false);
+
+    const remainingJobIds = jobIds.filter((id) => id !== currentJobId);
+
+    // Remove the current job and continue with the next ones (if any).
+    setJobIds((prev) => prev.filter((id) => id !== currentJobId));
+    setJobMetaById((prev) => {
+      const next = { ...prev };
+      delete next[currentJobId];
+      return next;
+    });
+
+    setCurrentJobId(null);
+    setExtractedData(null);
+    setIsOptimizing(false);
+    setReviewDate("");
+    setReviewProject("");
+    setReviewProducer("");
+    setReviewLocations([]);
+    setReviewDistance("0");
+
+    if (remainingJobIds.length > 0) {
+      setProcessingTotal(remainingJobIds.length);
+      setProcessingDone(0);
+      setAiStep("processing");
+    } else {
+      setOpen(false);
+    }
   };
 
   return (
@@ -405,6 +492,7 @@ interface SavedTrip {
                 ref={fileInputRef} 
                 className="hidden" 
                 accept="application/pdf"
+                multiple
                 onChange={handleFileSelect}
             />
             
@@ -415,8 +503,16 @@ interface SavedTrip {
                         className="border-2 border-dashed border-border/50 rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
                     >
                     <Sparkles className="w-12 h-12 text-primary mx-auto mb-4" />
-                    <p className="font-medium text-lg">{selectedFile ? selectedFile.name : t("bulk.aiDropTitle")}</p>
-                    <p className="text-sm text-muted-foreground mt-2">{selectedFile ? "Click para cambiar archivo" : t("bulk.aiDropSubtitle")}</p>
+                    <p className="font-medium text-lg">
+                      {selectedFiles.length > 0
+                        ? selectedFiles.length === 1
+                          ? selectedFiles[0].name
+                          : `${selectedFiles.length} archivos seleccionados`
+                        : t("bulk.aiDropTitle")}
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      {selectedFiles.length > 0 ? "Click para cambiar archivos" : t("bulk.aiDropSubtitle")}
+                    </p>
                     </div>
 
                     <p className="text-sm text-muted-foreground text-center">
@@ -431,7 +527,7 @@ interface SavedTrip {
                         variant="add" 
                         className="gap-2" 
                         onClick={startAiProcess} 
-                        disabled={!selectedFile || aiLoading}
+                      disabled={selectedFiles.length === 0 || aiLoading}
                     >
                         {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                         {t("bulk.aiProcess")}
@@ -445,9 +541,11 @@ interface SavedTrip {
                     <Loader2 className="w-16 h-16 text-primary animate-spin mx-auto" />
                     <div>
                         <h3 className="text-lg font-medium">
-                            {isOptimizing ? "Optimizando ruta y direcciones..." : "Analizando documento..."}
+                    {isOptimizing ? "Optimizando ruta y direcciones..." : "Analizando documentos..."}
                         </h3>
-                        <p className="text-muted-foreground">Esto puede tomar unos segundos.</p>
+                  <p className="text-muted-foreground">
+                    {processingTotal > 1 ? `Completados ${processingDone}/${processingTotal}` : "Esto puede tomar unos segundos."}
+                  </p>
                     </div>
                 </div>
             )}

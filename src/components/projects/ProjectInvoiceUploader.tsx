@@ -14,13 +14,21 @@ export function ProjectInvoiceUploader({ onUploadComplete, projectId }: ProjectI
   const [uploading, setUploading] = useState(false);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
 
-    // Validate type (PDF/Image)
-    if (!file.type.match(/pdf|image/)) {
-      toast.error("Solo se permiten archivos PDF o Imágenes");
+    if (files.length > 20) {
+      toast.error("Máximo 20 documentos por vez");
+      e.target.value = "";
       return;
+    }
+
+    for (const file of files) {
+      if (!file.type.match(/pdf|image/)) {
+        toast.error("Solo se permiten archivos PDF o Imágenes");
+        e.target.value = "";
+        return;
+      }
     }
 
     setUploading(true);
@@ -28,29 +36,34 @@ export function ProjectInvoiceUploader({ onUploadComplete, projectId }: ProjectI
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError || !user) throw new Error("No estás autenticado");
 
-      // 1. Upload File
-      const filePath = `${projectId}/${crypto.randomUUID()}-${file.name}`;
-      const { error: uploadError } = await supabase.storage
-        .from("project_documents")
-        .upload(filePath, file);
+      let successCount = 0;
+      let failCount = 0;
 
-      if (uploadError) throw uploadError;
+      for (const file of files) {
+        try {
+          const filePath = `${projectId}/${crypto.randomUUID()}-${file.name}`;
+          const { error: uploadError } = await supabase.storage.from("project_documents").upload(filePath, file);
+          if (uploadError) throw uploadError;
 
-      // 2. Insert Record
-      const { error: dbError } = await supabase
-        .from("project_documents")
-        .insert({
+          const { error: dbError } = await supabase.from("project_documents").insert({
             project_id: projectId,
             user_id: user.id,
             name: file.name,
             storage_path: filePath,
-            type: "invoice"
-        });
+            type: "invoice",
+          });
+          if (dbError) throw dbError;
 
-      if (dbError) throw dbError;
+          successCount += 1;
+        } catch (err: any) {
+          console.error(err);
+          failCount += 1;
+        }
+      }
 
-      toast.success("Factura subida correctamente");
-      if (onUploadComplete) onUploadComplete();
+      if (successCount > 0) toast.success(`Se subieron ${successCount} facturas/documentos`);
+      if (failCount > 0) toast.error(`Fallaron ${failCount} documentos`);
+      onUploadComplete?.();
 
     } catch (err: any) {
       console.error(err);
@@ -68,6 +81,7 @@ export function ProjectInvoiceUploader({ onUploadComplete, projectId }: ProjectI
         accept="application/pdf,image/*"
         id="invoice-upload"
         className="hidden"
+        multiple
         onChange={handleFileChange}
         disabled={uploading}
       />

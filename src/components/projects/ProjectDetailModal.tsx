@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Car, Calendar, Route, Leaf, FileText, Sparkles, Eye, Trash2, Upload, Receipt } from "lucide-react";
+import { Car, Calendar, Route, Leaf, FileText, Sparkles, Eye, Trash2, Upload, Receipt, Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/hooks/use-i18n";
 import { tf } from "@/lib/i18n";
@@ -364,9 +364,13 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   };
   
   const handleExtract = async (doc: ProjectDocument) => {
-    if (doc.status === 'queued' || doc.status === 'processing' || doc.status === 'done') {
-        toast.info(`El documento ya está en estado: ${doc.status}`);
-        return;
+    if (doc.status === 'queued' || doc.status === 'processing') {
+      toast.info("El documento ya se está procesando");
+      return;
+    }
+    if (doc.status === 'done') {
+      toast.info("El documento ya fue procesado");
+      return;
     }
     
     try {
@@ -520,17 +524,19 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                       <div className="flex items-center gap-3 min-w-0">
                         <FileText className="w-4 h-4 text-primary shrink-0" />
                         <span className="text-sm truncate">{sheet.name}</span>
-                        {sheet.status && (
-                            <span title={sheet.needs_review_reason} className={`text-[10px] px-1.5 py-0.5 rounded-full capitalize cursor-help ${
-                                sheet.status === 'done' ? 'bg-green-500/20 text-green-500' :
-                                sheet.status === 'failed' ? 'bg-red-500/20 text-red-500' :
-                                sheet.status === 'queued' ? 'bg-yellow-500/20 text-yellow-500' :
-                                sheet.status === 'needs_review' ? 'bg-orange-500/20 text-orange-500' :
-                                'bg-gray-500/20 text-gray-500'
-                            }`}>
-                                {sheet.status === 'needs_review' ? 'Revisar' : sheet.status}
-                            </span>
-                        )}
+                        {sheet.status === 'queued' || sheet.status === 'processing' ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        ) : null}
+                        {sheet.status === 'needs_review' ? (
+                          <span title={sheet.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-full cursor-help bg-orange-500/20 text-orange-500">
+                            Revisar
+                          </span>
+                        ) : null}
+                        {sheet.status === 'failed' ? (
+                          <span title={sheet.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-full cursor-help bg-red-500/20 text-red-500">
+                            Error
+                          </span>
+                        ) : null}
                       </div>
                       
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

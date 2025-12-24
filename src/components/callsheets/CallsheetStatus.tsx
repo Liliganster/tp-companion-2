@@ -24,13 +24,14 @@ export function CallsheetStatus({ jobId }: CallsheetStatusProps) {
         if (!session.session) return;
 
         // 1. Fetch Job
-        const { data: jobData, error: jobError } = await supabase
+                const { data: jobData, error: jobError } = await supabase
           .from("callsheet_jobs")
           .select("*")
           .eq("id", jobId)
-          .single();
+                    .maybeSingle();
 
-        if (jobError) throw jobError;
+                if (jobError) throw jobError;
+                if (!jobData) return;
         setStatus(jobData);
 
         // 2. Fetch Results & Locations if done/review
@@ -71,15 +72,16 @@ export function CallsheetStatus({ jobId }: CallsheetStatusProps) {
   if (loading && !status) return <div className="p-4"><Loader2 className="animate-spin" /> Cargando estado...</div>;
   if (error) return <div className="text-red-500 p-4">Error: {error}</div>;
 
-  return (
-    <div className="space-y-4 p-4">
-        <div className="flex items-center gap-2">
-            <span className="font-bold">Estado:</span>
-            <Badge variant={status?.status === 'done' ? 'default' : status?.status === 'failed' ? 'destructive' : 'secondary'}>
-                {status?.status}
-            </Badge>
-            {status?.pdf_kind && <Badge variant="outline">{status.pdf_kind}</Badge>}
-        </div>
+    const isProcessing = status?.status === "created" || status?.status === "queued" || status?.status === "processing";
+
+    return (
+        <div className="space-y-4 p-4">
+                {isProcessing && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Procesando…</span>
+                    </div>
+                )}
 
         {status?.status === 'done' && results && (
             <Card>
