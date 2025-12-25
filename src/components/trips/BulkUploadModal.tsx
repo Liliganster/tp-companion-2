@@ -23,6 +23,7 @@ interface SavedTrip {
   date: string;
   route: string[];
   project: string;
+  projectId?: string;
   purpose: string;
   passengers: number;
   invoice?: string;
@@ -379,7 +380,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
             if (typeof computedKm === "number" && computedKm > 0) distance = computedKm;
           }
 
-          await onSave({ ...trip, projectId, distance });
+          onSave({ ...trip, projectId, distance });
           ok += 1;
         } catch (e) {
           console.error(e);
@@ -648,20 +649,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const { profile } = useUserProfile();
   const { projects, addProject } = useProjects();
 
-interface SavedTrip {
-  id: string;
-  date: string;
-  route: string[];
-  project: string;
-  projectId?: string; // Added
-  purpose: string;
-  passengers: number;
-  invoice?: string;
-  distance: number;
-  ratePerKmOverride?: number | null;
-  specialOrigin?: "base" | "continue" | "return";
-  documents?: any[];
-}
+// Duplicate SavedTrip interface removed; projectId is declared in the top SavedTrip interface.
 
   const handleSaveTrip = async () => {
     if (!onSave) return;
