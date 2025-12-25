@@ -150,6 +150,13 @@
   }
 
   body {
+    /* Ensure body maintains width when modal opens */
+    overflow-x: hidden;
+    overflow-y: scroll;
+    width: 100%;
+  }
+
+  body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', system-ui, sans-serif;
   }
