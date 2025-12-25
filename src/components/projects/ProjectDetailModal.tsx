@@ -47,6 +47,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const [realCallSheets, setRealCallSheets] = useState<ProjectDocument[]>([]);
   const [projectDocs, setProjectDocs] = useState<ProjectDocument[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [triggeringWorker, setTriggeringWorker] = useState(false);
   const realCallSheetsRef = useRef<ProjectDocument[]>([]);
 
   useEffect(() => {
@@ -486,8 +487,6 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         toast.error("Error al iniciar extracción: " + e.message);
     }
   };
-
-  const [triggeringWorker, setTriggeringWorker] = useState(false);
 
   const handleTriggerWorker = async () => {
     setTriggeringWorker(true);
