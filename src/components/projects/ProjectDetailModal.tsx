@@ -203,7 +203,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         inFlightJobsRef.current.delete(job.id);
       }
     },
-    [addTrip, calculateCO2, hasTripForStoragePath, normalizeProjectName, profile, project]
+    [addTrip, calculateCO2, hasTripForJob, normalizeProjectName, profile, project]
   );
 
   useEffect(() => {
