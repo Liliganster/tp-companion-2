@@ -463,28 +463,62 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     }
   };
   
-  const handleExtract = async (doc: ProjectDocument) => {
+  const handleExtract = async (doc: ProjectDocument, isReprocess = false) => {
     if (doc.status === 'queued' || doc.status === 'processing') {
       toast.info("El documento ya se está procesando");
       return;
     }
-    if (doc.status === 'done') {
-      toast.info("El documento ya fue procesado");
-      return;
+    
+    // Si es re-procesamiento, confirmar primero
+    if (doc.status === 'done' && !isReprocess) {
+      if (!confirm("Este documento ya fue procesado. ¿Quieres volver a procesarlo? Se borrarán los datos anteriores y se hará una nueva extracción con IA.")) {
+        return;
+      }
     }
     
     try {
-        const { error } = await supabase
-            .from("callsheet_jobs")
+      // Si está en 'done', limpiar datos anteriores
+      if (doc.status === 'done') {
+        // 1. Eliminar el viaje asociado a este job
+        const tripToDelete = trips.find(t => t.callsheet_job_id === doc.id);
+        if (tripToDelete) {
+          const { error: tripError } = await supabase
+            .from("trips")
+            .delete()
+            .eq("id", tripToDelete.id);
+          if (tripError) console.error("Error eliminando viaje anterior:", tripError);
+        }
+
+        // 2. Eliminar resultados de extracción anteriores
+        const { error: resultsError } = await supabase
+          .from("callsheet_results")
+          .delete()
+          .eq("job_id", doc.id);
+        if (resultsError) console.error("Error eliminando resultados:", resultsError);
+
+        // 3. Eliminar ubicaciones anteriores
+        const { error: locsError } = await supabase
+          .from("callsheet_locations")
+          .delete()
+          .eq("job_id", doc.id);
+        if (locsError) console.error("Error eliminando ubicaciones:", locsError);
+
+        // 4. Marcar el job para re-procesamiento
+        processedJobsRef.current.delete(doc.id);
+      }
+
+      // Poner en cola para procesamiento
+      const { error } = await supabase
+        .from("callsheet_jobs")
         .update({ status: "queued", project_id: project?.id ?? null })
-            .eq("id", doc.id);
+        .eq("id", doc.id);
             
-        if (error) throw error;
+      if (error) throw error;
         
-        toast.success("Extracción iniciada. El proceso comenzará en breve.");
-        setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'queued' } : p));
+      toast.success(doc.status === 'done' ? "Re-procesamiento iniciado" : "Extracción iniciada. El proceso comenzará en breve.");
+      setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'queued' } : p));
     } catch (e: any) {
-        toast.error("Error al iniciar extracción: " + e.message);
+      toast.error("Error al iniciar extracción: " + e.message);
     }
   };
 
@@ -681,10 +715,16 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                       </div>
                       
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {sheet.status !== 'done' && sheet.status !== 'queued' && sheet.status !== 'processing' && (
-                             <Button variant="ghost" size="icon" className="h-8 w-8 text-yellow-500 hover:text-yellow-400" onClick={() => handleExtract(sheet)} title="Extraer datos con IA">
-                                <Sparkles className="w-4 h-4" />
-                            </Button>
+                        {sheet.status !== 'queued' && sheet.status !== 'processing' && (
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-yellow-500 hover:text-yellow-400" 
+                            onClick={() => handleExtract(sheet)} 
+                            title={sheet.status === 'done' ? "Volver a procesar con IA" : "Extraer datos con IA"}
+                          >
+                            <Sparkles className="w-4 h-4" />
+                          </Button>
                         )}
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleViewCallSheet(sheet)}>
                           <Eye className="w-4 h-4" />
