@@ -124,6 +124,35 @@ export default function Trips() {
     setTripToEdit(trip);
     setEditModalOpen(true);
   };
+
+  const handleDeleteTrip = async (trip: Trip) => {
+    try {
+      await deleteTrip(trip.id);
+
+      setSelectedIds((prev) => {
+        if (!prev.has(trip.id)) return prev;
+        const next = new Set(prev);
+        next.delete(trip.id);
+        return next;
+      });
+
+      if (selectedTrip?.id === trip.id) {
+        setDetailModalOpen(false);
+        setSelectedTrip(null);
+      }
+
+      toast({
+        title: t("trips.toastTripsDeletedTitle"),
+        description: tf("trips.toastTripsDeletedBody", { count: 1 }),
+      });
+    } catch {
+      toast({
+        title: t("trips.toastTripsDeletedTitle"),
+        description: "No se pudo borrar el viaje.",
+        variant: "destructive",
+      });
+    }
+  };
   const handleAddToCalendar = (trip: Trip) => {
     (async () => {
       const token = await getAccessToken();
@@ -470,7 +499,14 @@ export default function Trips() {
                   <Pencil className="w-4 h-4 mr-2" />
                   {t("trips.edit")}
                 </DropdownMenuItem>
-                <DropdownMenuItem className="text-destructive">
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    void handleDeleteTrip(trip);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <Trash2 className="w-4 h-4 mr-2" />
                   {t("trips.delete")}
                 </DropdownMenuItem>
@@ -624,7 +660,14 @@ export default function Trips() {
                         <Pencil className="w-4 h-4 mr-2" />
                         {t("trips.edit")}
                       </DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive">
+                      <DropdownMenuItem
+                        className="text-destructive"
+                        onSelect={(e) => {
+                          e.preventDefault();
+                          void handleDeleteTrip(trip);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <Trash2 className="w-4 h-4 mr-2" />
                         {t("trips.delete")}
                       </DropdownMenuItem>

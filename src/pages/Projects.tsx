@@ -255,6 +255,35 @@ export default function Projects() {
     setDetailModalOpen(true);
   };
 
+  const handleDeleteProject = async (project: Project) => {
+    try {
+      await deleteProject(project.id);
+
+      setSelectedIds((prev) => {
+        if (!prev.has(project.id)) return prev;
+        const next = new Set(prev);
+        next.delete(project.id);
+        return next;
+      });
+
+      if (selectedProject?.id === project.id) {
+        setDetailModalOpen(false);
+        setSelectedProject(null);
+      }
+
+      toast({
+        title: t("projects.toastDeletedTitle"),
+        description: tf("projects.toastDeletedBody", { count: 1 }),
+      });
+    } catch {
+      toast({
+        title: t("projects.toastDeletedTitle"),
+        description: "No se pudo borrar el proyecto.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const filteredProjects = projects.filter(
     (project) =>
       project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -639,7 +668,13 @@ export default function Projects() {
                             <Pencil className="w-4 h-4 mr-2" />
                             {t("projects.edit")}
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive">
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onSelect={(e) => {
+                              e.preventDefault();
+                              void handleDeleteProject(project);
+                            }}
+                          >
                             <Trash2 className="w-4 h-4 mr-2" />
                             {t("projects.delete")}
                           </DropdownMenuItem>
