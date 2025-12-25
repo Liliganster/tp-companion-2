@@ -545,7 +545,20 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const handleTriggerWorker = async () => {
     setTriggeringWorker(true);
     try {
-      const res = await fetch('/api/callsheets/trigger-worker', { method: 'POST' });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error("Sesión no válida");
+        return;
+      }
+
+      const res = await fetch('/api/callsheets/trigger-worker', { 
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
       const data = await res.json();
       
       if (!res.ok) {
