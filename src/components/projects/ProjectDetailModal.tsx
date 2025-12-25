@@ -125,9 +125,17 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         }
         
         if (!result) {
-            console.warn("[Materialize] No result found for DONE job:", job.id);
-            // If it's done but has no result, it might be a weird state.
-            // We won't mark processed so it retries or we can manually inspect.
+            console.warn("[Materialize] No result found for DONE job:", job.id, "- marking as failed");
+            // Job is marked as "done" but has no extraction results - this is an error state
+            // Mark it as failed so user can see it and re-process
+            await supabase
+              .from("callsheet_jobs")
+              .update({ 
+                status: "failed", 
+                needs_review_reason: "Job marked as done but no extraction results found in database" 
+              })
+              .eq("id", job.id);
+            processedJobsRef.current.add(job.id);
             return;
         }
 
@@ -290,14 +298,18 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         
         setRealCallSheets(allDocs);
 
-        // Materialize trips from jobs that are already done
+        // Materialize trips from jobs that are already done (but only once per modal open)
+        // This runs after initial fetch to create trips for jobs that completed before modal opened
         const doneJobs = allDocs.filter(doc => doc.status === 'done');
         if (doneJobs.length > 0) {
-          Promise.all(doneJobs.map(doc => materializeTripFromJob({
-            id: doc.id,
-            storage_path: doc.storage_path,
-            status: doc.status
-          }))).catch(console.error);
+          // Use setTimeout to avoid blocking the UI and to run after state is set
+          setTimeout(() => {
+            Promise.all(doneJobs.map(doc => materializeTripFromJob({
+              id: doc.id,
+              storage_path: doc.storage_path,
+              status: doc.status
+            }))).catch(console.error);
+          }, 100);
         }
       };
 
@@ -387,18 +399,26 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
         // 2) Materialize trips for completed jobs.
         const doneJobs = (jobs ?? []).filter((j: any) => j.status === "done");
-        await Promise.all(doneJobs.map((j: any) => materializeTripFromJob(j)));
+        if (doneJobs.length > 0) {
+          // Only materialize jobs that haven't been processed yet
+          const unprocessedDone = doneJobs.filter((j: any) => !processedJobsRef.current.has(j.id));
+          if (unprocessedDone.length > 0) {
+            await Promise.allSettled(unprocessedDone.map((j: any) => materializeTripFromJob(j)));
+          }
+        }
 
         // 3) If nothing is pending, stop polling.
         const hasPending = (jobs ?? []).some(
           (j: any) => j?.status === "queued" || j?.status === "processing" || j?.status === "created",
         );
+        
         if (!hasPending && interval) {
+          console.log("[Polling] No pending jobs, stopping polling");
           clearInterval(interval);
           interval = null;
         }
-      } catch {
-        // silent polling failure
+      } catch (err) {
+        console.error("[Polling] Error:", err);
       }
     };
 
