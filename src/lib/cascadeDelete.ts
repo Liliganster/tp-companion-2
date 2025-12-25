@@ -2,6 +2,58 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 type AnyRow = Record<string, any>;
 
+type AnyErr = {
+  message?: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+  statusCode?: number;
+  status?: number;
+  error?: unknown;
+};
+
+function errToMessage(err: unknown) {
+  if (!err) return "";
+  if (typeof err === "string") return err;
+  const anyErr = err as AnyErr;
+  return anyErr.message ? String(anyErr.message) : String(err);
+}
+
+function isMissingColumnOrSchema(err: unknown) {
+  const anyErr = err as AnyErr;
+  const msg = errToMessage(err).toLowerCase();
+  return (
+    anyErr?.code === "PGRST204" ||
+    anyErr?.code === "PGRST205" ||
+    msg.includes("could not find") ||
+    msg.includes("column") && msg.includes("does not exist") ||
+    msg.includes("schema cache")
+  );
+}
+
+async function bestEffortRemoveFromBucket(
+  supabase: SupabaseClient,
+  bucket: string,
+  paths: string[],
+) {
+  if (paths.length === 0) return;
+
+  const { error } = await supabase.storage.from(bucket).remove(paths);
+  if (!error) return;
+
+  // If bulk remove fails, try one by one. We don't want a storage hiccup to block deletes.
+  console.warn(`[cascadeDelete] Storage bulk remove failed for ${bucket}:`, error);
+
+  await Promise.all(
+    paths.map(async (p) => {
+      const { error: singleError } = await supabase.storage.from(bucket).remove([p]);
+      if (singleError) {
+        console.warn(`[cascadeDelete] Storage remove failed for ${bucket} path=${p}:`, singleError);
+      }
+    }),
+  );
+}
+
 function uniqStrings(values: Array<string | null | undefined>) {
   return Array.from(new Set(values.map((v) => (v ?? "").trim()).filter(Boolean)));
 }
@@ -12,7 +64,15 @@ async function removeTripIdFromReports(supabase: SupabaseClient, tripId: string)
     .select("id, trip_ids")
     .contains("trip_ids", [tripId]);
 
-  if (error) throw error;
+  if (error) {
+    // Some deployments may not have the optional trip_ids column yet.
+    // In that case, skip report cleanup instead of blocking deletes.
+    if (isMissingColumnOrSchema(error)) {
+      console.warn("[cascadeDelete] reports.trip_ids missing; skipping report cleanup");
+      return;
+    }
+    throw error;
+  }
   if (!affectedReports || affectedReports.length === 0) return;
 
   await Promise.all(
@@ -50,8 +110,7 @@ export async function cascadeDeleteTripById(supabase: SupabaseClient, tripId: st
 
   // 3) Delete associated callsheet files (if any)
   if (storagePaths.length > 0) {
-    const { error: storageError } = await supabase.storage.from("callsheets").remove(storagePaths);
-    if (storageError) throw storageError;
+    await bestEffortRemoveFromBucket(supabase, "callsheets", storagePaths);
 
     // 4) Delete extractor jobs for these storage paths (cascades results/locations/etc)
     const { error: jobsDeleteError } = await supabase
@@ -79,8 +138,7 @@ export async function cascadeDeleteCallsheetJobById(supabase: SupabaseClient, jo
 
   const storagePath = String((job as AnyRow).storage_path ?? "").trim();
   if (storagePath) {
-    const { error: storageError } = await supabase.storage.from("callsheets").remove([storagePath]);
-    if (storageError) throw storageError;
+    await bestEffortRemoveFromBucket(supabase, "callsheets", [storagePath]);
   }
 
   const { error: deleteError } = await supabase.from("callsheet_jobs").delete().eq("id", jobId);
@@ -112,8 +170,7 @@ export async function cascadeDeleteProjectById(supabase: SupabaseClient, project
 
   const jobStoragePaths = uniqStrings((jobs ?? []).map((j: AnyRow) => j.storage_path));
   if (jobStoragePaths.length > 0) {
-    const { error: storageError } = await supabase.storage.from("callsheets").remove(jobStoragePaths);
-    if (storageError) throw storageError;
+    await bestEffortRemoveFromBucket(supabase, "callsheets", jobStoragePaths);
   }
 
   if ((jobs ?? []).length > 0) {
@@ -131,8 +188,7 @@ export async function cascadeDeleteProjectById(supabase: SupabaseClient, project
 
   const projectDocPaths = uniqStrings((docs ?? []).map((d: AnyRow) => d.storage_path));
   if (projectDocPaths.length > 0) {
-    const { error: storageError } = await supabase.storage.from("project_documents").remove(projectDocPaths);
-    if (storageError) throw storageError;
+    await bestEffortRemoveFromBucket(supabase, "project_documents", projectDocPaths);
   }
 
   if ((docs ?? []).length > 0) {
