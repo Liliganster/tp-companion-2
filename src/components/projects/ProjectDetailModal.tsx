@@ -265,6 +265,16 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         }
         
         setRealCallSheets(allDocs);
+
+        // Materialize trips from jobs that are already done
+        const doneJobs = allDocs.filter(doc => doc.status === 'done');
+        if (doneJobs.length > 0) {
+          Promise.all(doneJobs.map(doc => materializeTripFromJob({
+            id: doc.id,
+            storage_path: doc.storage_path,
+            status: doc.status
+          }))).catch(console.error);
+        }
       };
 
       const fetchProjectDocs = async () => {
@@ -454,6 +464,27 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     }
   };
 
+  const [triggeringWorker, setTriggeringWorker] = useState(false);
+
+  const handleTriggerWorker = async () => {
+    setTriggeringWorker(true);
+    try {
+      const res = await fetch('/api/callsheets/trigger-worker', { method: 'POST' });
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.message || 'Error al procesar');
+      }
+      
+      toast.success(`Worker ejecutado: ${data.processed || 0} trabajos procesados`);
+      setRefreshTrigger(p => p + 1);
+    } catch (e: any) {
+      toast.error("Error al ejecutar worker: " + e.message);
+    } finally {
+      setTriggeringWorker(false);
+    }
+  };
+
   const handleViewInvoice = async (doc: ProjectDocument) => {
       if (doc.storage_path) {
           // Project document (Project Invoices)
@@ -577,7 +608,28 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                   <FileText className="w-5 h-5 text-muted-foreground" />
                   <h3 className="font-medium">{t("projectDetail.callSheetsTitle")}</h3>
                 </div>
-                <CallsheetUploader projectId={project.id} onJobCreated={handleJobCreated} />
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={handleTriggerWorker}
+                    disabled={triggeringWorker}
+                    className="h-9"
+                  >
+                    {triggeringWorker ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Procesando...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        Procesar ahora
+                      </>
+                    )}
+                  </Button>
+                  <CallsheetUploader projectId={project.id} onJobCreated={handleJobCreated} />
+                </div>
               </div>
 
               <div className="space-y-2">

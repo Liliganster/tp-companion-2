@@ -12,8 +12,9 @@ export default async function handler(req: any, res: any) {
   if (!user) return;
 
   try {
-    // Trigger the worker endpoint directly
-    const workerUrl = `${req.headers.host?.includes('localhost') ? 'http' : 'https'}://${req.headers.host}/api/worker`;
+    // Trigger the worker endpoint directly with CRON_SECRET
+    const protocol = req.headers.host?.includes('localhost') ? 'http' : 'https';
+    const workerUrl = `${protocol}://${req.headers.host}/api/worker`;
     const cronSecret = process.env.CRON_SECRET;
 
     const workerRes = await fetch(workerUrl, {
@@ -24,12 +25,16 @@ export default async function handler(req: any, res: any) {
       },
     });
 
-    const result = await workerRes.json();
-
     if (!workerRes.ok) {
-      return sendJson(res, workerRes.status, result);
+      const errorText = await workerRes.text();
+      console.error("[trigger-worker] worker failed:", workerRes.status, errorText);
+      return sendJson(res, workerRes.status, { 
+        error: "worker_failed", 
+        message: errorText || "Worker execution failed" 
+      });
     }
 
+    const result = await workerRes.json();
     return sendJson(res, 200, { ok: true, ...result });
   } catch (e: any) {
     console.error("[trigger-worker] error:", e);
