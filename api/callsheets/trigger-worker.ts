@@ -34,7 +34,7 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const result = await workerRes.json();
+    const result = await workerRes.json() as Record<string, any>;
     return sendJson(res, 200, { ok: true, ...result });
   } catch (e: any) {
     console.error("[trigger-worker] error:", e);
