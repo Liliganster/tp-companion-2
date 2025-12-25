@@ -93,14 +93,19 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       if (inFlightJobsRef.current.has(job.id)) return;
 
       const storagePath = (job.storage_path ?? "").trim();
-      if (!storagePath) return;
+      if (!storagePath) {
+          console.warn("[Materialize] Job missing storage path:", job.id);
+          return;
+      }
 
       // Avoid duplicates if the trip already exists
       if (hasTripForJob(job.id, storagePath)) {
+        console.log("[Materialize] Trip already exists for job:", job.id);
         processedJobsRef.current.add(job.id);
         return;
       }
 
+      console.log("[Materialize] Processing job:", job.id);
       inFlightJobsRef.current.add(job.id);
 
       try {
@@ -109,12 +114,27 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           supabase.from("callsheet_locations").select("*").eq("job_id", job.id),
         ]);
 
-        if (resultError) return;
-        if (locsError) return;
-        if (!result) return;
+        if (resultError) {
+             console.error("[Materialize] Error fetching results:", resultError);
+             return;
+        }
+        if (locsError) {
+             console.error("[Materialize] Error fetching locations:", locsError);
+             return;
+        }
+        
+        if (!result) {
+            console.warn("[Materialize] No result found for DONE job:", job.id);
+            // If it's done but has no result, it might be a weird state.
+            // We won't mark processed so it retries or we can manually inspect.
+            return;
+        }
+
+        console.log("[Materialize] Extracted result:", result);
 
         const extractedProject = (result?.project_value ?? "").trim();
         if (extractedProject && normalizeProjectName(extractedProject) !== normalizeProjectName(project.name)) {
+          console.warn("[Materialize] Project mismatch:", extractedProject, "vs", project.name);
           const reason = `Project mismatch: AI extracted "${extractedProject}" but file is in project "${project.name}"`;
           toast.warning("Documento no coincide con el proyecto. Revisa manualmente.");
           // Best-effort persist (requires UPDATE policy on callsheet_jobs)
@@ -128,6 +148,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
         const date = (result?.date_value ?? "").toString().trim();
         if (!date) {
+          console.warn("[Materialize] Missing date value");
           const reason = "Missing date_value in extracted result";
           toast.warning("No se pudo extraer la fecha. Revisa manualmente.");
           await supabase
@@ -144,6 +165,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           .filter(Boolean);
 
         if (rawLocations.length === 0) {
+          console.warn("[Materialize] Missing locations");
           const reason = "Missing locations in extracted result";
           toast.warning("No se pudieron extraer ubicaciones. Revisa manualmente.");
           await supabase
@@ -153,7 +175,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           processedJobsRef.current.add(job.id);
           return;
         }
-
+        
+        console.log("[Materialize] Optimizing locations:", rawLocations);
         const { locations: normalizedLocs, distanceKm } = await optimizeCallsheetLocationsAndDistance({
           profile,
           rawLocations,
