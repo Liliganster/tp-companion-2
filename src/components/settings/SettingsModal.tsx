@@ -43,7 +43,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
   const { profile, saveProfile } = useUserProfile();
   const { appearance, saveAppearance, previewAppearance, resetPreview } = useAppearance();
-  const { getAccessToken } = useAuth();
+  const { getAccessToken, signOut } = useAuth();
 
   // Draft form state for profile
   const [profileData, setProfileData] = useState(profile);
@@ -120,6 +120,47 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
       setGoogleStatus({ loading: false, connected: Boolean(data.connected), email: data.email ?? null });
     } catch {
       setGoogleStatus({ loading: false, connected: false, email: null });
+    }
+  };
+
+  const deleteAccount = async () => {
+    const ok = window.confirm(t("settings.deleteAccountBody"));
+    if (!ok) return;
+
+    try {
+      const token = await getAccessToken();
+      if (!token) {
+        toast({ title: t("settings.deleteAccountTitle"), description: "Sesión inválida.", variant: "destructive" });
+        return;
+      }
+
+      const response = await fetch("/api/user/delete-account", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const data: any = await response.json().catch(() => null);
+      if (!response.ok) {
+        toast({
+          title: t("settings.deleteAccountTitle"),
+          description: data?.message ?? "No se pudo eliminar la cuenta.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({ title: t("settings.deleteAccountTitle"), description: "Cuenta eliminada." });
+      await signOut();
+      onOpenChange(false);
+    } catch (e: any) {
+      toast({
+        title: t("settings.deleteAccountTitle"),
+        description: e?.message ?? "No se pudo eliminar la cuenta.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -341,7 +382,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         <p className="text-sm text-muted-foreground mt-1 mb-4">
                           {t("settings.deleteAccountBody")}
                         </p>
-                        <Button variant="destructive" size="sm">
+                        <Button variant="destructive" size="sm" onClick={deleteAccount}>
                           <Trash2 className="w-4 h-4 mr-2" />
                           {t("settings.deleteAccountButton")}
                         </Button>

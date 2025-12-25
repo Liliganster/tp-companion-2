@@ -70,7 +70,7 @@ export default function Projects() {
 
   const [searchQuery, setSearchQuery] = useState(() => loadProjectsFilters()?.searchQuery ?? "");
   const [selectedYear, setSelectedYear] = useState(() => loadProjectsFilters()?.selectedYear ?? "2024");
-  const { projects, addProject, deleteProject, toggleStar } = useProjects();
+  const { projects, addProject, updateProject, deleteProject, toggleStar } = useProjects();
   const { trips } = useTrips();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -78,6 +78,7 @@ export default function Projects() {
   const { toast } = useToast();
 
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectProducer, setNewProjectProducer] = useState("");
   const [newProjectDescription, setNewProjectDescription] = useState("");
@@ -284,6 +285,19 @@ export default function Projects() {
     }
   };
 
+  const openEditProject = (project: Project) => {
+    setEditingProjectId(project.id);
+    setNewProjectName(project.name ?? "");
+    setNewProjectProducer(project.producer ?? "");
+    setNewProjectDescription(project.description ?? "");
+    setNewProjectRatePerKm(
+      typeof project.ratePerKm === "number" && Number.isFinite(project.ratePerKm)
+        ? String(project.ratePerKm)
+        : "0.30",
+    );
+    setCreateProjectOpen(true);
+  };
+
   const filteredProjects = projects.filter(
     (project) =>
       project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -349,6 +363,7 @@ export default function Projects() {
   };
 
   const resetCreateProjectForm = () => {
+    setEditingProjectId(null);
     setNewProjectName("");
     setNewProjectProducer("");
     setNewProjectDescription("");
@@ -360,17 +375,17 @@ export default function Projects() {
     const name = newProjectName.trim();
     if (!name) {
       toast({
-        title: t("projects.createNewProject"),
+        title: editingProjectId ? t("projects.edit") : t("projects.createNewProject"),
         description: t("projects.projectName") + " es obligatorio",
         variant: "destructive",
       });
       return;
     }
 
-    const exists = projects.some((p) => p.name.trim().toLowerCase() === name.toLowerCase());
+    const exists = projects.some((p) => p.name.trim().toLowerCase() === name.toLowerCase() && p.id !== editingProjectId);
     if (exists) {
       toast({
-        title: t("projects.createNewProject"),
+        title: editingProjectId ? t("projects.edit") : t("projects.createNewProject"),
         description: "Ya existe un proyecto con ese nombre",
         variant: "destructive",
       });
@@ -384,28 +399,42 @@ export default function Projects() {
     // Keep the input for now, but don't persist it.
     void newProjectRatePerPassenger;
 
-    await addProject({
-      id: uuidv4(),
-      name,
-      producer: newProjectProducer.trim() || undefined,
-      description: newProjectDescription.trim() || undefined,
-      ratePerKm: normalizedRatePerKm,
-      starred: false,
-      archived: false,
-      trips: 0,
-      totalKm: 0,
-      documents: 0,
-      invoices: 0,
-      estimatedCost: 0,
-      shootingDays: 0,
-      kmPerDay: 0,
-      co2Emissions: 0,
-    });
+    if (editingProjectId) {
+      await updateProject(editingProjectId, {
+        name,
+        producer: newProjectProducer.trim() || undefined,
+        description: newProjectDescription.trim() || undefined,
+        ratePerKm: normalizedRatePerKm,
+      });
 
-    toast({
-      title: t("projects.createProject"),
-      description: "Proyecto creado",
-    });
+      toast({
+        title: t("projects.edit"),
+        description: "Proyecto actualizado",
+      });
+    } else {
+      await addProject({
+        id: uuidv4(),
+        name,
+        producer: newProjectProducer.trim() || undefined,
+        description: newProjectDescription.trim() || undefined,
+        ratePerKm: normalizedRatePerKm,
+        starred: false,
+        archived: false,
+        trips: 0,
+        totalKm: 0,
+        documents: 0,
+        invoices: 0,
+        estimatedCost: 0,
+        shootingDays: 0,
+        kmPerDay: 0,
+        co2Emissions: 0,
+      });
+
+      toast({
+        title: t("projects.createProject"),
+        description: "Proyecto creado",
+      });
+    }
 
     setCreateProjectOpen(false);
     resetCreateProjectForm();
@@ -441,13 +470,18 @@ export default function Projects() {
                 if (!open) resetCreateProjectForm();
               }}
             >
-              <Button onClick={() => setCreateProjectOpen(true)}>
+              <Button
+                onClick={() => {
+                  resetCreateProjectForm();
+                  setCreateProjectOpen(true);
+                }}
+              >
                 <Plus className="w-4 h-4" />
                 {t("projects.newProject")}
               </Button>
               <DialogContent className="glass max-w-lg">
                 <DialogHeader>
-                  <DialogTitle>{t("projects.createNewProject")}</DialogTitle>
+                  <DialogTitle>{editingProjectId ? t("projects.edit") : t("projects.createNewProject")}</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">
@@ -507,7 +541,7 @@ export default function Projects() {
                     </div>
                   </div>
                   <Button className="w-full mt-2" onClick={handleCreateProject}>
-                    {t("projects.createProject")}
+                    {editingProjectId ? t("projects.edit") : t("projects.createProject")}
                   </Button>
                 </div>
               </DialogContent>
@@ -664,7 +698,11 @@ export default function Projects() {
                             <Eye className="w-4 h-4 mr-2" />
                             {t("projects.viewDetails")}
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              openEditProject(project);
+                            }}
+                          >
                             <Pencil className="w-4 h-4 mr-2" />
                             {t("projects.edit")}
                           </DropdownMenuItem>
