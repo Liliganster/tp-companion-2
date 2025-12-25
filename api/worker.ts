@@ -79,19 +79,28 @@ export default async function handler(req: any, res: any) {
       if (claimError || !claimed) return; // already taken or not claimable
 
       try {
-        console.log(`Processing Job ${job.id}`);
+        console.log(`[Job ${job.id}] Starting processing...`);
 
         // A. Download PDF
         const { data: fileData, error: downloadError } = await supabaseAdmin.storage
           .from("callsheets")
           .download(claimed.storage_path);
 
-        if (downloadError || !fileData) throw new Error("Failed to download PDF");
+        if (downloadError) {
+          console.error(`[Job ${job.id}] Download error:`, downloadError);
+          throw new Error(`Failed to download PDF: ${downloadError.message}`);
+        }
+        if (!fileData) {
+          throw new Error("Failed to download PDF: no data returned");
+        }
+
+        console.log(`[Job ${job.id}] PDF downloaded, size: ${fileData.size} bytes`);
 
         const arrayBuffer = await fileData.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
         // B. Process PDF with Gemini Vision
+        console.log(`[Job ${job.id}] Calling Gemini API...`);
         const systemInstruction = buildUniversalExtractorPrompt("[PDF CONTENT ATTACHED]");
         const resultText = await generateContentFromPDF(
           "gemini-2.5-flash",
@@ -100,6 +109,8 @@ export default async function handler(req: any, res: any) {
           "application/pdf",
           extractionSchema
         );
+
+        console.log(`[Job ${job.id}] Gemini response received, length: ${resultText?.length || 0}`);
 
         let extractedJson: any = null;
         try {
@@ -110,17 +121,38 @@ export default async function handler(req: any, res: any) {
 
         if (!extractedJson) throw new Error("Empty extraction result");
 
+        console.log(`[Job ${job.id}] Extraction result:`, JSON.stringify(extractedJson, null, 2));
+
+        // Validate extracted data
+        if (!extractedJson.date) {
+          throw new Error("Missing date in extraction result");
+        }
+        if (!extractedJson.projectName) {
+          throw new Error("Missing projectName in extraction result");
+        }
+        if (!Array.isArray(extractedJson.locations) || extractedJson.locations.length === 0) {
+          throw new Error("Missing or empty locations in extraction result");
+        }
+
         // D. Save Results
-        await supabaseAdmin.from("callsheet_results").insert({
+        const { error: resultInsertError } = await supabaseAdmin.from("callsheet_results").insert({
           job_id: job.id,
           date_value: extractedJson.date,
           project_value: extractedJson.projectName,
           producer_value: extractedJson.productionCompanies?.[0],
         });
 
+        if (resultInsertError) {
+          console.error(`[Job ${job.id}] Failed to insert result:`, resultInsertError);
+          throw new Error(`Failed to insert result: ${resultInsertError.message}`);
+        }
+
+        console.log(`[Job ${job.id}] Saved extraction result successfully`);
+
         if (Array.isArray(extractedJson.locations)) {
           const locs: any[] = [];
           for (const locStr of extractedJson.locations) {
+            console.log(`[Job ${job.id}] Geocoding location: ${locStr}`);
             const geo = await geocodeAddress(locStr);
             locs.push({
               job_id: job.id,
@@ -136,16 +168,37 @@ export default async function handler(req: any, res: any) {
           }
 
           if (locs.length > 0) {
-            await supabaseAdmin.from("callsheet_locations").insert(locs);
+            const { error: locsInsertError } = await supabaseAdmin.from("callsheet_locations").insert(locs);
+            if (locsInsertError) {
+              console.error(`[Job ${job.id}] Failed to insert locations:`, locsInsertError);
+              throw new Error(`Failed to insert locations: ${locsInsertError.message}`);
+            }
+            console.log(`[Job ${job.id}] Saved ${locs.length} locations successfully`);
           }
         }
 
         await supabaseAdmin.from("callsheet_jobs").update({ status: "done" }).eq("id", job.id);
+        console.log(`[Job ${job.id}] Marked as done`);
         processedResults.push({ id: job.id, status: "success" });
       } catch (jobErr: any) {
-        console.error(`Error processing job ${job.id}:`, jobErr);
-        await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", error: jobErr.message }).eq("id", job.id);
-        processedResults.push({ id: job.id, status: "failed", error: jobErr.message });
+        console.error(`[Job ${job.id}] Processing error:`, jobErr);
+        const errorMessage = jobErr?.message || String(jobErr);
+        const errorDetails = {
+          message: errorMessage,
+          stack: jobErr?.stack,
+          name: jobErr?.name
+        };
+        console.error(`[Job ${job.id}] Error details:`, JSON.stringify(errorDetails, null, 2));
+        
+        await supabaseAdmin
+          .from("callsheet_jobs")
+          .update({ 
+            status: "failed", 
+            needs_review_reason: errorMessage 
+          })
+          .eq("id", job.id);
+          
+        processedResults.push({ id: job.id, status: "failed", error: errorMessage });
       }
     }
 
