@@ -18,6 +18,8 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
 
+    console.log("CallsheetUploader: uploading files", { filesCount: files.length, projectId, tripId });
+
     if (files.length > 20) {
       toast.error("Máximo 20 documentos por vez");
       e.target.value = "";

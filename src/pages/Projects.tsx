@@ -349,16 +349,30 @@ export default function Projects() {
   const selectedProjectStats = useMemo(() => {
     if (!selectedProject) return null;
     const baseStats = statsByProjectKey.get(getProjectKey(selectedProject.name));
-    if (!baseStats) return null;
+    
+    // Create default stats for projects with 0 trips to allow document uploads
+    const defaultStats = {
+      trips: 0,
+      totalKm: 0,
+      documents: 0,
+      invoices: 0,
+      co2Emissions: 0,
+      overrideCost: 0,
+      distanceAtDefaultRate: 0,
+      invoiceDocs: [],
+      callSheetDocs: [],
+    };
+
+    const stats = baseStats || defaultStats;
 
     // Calculate shooting days from trips
     const projectTrips = trips.filter((t) => getProjectKey(t.project ?? "") === getProjectKey(selectedProject.name));
     const uniqueDates = new Set(projectTrips.map((t) => t.date).filter(Boolean));
     const shootingDays = uniqueDates.size;
-    const kmPerDay = shootingDays > 0 ? baseStats.totalKm / shootingDays : 0;
+    const kmPerDay = shootingDays > 0 ? stats.totalKm / shootingDays : 0;
 
     return {
-      ...baseStats,
+      ...stats,
       shootingDays,
       kmPerDay,
     };
@@ -805,10 +819,10 @@ export default function Projects() {
           project={selectedProject && selectedProjectStats ? {
             id: selectedProject.id,
             name: selectedProject.name,
-            totalKm: selectedProjectStats.totalKm,
-            shootingDays: selectedProjectStats.shootingDays,
-            kmPerDay: selectedProjectStats.kmPerDay,
-            co2Emissions: selectedProjectStats.co2Emissions,
+            totalKm: selectedProjectStats.totalKm ?? 0,
+            shootingDays: selectedProjectStats.shootingDays ?? 0,
+            kmPerDay: selectedProjectStats.kmPerDay ?? 0,
+            co2Emissions: selectedProjectStats.co2Emissions ?? 0,
             callSheets: selectedProjectStats.callSheetDocs ?? [],
             invoices: selectedProjectStats.invoiceDocs ?? [],
             totalInvoiced: selectedProjectStats.overrideCost ? selectedProjectStats.overrideCost : (selectedProjectStats.distanceAtDefaultRate ?? 0) * 0.45,

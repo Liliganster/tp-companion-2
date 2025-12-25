@@ -152,8 +152,16 @@
   body {
     /* Ensure body maintains width when modal opens */
     overflow-x: hidden;
-    overflow-y: scroll;
     width: 100%;
+    /* Force scrollbar to always be present to prevent layout shift */
+    min-height: 100vh;
+    overflow-y: scroll !important;
+  }
+
+  /* Prevent Radix Dialog from hiding scrollbar */
+  body[data-scroll-locked] {
+    overflow-y: scroll !important;
+    padding-right: 0 !important;
   }
 
   body {

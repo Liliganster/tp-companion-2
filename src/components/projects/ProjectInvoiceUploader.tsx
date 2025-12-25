@@ -17,6 +17,8 @@ export function ProjectInvoiceUploader({ onUploadComplete, projectId }: ProjectI
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
 
+    console.log("ProjectInvoiceUploader: uploading files", { filesCount: files.length, projectId });
+
     if (files.length > 20) {
       toast.error("Máximo 20 documentos por vez");
       e.target.value = "";

@@ -48,6 +48,13 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const [projectDocs, setProjectDocs] = useState<ProjectDocument[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
+  // Debug: verificar que project.id se pasa correctamente
+  useEffect(() => {
+    if (open && project) {
+      console.log("ProjectDetailModal opened with project:", { id: project.id, name: project.name });
+    }
+  }, [open, project]);
+
   const processedJobsRef = useRef<Set<string>>(new Set());
   const inFlightJobsRef = useRef<Set<string>>(new Set());
 
