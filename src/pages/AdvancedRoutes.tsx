@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,9 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/hooks/use-i18n";
+import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 interface RouteTemplate {
   id: string;
@@ -34,12 +37,29 @@ interface RouteTemplate {
   uses: number;
 }
 
+type DbRouteTemplate = {
+  id: string;
+  user_id: string;
+  name: string;
+  category: string;
+  start_location: string | null;
+  end_location: string | null;
+  distance_km: number | null;
+  estimated_time_min: number | null;
+  description: string | null;
+  uses: number | null;
+  created_at: string;
+};
+
 export default function AdvancedRoutes() {
   const navigate = useNavigate();
   const { t } = useI18n();
+  const { user } = useAuth();
   const [templates, setTemplates] = useState<RouteTemplate[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -52,17 +72,69 @@ export default function AdvancedRoutes() {
     description: "",
   });
 
-  const filteredTemplates = selectedCategory === "all"
-    ? templates
-    : templates.filter(t => t.category === selectedCategory);
+  const filteredTemplates = useMemo(
+    () => (selectedCategory === "all" ? templates : templates.filter((t) => t.category === selectedCategory)),
+    [selectedCategory, templates],
+  );
 
-  const avgDistance = templates.length > 0
-    ? templates.reduce((acc, t) => acc + t.distance, 0) / templates.length
-    : 0;
+  const avgDistance = useMemo(
+    () => (templates.length > 0 ? templates.reduce((acc, t) => acc + t.distance, 0) / templates.length : 0),
+    [templates],
+  );
 
-  const mostUsed = templates.length > 0
-    ? templates.reduce((max, t) => t.uses > max.uses ? t : max, templates[0])?.name
-    : t("advancedRoutes.none");
+  const mostUsed = useMemo(
+    () =>
+      templates.length > 0
+        ? templates.reduce((max, t) => (t.uses > max.uses ? t : max), templates[0])?.name
+        : t("advancedRoutes.none"),
+    [t, templates],
+  );
+
+  const mapDbToUi = (row: DbRouteTemplate): RouteTemplate => ({
+    id: row.id,
+    name: row.name,
+    category: row.category,
+    startLocation: row.start_location ?? "",
+    endLocation: row.end_location ?? "",
+    distance: Number(row.distance_km ?? 0),
+    estimatedTime: Number(row.estimated_time_min ?? 0),
+    description: row.description ?? "",
+    uses: Number(row.uses ?? 0),
+  });
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function load() {
+      if (!supabase || !user) {
+        setTemplates([]);
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from("route_templates")
+          .select("id, user_id, name, category, start_location, end_location, distance_km, estimated_time_min, description, uses, created_at")
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+        const rows = (data ?? []) as DbRouteTemplate[];
+        if (!mounted) return;
+        setTemplates(rows.map(mapDbToUi));
+      } catch (err: any) {
+        console.error("Failed to load route templates:", err);
+        toast.error(String(err?.message ?? "No se pudieron cargar las plantillas"));
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, [user]);
 
   const categories = [
     { id: "all", label: t("advancedRoutes.categoryAll") },
@@ -72,14 +144,7 @@ export default function AdvancedRoutes() {
     { id: "other", label: t("advancedRoutes.categoryOther") },
   ];
 
-  const handleCreateTemplate = () => {
-    const newTemplate: RouteTemplate = {
-      id: Date.now().toString(),
-      ...formData,
-      uses: 0,
-    };
-    setTemplates([...templates, newTemplate]);
-    setCreateModalOpen(false);
+  const resetForm = () => {
     setFormData({
       name: "",
       category: "business",
@@ -89,6 +154,121 @@ export default function AdvancedRoutes() {
       estimatedTime: 0,
       description: "",
     });
+  };
+
+  const closeModal = () => {
+    setCreateModalOpen(false);
+    setEditingTemplateId(null);
+    resetForm();
+  };
+
+  const openCreateModal = () => {
+    setEditingTemplateId(null);
+    resetForm();
+    setCreateModalOpen(true);
+  };
+
+  const openEditModal = (template: RouteTemplate) => {
+    setEditingTemplateId(template.id);
+    setFormData({
+      name: template.name,
+      category: template.category,
+      startLocation: template.startLocation,
+      endLocation: template.endLocation,
+      distance: template.distance,
+      estimatedTime: template.estimatedTime,
+      description: template.description,
+    });
+    setCreateModalOpen(true);
+  };
+
+  const handleSaveTemplate = async () => {
+    if (!supabase || !user) {
+      toast.error("Inicia sesión para guardar plantillas");
+      return;
+    }
+
+    const name = formData.name.trim();
+    if (!name) {
+      toast.error("Pon un nombre a la plantilla");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (editingTemplateId) {
+        const payload = {
+          name,
+          category: formData.category,
+          start_location: formData.startLocation || null,
+          end_location: formData.endLocation || null,
+          distance_km: Number.isFinite(Number(formData.distance)) ? Number(formData.distance) : 0,
+          estimated_time_min: Number.isFinite(Number(formData.estimatedTime)) ? Number(formData.estimatedTime) : 0,
+          description: formData.description || null,
+          updated_at: new Date().toISOString(),
+        };
+
+        const { data, error } = await supabase
+          .from("route_templates")
+          .update(payload)
+          .eq("id", editingTemplateId)
+          .select("id, user_id, name, category, start_location, end_location, distance_km, estimated_time_min, description, uses, created_at")
+          .maybeSingle();
+
+        if (error) throw error;
+        if (!data) throw new Error("No se pudo actualizar la plantilla");
+
+        const updated = mapDbToUi(data as DbRouteTemplate);
+        setTemplates((prev) => prev.map((t) => (t.id === editingTemplateId ? { ...t, ...updated } : t)));
+        closeModal();
+        toast.success("Plantilla actualizada");
+      } else {
+        const payload = {
+          user_id: user.id,
+          name,
+          category: formData.category,
+          start_location: formData.startLocation || null,
+          end_location: formData.endLocation || null,
+          distance_km: Number.isFinite(Number(formData.distance)) ? Number(formData.distance) : 0,
+          estimated_time_min: Number.isFinite(Number(formData.estimatedTime)) ? Number(formData.estimatedTime) : 0,
+          description: formData.description || null,
+          uses: 0,
+        };
+
+        const { data, error } = await supabase
+          .from("route_templates")
+          .insert(payload)
+          .select("id, user_id, name, category, start_location, end_location, distance_km, estimated_time_min, description, uses, created_at")
+          .maybeSingle();
+
+        if (error) throw error;
+        if (!data) throw new Error("No se pudo crear la plantilla");
+
+        setTemplates((prev) => [mapDbToUi(data as DbRouteTemplate), ...prev]);
+        closeModal();
+        toast.success("Plantilla creada");
+      }
+    } catch (err: any) {
+      console.error("Failed to save route template:", err);
+      toast.error(String(err?.message ?? "No se pudo guardar la plantilla"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const bumpUses = async (template: RouteTemplate) => {
+    if (!supabase || !user) return;
+    const nextUses = (Number(template.uses) || 0) + 1;
+    setTemplates((prev) => prev.map((t) => (t.id === template.id ? { ...t, uses: nextUses } : t)));
+    const { error } = await supabase
+      .from("route_templates")
+      .update({ uses: nextUses, updated_at: new Date().toISOString() })
+      .eq("id", template.id);
+    if (error) {
+      console.error("Failed to update uses:", error);
+      toast.error("No se pudo actualizar el contador");
+      setTemplates((prev) => prev.map((t) => (t.id === template.id ? { ...t, uses: template.uses } : t)));
+    }
   };
 
   return (
@@ -162,10 +342,10 @@ export default function AdvancedRoutes() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" onClick={() => openEditModal(template)} disabled={loading}>
                     Editar
                   </Button>
-                  <Button size="sm">
+                  <Button size="sm" onClick={() => bumpUses(template)} disabled={loading}>
                     Usar
                   </Button>
                 </div>
@@ -175,17 +355,25 @@ export default function AdvancedRoutes() {
         ) : (
           <div className="glass-card p-12 text-center animate-fade-in animation-delay-300">
             <p className="text-muted-foreground">
-              No hay plantillas en esta categoría. Crea tu primera plantilla para empezar.
+              {loading ? "Cargando…" : "No hay plantillas en esta categoría. Crea tu primera plantilla para empezar."}
             </p>
           </div>
         )}
       </div>
 
       {/* Create Template Modal */}
-      <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
+      <Dialog
+        open={createModalOpen}
+        onOpenChange={(open) => {
+          if (open) setCreateModalOpen(true);
+          else closeModal();
+        }}
+      >
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{t("advancedRoutes.createTemplateTitle")}</DialogTitle>
+            <DialogTitle>
+              {editingTemplateId ? t("advancedRoutes.editTemplateTitle") : t("advancedRoutes.createTemplateTitle")}
+            </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-6 py-4">
@@ -200,6 +388,7 @@ export default function AdvancedRoutes() {
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="bg-secondary/50"
+                    disabled={loading}
                   />
                 </div>
                 <div className="space-y-2">
@@ -207,8 +396,9 @@ export default function AdvancedRoutes() {
                   <Select
                     value={formData.category}
                     onValueChange={(value) => setFormData({ ...formData, category: value })}
+                    disabled={loading}
                   >
-                    <SelectTrigger className="bg-secondary/50">
+                    <SelectTrigger className="bg-secondary/50" disabled={loading}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -233,6 +423,7 @@ export default function AdvancedRoutes() {
                     value={formData.startLocation}
                     onChange={(e) => setFormData({ ...formData, startLocation: e.target.value })}
                     className="bg-secondary/50"
+                    disabled={loading}
                   />
                 </div>
                 <div className="space-y-2">
@@ -242,6 +433,7 @@ export default function AdvancedRoutes() {
                     value={formData.endLocation}
                     onChange={(e) => setFormData({ ...formData, endLocation: e.target.value })}
                     className="bg-secondary/50"
+                    disabled={loading}
                   />
                 </div>
                 <div className="space-y-2">
@@ -252,6 +444,7 @@ export default function AdvancedRoutes() {
                     value={formData.distance}
                     onChange={(e) => setFormData({ ...formData, distance: Number(e.target.value) })}
                     className="bg-secondary/50"
+                    disabled={loading}
                   />
                 </div>
                 <div className="space-y-2">
@@ -262,6 +455,7 @@ export default function AdvancedRoutes() {
                     value={formData.estimatedTime}
                     onChange={(e) => setFormData({ ...formData, estimatedTime: Number(e.target.value) })}
                     className="bg-secondary/50"
+                    disabled={loading}
                   />
                 </div>
               </div>
@@ -278,18 +472,19 @@ export default function AdvancedRoutes() {
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="bg-secondary/50 resize-none min-h-[100px]"
+                  disabled={loading}
                 />
               </div>
             </div>
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
-            <Button variant="outline" onClick={() => setCreateModalOpen(false)}>
+            <Button variant="outline" onClick={closeModal} disabled={loading}>
               {t("advancedRoutes.cancel")}
             </Button>
-            <Button variant="add" onClick={handleCreateTemplate}>
+            <Button variant="add" onClick={handleSaveTemplate} disabled={loading}>
               <Plus className="w-4 h-4 mr-2" />
-              {t("advancedRoutes.createTemplate")}
+              {editingTemplateId ? t("advancedRoutes.saveChanges") : t("advancedRoutes.createTemplate")}
             </Button>
           </div>
         </DialogContent>

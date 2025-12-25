@@ -306,6 +306,7 @@ const es = {
   "reportView.totalShort": "Total",
 
   "advancedRoutes.createTemplateTitle": "Crear nueva plantilla",
+  "advancedRoutes.editTemplateTitle": "Editar plantilla",
   "advancedRoutes.basicInfo": "Información básica",
   "advancedRoutes.templateName": "Nombre de plantilla",
   "advancedRoutes.category": "Categoría",
@@ -323,6 +324,7 @@ const es = {
   "advancedRoutes.descriptionPlaceholder": "Ingresa una descripción",
   "advancedRoutes.cancel": "Cancelar",
   "advancedRoutes.createTemplate": "Crear plantilla",
+  "advancedRoutes.saveChanges": "Guardar cambios",
   "advancedRoutes.pageTitle": "Plantillas de rutas",
   "advancedRoutes.pageSubtitle": "Guarda rutas frecuentes como plantillas reutilizables.",
   "advancedRoutes.statTotalTemplates": "Total de plantillas",
@@ -715,6 +717,7 @@ const en: Record<I18nKey, string> = {
   "reportView.totalShort": "Total",
 
   "advancedRoutes.createTemplateTitle": "Create new template",
+  "advancedRoutes.editTemplateTitle": "Edit template",
   "advancedRoutes.basicInfo": "Basic information",
   "advancedRoutes.templateName": "Template name",
   "advancedRoutes.category": "Category",
@@ -732,6 +735,7 @@ const en: Record<I18nKey, string> = {
   "advancedRoutes.descriptionPlaceholder": "Enter a description",
   "advancedRoutes.cancel": "Cancel",
   "advancedRoutes.createTemplate": "Create template",
+  "advancedRoutes.saveChanges": "Save changes",
   "advancedRoutes.pageTitle": "Route templates",
   "advancedRoutes.pageSubtitle": "Save frequent routes as reusable templates.",
   "advancedRoutes.statTotalTemplates": "Total templates",
@@ -1122,6 +1126,7 @@ const de: Record<I18nKey, string> = {
   "reportView.totalShort": "Summe",
 
   "advancedRoutes.createTemplateTitle": "Neue Vorlage erstellen",
+  "advancedRoutes.editTemplateTitle": "Vorlage bearbeiten",
   "advancedRoutes.basicInfo": "Grundinformationen",
   "advancedRoutes.templateName": "Vorlagenname",
   "advancedRoutes.category": "Kategorie",
@@ -1139,6 +1144,7 @@ const de: Record<I18nKey, string> = {
   "advancedRoutes.descriptionPlaceholder": "Beschreibung eingeben",
   "advancedRoutes.cancel": "Abbrechen",
   "advancedRoutes.createTemplate": "Vorlage erstellen",
+  "advancedRoutes.saveChanges": "Änderungen speichern",
   "advancedRoutes.pageTitle": "Routenvorlagen",
   "advancedRoutes.pageSubtitle": "Speichere häufige Routen als wiederverwendbare Vorlagen.",
   "advancedRoutes.statTotalTemplates": "Vorlagen insgesamt",
