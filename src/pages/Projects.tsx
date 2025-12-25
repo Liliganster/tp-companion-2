@@ -108,7 +108,8 @@ export default function Projects() {
   };
 
   // Fetch document counts for projects
-  const [projectDocCounts, setProjectDocCounts] = useState<Record<string, number>>({});
+  const [projectCallsheetPathsByKey, setProjectCallsheetPathsByKey] = useState<Record<string, string[]>>({});
+  const [projectInvoiceCountsByKey, setProjectInvoiceCountsByKey] = useState<Record<string, number>>({});
 
   useEffect(() => {
     try {
@@ -120,47 +121,74 @@ export default function Projects() {
 
   useEffect(() => {
     const fetchCounts = async () => {
-        const counts: Record<string, number> = {};
+        const callsheetPathsByProjectId: Record<string, Set<string>> = {};
+        const invoiceCountsByProjectId: Record<string, number> = {};
         
-        // 1. Count CallSheets (Jobs) by project_id
-        const { data: jobs } = await supabase.from("callsheet_jobs").select("project_id").not("project_id", "is", null);
+        // 1) Callsheets by explicit project_id (manual uploads linked to project)
+        const { data: jobs } = await supabase
+          .from("callsheet_jobs")
+          .select("project_id, storage_path")
+          .not("project_id", "is", null);
+
         jobs?.forEach((job: any) => {
-             const pid = job.project_id;
-             if (pid) counts[pid] = (counts[pid] || 0) + 1;
+          const pid = job.project_id;
+          const path = (job.storage_path ?? "").toString().trim();
+          if (!pid || !path) return;
+          if (!callsheetPathsByProjectId[pid]) callsheetPathsByProjectId[pid] = new Set();
+          callsheetPathsByProjectId[pid].add(path);
         });
         
-        // 2. Count Project Invoices by project_id
+        // 2) Project invoices by project_id
         const { data: invoices } = await supabase.from("project_documents").select("project_id");
         invoices?.forEach((inv: any) => {
-             const pid = inv.project_id;
-             if (pid) counts[pid] = (counts[pid] || 0) + 1;
+          const pid = inv.project_id;
+          if (!pid) return;
+          invoiceCountsByProjectId[pid] = (invoiceCountsByProjectId[pid] || 0) + 1;
         });
 
-        // 3. Count Results by project_value (Name linking)
+        // 3) Legacy/extracted results by project_value (name linking)
         if (projects.length > 0) {
              const idToKey = new Map<string, string>();
              projects.forEach(p => idToKey.set(p.id, getProjectKey(p.name)));
              
-             // Map existing ID counts to Keys
-             const keyCounts: Record<string, number> = {};
-             // Transfer ID counts to NAME keys for statsByProjectKey
-             for (const [pid, count] of Object.entries(counts)) {
-                 const key = idToKey.get(pid);
-                 if (key) {
-                     keyCounts[key] = (keyCounts[key] || 0) + count;
-                 }
+             const callsheetPathsByKey: Record<string, Set<string>> = {};
+             const invoiceCountsByKey: Record<string, number> = {};
+
+             // Transfer explicit project_id callsheets to NAME keys
+             for (const [pid, pathSet] of Object.entries(callsheetPathsByProjectId)) {
+               const key = idToKey.get(pid);
+               if (!key) continue;
+               if (!callsheetPathsByKey[key]) callsheetPathsByKey[key] = new Set();
+               for (const p of pathSet) callsheetPathsByKey[key].add(p);
              }
 
-             const { data: results } = await supabase.from("callsheet_results").select("project_value, job_id, callsheet_jobs!inner(project_id)");
-             
+             // Transfer project invoice counts to NAME keys (Facturas column)
+             for (const [pid, count] of Object.entries(invoiceCountsByProjectId)) {
+               const key = idToKey.get(pid);
+               if (!key) continue;
+               invoiceCountsByKey[key] = (invoiceCountsByKey[key] || 0) + count;
+             }
+
+             // Legacy results: callsheet_jobs has no project_id, but results.project_value matches
+             const { data: results } = await supabase
+               .from("callsheet_results")
+               .select("project_value, job_id, callsheet_jobs!inner(project_id, storage_path)");
+
              results?.forEach((res: any) => {
-                 if (!res.callsheet_jobs?.project_id) {
-                     const key = getProjectKey(res.project_value);
-                     keyCounts[key] = (keyCounts[key] || 0) + 1;
-                 }
+               const job = res.callsheet_jobs;
+               const path = (job?.storage_path ?? "").toString().trim();
+               if (!path) return;
+               if (!job?.project_id) {
+                 const key = getProjectKey(res.project_value);
+                 if (!callsheetPathsByKey[key]) callsheetPathsByKey[key] = new Set();
+                 callsheetPathsByKey[key].add(path);
+               }
              });
-             
-             setProjectDocCounts(keyCounts);
+
+             setProjectCallsheetPathsByKey(
+               Object.fromEntries(Object.entries(callsheetPathsByKey).map(([k, v]) => [k, Array.from(v)])),
+             );
+             setProjectInvoiceCountsByKey(invoiceCountsByKey);
         }
     };
     
@@ -170,13 +198,15 @@ export default function Projects() {
 
   const statsByProjectKey = useMemo(() => {
     const map = new Map<string, AggregatedTripStats>();
+    const tripCallsheetKeysByProjectKey = new Map<string, Set<string>>();
 
     for (const trip of trips) {
       const key = getProjectKey(trip.project ?? "");
       if (!key) continue;
 
       const distance = Number.isFinite(trip.distance) ? trip.distance : 0;
-      const documents = trip.documents?.length ?? 0;
+      // NOTE: Do not count trip.documents directly, because the same PDF may also exist as a callsheet_job.
+      // We'll compute a de-duplicated callsheet count later (union of trip docs + callsheet_jobs).
       const invoices = trip.invoice?.trim() ? 1 : 0;
       const co2 = Number.isFinite(trip.co2) ? trip.co2 : 0;
 
@@ -194,7 +224,6 @@ export default function Projects() {
 
       current.trips += 1;
       current.totalKm += distance;
-      current.documents += documents;
       current.invoices += invoices;
       current.co2Emissions += co2;
       
@@ -216,6 +245,18 @@ export default function Projects() {
              name: doc.name,
              type: "call-sheet"
           });
+
+          const dedupeKey =
+            doc.storagePath
+              ? `storage:${doc.storagePath}`
+              : doc.driveFileId
+                ? `drive:${doc.driveFileId}`
+                : "";
+          if (dedupeKey) {
+            const set = tripCallsheetKeysByProjectKey.get(key) ?? new Set<string>();
+            set.add(dedupeKey);
+            tripCallsheetKeysByProjectKey.set(key, set);
+          }
         });
       }
 
@@ -228,25 +269,41 @@ export default function Projects() {
       map.set(key, current);
     }
     
-    // Inject doc counts
-    for (const [key, count] of Object.entries(projectDocCounts)) {
-        const current = map.get(key) ?? {
-            trips: 0,
-            totalKm: 0,
-            documents: 0, // Base documents from trips
-            invoices: 0,
-            co2Emissions: 0,
-            overrideCost: 0,
-            distanceAtDefaultRate: 0,
-            invoiceDocs: [],
-            callSheetDocs: [],
-        };
-        current.documents += count; // Add callsheets to documents count
-        map.set(key, current);
+    // Inject callsheet paths (from callsheet_jobs + legacy results) and invoice counts (from project_documents)
+    const keys = new Set<string>([
+      ...Array.from(map.keys()),
+      ...Object.keys(projectCallsheetPathsByKey),
+      ...Object.keys(projectInvoiceCountsByKey),
+    ]);
+
+    for (const key of keys) {
+      const current = map.get(key) ?? {
+        trips: 0,
+        totalKm: 0,
+        documents: 0,
+        invoices: 0,
+        co2Emissions: 0,
+        overrideCost: 0,
+        distanceAtDefaultRate: 0,
+        invoiceDocs: [],
+        callSheetDocs: [],
+      };
+
+      const deduped = new Set<string>(tripCallsheetKeysByProjectKey.get(key) ?? []);
+      for (const p of projectCallsheetPathsByKey[key] ?? []) {
+        const trimmed = (p ?? "").toString().trim();
+        if (!trimmed) continue;
+        deduped.add(`storage:${trimmed}`);
+      }
+
+      current.documents = deduped.size;
+      current.invoices += projectInvoiceCountsByKey[key] ?? 0;
+
+      map.set(key, current);
     }
 
     return map;
-  }, [trips, projectDocCounts]);
+  }, [trips, projectCallsheetPathsByKey, projectInvoiceCountsByKey]);
 
 
 
