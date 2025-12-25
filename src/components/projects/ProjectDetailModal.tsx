@@ -47,6 +47,11 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const [realCallSheets, setRealCallSheets] = useState<ProjectDocument[]>([]);
   const [projectDocs, setProjectDocs] = useState<ProjectDocument[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const realCallSheetsRef = useRef<ProjectDocument[]>([]);
+
+  useEffect(() => {
+    realCallSheetsRef.current = realCallSheets;
+  }, [realCallSheets]);
 
   // Debug: verificar que project.id se pasa correctamente
   useEffect(() => {
@@ -292,7 +297,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
     const tick = async () => {
       try {
-        const visibleIds = (realCallSheets ?? []).map((d) => d.id).filter(Boolean);
+        const visibleIds = (realCallSheetsRef.current ?? []).map((d) => d.id).filter(Boolean);
 
         let q = supabase
           .from("callsheet_jobs")
@@ -315,21 +320,34 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             const byId = new Map<string, ProjectDocument>();
             for (const d of prev) byId.set(d.id, d);
 
+            let changed = false;
             for (const job of jobs as any[]) {
               const existing = byId.get(job.id);
               const path = job.storage_path || existing?.storage_path || "";
               const name = (existing?.name || path.split("/").pop() || path || "Documento").toString();
-              byId.set(job.id, {
+
+              const next: ProjectDocument = {
                 id: job.id,
                 name,
                 type: "call-sheet",
                 status: job.status,
                 storage_path: job.storage_path,
                 needs_review_reason: job.needs_review_reason,
-              });
+              };
+
+              if (
+                !existing ||
+                existing.status !== next.status ||
+                existing.storage_path !== next.storage_path ||
+                existing.needs_review_reason !== next.needs_review_reason ||
+                existing.name !== next.name
+              ) {
+                changed = true;
+                byId.set(job.id, next);
+              }
             }
 
-            return Array.from(byId.values());
+            return changed ? Array.from(byId.values()) : prev;
           });
         }
 
@@ -356,7 +374,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [open, project?.id, materializeTripFromJob, realCallSheets]);
+  }, [open, project?.id, materializeTripFromJob]);
 
   if (!project) return null;
 
