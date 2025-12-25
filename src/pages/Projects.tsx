@@ -198,15 +198,12 @@ export default function Projects() {
 
   const statsByProjectKey = useMemo(() => {
     const map = new Map<string, AggregatedTripStats>();
-    const tripCallsheetKeysByProjectKey = new Map<string, Set<string>>();
 
     for (const trip of trips) {
       const key = getProjectKey(trip.project ?? "");
       if (!key) continue;
 
       const distance = Number.isFinite(trip.distance) ? trip.distance : 0;
-      // NOTE: Do not count trip.documents directly, because the same PDF may also exist as a callsheet_job.
-      // We'll compute a de-duplicated callsheet count later (union of trip docs + callsheet_jobs).
       const invoices = trip.invoice?.trim() ? 1 : 0;
       const co2 = Number.isFinite(trip.co2) ? trip.co2 : 0;
 
@@ -237,26 +234,14 @@ export default function Projects() {
            });
       }
 
-      // Aggregate CallSheets (Trip Documents)
+      // Trip-specific documents (NOT callsheets - those are project documents)
       if (trip.documents && trip.documents.length > 0) {
         trip.documents.forEach(doc => {
           current.callSheetDocs.push({
              id: doc.id,
              name: doc.name,
-             type: "call-sheet"
+             type: "trip-document"
           });
-
-          const dedupeKey =
-            doc.storagePath
-              ? `storage:${doc.storagePath}`
-              : doc.driveFileId
-                ? `drive:${doc.driveFileId}`
-                : "";
-          if (dedupeKey) {
-            const set = tripCallsheetKeysByProjectKey.get(key) ?? new Set<string>();
-            set.add(dedupeKey);
-            tripCallsheetKeysByProjectKey.set(key, set);
-          }
         });
       }
 
@@ -269,7 +254,7 @@ export default function Projects() {
       map.set(key, current);
     }
     
-    // Inject callsheet paths (from callsheet_jobs + legacy results) and invoice counts (from project_documents)
+    // Count project callsheets (from callsheet_jobs ONLY)
     const keys = new Set<string>([
       ...Array.from(map.keys()),
       ...Object.keys(projectCallsheetPathsByKey),
@@ -289,14 +274,14 @@ export default function Projects() {
         callSheetDocs: [],
       };
 
-      const deduped = new Set<string>(tripCallsheetKeysByProjectKey.get(key) ?? []);
+      // Project callsheets: count unique paths from callsheet_jobs
+      const uniquePaths = new Set<string>();
       for (const p of projectCallsheetPathsByKey[key] ?? []) {
         const trimmed = (p ?? "").toString().trim();
-        if (!trimmed) continue;
-        deduped.add(`storage:${trimmed}`);
+        if (trimmed) uniquePaths.add(trimmed);
       }
 
-      current.documents = deduped.size;
+      current.documents = uniquePaths.size;
       current.invoices += projectInvoiceCountsByKey[key] ?? 0;
 
       map.set(key, current);

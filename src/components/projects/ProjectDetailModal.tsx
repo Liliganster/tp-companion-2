@@ -152,15 +152,13 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         const producer = (result?.producer_value ?? "").trim();
         const purpose = producer ? `Rodaje: ${producer}` : "Rodaje";
 
-        const filename = storagePath.split("/").pop() || storagePath;
-        const nowIso = new Date().toISOString();
-
         const nextTrip: Trip = {
           id: uuidv4(),
           date,
           route,
           project: project.name,
           projectId: project.id,
+          callsheet_job_id: job.id, // Reference to project callsheet
           purpose,
           passengers: 0,
           invoice: undefined,
@@ -168,15 +166,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           co2: calculateCO2(distance),
           ratePerKmOverride: null,
           specialOrigin: "base",
-          documents: [
-            {
-              id: job.id,
-              name: filename,
-              mimeType: "application/pdf",
-              storagePath,
-              createdAt: nowIso,
-            },
-          ],
+          documents: undefined, // No duplication
         };
 
         await addTrip(nextTrip);

@@ -20,6 +20,7 @@ export type Trip = {
   distance: number;
   ratePerKmOverride?: number | null;
   specialOrigin?: "base" | "continue" | "return";
+  callsheet_job_id?: string; // Reference to callsheet_job (project document)
   documents?: Array<{
     id: string;
     name: string;
@@ -27,7 +28,7 @@ export type Trip = {
     driveFileId?: string;
     storagePath?: string;
     createdAt: string; // ISO
-  }>;
+  }>; // For trip-specific documents only
 };
 
 type TripsContextValue = {
@@ -74,8 +75,9 @@ export function TripsProvider({ children }: { children: ReactNode }) {
             id: t.id,
             date: t.trip_date || t.date_value || "",
             route: t.route || [],
-            project: t.projects?.name || "Unknown", // Fallback if join null (e.g. deleted project)
+            project: t.projects?.name || "Unknown",
             projectId: t.project_id,
+            callsheet_job_id: t.callsheet_job_id,
             purpose: t.purpose || "",
             passengers: t.passengers || 0,
             invoice: t.invoice_number,
@@ -131,8 +133,8 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     const dbPayload = {
       id: normalizedTrip.id,
       user_id: user.id,
-      project_id: normalizedTrip.projectId || null, // Important
-      // Some Supabase schemas include both columns; keep them in sync.
+      project_id: normalizedTrip.projectId || null,
+      callsheet_job_id: normalizedTrip.callsheet_job_id || null,
       trip_date: normalizedTrip.date,
       purpose: normalizedTrip.purpose,
       passengers: normalizedTrip.passengers,
@@ -176,6 +178,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     if (patch.specialOrigin !== undefined) dbPatch.special_origin = patch.specialOrigin;
     if (patch.invoice !== undefined) dbPatch.invoice_number = patch.invoice;
     if (patch.documents !== undefined) dbPatch.documents = patch.documents;
+    if (patch.callsheet_job_id !== undefined) dbPatch.callsheet_job_id = patch.callsheet_job_id;
     if (patch.projectId !== undefined) dbPatch.project_id = patch.projectId;
 
     if (Object.keys(dbPatch).length > 0) {
