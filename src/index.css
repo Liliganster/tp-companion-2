@@ -143,30 +143,10 @@
     @apply border-border;
   }
 
-  html {
-    /* Prevent layout shift when navigating between pages with/without scrollbars */
-    overflow-y: scroll;
-    scrollbar-gutter: stable;
-  }
-
-  body {
-    /* Ensure body maintains width when modal opens */
-    overflow-x: hidden;
-    width: 100%;
-    /* Force scrollbar to always be present to prevent layout shift */
-    min-height: 100vh;
-    overflow-y: scroll !important;
-  }
-
-  /* Prevent Radix Dialog from hiding scrollbar */
-  body[data-scroll-locked] {
-    overflow-y: scroll !important;
-    padding-right: 0 !important;
-  }
-
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', system-ui, sans-serif;
+    overflow-x: hidden;
   }
 }
 
