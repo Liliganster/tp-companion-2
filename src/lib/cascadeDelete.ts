@@ -59,10 +59,13 @@ function uniqStrings(values: Array<string | null | undefined>) {
 }
 
 async function removeTripIdFromReports(supabase: SupabaseClient, tripId: string) {
-  const { data: affectedReports, error } = await supabase
+  // NOTE:
+  // Using PostgREST json contains operators can be brittle across schema cache / type differences
+  // and has been observed to return 400 (22P02 invalid json). To keep deletes reliable, we
+  // fetch report ids + trip_ids and filter client-side.
+  const { data: allReports, error } = await supabase
     .from("reports")
-    .select("id, trip_ids")
-    .contains("trip_ids", [tripId]);
+    .select("id, trip_ids");
 
   if (error) {
     // Some deployments may not have the optional trip_ids column yet.
@@ -73,7 +76,24 @@ async function removeTripIdFromReports(supabase: SupabaseClient, tripId: string)
     }
     throw error;
   }
-  if (!affectedReports || affectedReports.length === 0) return;
+  if (!allReports || allReports.length === 0) return;
+
+  const affectedReports = (allReports as AnyRow[]).filter((r) => {
+    const v = (r as AnyRow)?.trip_ids;
+    if (Array.isArray(v)) return v.includes(tripId);
+    // Some clients may store trip_ids as jsonb but return it as string.
+    if (typeof v === "string") {
+      try {
+        const parsed = JSON.parse(v);
+        return Array.isArray(parsed) && parsed.includes(tripId);
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  });
+
+  if (affectedReports.length === 0) return;
 
   await Promise.all(
     affectedReports.map(async (r: AnyRow) => {
