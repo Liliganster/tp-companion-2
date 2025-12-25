@@ -101,7 +101,8 @@ export default async function handler(req: any, res: any) {
     await deleteStoragePaths("project_documents", projectDocsPaths);
 
     // 3) Delete DB rows (best-effort order)
-    const deletes: Array<Promise<any>> = [];
+    // supabase-js query builders are thenables but not typed as Promise
+    const deletes: Array<PromiseLike<any>> = [];
 
     deletes.push(supabaseAdmin.from("project_documents").delete().eq("user_id", user.id));
     deletes.push(supabaseAdmin.from("reports").delete().eq("user_id", user.id));

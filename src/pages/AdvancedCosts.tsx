@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Upload, ArrowLeft } from "lucide-react";
@@ -12,6 +12,10 @@ import {
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { VehicleConfigModal } from "@/components/settings/VehicleConfigModal";
+import { useProjects } from "@/contexts/ProjectsContext";
+import { supabase } from "@/lib/supabaseClient";
+import { formatSupabaseError } from "@/lib/supabaseErrors";
+import { toast } from "sonner";
 
 const summaryData = {
   totalDistance: 103.8,
@@ -52,10 +56,93 @@ const monthlyCosts = [
 
 export default function AdvancedCosts() {
   const navigate = useNavigate();
+  const { projects } = useProjects();
   const [activeTab, setActiveTab] = useState<"resumen" | "mensuales">("resumen");
   const [periodFilter, setPeriodFilter] = useState("3m");
   const [projectFilter, setProjectFilter] = useState("all");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [uploadingInvoice, setUploadingInvoice] = useState(false);
+  const invoiceInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadInvoicesForProject = async (files: FileList | null) => {
+    const chosenProjectId = projectFilter;
+    if (!files || files.length === 0) return;
+
+    if (chosenProjectId === "all") {
+      toast.error("Selecciona un proyecto para adjuntar la factura");
+      if (invoiceInputRef.current) invoiceInputRef.current.value = "";
+      return;
+    }
+
+    if (!supabase) {
+      toast.error("Supabase no está configurado");
+      if (invoiceInputRef.current) invoiceInputRef.current.value = "";
+      return;
+    }
+
+    const list = Array.from(files);
+    if (list.length > 20) {
+      toast.error("Máximo 20 documentos por vez");
+      if (invoiceInputRef.current) invoiceInputRef.current.value = "";
+      return;
+    }
+
+    for (const file of list) {
+      if (!file.type.match(/pdf|image/)) {
+        toast.error("Solo se permiten archivos PDF o Imágenes");
+        if (invoiceInputRef.current) invoiceInputRef.current.value = "";
+        return;
+      }
+    }
+
+    setUploadingInvoice(true);
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) throw new Error("No estás autenticado");
+
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const file of list) {
+        try {
+          const filePath = `${chosenProjectId}/${crypto.randomUUID()}-${file.name}`;
+          const { error: uploadError } = await supabase.storage.from("project_documents").upload(filePath, file);
+          if (uploadError) throw uploadError;
+
+          const { error: dbError } = await supabase.from("project_documents").insert({
+            project_id: chosenProjectId,
+            user_id: user.id,
+            name: file.name,
+            storage_path: filePath,
+            type: "invoice",
+          });
+
+          if (dbError) {
+            if (dbError.code === "23505") {
+              console.warn(`Document ${filePath} already exists, skipping`);
+              failCount += 1;
+            } else {
+              throw dbError;
+            }
+          } else {
+            successCount += 1;
+          }
+        } catch (err) {
+          console.error(err);
+          failCount += 1;
+        }
+      }
+
+      if (successCount > 0) toast.success(`Se subieron ${successCount} factura(s)/documento(s)`);
+      if (failCount > 0) toast.error(`Fallaron ${failCount} documento(s)`);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(formatSupabaseError(err, "Error al subir factura"));
+    } finally {
+      setUploadingInvoice(false);
+      if (invoiceInputRef.current) invoiceInputRef.current.value = "";
+    }
+  };
 
   return (
     <MainLayout>
@@ -75,7 +162,21 @@ export default function AdvancedCosts() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button className="flex-1 sm:flex-none">
+            <input
+              ref={invoiceInputRef}
+              type="file"
+              accept="application/pdf,image/*"
+              className="hidden"
+              multiple
+              disabled={uploadingInvoice}
+              onChange={(e) => void uploadInvoicesForProject(e.target.files)}
+            />
+            <Button
+              className="flex-1 sm:flex-none"
+              type="button"
+              disabled={uploadingInvoice}
+              onClick={() => invoiceInputRef.current?.click()}
+            >
               <Upload className="w-4 h-4 mr-2" />
               <span className="hidden sm:inline">Subir factura</span>
               <span className="sm:hidden">Subir</span>
@@ -200,6 +301,11 @@ export default function AdvancedCosts() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos los proyectos</SelectItem>
+                      {projects.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

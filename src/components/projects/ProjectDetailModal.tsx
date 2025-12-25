@@ -282,14 +282,59 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
     const tick = async () => {
       try {
-        const { data: jobs } = await supabase
-          .from("callsheet_jobs")
-          .select("id, storage_path, status")
-          .eq("project_id", project.id)
-          .in("status", ["done", "needs_review"]);
+        const visibleIds = (realCallSheets ?? []).map((d) => d.id).filter(Boolean);
 
+        let q = supabase
+          .from("callsheet_jobs")
+          .select("id, storage_path, created_at, status, needs_review_reason");
+
+        // Some legacy/extracted jobs may not have project_id set.
+        // Poll by visible IDs as well so UI can move from queued/processing -> done.
+        if (visibleIds.length > 0) {
+          const inList = visibleIds.join(",");
+          q = q.or(`project_id.eq.${project.id},id.in.(${inList})`);
+        } else {
+          q = q.eq("project_id", project.id);
+        }
+
+        const { data: jobs } = await q;
+
+        // 1) Keep UI in sync so spinners stop when status changes.
+        if (jobs && jobs.length > 0) {
+          setRealCallSheets((prev) => {
+            const byId = new Map<string, ProjectDocument>();
+            for (const d of prev) byId.set(d.id, d);
+
+            for (const job of jobs as any[]) {
+              const existing = byId.get(job.id);
+              const path = job.storage_path || existing?.storage_path || "";
+              const name = (existing?.name || path.split("/").pop() || path || "Documento").toString();
+              byId.set(job.id, {
+                id: job.id,
+                name,
+                type: "call-sheet",
+                status: job.status,
+                storage_path: job.storage_path,
+                needs_review_reason: job.needs_review_reason,
+              });
+            }
+
+            return Array.from(byId.values());
+          });
+        }
+
+        // 2) Materialize trips for completed jobs.
         const doneJobs = (jobs ?? []).filter((j: any) => j.status === "done");
         await Promise.all(doneJobs.map((j: any) => materializeTripFromJob(j)));
+
+        // 3) If nothing is pending, stop polling.
+        const hasPending = (jobs ?? []).some(
+          (j: any) => j?.status === "queued" || j?.status === "processing" || j?.status === "created",
+        );
+        if (!hasPending && interval) {
+          clearInterval(interval);
+          interval = null;
+        }
       } catch {
         // silent polling failure
       }
@@ -301,7 +346,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [open, project?.id, materializeTripFromJob]);
+  }, [open, project?.id, materializeTripFromJob, realCallSheets]);
 
   if (!project) return null;
 
