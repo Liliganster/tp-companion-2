@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { getProfileInitial, useUserProfile } from "@/contexts/UserProfileContext";
 import { useI18n } from "@/hooks/use-i18n";
+import { useAuth } from "@/contexts/AuthContext";
 interface MobileHeaderProps {
   onSettingsClick: () => void;
 }
@@ -15,6 +16,7 @@ export function MobileHeader({
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const { profile } = useUserProfile();
+  const { signOut } = useAuth();
   const { t } = useI18n();
   const profileInitial = getProfileInitial(profile.fullName);
   const navigation = [{
@@ -93,7 +95,13 @@ export function MobileHeader({
                   <Settings className="w-5 h-5" />
                   <span>{t("nav.settings")}</span>
                 </button>
-                <button className="nav-item w-full text-destructive hover:text-destructive hover:bg-destructive/10">
+                <button
+                  onClick={() => {
+                    setOpen(false);
+                    void signOut();
+                  }}
+                  className="nav-item w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                >
                   <LogOut className="w-5 h-5" />
                   <span>{t("nav.logout")}</span>
                 </button>

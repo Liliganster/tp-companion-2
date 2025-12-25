@@ -47,6 +47,18 @@ type EmissionsResult = {
   trips: number;
 };
 
+function downloadTextFile(content: string, fileName: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 function parseTripDate(value: string): Date | null {
   if (!value) return null;
   const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})/.exec(value);
@@ -298,6 +310,51 @@ export default function AdvancedEmissions() {
     setConfigModalOpen(false);
   };
 
+  const handleExport = () => {
+    const rows = computed.results ?? [];
+
+    const header = [
+      "rank",
+      "name",
+      "co2Kg",
+      "efficiencyKgPerKm",
+      "distanceKm",
+      "trips",
+      "rating",
+      "trend",
+    ];
+
+    const escape = (v: unknown) => {
+      const s = String(v ?? "");
+      if (/[\n\r\",]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    };
+
+    const lines: string[] = [];
+    lines.push(header.join(","));
+    for (const r of rows) {
+      lines.push(
+        [
+          r.rank,
+          r.name,
+          r.co2Kg,
+          r.efficiency,
+          r.distanceKm,
+          r.trips,
+          r.rating,
+          r.trend,
+        ].map(escape).join(","),
+      );
+    }
+
+    // Add summary row at end
+    lines.push("");
+    lines.push(["total", "", computed.totalCo2, computed.avgEfficiency, "", "", "", ""].map(escape).join(","));
+
+    const fileBase = `advanced-emissions-${timeRange}-${viewMode}-${sortBy}`;
+    downloadTextFile(lines.join("\n"), `${fileBase}.csv`, "text/csv;charset=utf-8");
+  };
+
   return (
     <MainLayout>
       <div className="max-w-5xl mx-auto space-y-6">
@@ -315,7 +372,7 @@ export default function AdvancedEmissions() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Button className="gap-2 bg-primary hover:bg-primary/90">
+            <Button className="gap-2 bg-primary hover:bg-primary/90" type="button" onClick={handleExport}>
               <Download className="w-4 h-4" />
               {t("advancedEmissions.export")}
             </Button>

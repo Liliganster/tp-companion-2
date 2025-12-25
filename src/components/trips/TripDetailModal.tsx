@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -24,11 +24,13 @@ interface TripDetailModalProps {
 export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalProps) {
   const { t, locale, language } = useI18n();
   const { profile } = useUserProfile();
-  // removed unused contexts
+  const { updateTrip } = useTrips();
   const { getAccessToken } = useAuth();
   const { toast } = useToast();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewDocName, setPreviewDocName] = useState<string>("");
+  const [attachBusy, setAttachBusy] = useState(false);
+  const attachInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) {
@@ -61,6 +63,54 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
   })} €`;
 
   const tripDocuments = trip.documents ?? [];
+
+  const onAttachFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    if (!supabase) return;
+
+    setAttachBusy(true);
+    try {
+      const { data, error } = await supabase.auth.getUser();
+      if (error || !data?.user) throw new Error("No estás autenticado");
+
+      const userId = data.user.id;
+      const uploadedDocs: NonNullable<Trip["documents"]> = [];
+
+      for (const file of Array.from(files)) {
+        const safeName = file.name.replace(/\s+/g, " ").trim();
+        const storagePath = `${userId}/trip-documents/${trip.id}/${Date.now()}-${safeName}`;
+
+        const { error: uploadError } = await supabase.storage.from("callsheets").upload(storagePath, file, {
+          contentType: file.type || undefined,
+          upsert: false,
+        });
+        if (uploadError) throw uploadError;
+
+        uploadedDocs.push({
+          id: crypto.randomUUID(),
+          name: safeName,
+          mimeType: file.type || "application/octet-stream",
+          storagePath,
+          createdAt: new Date().toISOString(),
+        });
+      }
+
+      const nextDocs = [...tripDocuments, ...uploadedDocs];
+      await updateTrip(trip.id, { documents: nextDocs });
+
+      toast({ title: t("tripDetail.invoicesTitle"), description: `Se adjuntaron ${uploadedDocs.length} archivo(s).` });
+
+      // Preview the last uploaded
+      const last = uploadedDocs[uploadedDocs.length - 1];
+      if (last) void viewDocument(last);
+    } catch (e: any) {
+      console.error(e);
+      toast({ title: "Error", description: e?.message ?? "No se pudo adjuntar el archivo", variant: "destructive" });
+    } finally {
+      setAttachBusy(false);
+      if (attachInputRef.current) attachInputRef.current.value = "";
+    }
+  };
 
 
   const viewDocument = async (doc: NonNullable<Trip["documents"]>[number]) => {
@@ -174,7 +224,22 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
                     {t("tripDetail.invoicesTitle")}
                   </Label>
                 </div>
-                <Button size="sm" variant="secondary" className="gap-1">
+                <input
+                  ref={attachInputRef}
+                  type="file"
+                  className="hidden"
+                  multiple
+                  accept="application/pdf,image/*"
+                  onChange={(e) => void onAttachFiles(e.target.files)}
+                />
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="gap-1"
+                  type="button"
+                  disabled={attachBusy}
+                  onClick={() => attachInputRef.current?.click()}
+                >
                   <Paperclip className="w-3 h-3" />
                   {t("tripDetail.attach")}
                 </Button>

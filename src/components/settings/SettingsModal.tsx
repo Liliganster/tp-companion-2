@@ -41,6 +41,34 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const { t } = useI18n();
   const { toast } = useToast();
 
+  const handleCheckUpdates = () => {
+    toast({
+      title: t("settings.appVersionTitle"),
+      description: "No hay un canal de actualizaciones configurado aún.",
+    });
+  };
+
+  const handleViewChangelog = () => {
+    toast({
+      title: "Changelog",
+      description: "El changelog todavía no está publicado dentro de la app.",
+    });
+  };
+
+  const handleViewDocs = () => {
+    toast({
+      title: t("settings.docsTitle"),
+      description: "La documentación integrada aún no está disponible.",
+    });
+  };
+
+  const handleContactSupport = () => {
+    toast({
+      title: t("settings.supportTitle"),
+      description: "El canal de soporte aún no está configurado.",
+    });
+  };
+
   const { profile, saveProfile } = useUserProfile();
   const { appearance, saveAppearance, previewAppearance, resetPreview } = useAppearance();
   const { getAccessToken, signOut } = useAuth();
@@ -653,13 +681,17 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   <div className="glass-card p-4 space-y-2">
                     <h3 className="font-medium">{t("settings.appVersionTitle")}</h3>
                     <p className="text-sm text-muted-foreground">Fahrtenbuch Pro v1.0.0</p>
-                    <Button variant="outline" size="sm">{t("settings.checkUpdates")}</Button>
+                    <Button variant="outline" size="sm" type="button" onClick={handleCheckUpdates}>
+                      {t("settings.checkUpdates")}
+                    </Button>
                   </div>
 
                   <div className="glass-card p-4 space-y-2">
                     <h3 className="font-medium">Changelog</h3>
                     <p className="text-sm text-muted-foreground">{t("settings.changelogBody")}</p>
-                    <Button variant="outline" size="sm">{t("settings.viewChangelog")}</Button>
+                    <Button variant="outline" size="sm" type="button" onClick={handleViewChangelog}>
+                      {t("settings.viewChangelog")}
+                    </Button>
                   </div>
                 </div>
               )}
@@ -670,13 +702,17 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   <div className="glass-card p-4 space-y-2">
                     <h3 className="font-medium">{t("settings.docsTitle")}</h3>
                     <p className="text-sm text-muted-foreground">{t("settings.docsBody")}</p>
-                    <Button variant="outline" size="sm">{t("settings.viewDocs")}</Button>
+                    <Button variant="outline" size="sm" type="button" onClick={handleViewDocs}>
+                      {t("settings.viewDocs")}
+                    </Button>
                   </div>
 
                   <div className="glass-card p-4 space-y-2">
                     <h3 className="font-medium">{t("settings.supportTitle")}</h3>
                     <p className="text-sm text-muted-foreground">{t("settings.supportBody")}</p>
-                    <Button variant="outline" size="sm">{t("settings.contactSupport")}</Button>
+                    <Button variant="outline" size="sm" type="button" onClick={handleContactSupport}>
+                      {t("settings.contactSupport")}
+                    </Button>
                   </div>
                 </div>
               )}

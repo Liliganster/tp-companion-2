@@ -16,6 +16,7 @@ import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { uuidv4 } from "@/lib/utils";
 import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface SavedTrip {
   id: string;
@@ -39,6 +40,7 @@ interface BulkUploadModalProps {
 export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const [open, setOpen] = useState(false);
   const [csvText, setCsvText] = useState("");
+  const [csvBusy, setCsvBusy] = useState(false);
   
   // AI Tab State
   const [aiStep, setAiStep] = useState<"upload" | "processing" | "review">("upload");
@@ -53,6 +55,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const [processingTotal, setProcessingTotal] = useState(0);
   const [processingDone, setProcessingDone] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const csvFileInputRef = useRef<HTMLInputElement>(null);
   
   // Review form state
   const [reviewDate, setReviewDate] = useState("");
@@ -65,6 +68,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   
   const { t, locale } = useI18n();
   const exampleText = t("bulk.examplePlaceholder");
+  const { getAccessToken } = useAuth();
 
   // Reset state when modal closes or tab changes
   useEffect(() => {
@@ -92,6 +96,351 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     setReviewLocations([]);
     setReviewDistance("0");
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const normalizeHeaderKey = (raw: string): string =>
+    String(raw ?? "")
+      .trim()
+      .replace(/^\uFEFF/, "")
+      .toLowerCase();
+
+  const parseDriveFileId = (input: string): string | null => {
+    const trimmed = String(input ?? "").trim();
+    if (!trimmed) return null;
+
+    // Raw id
+    if (/^[a-zA-Z0-9_-]{10,}$/.test(trimmed) && !trimmed.includes("/") && !trimmed.includes("?")) return trimmed;
+
+    // URL patterns
+    const m1 = /[?&]id=([^&]+)/.exec(trimmed);
+    if (m1?.[1]) return decodeURIComponent(m1[1]);
+    const m2 = /\/file\/d\/([^/]+)/.exec(trimmed);
+    if (m2?.[1]) return decodeURIComponent(m2[1]);
+
+    return null;
+  };
+
+  function detectDelimiter(headerLine: string): "," | ";" {
+    // Count separators outside quotes
+    let inQuotes = false;
+    let commas = 0;
+    let semis = 0;
+    for (let i = 0; i < headerLine.length; i++) {
+      const ch = headerLine[i];
+      if (ch === '"') {
+        if (inQuotes && headerLine[i + 1] === '"') {
+          i += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+        continue;
+      }
+      if (inQuotes) continue;
+      if (ch === ",") commas += 1;
+      if (ch === ";") semis += 1;
+    }
+    return semis > commas ? ";" : ",";
+  }
+
+  function parseCsvLine(line: string, delimiter: string): string[] {
+    const out: string[] = [];
+    let cur = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          cur += '"';
+          i += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+        continue;
+      }
+
+      if (!inQuotes && ch === delimiter) {
+        out.push(cur.trim());
+        cur = "";
+        continue;
+      }
+      cur += ch;
+    }
+
+    out.push(cur.trim());
+    return out;
+  }
+
+  const parseDateToIso = (raw: string): string | null => {
+    const v = String(raw ?? "").trim();
+    if (!v) return null;
+
+    // ISO: YYYY-MM-DD
+    const iso = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(v);
+    if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+
+    // DD-MM-YYYY or DD/MM/YYYY
+    const dmy = /^([0-9]{1,2})[\/-]([0-9]{1,2})[\/-]([0-9]{4})$/.exec(v);
+    if (dmy) {
+      const dd = String(Number(dmy[1])).padStart(2, "0");
+      const mm = String(Number(dmy[2])).padStart(2, "0");
+      const yyyy = dmy[3];
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    const time = Date.parse(v);
+    if (!Number.isFinite(time)) return null;
+    const dt = new Date(time);
+    const yyyy = dt.getFullYear();
+    const mm = String(dt.getMonth() + 1).padStart(2, "0");
+    const dd = String(dt.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const readCsvTextFromFile = async (file: File): Promise<string> => {
+    const text = await file.text();
+    // remove BOM if present
+    return text.replace(/^\uFEFF/, "");
+  };
+
+  const resolveProjectIdByName = async (projectNameRaw: string, sourceLabel: string): Promise<string | undefined> => {
+    const trimmed = String(projectNameRaw ?? "").trim();
+    if (!trimmed) return undefined;
+
+    const existing = projects.find((p) => p.name.trim().toLowerCase() === trimmed.toLowerCase());
+    if (existing) return existing.id;
+
+    const newProjectId = uuidv4();
+    await addProject({
+      id: newProjectId,
+      name: trimmed,
+      producer: "",
+      description: `Created from CSV import: ${sourceLabel}`,
+      ratePerKm: 0.30,
+      starred: false,
+      trips: 0,
+      totalKm: 0,
+      documents: 0,
+      invoices: 0,
+      estimatedCost: 0,
+      shootingDays: 0,
+      kmPerDay: 0,
+      co2Emissions: 0,
+    });
+    return newProjectId;
+  };
+
+  const computeDistanceKmIfMissing = async (routeValues: string[], region?: string): Promise<number | null> => {
+    const origin = routeValues[0];
+    const destination = routeValues[routeValues.length - 1];
+    const waypoints = routeValues.slice(1, -1);
+    if (!origin || !destination) return null;
+
+    try {
+      const response = await fetch("/api/google/directions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ origin, destination, waypoints, region }),
+      });
+
+      const data = (await response.json().catch(() => null)) as { totalDistanceMeters?: number } | null;
+      const meters = typeof data?.totalDistanceMeters === "number" ? data.totalDistanceMeters : null;
+      if (!response.ok || meters == null) return null;
+      const km = Math.round((meters / 1000) * 10) / 10;
+      return km;
+    } catch {
+      return null;
+    }
+  };
+
+  const parseCsvTrips = (rawCsv: string): { trips: SavedTrip[]; errors: string[] } => {
+    const text = String(rawCsv ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+    if (!text) return { trips: [], errors: ["CSV vacío"] };
+
+    const lines = text.split("\n").filter((l) => l.trim().length > 0);
+    if (lines.length < 2) return { trips: [], errors: ["CSV debe incluir cabecera + al menos una fila"] };
+
+    const headerLine = lines[0];
+    const delimiter = detectDelimiter(headerLine);
+    const headers = parseCsvLine(headerLine, delimiter).map(normalizeHeaderKey);
+
+    const idx = (key: string) => headers.findIndex((h) => h === key);
+    const iDate = idx("date");
+    const iProject = idx("projectname");
+    const iOrigin = idx("origin");
+    const iDestination = idx("destination");
+
+    const iReason = idx("reason");
+    const iDistance = (() => {
+      const a = idx("distance");
+      if (a >= 0) return a;
+      const b = idx("km");
+      if (b >= 0) return b;
+      return -1;
+    })();
+
+    if (iDate < 0 || iProject < 0 || iOrigin < 0 || iDestination < 0) {
+      return {
+        trips: [],
+        errors: ["Faltan cabeceras requeridas: date, projectName, origin, destination"],
+      };
+    }
+
+    const reserved = new Set(["date", "projectname", "origin", "destination", "reason", "distance", "km"]);
+
+    const errors: string[] = [];
+    const tripsOut: SavedTrip[] = [];
+
+    for (let rowIdx = 1; rowIdx < lines.length; rowIdx++) {
+      const rowRaw = lines[rowIdx];
+      const cols = parseCsvLine(rowRaw, delimiter);
+      const get = (i: number) => (i >= 0 ? String(cols[i] ?? "").trim() : "");
+
+      const dateIso = parseDateToIso(get(iDate));
+      const projectName = get(iProject);
+      const reason = iReason >= 0 ? get(iReason) : "";
+
+      const originRaw = get(iOrigin);
+      const destinationRaw = get(iDestination);
+      const origin = originRaw || profile.baseAddress || "";
+      const destination = destinationRaw || profile.baseAddress || "";
+
+      if (!dateIso) {
+        errors.push(`Fila ${rowIdx + 1}: fecha inválida`);
+        continue;
+      }
+      if (!projectName.trim()) {
+        errors.push(`Fila ${rowIdx + 1}: projectName vacío`);
+        continue;
+      }
+      if (!origin || !destination) {
+        errors.push(`Fila ${rowIdx + 1}: origin/destination vacíos (y no hay dirección base)`);
+        continue;
+      }
+
+      const stops: string[] = [];
+      for (let i = 0; i < headers.length; i++) {
+        if (reserved.has(headers[i])) continue;
+        const v = String(cols[i] ?? "").trim();
+        if (v) stops.push(v);
+      }
+
+      const routeValues = [origin, ...stops, destination].filter((x) => String(x ?? "").trim().length > 0);
+
+      let distanceKm = 0;
+      if (iDistance >= 0) {
+        const raw = get(iDistance).replace(",", ".");
+        const n = Number.parseFloat(raw);
+        if (Number.isFinite(n) && n > 0) distanceKm = n;
+      }
+
+      tripsOut.push({
+        id: uuidv4(),
+        date: dateIso,
+        route: routeValues,
+        project: projectName,
+        purpose: reason,
+        passengers: 0,
+        distance: distanceKm,
+        specialOrigin: "base",
+      });
+    }
+
+    return { trips: tripsOut, errors };
+  };
+
+  const importCsvText = async (rawCsv: string, sourceLabel: string) => {
+    if (!onSave) return;
+    if (csvBusy) return;
+
+    setCsvBusy(true);
+    try {
+      const { trips: parsedTrips, errors } = parseCsvTrips(rawCsv);
+      if (errors.length > 0) {
+        toast.error(errors.slice(0, 3).join("\n"));
+      }
+
+      if (parsedTrips.length === 0) {
+        toast.error("No se encontraron viajes válidos para importar");
+        return;
+      }
+
+      let ok = 0;
+      let failed = 0;
+
+      // sequential to avoid rate limits and keep ordering
+      for (const trip of parsedTrips) {
+        try {
+          const projectId = await resolveProjectIdByName(trip.project, sourceLabel);
+
+          let distance = trip.distance;
+          if (!Number.isFinite(distance) || distance <= 0) {
+            const computedKm = await computeDistanceKmIfMissing(trip.route);
+            if (typeof computedKm === "number" && computedKm > 0) distance = computedKm;
+          }
+
+          await onSave({ ...trip, projectId, distance });
+          ok += 1;
+        } catch (e) {
+          console.error(e);
+          failed += 1;
+        }
+      }
+
+      if (ok > 0) toast.success(`Importados ${ok} viajes`);
+      if (failed > 0) toast.error(`Fallaron ${failed} viajes`);
+
+      // keep the text for user inspection; close if everything ok
+      if (failed === 0) setOpen(false);
+    } finally {
+      setCsvBusy(false);
+    }
+  };
+
+  const handleCsvFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await readCsvTextFromFile(file);
+      setCsvText(text);
+      toast.success("CSV cargado");
+    } catch (err) {
+      console.error(err);
+      toast.error("No se pudo leer el CSV");
+    } finally {
+      e.target.value = "";
+    }
+  };
+
+  const importFromGoogleDrive = async () => {
+    const token = await getAccessToken();
+    if (!token) {
+      toast.error("Inicia sesión para importar desde Drive");
+      return;
+    }
+
+    const input = window.prompt("Pega el enlace de Google Drive o el fileId del CSV");
+    const fileId = parseDriveFileId(input ?? "");
+    if (!fileId) {
+      toast.error("No se pudo detectar el fileId");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/google/drive/download?fileId=${encodeURIComponent(fileId)}&name=${encodeURIComponent("import.csv")}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        throw new Error(text || "Drive download failed");
+      }
+      const text = await response.text();
+      setCsvText(text.replace(/^\uFEFF/, ""));
+      toast.success("CSV importado desde Drive");
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message ?? "No se pudo importar desde Drive");
+    }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -447,11 +796,28 @@ interface SavedTrip {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <Button variant="outline" className="h-12 gap-2">
+              <input
+                type="file"
+                ref={csvFileInputRef}
+                className="hidden"
+                accept=".csv,text/csv"
+                onChange={handleCsvFileSelect}
+              />
+              <Button
+                variant="outline"
+                className="h-12 gap-2"
+                type="button"
+                onClick={() => csvFileInputRef.current?.click()}
+              >
                 <Upload className="w-4 h-4" />
                 {t("bulk.selectCsvFile")}
               </Button>
-              <Button variant="outline" className="h-12 gap-2">
+              <Button
+                variant="outline"
+                className="h-12 gap-2"
+                type="button"
+                onClick={() => void importFromGoogleDrive()}
+              >
                 <CloudUpload className="w-4 h-4" />
                 {t("bulk.importFromDrive")}
               </Button>
@@ -474,7 +840,13 @@ interface SavedTrip {
                 onChange={(e) => setCsvText(e.target.value)}
                 className="min-h-[140px] font-mono text-sm bg-secondary/30"
               />
-              <Button variant="secondary" className="w-full" disabled={!csvText.trim()}>
+              <Button
+                variant="secondary"
+                className="w-full"
+                disabled={!csvText.trim() || csvBusy}
+                type="button"
+                onClick={() => void importCsvText(csvText, "pasted")}
+              >
                 {t("bulk.processPasted")}
               </Button>
             </div>
