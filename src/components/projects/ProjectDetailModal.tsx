@@ -66,12 +66,14 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
   const calculateCO2 = useCallback((distance: number) => Math.round(distance * 0.12 * 10) / 10, []);
 
-  const hasTripForStoragePath = useCallback(
-    (storagePath: string | undefined) => {
-      if (!storagePath) return false;
-      return trips.some((trip) =>
-        (trip.documents ?? []).some((d) => d?.storagePath === storagePath)
-      );
+  const hasTripForJob = useCallback(
+    (jobId: string | undefined, storagePath: string | undefined) => {
+      if (!jobId && !storagePath) return false;
+      return trips.some((trip) => {
+        if (jobId && trip.callsheet_job_id === jobId) return true;
+        if (!storagePath) return false;
+        return (trip.documents ?? []).some((d) => d?.storagePath === storagePath);
+      });
     },
     [trips]
   );
@@ -89,7 +91,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       if (!storagePath) return;
 
       // Avoid duplicates if the trip already exists
-      if (hasTripForStoragePath(storagePath)) {
+      if (hasTripForJob(job.id, storagePath)) {
         processedJobsRef.current.add(job.id);
         return;
       }
@@ -173,7 +175,15 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           co2: calculateCO2(distance),
           ratePerKmOverride: null,
           specialOrigin: "base",
-          documents: undefined, // No duplication
+          documents: [
+            {
+              id: `${job.id}-callsheet`,
+              name: storagePath.split("/").pop() || "Callsheet",
+              mimeType: "application/pdf",
+              storagePath,
+              createdAt: new Date().toISOString(),
+            },
+          ],
         };
 
         await addTrip(nextTrip);
