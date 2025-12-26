@@ -22,6 +22,9 @@ interface ProjectDocument {
   status?: string;
   storage_path?: string;
   needs_review_reason?: string;
+  invoice_job_id?: string;
+  extracted_amount?: number;
+  extracted_currency?: string;
 }
 
 interface ProjectDetailModalProps {
@@ -314,9 +317,14 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       };
 
       const fetchProjectDocs = async () => {
+          // Fetch project documents with their invoice jobs and extraction results
           const { data, error } = await supabase
             .from("project_documents")
-            .select("*")
+            .select(`
+              *,
+              invoice_job:invoice_jobs(id, status, needs_review_reason),
+              invoice_result:invoice_results(total_amount, currency)
+            `)
             .eq("project_id", project.id);
             
           if (data) {
@@ -324,7 +332,12 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                   id: d.id,
                   name: d.name,
                   type: (d.type as any) || "invoice",
-                  storage_path: d.storage_path
+                  storage_path: d.storage_path,
+                  invoice_job_id: d.invoice_job_id,
+                  status: d.invoice_job?.status,
+                  needs_review_reason: d.invoice_job?.needs_review_reason,
+                  extracted_amount: d.invoice_result?.total_amount,
+                  extracted_currency: d.invoice_result?.currency
               })));
           }
       };
@@ -407,12 +420,74 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           }
         }
 
-        // 3) If nothing is pending, stop polling.
+        // 3) Poll invoice jobs too
+        const invoiceJobIds = projectDocs
+          .map(d => d.invoice_job_id)
+          .filter(Boolean);
+
+        if (invoiceJobIds.length > 0) {
+          const { data: invoiceJobs } = await supabase
+            .from("invoice_jobs")
+            .select("id, status, needs_review_reason")
+            .in("id", invoiceJobIds);
+
+          if (invoiceJobs && invoiceJobs.length > 0) {
+            // Fetch results for done jobs
+            const doneInvoiceJobIds = invoiceJobs
+              .filter((j: any) => j.status === "done")
+              .map((j: any) => j.id);
+
+            let invoiceResults: any[] = [];
+            if (doneInvoiceJobIds.length > 0) {
+              const { data } = await supabase
+                .from("invoice_results")
+                .select("job_id, total_amount, currency")
+                .in("job_id", doneInvoiceJobIds);
+              invoiceResults = data || [];
+            }
+
+            setProjectDocs((prev) => {
+              let changed = false;
+              const updated = prev.map(doc => {
+                if (!doc.invoice_job_id) return doc;
+                
+                const job = invoiceJobs.find((j: any) => j.id === doc.invoice_job_id);
+                if (!job) return doc;
+
+                const result = invoiceResults.find((r: any) => r.job_id === doc.invoice_job_id);
+
+                if (
+                  doc.status !== job.status ||
+                  doc.needs_review_reason !== job.needs_review_reason ||
+                  doc.extracted_amount !== result?.total_amount ||
+                  doc.extracted_currency !== result?.currency
+                ) {
+                  changed = true;
+                  return {
+                    ...doc,
+                    status: job.status,
+                    needs_review_reason: job.needs_review_reason,
+                    extracted_amount: result?.total_amount,
+                    extracted_currency: result?.currency
+                  };
+                }
+                return doc;
+              });
+
+              return changed ? updated : prev;
+            });
+          }
+        }
+
+        // 4) If nothing is pending, stop polling.
         const hasPending = (jobs ?? []).some(
           (j: any) => j?.status === "queued" || j?.status === "processing" || j?.status === "created",
         );
+        const hasInvoicePending = projectDocs.some(
+          (d: any) => d.status === "queued" || d.status === "processing" || d.status === "created"
+        );
         
-        if (!hasPending && interval) {
+        if (!hasPending && !hasInvoicePending && interval) {
           console.log("[Polling] No pending jobs, stopping polling");
           clearInterval(interval);
           interval = null;
@@ -591,6 +666,60 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       }
   };
 
+  const handleExtractInvoice = async (doc: ProjectDocument) => {
+    if (doc.status === 'queued' || doc.status === 'processing') {
+      toast.info("La factura ya se está procesando");
+      return;
+    }
+    
+    if (doc.status === 'done') {
+      if (!confirm("Esta factura ya fue procesada. ¿Quieres volver a procesarla? Se borrarán los datos anteriores.")) {
+        return;
+      }
+    }
+    
+    try {
+      if (!doc.invoice_job_id) {
+        toast.error("Esta factura no tiene un job de extracción asociado");
+        return;
+      }
+
+      // If it's done, clean previous results
+      if (doc.status === 'done') {
+        const { error: resultsError } = await supabase
+          .from("invoice_results")
+          .delete()
+          .eq("job_id", doc.invoice_job_id);
+        if (resultsError) console.error("Error eliminando resultados:", resultsError);
+      }
+
+      // Queue the job
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error("Sesión no válida");
+        return;
+      }
+
+      const res = await fetch('/api/invoices/queue', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ jobId: doc.invoice_job_id })
+      });
+
+      if (!res.ok) throw new Error('Error al encolar job');
+
+      toast.success(doc.status === 'done' ? "Re-procesamiento iniciado" : "Extracción iniciada");
+      setProjectDocs(prev => prev.map(p => 
+        p.id === doc.id ? { ...p, status: 'queued' } : p
+      ));
+    } catch (e: any) {
+      toast.error("Error al iniciar extracción: " + e.message);
+    }
+  };
+
   const handleDeleteInvoice = async (doc: ProjectDocument) => {
       if (doc.storage_path) {
           // Project document
@@ -672,11 +801,42 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                   allInvoices.map((doc) => (
                     <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors group">
                       <div className="flex items-center gap-3 min-w-0">
-                        <FileText className="w-4 h-4 text-primary shrink-0" />
-                        <span className="text-sm truncate">{doc.name}</span>
+                        <Receipt className="w-4 h-4 text-primary shrink-0" />
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm truncate">{doc.name}</span>
+                          {doc.extracted_amount !== undefined && (
+                            <span className="text-xs text-muted-foreground">
+                              {doc.extracted_amount.toFixed(2)} {doc.extracted_currency || 'EUR'}
+                            </span>
+                          )}
+                        </div>
+                        {doc.status === 'queued' || doc.status === 'processing' ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        ) : null}
+                        {doc.status === 'needs_review' ? (
+                          <span title={doc.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-full cursor-help bg-orange-500/20 text-orange-500">
+                            Revisar
+                          </span>
+                        ) : null}
+                        {doc.status === 'failed' ? (
+                          <span title={doc.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-full cursor-help bg-red-500/20 text-red-500">
+                            Error
+                          </span>
+                        ) : null}
                         {!doc.storage_path && <span className="text-[10px] text-muted-foreground bg-secondary px-1 rounded">Viaje</span>}
                       </div>
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {doc.invoice_job_id && doc.status !== 'queued' && doc.status !== 'processing' && (
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-yellow-500 hover:text-yellow-400" 
+                            onClick={() => handleExtractInvoice(doc)} 
+                            title={doc.status === 'done' ? "Volver a procesar" : "Extraer datos con IA"}
+                          >
+                            <Sparkles className="w-4 h-4" />
+                          </Button>
+                        )}
                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleViewInvoice(doc)}>
                           <Eye className="w-4 h-4" />
                         </Button>

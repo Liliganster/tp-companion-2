@@ -47,12 +47,43 @@ export function ProjectInvoiceUploader({ onUploadComplete, projectId }: ProjectI
           const { error: uploadError } = await supabase.storage.from("project_documents").upload(filePath, file);
           if (uploadError) throw uploadError;
 
+          // Create invoice extraction job
+          const { data: jobData, error: jobError } = await supabase
+            .from("invoice_jobs")
+            .insert({
+              project_id: projectId,
+              user_id: user.id,
+              storage_path: filePath,
+              status: "created"
+            })
+            .select("id")
+            .single();
+
+          if (jobError) throw jobError;
+
+          // Auto-queue the job for processing
+          try {
+            await fetch('/api/invoices/queue', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ jobId: jobData.id })
+            });
+          } catch (queueErr) {
+            console.warn("Failed to auto-queue invoice job:", queueErr);
+            // Non-fatal, user can manually trigger later
+          }
+
+          // Create project_documents entry linked to the job
           const { error: dbError } = await supabase.from("project_documents").insert({
             project_id: projectId,
             user_id: user.id,
             name: file.name,
             storage_path: filePath,
             type: "invoice",
+            invoice_job_id: jobData.id
           });
           
           if (dbError) {
@@ -72,7 +103,7 @@ export function ProjectInvoiceUploader({ onUploadComplete, projectId }: ProjectI
         }
       }
 
-      if (successCount > 0) toast.success(`Se subieron ${successCount} facturas/documentos`);
+      if (successCount > 0) toast.success(`Se subieron ${successCount} facturas. La extracción comenzará automáticamente.`);
       if (failCount > 0) toast.error(`Fallaron ${failCount} documentos`);
       onUploadComplete?.();
 
