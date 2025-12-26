@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useMemo } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Upload, ArrowLeft } from "lucide-react";
@@ -13,56 +13,118 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { VehicleConfigModal } from "@/components/settings/VehicleConfigModal";
 import { useProjects } from "@/contexts/ProjectsContext";
+import { useTrips } from "@/contexts/TripsContext";
 import { supabase } from "@/lib/supabaseClient";
 import { formatSupabaseError } from "@/lib/supabaseErrors";
 import { toast } from "sonner";
 
-const summaryData = {
-  totalDistance: 103.8,
-  totalTrips: 2,
-  estimatedCost: 0.0,
-  costPerKm: 0.0,
-};
-
-const costBreakdown = [
-  { label: "Combustible / Energía", value: 0.0, color: "bg-info", percent: 0 },
-  { label: "Mantenimiento", value: 0.0, color: "bg-info", percent: 0 },
-  { label: "Otros", value: 0.0, color: "bg-info", percent: 0 },
-  { label: "Costo Prom. / Viaje", value: 0.0, color: "bg-success", percent: 100 },
-];
-
-const costAssumptions = {
-  fuelPerKm: 0.0,
-  maintenanceTotal: 0.0,
-  otherTotal: 0.0,
-};
-
-const projectCosts = [
-  { project: "WENN DAS LICHT ...", distance: 104, trips: 2, total: 0.0, perKm: 0.0 },
-];
-
-const monthlyCosts = [
-  {
-    month: "diciembre de 2025",
-    distance: 103.8,
-    trips: 2,
-    fuel: 0.0,
-    maintenance: 0.0,
-    other: 0.0,
-    total: 0.0,
-    perKm: 0.0,
-  },
-];
-
 export default function AdvancedCosts() {
   const navigate = useNavigate();
   const { projects } = useProjects();
-  const [activeTab, setActiveTab] = useState<"resumen" | "mensuales">("resumen");
+  const { trips } = useTrips();
+  const [activeTab, setActiveTab] = useState("resumen");
   const [periodFilter, setPeriodFilter] = useState("3m");
   const [projectFilter, setProjectFilter] = useState("all");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [uploadingInvoice, setUploadingInvoice] = useState(false);
+  const [chosenProjectId, setChosenProjectId] = useState("");
   const invoiceInputRef = useRef<HTMLInputElement>(null);
+
+  // Calculate real costs from trips and invoices
+  const summaryData = useMemo(() => {
+    const totalDistance = trips.reduce((sum, t) => sum + (t.distance || 0), 0);
+    const totalTrips = trips.length;
+    
+    // Sum all invoice amounts (converting to EUR if needed)
+    const totalInvoiced = trips.reduce((sum, t) => {
+      if (!t.invoiceAmount) return sum;
+      const amount = t.invoiceAmount;
+      if (t.invoiceCurrency === 'USD') return sum + (amount * 0.92);
+      if (t.invoiceCurrency === 'GBP') return sum + (amount * 1.17);
+      return sum + amount;
+    }, 0);
+
+    const costPerKm = totalDistance > 0 ? totalInvoiced / totalDistance : 0;
+
+    return {
+      totalDistance,
+      totalTrips,
+      estimatedCost: totalInvoiced,
+      costPerKm,
+    };
+  }, [trips]);
+
+  const costBreakdown = useMemo(() => [
+    { label: "Combustible / Energía", value: summaryData.estimatedCost * 0.6, color: "bg-info", percent: 60 },
+    { label: "Mantenimiento", value: summaryData.estimatedCost * 0.25, color: "bg-info", percent: 25 },
+    { label: "Otros", value: summaryData.estimatedCost * 0.15, color: "bg-info", percent: 15 },
+    { label: "Costo Prom. / Viaje", value: summaryData.totalTrips > 0 ? summaryData.estimatedCost / summaryData.totalTrips : 0, color: "bg-success", percent: 100 },
+  ], [summaryData]);
+
+  const costAssumptions = useMemo(() => ({
+    fuelPerKm: summaryData.costPerKm * 0.6,
+    maintenanceTotal: summaryData.estimatedCost * 0.25,
+    otherTotal: summaryData.estimatedCost * 0.15,
+  }), [summaryData]);
+
+  const projectCosts = useMemo(() => projects.map(p => {
+    const projectTrips = trips.filter(t => t.projectId === p.id);
+    const distance = projectTrips.reduce((sum, t) => sum + (t.distance || 0), 0);
+    const invoiced = projectTrips.reduce((sum, t) => {
+      if (!t.invoiceAmount) return sum;
+      const amount = t.invoiceAmount;
+      if (t.invoiceCurrency === 'USD') return sum + (amount * 0.92);
+      if (t.invoiceCurrency === 'GBP') return sum + (amount * 1.17);
+      return sum + amount;
+    }, 0);
+    
+    return {
+      project: p.name,
+      distance,
+      trips: projectTrips.length,
+      total: invoiced,
+      perKm: distance > 0 ? invoiced / distance : 0,
+    };
+  }), [projects, trips]);
+
+  const monthlyCosts = useMemo(() => {
+    const byMonth = new Map<string, { distance: number; trips: number; invoiced: number }>();
+    
+    trips.forEach(t => {
+      const date = new Date(t.date);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const existing = byMonth.get(monthKey) || { distance: 0, trips: 0, invoiced: 0 };
+      
+      const invoiced = t.invoiceAmount ? (
+        t.invoiceCurrency === 'USD' ? t.invoiceAmount * 0.92 :
+        t.invoiceCurrency === 'GBP' ? t.invoiceAmount * 1.17 :
+        t.invoiceAmount
+      ) : 0;
+      
+      byMonth.set(monthKey, {
+        distance: existing.distance + (t.distance || 0),
+        trips: existing.trips + 1,
+        invoiced: existing.invoiced + invoiced,
+      });
+    });
+
+    return Array.from(byMonth.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([monthKey, data]) => {
+        const [year, month] = monthKey.split('-');
+        const monthName = new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+        
+        return {
+          month: monthName,
+          distance: data.distance,
+          trips: data.trips,
+          fuel: data.invoiced * 0.6,
+          maintenance: data.invoiced * 0.25,
+          other: data.invoiced * 0.15,
+          total: data.invoiced,
+        };
+      });
+  }, [trips]);
 
   const uploadInvoicesForProject = async (files: FileList | null) => {
     const chosenProjectId = projectFilter;

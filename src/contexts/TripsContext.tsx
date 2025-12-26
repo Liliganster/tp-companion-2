@@ -14,7 +14,10 @@ export type Trip = {
   projectId?: string; // Added for relational link
   purpose: string;
   passengers: number;
-  invoice?: string;
+  invoice?: string; // Legacy: invoice_number
+  invoiceAmount?: number; // New: extracted amount from invoice
+  invoiceCurrency?: string; // New: currency (EUR, USD, etc.)
+  invoiceJobId?: string; // New: link to invoice_job
   warnings?: string[];
   co2: number;
   distance: number;
@@ -81,6 +84,9 @@ export function TripsProvider({ children }: { children: ReactNode }) {
             purpose: t.purpose || "",
             passengers: t.passengers || 0,
             invoice: t.invoice_number,
+            invoiceAmount: t.invoice_amount,
+            invoiceCurrency: t.invoice_currency,
+            invoiceJobId: t.invoice_job_id,
             distance: t.distance_km || 0,
             co2: Number.isFinite(Number(t.co2_kg)) && Number(t.co2_kg) > 0
               ? Number(t.co2_kg)
@@ -144,6 +150,9 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       rate_per_km_override: normalizedTrip.ratePerKmOverride,
       special_origin: normalizedTrip.specialOrigin,
       invoice_number: normalizedTrip.invoice,
+      invoice_amount: normalizedTrip.invoiceAmount,
+      invoice_currency: normalizedTrip.invoiceCurrency,
+      invoice_job_id: normalizedTrip.invoiceJobId,
       documents: normalizedTrip.documents
     };
     
@@ -177,6 +186,9 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     if (patch.ratePerKmOverride !== undefined) dbPatch.rate_per_km_override = patch.ratePerKmOverride;
     if (patch.specialOrigin !== undefined) dbPatch.special_origin = patch.specialOrigin;
     if (patch.invoice !== undefined) dbPatch.invoice_number = patch.invoice;
+    if (patch.invoiceAmount !== undefined) dbPatch.invoice_amount = patch.invoiceAmount;
+    if (patch.invoiceCurrency !== undefined) dbPatch.invoice_currency = patch.invoiceCurrency;
+    if (patch.invoiceJobId !== undefined) dbPatch.invoice_job_id = patch.invoiceJobId;
     if (patch.documents !== undefined) dbPatch.documents = patch.documents;
     if (patch.callsheet_job_id !== undefined) dbPatch.callsheet_job_id = patch.callsheet_job_id;
     if (patch.projectId !== undefined) dbPatch.project_id = patch.projectId;

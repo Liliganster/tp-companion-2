@@ -51,48 +51,59 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     let mounted = true;
 
     async function fetchProjects() {
-      const { data, error } = await supabase!
+      // Fetch projects with computed totals from project_totals view
+      const { data: projectsData, error: projectsError } = await supabase!
         .from("projects")
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("Error fetching projects:", error);
-        toast.error("Error loading projects: " + error.message);
+      if (projectsError) {
+        console.error("Error fetching projects:", projectsError);
+        toast.error("Error loading projects: " + projectsError.message);
+        if (mounted) setLoading(false);
+        return;
       }
 
+      // Fetch totals from the view
+      const { data: totalsData, error: totalsError } = await supabase!
+        .from("project_totals")
+        .select("*");
+
+      if (totalsError) {
+        console.warn("Error fetching project totals:", totalsError);
+      }
+
+      // Create a map of totals by project_id
+      const totalsMap = new Map(
+        (totalsData || []).map((t: any) => [t.project_id, t])
+      );
+
       if (mounted) {
-        if (data) {
-          // Map DB snake_case to CamelCase if needed
-          // Assuming DB columns map exactly to frontend types OR we map them
-          // DB: name, producer, description, rate_per_km, starred, archived
-          // Stats fields might be missing in DB or separate.
-          // For now, we'll assume the DB has these columns OR we default them.
-          // Note: The schema I created earlier didn't have specific stats columns (trips, totalKm etc).
-          // They were discussed as "computed".
-          // If the DB doesn't have them, we must set them to 0 or calculate them.
-          // For "Database Persistence Audit", we want to load what is there.
-          // Realistically, to match the UI, we should calculate stats from TRIPS.
-          // But that requires fetching all trips.
-          // For now, let's map what we have and default stats to 0.
-          const mapped = data.map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            producer: p.producer,
-            description: p.description,
-            ratePerKm: p.rate_per_km ? Number(p.rate_per_km) : 0,
-            starred: p.starred,
-            archived: p.archived,
-            // Stats - temporary zeros until we implement aggregation
-            trips: p.trips_count || 0,
-            totalKm: p.total_km || 0,
-            documents: 0,
-            invoices: 0,
-            estimatedCost: 0,
-            shootingDays: 0,
-            kmPerDay: 0,
-            co2Emissions: 0,
-          }));
+        if (projectsData) {
+          const mapped = projectsData.map((p: any) => {
+            const totals = totalsMap.get(p.id);
+            const totalKm = totals?.total_distance_km || 0;
+            const trips = totals?.total_trips || 0;
+            const totalInvoiced = (totals?.total_invoiced_eur || 0) + (totals?.total_trip_invoices_eur || 0);
+            
+            return {
+              id: p.id,
+              name: p.name,
+              producer: p.producer,
+              description: p.description,
+              ratePerKm: p.rate_per_km ? Number(p.rate_per_km) : 0,
+              starred: p.starred,
+              archived: p.archived,
+              trips: trips,
+              totalKm: totalKm,
+              documents: 0, // Could be calculated from project_documents count
+              invoices: totalInvoiced,
+              estimatedCost: totalKm * (p.rate_per_km || 0),
+              shootingDays: trips, // Approximate: 1 trip = 1 day
+              kmPerDay: trips > 0 ? totalKm / trips : 0,
+              co2Emissions: totals?.total_co2_kg || 0,
+            };
+          });
           setProjects(mapped);
         }
         setLoading(false);
