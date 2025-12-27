@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabaseClient";
+﻿import { supabase } from "@/lib/supabaseClient";
 import { Trip } from "@/contexts/TripsContext";
 import { Project } from "@/contexts/ProjectsContext";
 import { SavedReport } from "@/contexts/ReportsContext";
@@ -33,6 +33,13 @@ function safeUuid() {
 function normalizeKey(value: string) {
   return value.trim().toLowerCase();
 }
+function parseLocaleFloat(value: unknown): number | null {
+  const normalized = String(value ?? "").trim().replace(",", ".");
+  if (!normalized) return null;
+  const n = Number.parseFloat(normalized);
+  return Number.isFinite(n) ? n : null;
+}
+
 
 export async function checkAndMigrateData(userId: string): Promise<MigrationResult> {
   if (typeof window === "undefined") return;
@@ -72,8 +79,8 @@ export async function checkAndMigrateData(userId: string): Promise<MigrationResu
         city: profile.city,
         country: profile.country,
         // image_url: profile.imageUrl, // Not in UserProfile type
-        rate_per_km: profile.ratePerKm,
-        passenger_surcharge: profile.passengerSurcharge,
+        rate_per_km: parseLocaleFloat(profile.ratePerKm),
+        passenger_surcharge: parseLocaleFloat(profile.passengerSurcharge),
         currency: "EUR", // Default
         language: profile.language,
         // theme: profile.theme, // Not in UserProfile type

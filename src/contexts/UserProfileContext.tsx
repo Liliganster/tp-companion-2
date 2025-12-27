@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
+﻿import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "./AuthContext";
 import { toast } from "sonner";
@@ -22,8 +22,8 @@ const DEFAULT_PROFILE: UserProfile = {
   vatId: "",
   licensePlate: "",
   language: "es",
-  ratePerKm: "0,42",
-  passengerSurcharge: "0,05",
+  ratePerKm: "",
+  passengerSurcharge: "",
   baseAddress: "",
   city: "",
   country: "",
@@ -45,6 +45,13 @@ function detectBrowserLanguage(): UserProfile["language"] {
   if (lang.startsWith("de")) return "de";
   if (lang.startsWith("en")) return "en";
   return "es";
+}
+
+function parseProfileNumber(value: string): number | null {
+  const normalized = String(value ?? "").trim().replace(",", ".");
+  if (!normalized) return null;
+  const n = Number.parseFloat(normalized);
+  return Number.isFinite(n) ? n : null;
 }
 
 export function UserProfileProvider({ children }: { children: ReactNode }) {
@@ -84,8 +91,8 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
               vatId: data.vat_id || "",
               licensePlate: data.license_plate || "",
               language: (data.language as any) || "es",
-              ratePerKm: data.rate_per_km?.toString().replace(".", ",") || "0,42",
-              passengerSurcharge: data.passenger_surcharge?.toString().replace(".", ",") || "0,05",
+              ratePerKm: data.rate_per_km == null ? "" : String(data.rate_per_km).replace(".", ","),
+              passengerSurcharge: data.passenger_surcharge == null ? "" : String(data.passenger_surcharge).replace(".", ","),
               baseAddress: data.base_address || "",
               city: data.city || "",
               country: data.country || "",
@@ -122,8 +129,8 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
       vat_id: nextProfile.vatId,
       license_plate: nextProfile.licensePlate,
       language: nextProfile.language,
-      rate_per_km: parseFloat(nextProfile.ratePerKm.replace(",", ".")),
-      passenger_surcharge: parseFloat(nextProfile.passengerSurcharge.replace(",", ".")),
+      rate_per_km: parseProfileNumber(nextProfile.ratePerKm),
+      passenger_surcharge: parseProfileNumber(nextProfile.passengerSurcharge),
       base_address: nextProfile.baseAddress,
       city: nextProfile.city,
       country: nextProfile.country,
