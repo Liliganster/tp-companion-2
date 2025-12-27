@@ -231,16 +231,21 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     return newProjectId;
   };
 
-  const computeDistanceKmIfMissing = async (routeValues: string[], region?: string): Promise<number | null> => {
+  const computeDistanceKmIfMissing = async (
+    routeValues: string[],
+    region?: string,
+    accessToken?: string | null,
+  ): Promise<number | null> => {
     const origin = routeValues[0];
     const destination = routeValues[routeValues.length - 1];
     const waypoints = routeValues.slice(1, -1);
     if (!origin || !destination) return null;
+    if (!accessToken) return null;
 
     try {
       const response = await fetch("/api/google/directions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({ origin, destination, waypoints, region }),
       });
 
@@ -356,6 +361,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
     setCsvBusy(true);
     try {
+      const token = await getAccessToken();
       const { trips: parsedTrips, errors } = parseCsvTrips(rawCsv);
       if (errors.length > 0) {
         toast.error(errors.slice(0, 3).join("\n"));
@@ -376,7 +382,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
           let distance = trip.distance;
           if (!Number.isFinite(distance) || distance <= 0) {
-            const computedKm = await computeDistanceKmIfMissing(trip.route);
+            const computedKm = await computeDistanceKmIfMissing(trip.route, undefined, token);
             if (typeof computedKm === "number" && computedKm > 0) distance = computedKm;
           }
 
@@ -627,9 +633,11 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       let currentLocs = rawLocations.map(l => l.formatted_address || l.address_raw);
 
       try {
+        const token = await getAccessToken();
         const { locations: normalizedLocs, distanceKm } = await optimizeCallsheetLocationsAndDistance({
         profile,
         rawLocations: currentLocs,
+        accessToken: token,
         });
 
         setReviewLocations(normalizedLocs);

@@ -4,13 +4,29 @@ import { buildInvoiceExtractorPrompt, invoiceExtractionSchema } from "../src/lib
 
 export default async function handler(req: any, res: any) {
   // CRON authentication
-  const authHeader = req.headers.authorization;
+  const authHeader = req.headers?.authorization;
   const cronSecret = process.env.CRON_SECRET;
-  
-  // Verify that the request is from Vercel Cron
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}` && req.query.key !== cronSecret) {
-      res.status(401).json({ error: 'Unauthorized' });
+  const vercelEnv = process.env.VERCEL_ENV; // "production" | "preview" | "development" | undefined
+  const requireSecret = vercelEnv ? vercelEnv !== "development" : process.env.NODE_ENV === "production";
+
+  const queryKey = typeof req.query?.key === "string" ? req.query.key : null;
+
+  // In production/preview: require CRON_SECRET and only accept Authorization header.
+  // In development: allow unauthenticated runs if CRON_SECRET is not set; if set, allow header or ?key=.
+  if (requireSecret) {
+    if (!cronSecret) {
+      res.status(500).json({ error: "Missing CRON_SECRET" });
       return;
+    }
+    if (authHeader !== `Bearer ${cronSecret}`) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+  } else if (cronSecret) {
+    if (authHeader !== `Bearer ${cronSecret}` && queryKey !== cronSecret) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
   }
 
   if (req.method !== "POST" && req.method !== "GET") {
@@ -94,7 +110,7 @@ export default async function handler(req: any, res: any) {
 
         if (!extractedJson) throw new Error("Empty extraction result");
 
-        console.log(`[Invoice Job ${job.id}] Extraction result:`, JSON.stringify(extractedJson, null, 2));
+        console.log(`[Invoice Job ${job.id}] Extraction parsed`);
 
         // Validate extracted data
         if (!extractedJson.totalAmount && extractedJson.totalAmount !== 0) {

@@ -1,6 +1,16 @@
 import { requireSupabaseUser, sendJson } from "../../_utils/supabase.js";
 import { getGoogleAccessTokenForUser } from "../_utils.js";
 
+function safeFilename(input: string) {
+  const cleaned = String(input ?? "document")
+    .replace(/[\r\n]/g, "")
+    .replace(/["]/g, "")
+    .replace(/[\\/]/g, "_")
+    .trim();
+  const name = cleaned || "document";
+  return name.length > 150 ? name.slice(0, 150) : name;
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== "GET") {
     res.statusCode = 405;
@@ -28,7 +38,7 @@ export default async function handler(req: any, res: any) {
     }
 
     res.statusCode = 200;
-    res.setHeader("Content-Disposition", `attachment; filename="${name.replace(/\"/g, "")}"`);
+    res.setHeader("Content-Disposition", `attachment; filename="${safeFilename(name)}"`);
     res.setHeader("Content-Type", response.headers.get("content-type") || "application/octet-stream");
 
     const buf = Buffer.from(await response.arrayBuffer());
@@ -37,4 +47,3 @@ export default async function handler(req: any, res: any) {
     return sendJson(res, 400, { error: "not_connected", message: e?.message ?? "Google not connected" });
   }
 }
-

@@ -9,8 +9,9 @@ type UserProfileLike = {
 export async function optimizeCallsheetLocationsAndDistance(args: {
   profile: UserProfileLike;
   rawLocations: string[];
+  accessToken?: string | null;
 }): Promise<{ locations: string[]; distanceKm: number | null }> {
-  const { profile, rawLocations } = args;
+  const { profile, rawLocations, accessToken } = args;
 
   const baseAddress = (profile.baseAddress ?? "").trim();
   const city = (profile.city ?? "").trim();
@@ -18,6 +19,8 @@ export async function optimizeCallsheetLocationsAndDistance(args: {
 
   const currentLocs = rawLocations.map((l) => (l ?? "").trim()).filter(Boolean);
   if (currentLocs.length === 0) return { locations: [], distanceKm: null };
+
+  if (!accessToken) return { locations: currentLocs, distanceKm: null };
 
   const region = getCountryCode(country);
 
@@ -37,7 +40,7 @@ export async function optimizeCallsheetLocationsAndDistance(args: {
     try {
       const res = await fetch("/api/google/geocode", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({ address: query, region }),
       });
 
@@ -59,7 +62,7 @@ export async function optimizeCallsheetLocationsAndDistance(args: {
     try {
       const res = await fetch("/api/google/directions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({
           origin: baseAddress,
           destination: baseAddress,

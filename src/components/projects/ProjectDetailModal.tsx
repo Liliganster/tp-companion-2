@@ -12,8 +12,11 @@ import { CallsheetUploader } from "@/components/callsheets/CallsheetUploader";
 import { ProjectInvoiceUploader } from "@/components/projects/ProjectInvoiceUploader";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useTrips, type Trip } from "@/contexts/TripsContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
 import { uuidv4 } from "@/lib/utils";
+
+const DEBUG = import.meta.env.DEV;
 
 interface ProjectDocument {
   id: string;
@@ -47,6 +50,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const { t, locale, language } = useI18n();
   const { profile } = useUserProfile();
   const { trips, addTrip } = useTrips();
+  const { getAccessToken } = useAuth();
   const [realCallSheets, setRealCallSheets] = useState<ProjectDocument[]>([]);
   const [projectDocs, setProjectDocs] = useState<ProjectDocument[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -60,7 +64,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   // Debug: verificar que project.id se pasa correctamente
   useEffect(() => {
     if (open && project) {
-      console.log("ProjectDetailModal opened with project:", { id: project.id, name: project.name });
+      if (DEBUG) console.log("ProjectDetailModal opened with project:", { id: project.id, name: project.name });
     }
   }, [open, project]);
 
@@ -104,12 +108,12 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
       // Avoid duplicates if the trip already exists
       if (hasTripForJob(job.id, storagePath)) {
-        console.log("[Materialize] Trip already exists for job:", job.id);
+        if (DEBUG) console.log("[Materialize] Trip already exists for job:", job.id);
         processedJobsRef.current.add(job.id);
         return;
       }
 
-      console.log("[Materialize] Processing job:", job.id);
+      if (DEBUG) console.log("[Materialize] Processing job:", job.id);
       inFlightJobsRef.current.add(job.id);
 
       try {
@@ -142,7 +146,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             return;
         }
 
-        console.log("[Materialize] Extracted result:", result);
+        if (DEBUG) console.log("[Materialize] Extracted result:", result);
 
         const extractedProject = (result?.project_value ?? "").trim();
         if (extractedProject && normalizeProjectName(extractedProject) !== normalizeProjectName(project.name)) {
@@ -188,10 +192,12 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           return;
         }
         
-        console.log("[Materialize] Optimizing locations:", rawLocations);
+        if (DEBUG) console.log("[Materialize] Optimizing locations:", rawLocations);
+        const token = await getAccessToken();
         const { locations: normalizedLocs, distanceKm } = await optimizeCallsheetLocationsAndDistance({
           profile,
           rawLocations,
+          accessToken: token,
         });
 
         const base = (profile.baseAddress ?? "").trim();
@@ -238,7 +244,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         inFlightJobsRef.current.delete(job.id);
       }
     },
-    [addTrip, calculateCO2, hasTripForJob, normalizeProjectName, profile, project]
+    [addTrip, calculateCO2, getAccessToken, hasTripForJob, normalizeProjectName, profile, project]
   );
 
   useEffect(() => {
@@ -488,7 +494,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         );
         
         if (!hasPending && !hasInvoicePending && interval) {
-          console.log("[Polling] No pending jobs, stopping polling");
+          if (DEBUG) console.log("[Polling] No pending jobs, stopping polling");
           clearInterval(interval);
           interval = null;
         }

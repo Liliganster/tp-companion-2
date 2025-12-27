@@ -30,9 +30,12 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import tripHeaderImage from "@/assets/trip-modal-header.jpg";
 import { useUserProfile } from "@/contexts/UserProfileContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { formatLocaleNumber, parseLocaleNumber } from "@/lib/number";
 import { getCountryCode } from "@/lib/country-mapping";
 import { useI18n } from "@/hooks/use-i18n";
+
+const DEBUG = import.meta.env.DEV;
 
 interface Stop {
   id: string;
@@ -75,6 +78,7 @@ function AddressAutocompleteInput({
 }) {
   // Use robust country mapping
   const countryCode = useMemo(() => getCountryCode(country), [country]);
+  const { getAccessToken } = useAuth();
 
   const [draft, setDraft] = useState(value);
   const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
@@ -117,14 +121,20 @@ function AddressAutocompleteInput({
         if (countryCode) {
           body.components = `country:${countryCode}`;
           body.region = countryCode;
-          console.log(`[Autocomplete] Country: "${country}" -> Code: "${countryCode}" -> Components: "${body.components}"`);
+          if (DEBUG) console.log(`[Autocomplete] Country: "${country}" -> Code: "${countryCode}" -> Components: "${body.components}"`);
         } else {
-          console.warn(`[Autocomplete] No country code found for: "${country}"`);
+          if (DEBUG) console.warn(`[Autocomplete] No country code found for: "${country}"`);
+        }
+
+        const token = await getAccessToken();
+        if (!token) {
+          setPredictions([]);
+          return;
         }
 
         const response = await fetch("/api/google/places-autocomplete", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify(body),
           signal: controller.signal,
         });
@@ -210,9 +220,14 @@ function AddressAutocompleteInput({
                   // 2. Fetch full details to get postal code
                   setLoading(true);
                   try {
+                    const token = await getAccessToken();
+                    if (!token) {
+                      onCommit(p.description);
+                      return;
+                    }
                     const res = await fetch("/api/google/place-details", {
                       method: "POST",
-                      headers: { "Content-Type": "application/json" },
+                      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                       body: JSON.stringify({ placeId: p.placeId, region: countryCode }),
                     });
                     const data = await res.json();
@@ -358,6 +373,7 @@ interface AddTripModalProps {
 
 export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestination, onSave }: AddTripModalProps) {
   const { profile } = useUserProfile();
+  const { getAccessToken } = useAuth();
   const { projects, addProject } = useProjects();
   const { trips } = useTrips();
   const { t, locale } = useI18n();
@@ -535,10 +551,13 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
     // but for now we interact with the API.
     const fetchBaseLocation = async () => {
       try {
+        const token = await getAccessToken();
+        if (!token) return;
+
         const query = `${profile.city}, ${profile.country}`;
         const res = await fetch("/api/google/geocode", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ address: query, region: googleRegion }),
         });
         const data = await res.json();
@@ -551,7 +570,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
     };
 
     fetchBaseLocation();
-  }, [profile.city, profile.country, googleRegion]);
+  }, [getAccessToken, profile.city, profile.country, googleRegion]);
 
   type SpecialOrigin = NonNullable<TripData["specialOrigin"]>;
 
@@ -636,9 +655,12 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
 
     setDistanceLoading(true);
     try {
+      const token = await getAccessToken();
+      if (!token) return;
+
       const response = await fetch("/api/google/directions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           origin,
           destination,
@@ -658,7 +680,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
     } finally {
       setDistanceLoading(false);
     }
-  }, [getEffectiveRouteValues, googleRegion, isOpen]);
+  }, [getAccessToken, getEffectiveRouteValues, googleRegion, isOpen]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),

@@ -6,6 +6,44 @@ export type SupabaseUser = {
   email?: string;
 };
 
+type CachedUser = { user: SupabaseUser; expiresAt: number };
+
+const USER_CACHE = new Map<string, CachedUser>();
+const MAX_USER_CACHE_ENTRIES = 500;
+const MAX_USER_CACHE_TTL_MS = 15 * 60 * 1000;
+
+function decodeBase64UrlToUtf8(input: string) {
+  const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
+  const padLen = normalized.length % 4;
+  const padded = padLen === 0 ? normalized : normalized + "=".repeat(4 - padLen);
+  return Buffer.from(padded, "base64").toString("utf8");
+}
+
+function jwtExpiresAtMs(token: string): number | null {
+  const parts = token.split(".");
+  if (parts.length < 2) return null;
+  try {
+    const payloadJson = decodeBase64UrlToUtf8(parts[1]);
+    const payload: any = JSON.parse(payloadJson);
+    if (typeof payload?.exp === "number") return payload.exp * 1000;
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+function cacheUser(token: string, user: SupabaseUser) {
+  if (USER_CACHE.size >= MAX_USER_CACHE_ENTRIES) USER_CACHE.clear();
+
+  const now = Date.now();
+  const expMs = jwtExpiresAtMs(token);
+  const untilByJwt = typeof expMs === "number" ? expMs - 30_000 : now + 60_000;
+  const until = Math.min(untilByJwt, now + MAX_USER_CACHE_TTL_MS);
+
+  if (until <= now) return;
+  USER_CACHE.set(token, { user, expiresAt: until });
+}
+
 function json(res: any, status: number, payload: unknown) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
@@ -31,6 +69,11 @@ export async function requireSupabaseUser(req: any, res: any): Promise<SupabaseU
     return null;
   }
 
+  const cached = USER_CACHE.get(token);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.user;
+  }
+
   const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -49,7 +92,9 @@ export async function requireSupabaseUser(req: any, res: any): Promise<SupabaseU
     return null;
   }
 
-  return { id: String(data.id), email: data.email ? String(data.email) : undefined };
+  const user = { id: String(data.id), email: data.email ? String(data.email) : undefined };
+  cacheUser(token, user);
+  return user;
 }
 
 export async function supabaseUpsertGoogleConnection(params: {
@@ -142,4 +187,3 @@ export async function supabaseDeleteGoogleConnection(userId: string) {
 export function sendJson(res: any, status: number, payload: unknown) {
   json(res, status, payload);
 }
-

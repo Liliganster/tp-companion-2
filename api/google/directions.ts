@@ -1,3 +1,5 @@
+import { requireSupabaseUser } from "../_utils/supabase.js";
+
 const GOOGLE_BASE = "https://maps.googleapis.com/maps/api";
 
 function normalizeRegion(value: unknown) {
@@ -66,6 +68,9 @@ export default async function handler(req: any, res: any) {
     res.end();
     return;
   }
+
+  const user = await requireSupabaseUser(req, res);
+  if (!user) return;
 
   const key = process.env.GOOGLE_MAPS_SERVER_KEY;
   if (!key) {
