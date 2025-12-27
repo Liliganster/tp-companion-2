@@ -86,7 +86,13 @@ function getRange(now: Date, timeRange: string): { start: Date; end: Date; prevS
   const prevEnd = new Date(now);
   const prevStart = new Date(now);
 
-  if (timeRange === "7days") {
+  if (timeRange === "all") {
+    start.setTime(0);
+    start.setHours(0, 0, 0, 0);
+    // "All time" has no meaningful previous window. Reuse the same window to keep trend stable.
+    prevStart.setTime(start.getTime());
+    prevEnd.setTime(end.getTime());
+  } else if (timeRange === "7days") {
     start.setDate(start.getDate() - 7);
     prevEnd.setDate(prevEnd.getDate() - 7);
     prevStart.setDate(prevStart.getDate() - 14);
@@ -141,26 +147,26 @@ function loadAdvancedEmissionsConfig(): {
 } {
   try {
     if (typeof window === "undefined") {
-      return { isConfigured: false, viewMode: "projects", sortBy: "co2", timeRange: "30days", fuelEfficiency: "12" };
+      return { isConfigured: false, viewMode: "projects", sortBy: "co2", timeRange: "all", fuelEfficiency: "12" };
     }
     const raw = window.localStorage.getItem(ADV_EMISSIONS_CONFIG_KEY);
     if (!raw) {
-      return { isConfigured: false, viewMode: "projects", sortBy: "co2", timeRange: "30days", fuelEfficiency: "12" };
+      return { isConfigured: false, viewMode: "projects", sortBy: "co2", timeRange: "all", fuelEfficiency: "12" };
     }
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") {
-      return { isConfigured: false, viewMode: "projects", sortBy: "co2", timeRange: "30days", fuelEfficiency: "12" };
+      return { isConfigured: false, viewMode: "projects", sortBy: "co2", timeRange: "all", fuelEfficiency: "12" };
     }
 
     return {
       isConfigured: Boolean((parsed as any).isConfigured),
       viewMode: typeof (parsed as any).viewMode === "string" ? (parsed as any).viewMode : "projects",
       sortBy: typeof (parsed as any).sortBy === "string" ? (parsed as any).sortBy : "co2",
-      timeRange: typeof (parsed as any).timeRange === "string" ? (parsed as any).timeRange : "30days",
+      timeRange: typeof (parsed as any).timeRange === "string" ? (parsed as any).timeRange : "all",
       fuelEfficiency: typeof (parsed as any).fuelEfficiency === "string" ? (parsed as any).fuelEfficiency : "12",
     };
   } catch {
-    return { isConfigured: false, viewMode: "projects", sortBy: "co2", timeRange: "30days", fuelEfficiency: "12" };
+    return { isConfigured: false, viewMode: "projects", sortBy: "co2", timeRange: "all", fuelEfficiency: "12" };
   }
 }
 
@@ -372,6 +378,16 @@ export default function AdvancedEmissions() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => setConfigModalOpen(true)}
+              className="gap-2"
+              aria-label={t("advancedEmissions.configureButton")}
+            >
+              <Settings2 className="w-4 h-4" />
+              <span className="hidden sm:inline">{t("advancedEmissions.configureButton")}</span>
+            </Button>
             <Button className="gap-2 bg-primary hover:bg-primary/90" type="button" onClick={handleExport}>
               <Download className="w-4 h-4" />
               {t("advancedEmissions.export")}
@@ -443,7 +459,19 @@ export default function AdvancedEmissions() {
                 {tf("advancedEmissions.resultsTitle", { count: computed.results.length })}
               </h3>
 
-              {computed.results.map((result) => (
+              {computed.results.length === 0 ? (
+                <div className="glass-card p-8 text-center">
+                  <h4 className="font-semibold">{t("advancedEmissions.noResultsTitle")}</h4>
+                  <p className="text-sm text-muted-foreground mt-2">{t("advancedEmissions.noResultsBody")}</p>
+                  <div className="mt-4 flex justify-center">
+                    <Button variant="outline" type="button" className="gap-2" onClick={() => setConfigModalOpen(true)}>
+                      <Settings2 className="w-4 h-4" />
+                      {t("advancedEmissions.configureButton")}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                computed.results.map((result) => (
                 <div key={result.id} className="glass-card p-5">
                   <div className="flex items-start gap-4">
                     {/* Rank Badge */}
@@ -462,7 +490,7 @@ export default function AdvancedEmissions() {
                           "px-2 py-0.5 text-xs rounded-full flex items-center gap-1",
                           result.trend === "Mejorando" ? "bg-success/20 text-success" : result.trend === "Empeorando" ? "bg-destructive/20 text-destructive" : "bg-secondary/40 text-muted-foreground"
                         )}>
-                          {result.trend === "Mejorando" ? "✓" : result.trend === "Empeorando" ? "!" : "•"} {result.trend}
+                          {result.trend === "Mejorando" ? "↓" : result.trend === "Empeorando" ? "↑" : "→"} {result.trend}
                         </span>
                       </div>
 
@@ -488,7 +516,8 @@ export default function AdvancedEmissions() {
                     </div>
                   </div>
                 </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         )}
@@ -554,6 +583,7 @@ export default function AdvancedEmissions() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="all">{t("advancedEmissions.allTime")}</SelectItem>
                     <SelectItem value="7days">{t("advancedEmissions.last7Days")}</SelectItem>
                     <SelectItem value="30days">{t("advancedEmissions.last30Days")}</SelectItem>
                     <SelectItem value="90days">{t("advancedEmissions.last90Days")}</SelectItem>
