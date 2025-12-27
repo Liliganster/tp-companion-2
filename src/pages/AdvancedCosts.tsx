@@ -77,6 +77,16 @@ export default function AdvancedCosts() {
     return Number.isFinite(dt.getTime()) ? dt : null;
   };
 
+  const toNumber = (value: unknown): number => {
+    if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+    if (typeof value === "string") {
+      const normalized = value.replace(",", ".");
+      const n = Number(normalized);
+      return Number.isFinite(n) ? n : 0;
+    }
+    return 0;
+  };
+
   const periodTrips = useMemo(() => {
     if (periodFilter === "all") return trips;
 
@@ -97,15 +107,16 @@ export default function AdvancedCosts() {
 
   // Calculate real costs from trips and invoices
   const summaryData = useMemo(() => {
-    const totalDistance = periodTrips.reduce((sum, t) => sum + (t.distance || 0), 0);
+    const totalDistance = periodTrips.reduce((sum, t) => sum + toNumber(t.distance), 0);
     const totalTrips = periodTrips.length;
     
     // Sum all invoice amounts (converting to EUR if needed)
     const totalInvoiced = periodTrips.reduce((sum, t) => {
-      if (!t.invoiceAmount) return sum;
-      const amount = t.invoiceAmount;
-      if (t.invoiceCurrency === 'USD') return sum + (amount * 0.92);
-      if (t.invoiceCurrency === 'GBP') return sum + (amount * 1.17);
+      if (t.invoiceAmount == null) return sum;
+      const amount = toNumber(t.invoiceAmount);
+      if (amount <= 0) return sum;
+      if (t.invoiceCurrency === "USD") return sum + amount * 0.92;
+      if (t.invoiceCurrency === "GBP") return sum + amount * 1.17;
       return sum + amount;
     }, 0);
 
@@ -157,12 +168,13 @@ export default function AdvancedCosts() {
 
   const projectCosts = useMemo(() => projects.map(p => {
     const projectTrips = periodTrips.filter(t => t.projectId === p.id);
-    const distance = projectTrips.reduce((sum, t) => sum + (t.distance || 0), 0);
+    const distance = projectTrips.reduce((sum, t) => sum + toNumber(t.distance), 0);
     const invoiced = projectTrips.reduce((sum, t) => {
-      if (!t.invoiceAmount) return sum;
-      const amount = t.invoiceAmount;
-      if (t.invoiceCurrency === 'USD') return sum + (amount * 0.92);
-      if (t.invoiceCurrency === 'GBP') return sum + (amount * 1.17);
+      if (t.invoiceAmount == null) return sum;
+      const amount = toNumber(t.invoiceAmount);
+      if (amount <= 0) return sum;
+      if (t.invoiceCurrency === "USD") return sum + amount * 0.92;
+      if (t.invoiceCurrency === "GBP") return sum + amount * 1.17;
       return sum + amount;
     }, 0);
     
@@ -190,14 +202,18 @@ export default function AdvancedCosts() {
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       const existing = byMonth.get(monthKey) || { distance: 0, trips: 0, invoiced: 0 };
       
-      const invoiced = t.invoiceAmount ? (
-        t.invoiceCurrency === 'USD' ? t.invoiceAmount * 0.92 :
-        t.invoiceCurrency === 'GBP' ? t.invoiceAmount * 1.17 :
-        t.invoiceAmount
-      ) : 0;
+      const rawAmount = t.invoiceAmount == null ? 0 : toNumber(t.invoiceAmount);
+      const invoiced =
+        rawAmount <= 0
+          ? 0
+          : t.invoiceCurrency === "USD"
+            ? rawAmount * 0.92
+            : t.invoiceCurrency === "GBP"
+              ? rawAmount * 1.17
+              : rawAmount;
       
       byMonth.set(monthKey, {
-        distance: existing.distance + (t.distance || 0),
+        distance: existing.distance + toNumber(t.distance),
         trips: existing.trips + 1,
         invoiced: existing.invoiced + invoiced,
       });
