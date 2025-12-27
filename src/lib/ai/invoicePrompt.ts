@@ -20,6 +20,10 @@ export const invoiceExtractionSchema = {
     vendorName: {
       type: "string",
       description: "Name of the vendor or company issuing the invoice"
+    },
+    purpose: {
+      type: "string",
+      description: "Short purpose / concept if clearly stated on the invoice (e.g. 'Fuel', 'Hotel', 'Toll', 'Parking', 'Car rental')."
     }
   },
   required: ["totalAmount"]
@@ -36,6 +40,7 @@ OPTIONAL (but extract if present):
 - invoiceNumber: Invoice number or reference
 - invoiceDate: Date in YYYY-MM-DD format
 - vendorName: Name of the company/vendor
+- purpose: A short purpose/concept ONLY if clearly stated (e.g. "Concepto", "Descripción", "Motivo", "Service", "Item"). Keep it brief (max ~8 words). If unclear, return null.
 
 IMPORTANT RULES:
 - For totalAmount, extract ONLY the final total amount (not subtotals or line items)

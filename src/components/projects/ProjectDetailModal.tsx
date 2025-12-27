@@ -31,6 +31,7 @@ interface ProjectDocument {
   invoice_job_id?: string;
   extracted_amount?: number;
   extracted_currency?: string;
+  extracted_purpose?: string;
 }
 
 interface ProjectDetailModalProps {
@@ -374,7 +375,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
             const { data: results, error: resultsError } = await supabase
               .from("invoice_results")
-              .select("job_id, total_amount, currency")
+              .select("job_id, total_amount, currency, purpose")
               .in("job_id", invoiceJobIds);
 
             if (resultsError) {
@@ -400,6 +401,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                 needs_review_reason: job?.needs_review_reason,
                 extracted_amount: result?.total_amount,
                 extracted_currency: result?.currency,
+                extracted_purpose: result?.purpose,
               };
             }),
           );
@@ -504,7 +506,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             if (doneInvoiceJobIds.length > 0) {
               const { data } = await supabase
                 .from("invoice_results")
-                .select("job_id, total_amount, currency")
+                .select("job_id, total_amount, currency, purpose")
                 .in("job_id", doneInvoiceJobIds);
               invoiceResults = data || [];
             }
@@ -523,7 +525,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                   doc.status !== job.status ||
                   doc.needs_review_reason !== job.needs_review_reason ||
                   doc.extracted_amount !== result?.total_amount ||
-                  doc.extracted_currency !== result?.currency
+                  doc.extracted_currency !== result?.currency ||
+                  doc.extracted_purpose !== result?.purpose
                 ) {
                   changed = true;
                   return {
@@ -531,7 +534,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                     status: job.status,
                     needs_review_reason: job.needs_review_reason,
                     extracted_amount: result?.total_amount,
-                    extracted_currency: result?.currency
+                    extracted_currency: result?.currency,
+                    extracted_purpose: result?.purpose,
                   };
                 }
                 return doc;
@@ -870,6 +874,11 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                           {doc.extracted_amount !== undefined && (
                             <span className="text-xs text-muted-foreground">
                               {doc.extracted_amount.toFixed(2)} {doc.extracted_currency || 'EUR'}
+                            </span>
+                          )}
+                          {doc.extracted_purpose && (
+                            <span className="text-xs text-muted-foreground truncate" title={doc.extracted_purpose}>
+                              {doc.extracted_purpose}
                             </span>
                           )}
                         </div>

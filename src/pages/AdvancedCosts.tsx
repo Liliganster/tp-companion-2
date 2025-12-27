@@ -341,12 +341,42 @@ export default function AdvancedCosts() {
           const { error: uploadError } = await supabase.storage.from("project_documents").upload(filePath, file);
           if (uploadError) throw uploadError;
 
+          // Create invoice extraction job (AI-first)
+          const { data: jobData, error: jobError } = await supabase
+            .from("invoice_jobs")
+            .insert({
+              project_id: chosenProjectId,
+              user_id: user.id,
+              storage_path: filePath,
+              status: "created",
+            })
+            .select("id")
+            .single();
+
+          if (jobError) throw jobError;
+
+          // Auto-queue the job for processing (non-fatal if it fails)
+          try {
+            const accessToken = (await supabase.auth.getSession()).data.session?.access_token;
+            await fetch("/api/invoices/queue", {
+              method: "POST",
+              headers: {
+                Authorization: accessToken ? `Bearer ${accessToken}` : "",
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ jobId: jobData.id }),
+            });
+          } catch (queueErr) {
+            console.warn("Failed to auto-queue invoice job:", queueErr);
+          }
+
           const { error: dbError } = await supabase.from("project_documents").insert({
             project_id: chosenProjectId,
             user_id: user.id,
             name: file.name,
             storage_path: filePath,
             type: "invoice",
+            invoice_job_id: jobData.id,
           });
 
           if (dbError) {

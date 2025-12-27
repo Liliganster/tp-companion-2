@@ -125,6 +125,7 @@ export default async function handler(req: any, res: any) {
           invoice_number: extractedJson.invoiceNumber || null,
           invoice_date: extractedJson.invoiceDate || null,
           vendor_name: extractedJson.vendorName || null,
+          purpose: extractedJson.purpose || null,
         });
 
         if (resultInsertError) {
