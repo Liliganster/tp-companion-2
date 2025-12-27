@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { MapPin, FileText, CircleDot, Download, Upload, Eye, ArrowLeft, ExternalLink, Receipt } from "lucide-react";
+import { MapPin, FileText, CircleDot, Eye, Receipt, Trash2 } from "lucide-react";
 import { useI18n } from "@/hooks/use-i18n";
 import { TripGoogleMap } from "@/components/trips/TripGoogleMap";
 import { Trip, useTrips } from "@/contexts/TripsContext";
@@ -13,7 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import { useUserProfile } from "@/contexts/UserProfileContext";
-import { useProjects } from "@/contexts/ProjectsContext";
+import { cascadeDeleteInvoiceJobById } from "@/lib/cascadeDelete";
 
 interface TripDetailModalProps {
   trip: Trip | null;
@@ -25,7 +25,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
   const { t, tf, locale } = useI18n();
   const { profile } = useUserProfile();
   const { trips, updateTrip } = useTrips();
-  const { refreshProjects } = useProjects();
+  const { projects, refreshProjects } = useProjects();
   const { getAccessToken } = useAuth();
   const { toast } = useToast();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -153,6 +153,33 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
     if (!files || files.length === 0) return;
     if (!supabase) return;
 
+    // Ensure the trip is linked to a real project so the invoice can appear under the project and in analyses.
+    let resolvedProjectId: string | null = liveTrip.projectId ?? null;
+    if (!resolvedProjectId) {
+      const projectName = (liveTrip.project ?? "").trim();
+      const byExact = projects.find((p) => p.name === projectName);
+      const byLoose =
+        !byExact && projectName
+          ? projects.find((p) => (p.name ?? "").toLowerCase() === projectName.toLowerCase())
+          : undefined;
+      resolvedProjectId = (byExact?.id ?? byLoose?.id ?? null) as any;
+
+      if (resolvedProjectId) {
+        const ok = await updateTrip(liveTrip.id, { projectId: resolvedProjectId });
+        if (!ok) resolvedProjectId = null;
+      }
+    }
+
+    if (!resolvedProjectId) {
+      toast({
+        title: t("tripDetail.errorTitle"),
+        description: t("tripDetail.missingProjectIdForInvoice"),
+        variant: "destructive",
+      });
+      if (invoiceInputRef.current) invoiceInputRef.current.value = "";
+      return;
+    }
+
     const list = Array.from(files);
     if (list.length > 1) {
       toast({
@@ -183,7 +210,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
       const { data: jobData, error: jobError } = await supabase
         .from("invoice_jobs")
         .insert({
-          project_id: liveTrip.projectId ?? null,
+          project_id: resolvedProjectId,
           trip_id: liveTrip.id,
           user_id: userId,
           storage_path: storagePath,
@@ -194,23 +221,15 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
       if (jobError) throw jobError;
 
       // Also register under the project so it appears in project invoice list immediately.
-      if (liveTrip.projectId) {
-        const { error: projectDocError } = await supabase.from("project_documents").insert({
-          project_id: liveTrip.projectId,
-          user_id: userId,
-          name: safeName,
-          storage_path: storagePath,
-          type: "invoice",
-          invoice_job_id: jobData.id,
-        });
-        if (projectDocError) throw projectDocError;
-      } else {
-        toast({
-          title: t("tripDetail.errorTitle"),
-          description: t("tripDetail.missingProjectIdForInvoice"),
-          variant: "destructive",
-        });
-      }
+      const { error: projectDocError } = await supabase.from("project_documents").insert({
+        project_id: resolvedProjectId,
+        user_id: userId,
+        name: safeName,
+        storage_path: storagePath,
+        type: "invoice",
+        invoice_job_id: jobData.id,
+      });
+      if (projectDocError) throw projectDocError;
 
       const invoiceDoc: NonNullable<Trip["documents"]>[number] = {
         id: crypto.randomUUID(),
@@ -270,6 +289,52 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
     } finally {
       setInvoiceBusy(false);
       if (invoiceInputRef.current) invoiceInputRef.current.value = "";
+    }
+  };
+
+  const deleteTripInvoice = async () => {
+    const jobId = typeof liveTrip.invoiceJobId === "string" ? liveTrip.invoiceJobId : "";
+    if (!jobId) return;
+
+    if (!confirm(t("projectDetail.confirmDeleteInvoice") as any)) return;
+
+    setInvoiceBusy(true);
+    try {
+      const nextDocs = (tripDocuments ?? []).filter((d) => {
+        if (d?.kind === "invoice") return false;
+        if (d?.invoiceJobId && d.invoiceJobId === jobId) return false;
+        return true;
+      });
+
+      await cascadeDeleteInvoiceJobById(supabase, jobId);
+
+      // Ensure local state updates immediately (in addition to realtime sync).
+      await updateTrip(liveTrip.id, {
+        invoiceAmount: null,
+        invoiceCurrency: null,
+        invoiceJobId: null,
+        documents: nextDocs,
+      });
+
+      setInvoicePurpose("");
+      setInvoiceStatus("");
+      setInvoiceError("");
+      setPreviewUrl(null);
+      setPreviewDocName("");
+
+      toast({
+        title: t("projectDetail.toastInvoiceDeleted"),
+      });
+      refreshProjects();
+    } catch (e: any) {
+      console.error(e);
+      toast({
+        title: t("tripDetail.errorTitle"),
+        description: e?.message ?? t("tripDetail.attachFailed"),
+        variant: "destructive",
+      });
+    } finally {
+      setInvoiceBusy(false);
     }
   };
 
@@ -405,6 +470,19 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
                     accept="application/pdf,image/*"
                     onChange={(e) => void onAttachInvoice(e.target.files)}
                   />
+                  {liveTrip.invoiceJobId ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1"
+                      type="button"
+                      disabled={invoiceBusy}
+                      onClick={() => void deleteTripInvoice()}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      {t("trips.delete")}
+                    </Button>
+                  ) : null}
                   <Button
                     size="sm"
                     variant="secondary"

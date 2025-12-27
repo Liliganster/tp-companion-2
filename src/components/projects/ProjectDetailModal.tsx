@@ -423,6 +423,34 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     }
   }, [open, project?.name, project?.id, refreshTrigger]);
 
+  // Keep project invoices/documents list fresh when uploads/deletes happen elsewhere (trip modal, cost analysis, etc).
+  useEffect(() => {
+    if (!open || !project?.id) return;
+
+    let timer: any = null;
+    const schedule = () => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        setRefreshTrigger((p) => p + 1);
+      }, 300);
+    };
+
+    const channel = supabase
+      .channel(`project-documents-${project.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "project_documents", filter: `project_id=eq.${project.id}` },
+        () => schedule(),
+      )
+      .subscribe();
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
+  }, [open, project?.id]);
+
   // While modal is open, poll for completed extractions and materialize trips.
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
