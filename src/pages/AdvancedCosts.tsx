@@ -43,6 +43,14 @@ export default function AdvancedCosts() {
     [locale],
   );
 
+  const distanceFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat(locale, {
+        maximumFractionDigits: 1,
+      }),
+    [locale],
+  );
+
   // Calculate real costs from trips and invoices
   const summaryData = useMemo(() => {
     const totalDistance = trips.reduce((sum, t) => sum + (t.distance || 0), 0);
@@ -68,17 +76,32 @@ export default function AdvancedCosts() {
   }, [trips]);
 
   const costBreakdown = useMemo(
-    () => [
-      { label: t("advancedCosts.breakdownFuelEnergy"), value: summaryData.estimatedCost * 0.6, color: "bg-info", percent: 60 },
-      { label: t("advancedCosts.breakdownMaintenance"), value: summaryData.estimatedCost * 0.25, color: "bg-info", percent: 25 },
-      { label: t("advancedCosts.breakdownOther"), value: summaryData.estimatedCost * 0.15, color: "bg-info", percent: 15 },
-      {
-        label: t("advancedCosts.breakdownAvgPerTrip"),
-        value: summaryData.totalTrips > 0 ? summaryData.estimatedCost / summaryData.totalTrips : 0,
-        color: "bg-success",
-        percent: 100,
-      },
-    ],
+    () => {
+      const total = Number(summaryData.estimatedCost) || 0;
+      const fuel = total * 0.6;
+      const maintenance = total * 0.25;
+      const other = total * 0.15;
+      const avgPerTrip = summaryData.totalTrips > 0 ? total / summaryData.totalTrips : 0;
+
+      const pct = (value: number) => {
+        if (total <= 0) return 0;
+        const p = (value / total) * 100;
+        if (!Number.isFinite(p)) return 0;
+        return Math.max(0, Math.min(100, p));
+      };
+
+      return [
+        { label: t("advancedCosts.breakdownFuelEnergy"), value: fuel, color: "bg-info", percent: pct(fuel) },
+        { label: t("advancedCosts.breakdownMaintenance"), value: maintenance, color: "bg-info", percent: pct(maintenance) },
+        { label: t("advancedCosts.breakdownOther"), value: other, color: "bg-info", percent: pct(other) },
+        {
+          label: t("advancedCosts.breakdownAvgPerTrip"),
+          value: avgPerTrip,
+          color: "bg-success",
+          percent: total > 0 && avgPerTrip > 0 ? 100 : 0,
+        },
+      ];
+    },
     [summaryData.estimatedCost, summaryData.totalTrips, t],
   );
 
@@ -308,7 +331,7 @@ export default function AdvancedCosts() {
 	            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 animate-fade-in animation-delay-200">
 	              <div className="glass-card p-4 sm:p-5">
 	                <p className="text-xs sm:text-sm text-muted-foreground mb-1">{t("advancedCosts.statTotalDistance")}</p>
-	                <p className="text-xl sm:text-2xl lg:text-3xl font-bold">{summaryData.totalDistance} km</p>
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold">{distanceFormatter.format(summaryData.totalDistance)} km</p>
 	              </div>
 	              <div className="glass-card p-4 sm:p-5">
 	                <p className="text-xs sm:text-sm text-muted-foreground mb-1">{t("advancedCosts.statTotalTrips")}</p>
@@ -430,7 +453,7 @@ export default function AdvancedCosts() {
                         <tr key={index} className="border-b border-border/50">
                           <td className="py-3 px-3 font-medium">{item.project}</td>
                           <td className="py-3 px-3 text-right text-muted-foreground">
-                            {item.distance} km
+                            {distanceFormatter.format(item.distance)} km
                           </td>
                           <td className="py-3 px-3 text-right text-muted-foreground">
                             {item.trips}
@@ -457,7 +480,7 @@ export default function AdvancedCosts() {
 	            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 animate-fade-in animation-delay-200">
 	              <div className="glass-card p-4 sm:p-5">
 	                <p className="text-xs sm:text-sm text-muted-foreground mb-1">{t("advancedCosts.statTotalDistance")}</p>
-	                <p className="text-xl sm:text-2xl lg:text-3xl font-bold">{summaryData.totalDistance} km</p>
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold">{distanceFormatter.format(summaryData.totalDistance)} km</p>
 	              </div>
 	              <div className="glass-card p-4 sm:p-5">
 	                <p className="text-xs sm:text-sm text-muted-foreground mb-1">{t("advancedCosts.statTotalTrips")}</p>
@@ -510,9 +533,9 @@ export default function AdvancedCosts() {
                     {monthlyCosts.map((item, index) => (
                       <tr key={index} className="border-b border-border/50">
                         <td className="py-4 px-3 font-medium whitespace-nowrap">{item.month}</td>
-                        <td className="py-4 px-3 text-right text-muted-foreground whitespace-nowrap">
-                          {item.distance} km
-                        </td>
+	                        <td className="py-4 px-3 text-right text-muted-foreground whitespace-nowrap">
+	                          {distanceFormatter.format(item.distance)} km
+	                        </td>
                         <td className="py-4 px-3 text-right text-muted-foreground">
                           {item.trips}
                         </td>
