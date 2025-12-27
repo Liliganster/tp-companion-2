@@ -24,6 +24,7 @@ interface ProjectDocument {
   type: "call-sheet" | "invoice" | "document" | "other";
   status?: string;
   storage_path?: string;
+  project_id?: string | null;
   needs_review_reason?: string;
   invoice_job_id?: string;
   extracted_amount?: number;
@@ -152,14 +153,12 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         if (extractedProject && normalizeProjectName(extractedProject) !== normalizeProjectName(project.name)) {
           console.warn("[Materialize] Project mismatch:", extractedProject, "vs", project.name);
           const reason = `Project mismatch: AI extracted "${extractedProject}" but file is in project "${project.name}"`;
-          toast.warning("Documento no coincide con el proyecto. Revisa manualmente.");
-          // Best-effort persist (requires UPDATE policy on callsheet_jobs)
+          toast.warning("El proyecto extraído por IA no coincide, pero se creará el viaje igualmente. Revisa el resultado.");
+          // Best-effort persist a review hint without blocking trip creation.
           await supabase
             .from("callsheet_jobs")
-            .update({ status: "needs_review", needs_review_reason: reason })
+            .update({ needs_review_reason: reason })
             .eq("id", job.id);
-          processedJobsRef.current.add(job.id);
-          return;
         }
 
         const date = (result?.date_value ?? "").toString().trim();
@@ -323,29 +322,70 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       };
 
       const fetchProjectDocs = async () => {
-          // Fetch project documents with their invoice jobs and extraction results
-          const { data, error } = await supabase
+          // Fetch project documents.
+          // We intentionally avoid PostgREST embedding here because project_documents has no direct FK to invoice_results
+          // and embedding can fail with a 400 depending on schema cache / relationships.
+          const { data: docs, error: docsError } = await supabase
             .from("project_documents")
-            .select(`
-              *,
-              invoice_job:invoice_jobs(id, status, needs_review_reason),
-              invoice_result:invoice_results(total_amount, currency)
-            `)
+            .select("*")
             .eq("project_id", project.id);
-            
-          if (data) {
-              setProjectDocs(data.map((d: any) => ({
-                  id: d.id,
-                  name: d.name,
-                  type: (d.type as any) || "invoice",
-                  storage_path: d.storage_path,
-                  invoice_job_id: d.invoice_job_id,
-                  status: d.invoice_job?.status,
-                  needs_review_reason: d.invoice_job?.needs_review_reason,
-                  extracted_amount: d.invoice_result?.total_amount,
-                  extracted_currency: d.invoice_result?.currency
-              })));
+
+          if (docsError) {
+            console.error("Error fetching project documents:", docsError);
+            return;
           }
+
+          const rows = Array.isArray(docs) ? docs : [];
+          const invoiceJobIds = Array.from(
+            new Set(rows.map((d: any) => d?.invoice_job_id).filter((id: any) => typeof id === "string" && id)),
+          );
+
+          const invoiceJobsById = new Map<string, any>();
+          const invoiceResultsByJobId = new Map<string, any>();
+
+          if (invoiceJobIds.length > 0) {
+            const { data: jobs, error: jobsError } = await supabase
+              .from("invoice_jobs")
+              .select("id, status, needs_review_reason")
+              .in("id", invoiceJobIds);
+
+            if (jobsError) {
+              console.warn("Error fetching invoice jobs:", jobsError);
+            } else {
+              for (const j of (jobs ?? []) as any[]) invoiceJobsById.set(String(j.id), j);
+            }
+
+            const { data: results, error: resultsError } = await supabase
+              .from("invoice_results")
+              .select("job_id, total_amount, currency")
+              .in("job_id", invoiceJobIds);
+
+            if (resultsError) {
+              console.warn("Error fetching invoice results:", resultsError);
+            } else {
+              for (const r of (results ?? []) as any[]) invoiceResultsByJobId.set(String(r.job_id), r);
+            }
+          }
+
+          setProjectDocs(
+            rows.map((d: any) => {
+              const jobId = typeof d?.invoice_job_id === "string" ? d.invoice_job_id : undefined;
+              const job = jobId ? invoiceJobsById.get(jobId) : null;
+              const result = jobId ? invoiceResultsByJobId.get(jobId) : null;
+
+              return {
+                id: d.id,
+                name: d.name,
+                type: (d.type as any) || "invoice",
+                storage_path: d.storage_path,
+                invoice_job_id: jobId,
+                status: job?.status,
+                needs_review_reason: job?.needs_review_reason,
+                extracted_amount: result?.total_amount,
+                extracted_currency: result?.currency,
+              };
+            }),
+          );
       };
 
       Promise.all([fetchCallSheets(), fetchProjectDocs()]).catch(console.error);

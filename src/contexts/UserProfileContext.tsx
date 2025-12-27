@@ -70,9 +70,9 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
           .from("user_profiles")
           .select("*")
           .eq("id", user!.id)
-          .single();
+          .maybeSingle();
 
-        if (error && error.code !== "PGRST116") { // PGRST116 = 0 rows
+        if (error) {
           console.error("Error fetching profile:", error);
           toast.error("Error loading profile: " + error.message);
         }

@@ -5,6 +5,28 @@ import { toast } from "sonner";
 import { cascadeDeleteProjectById } from "@/lib/cascadeDelete";
 import { formatSupabaseError } from "@/lib/supabaseErrors";
 
+const PROJECT_TOTALS_AVAILABLE_KEY = "fbp.project_totals.available";
+const PROJECT_TOTALS_MISSING_NOTIFIED_KEY = "fbp.project_totals.missing_notified";
+
+function readLocalStorageFlag(key: string): boolean | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === "1") return true;
+    if (raw === "0") return false;
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+function writeLocalStorageFlag(key: string, value: boolean) {
+  try {
+    localStorage.setItem(key, value ? "1" : "0");
+  } catch {
+    // ignore
+  }
+}
+
 export type Project = {
   id: string;
   name: string;
@@ -65,12 +87,30 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       }
 
       // Fetch totals from the view
-      const { data: totalsData, error: totalsError } = await supabase!
-        .from("project_totals")
-        .select("*");
+      let totalsData: any[] | null = null;
+      const cachedAvailability = readLocalStorageFlag(PROJECT_TOTALS_AVAILABLE_KEY);
+      if (cachedAvailability !== false) {
+        const { data, error: totalsError, status } = await supabase!
+          .from("project_totals")
+          .select("*");
 
-      if (totalsError) {
-        console.warn("Error fetching project totals:", totalsError);
+        if (totalsError) {
+          const missing = status === 404 || /Could not find the relation/i.test(totalsError.message ?? "");
+          if (missing) {
+            writeLocalStorageFlag(PROJECT_TOTALS_AVAILABLE_KEY, false);
+
+            const alreadyNotified = readLocalStorageFlag(PROJECT_TOTALS_MISSING_NOTIFIED_KEY) === true;
+            if (!alreadyNotified) {
+              writeLocalStorageFlag(PROJECT_TOTALS_MISSING_NOTIFIED_KEY, true);
+              toast.warning("Falta la vista 'project_totals' en Supabase. Ejecuta las migraciones para activar totales/importe.");
+            }
+          } else if (import.meta.env.DEV) {
+            console.warn("Error fetching project totals:", totalsError);
+          }
+        } else {
+          totalsData = (data ?? []) as any[];
+          writeLocalStorageFlag(PROJECT_TOTALS_AVAILABLE_KEY, true);
+        }
       }
 
       // Create a map of totals by project_id
