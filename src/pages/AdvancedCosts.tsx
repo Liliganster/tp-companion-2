@@ -14,17 +14,20 @@ import { Progress } from "@/components/ui/progress";
 import { VehicleConfigModal } from "@/components/settings/VehicleConfigModal";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { useTrips } from "@/contexts/TripsContext";
+import { useUserProfile } from "@/contexts/UserProfileContext";
 import { supabase } from "@/lib/supabaseClient";
 import { formatSupabaseError } from "@/lib/supabaseErrors";
 import { toast } from "sonner";
 import { useI18n } from "@/hooks/use-i18n";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { parseLocaleNumber } from "@/lib/number";
 
 export default function AdvancedCosts() {
   const navigate = useNavigate();
   const { t, tf, locale } = useI18n();
   const { projects } = useProjects();
   const { trips } = useTrips();
+  const { profile } = useUserProfile();
   const [activeTab, setActiveTab] = useState("resumen");
   const [periodFilter, setPeriodFilter] = useState("3m");
   const [projectFilter, setProjectFilter] = useState("all");
@@ -87,6 +90,46 @@ export default function AdvancedCosts() {
     return 0;
   };
 
+  const invoiceAmountToEur = (amount: number, currency?: string) => {
+    if (!Number.isFinite(amount) || amount <= 0) return 0;
+    if (currency === "USD") return amount * 0.92;
+    if (currency === "GBP") return amount * 1.17;
+    return amount;
+  };
+
+  const costRates = useMemo(() => {
+    const maintenancePerKm = parseLocaleNumber(profile.maintenanceEurPerKm) ?? 0;
+    const otherPerKm = parseLocaleNumber(profile.otherEurPerKm) ?? 0;
+
+    let energyPerKm = 0;
+    if (profile.fuelType === "ev") {
+      const kwhPer100 = parseLocaleNumber(profile.evKwhPer100Km) ?? 0;
+      const pricePerKwh = parseLocaleNumber(profile.electricityPricePerKwh) ?? 0;
+      if (kwhPer100 > 0 && pricePerKwh > 0) energyPerKm = (kwhPer100 / 100) * pricePerKwh;
+    } else if (profile.fuelType === "gasoline" || profile.fuelType === "diesel") {
+      const litersPer100 = parseLocaleNumber(profile.fuelLPer100Km) ?? 0;
+      const pricePerLiter = parseLocaleNumber(profile.fuelPricePerLiter) ?? 0;
+      if (litersPer100 > 0 && pricePerLiter > 0) energyPerKm = (litersPer100 / 100) * pricePerLiter;
+    }
+
+    const totalPerKm = Math.max(0, energyPerKm) + Math.max(0, maintenancePerKm) + Math.max(0, otherPerKm);
+
+    return {
+      energyPerKm: Math.max(0, energyPerKm),
+      maintenancePerKm: Math.max(0, maintenancePerKm),
+      otherPerKm: Math.max(0, otherPerKm),
+      totalPerKm,
+    };
+  }, [
+    profile.electricityPricePerKwh,
+    profile.evKwhPer100Km,
+    profile.fuelLPer100Km,
+    profile.fuelPricePerLiter,
+    profile.fuelType,
+    profile.maintenanceEurPerKm,
+    profile.otherEurPerKm,
+  ]);
+
   const periodTrips = useMemo(() => {
     if (periodFilter === "all") return trips;
 
@@ -110,32 +153,35 @@ export default function AdvancedCosts() {
     const totalDistance = periodTrips.reduce((sum, t) => sum + toNumber(t.distance), 0);
     const totalTrips = periodTrips.length;
     
-    // Sum all invoice amounts (converting to EUR if needed)
-    const totalInvoiced = periodTrips.reduce((sum, t) => {
-      if (t.invoiceAmount == null) return sum;
-      const amount = toNumber(t.invoiceAmount);
-      if (amount <= 0) return sum;
-      if (t.invoiceCurrency === "USD") return sum + amount * 0.92;
-      if (t.invoiceCurrency === "GBP") return sum + amount * 1.17;
-      return sum + amount;
+    // Prefer invoice amounts; otherwise estimate from vehicle config.
+    const totalCost = periodTrips.reduce((sum, t) => {
+      const invoiceEur = invoiceAmountToEur(toNumber(t.invoiceAmount), t.invoiceCurrency);
+      if (invoiceEur > 0) return sum + invoiceEur;
+      const distance = toNumber(t.distance);
+      return sum + distance * costRates.totalPerKm;
     }, 0);
 
-    const costPerKm = totalDistance > 0 ? totalInvoiced / totalDistance : 0;
+    const costPerKm = totalDistance > 0 ? totalCost / totalDistance : 0;
 
     return {
       totalDistance,
       totalTrips,
-      estimatedCost: totalInvoiced,
+      estimatedCost: totalCost,
       costPerKm,
     };
-  }, [periodTrips]);
+  }, [costRates.totalPerKm, periodTrips]);
 
   const costBreakdown = useMemo(
     () => {
       const total = Number(summaryData.estimatedCost) || 0;
-      const fuel = total * 0.6;
-      const maintenance = total * 0.25;
-      const other = total * 0.15;
+      const hasRates = costRates.totalPerKm > 0;
+      const fuelRatio = hasRates ? costRates.energyPerKm / costRates.totalPerKm : 0.6;
+      const maintenanceRatio = hasRates ? costRates.maintenancePerKm / costRates.totalPerKm : 0.25;
+      const otherRatio = hasRates ? costRates.otherPerKm / costRates.totalPerKm : 0.15;
+
+      const fuel = total * fuelRatio;
+      const maintenance = total * maintenanceRatio;
+      const other = total * otherRatio;
       const avgPerTrip = summaryData.totalTrips > 0 ? total / summaryData.totalTrips : 0;
 
       const pct = (value: number) => {
@@ -157,25 +203,30 @@ export default function AdvancedCosts() {
         },
       ];
     },
-    [summaryData.estimatedCost, summaryData.totalTrips, t],
+    [
+      costRates.energyPerKm,
+      costRates.maintenancePerKm,
+      costRates.otherPerKm,
+      costRates.totalPerKm,
+      summaryData.estimatedCost,
+      summaryData.totalTrips,
+      t,
+    ],
   );
 
   const costAssumptions = useMemo(() => ({
-    fuelPerKm: summaryData.costPerKm * 0.6,
-    maintenanceTotal: summaryData.estimatedCost * 0.25,
-    otherTotal: summaryData.estimatedCost * 0.15,
-  }), [summaryData]);
+    fuelPerKm: costRates.energyPerKm,
+    maintenanceTotal: summaryData.totalDistance * costRates.maintenancePerKm,
+    otherTotal: summaryData.totalDistance * costRates.otherPerKm,
+  }), [costRates.energyPerKm, costRates.maintenancePerKm, costRates.otherPerKm, summaryData.totalDistance]);
 
   const projectCosts = useMemo(() => projects.map(p => {
     const projectTrips = periodTrips.filter(t => t.projectId === p.id);
     const distance = projectTrips.reduce((sum, t) => sum + toNumber(t.distance), 0);
-    const invoiced = projectTrips.reduce((sum, t) => {
-      if (t.invoiceAmount == null) return sum;
-      const amount = toNumber(t.invoiceAmount);
-      if (amount <= 0) return sum;
-      if (t.invoiceCurrency === "USD") return sum + amount * 0.92;
-      if (t.invoiceCurrency === "GBP") return sum + amount * 1.17;
-      return sum + amount;
+    const total = projectTrips.reduce((sum, t) => {
+      const invoiceEur = invoiceAmountToEur(toNumber(t.invoiceAmount), t.invoiceCurrency);
+      if (invoiceEur > 0) return sum + invoiceEur;
+      return sum + toNumber(t.distance) * costRates.totalPerKm;
     }, 0);
     
     return {
@@ -183,10 +234,10 @@ export default function AdvancedCosts() {
       project: p.name,
       distance,
       trips: projectTrips.length,
-      total: invoiced,
-      perKm: distance > 0 ? invoiced / distance : 0,
+      total,
+      perKm: distance > 0 ? total / distance : 0,
     };
-  }), [periodTrips, projects]);
+  }), [costRates.totalPerKm, periodTrips, projects]);
 
   const visibleProjectCosts = useMemo(() => {
     if (projectFilter === "all") return projectCosts;
@@ -194,28 +245,22 @@ export default function AdvancedCosts() {
   }, [projectCosts, projectFilter]);
 
   const monthlyCosts = useMemo(() => {
-    const byMonth = new Map<string, { distance: number; trips: number; invoiced: number }>();
+    const byMonth = new Map<string, { distance: number; trips: number; total: number }>();
     
     periodTrips.forEach(t => {
       const date = parseTripDate(t.date);
       if (!date) return;
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      const existing = byMonth.get(monthKey) || { distance: 0, trips: 0, invoiced: 0 };
-      
-      const rawAmount = t.invoiceAmount == null ? 0 : toNumber(t.invoiceAmount);
-      const invoiced =
-        rawAmount <= 0
-          ? 0
-          : t.invoiceCurrency === "USD"
-            ? rawAmount * 0.92
-            : t.invoiceCurrency === "GBP"
-              ? rawAmount * 1.17
-              : rawAmount;
+      const existing = byMonth.get(monthKey) || { distance: 0, trips: 0, total: 0 };
+
+      const invoiceEur = invoiceAmountToEur(toNumber(t.invoiceAmount), t.invoiceCurrency);
+      const estimated = toNumber(t.distance) * costRates.totalPerKm;
+      const total = invoiceEur > 0 ? invoiceEur : estimated;
       
       byMonth.set(monthKey, {
         distance: existing.distance + toNumber(t.distance),
         trips: existing.trips + 1,
-        invoiced: existing.invoiced + invoiced,
+        total: existing.total + total,
       });
     });
 
@@ -226,6 +271,13 @@ export default function AdvancedCosts() {
         const monthDate = new Date(parseInt(year), parseInt(month) - 1, 1);
         const monthName = monthDate.toLocaleDateString(locale, { month: "long", year: "numeric" });
         const monthShort = monthDate.toLocaleDateString(locale, { month: "short", year: "numeric" });
+
+        const total = data.total;
+        const fallbackSplit = (ratio: number) => total * ratio;
+        const hasRates = costRates.totalPerKm > 0;
+        const fuelRatio = hasRates ? costRates.energyPerKm / costRates.totalPerKm : 0.6;
+        const maintenanceRatio = hasRates ? costRates.maintenancePerKm / costRates.totalPerKm : 0.25;
+        const otherRatio = hasRates ? costRates.otherPerKm / costRates.totalPerKm : 0.15;
         
         return {
           monthKey,
@@ -233,14 +285,14 @@ export default function AdvancedCosts() {
           monthShort,
           distance: data.distance,
           trips: data.trips,
-          fuel: data.invoiced * 0.6,
-          maintenance: data.invoiced * 0.25,
-          other: data.invoiced * 0.15,
-          total: data.invoiced,
-          perKm: data.distance > 0 ? data.invoiced / data.distance : 0,
+          fuel: hasRates ? total * fuelRatio : fallbackSplit(0.6),
+          maintenance: hasRates ? total * maintenanceRatio : fallbackSplit(0.25),
+          other: hasRates ? total * otherRatio : fallbackSplit(0.15),
+          total,
+          perKm: data.distance > 0 ? total / data.distance : 0,
         };
       });
-	  }, [locale, periodTrips]);
+	  }, [costRates.energyPerKm, costRates.maintenancePerKm, costRates.otherPerKm, costRates.totalPerKm, locale, periodTrips]);
 
   const monthlyChartData = useMemo(() => [...monthlyCosts].slice().reverse(), [monthlyCosts]);
 

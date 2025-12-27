@@ -18,6 +18,10 @@ export type UserProfile = {
   fuelLPer100Km: string; // gasoline/diesel
   evKwhPer100Km: string; // electric
   gridKgCo2PerKwh: string; // electric
+  fuelPricePerLiter: string; // gasoline/diesel
+  electricityPricePerKwh: string; // electric
+  maintenanceEurPerKm: string;
+  otherEurPerKm: string;
 };
 
 // Default profile for new users or offline fallback
@@ -35,7 +39,11 @@ const DEFAULT_PROFILE: UserProfile = {
   fuelType: "unknown",
   fuelLPer100Km: "",
   evKwhPer100Km: "",
-  gridKgCo2PerKwh: ""
+  gridKgCo2PerKwh: "",
+  fuelPricePerLiter: "",
+  electricityPricePerKwh: "",
+  maintenanceEurPerKm: "",
+  otherEurPerKm: "",
 };
 
 type UserProfileContextValue = {
@@ -112,6 +120,10 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
               fuelLPer100Km: (data as any).fuel_l_per_100km == null ? "" : String((data as any).fuel_l_per_100km).replace(".", ","),
               evKwhPer100Km: (data as any).ev_kwh_per_100km == null ? "" : String((data as any).ev_kwh_per_100km).replace(".", ","),
               gridKgCo2PerKwh: (data as any).grid_kgco2_per_kwh == null ? "" : String((data as any).grid_kgco2_per_kwh).replace(".", ","),
+              fuelPricePerLiter: (data as any).fuel_price_per_liter == null ? "" : String((data as any).fuel_price_per_liter).replace(".", ","),
+              electricityPricePerKwh: (data as any).electricity_price_per_kwh == null ? "" : String((data as any).electricity_price_per_kwh).replace(".", ","),
+              maintenanceEurPerKm: (data as any).maintenance_eur_per_km == null ? "" : String((data as any).maintenance_eur_per_km).replace(".", ","),
+              otherEurPerKm: (data as any).other_eur_per_km == null ? "" : String((data as any).other_eur_per_km).replace(".", ","),
             });
           } else {
              // New user? We could auto-create a profile here or wait for them to save.
@@ -157,6 +169,10 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
       fuel_l_per_100km: parseProfileNumber(nextProfile.fuelLPer100Km),
       ev_kwh_per_100km: parseProfileNumber(nextProfile.evKwhPer100Km),
       grid_kgco2_per_kwh: parseProfileNumber(nextProfile.gridKgCo2PerKwh),
+      fuel_price_per_liter: parseProfileNumber(nextProfile.fuelPricePerLiter),
+      electricity_price_per_kwh: parseProfileNumber(nextProfile.electricityPricePerKwh),
+      maintenance_eur_per_km: parseProfileNumber(nextProfile.maintenanceEurPerKm),
+      other_eur_per_km: parseProfileNumber(nextProfile.otherEurPerKm),
       updated_at: new Date().toISOString()
     };
 
