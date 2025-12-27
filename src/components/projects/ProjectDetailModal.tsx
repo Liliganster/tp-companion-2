@@ -6,11 +6,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/hooks/use-i18n";
 import { tf } from "@/lib/i18n";
 import { supabase } from "@/lib/supabaseClient";
-import { cascadeDeleteCallsheetJobById } from "@/lib/cascadeDelete";
+import { cascadeDeleteCallsheetJobById, cascadeDeleteInvoiceJobById } from "@/lib/cascadeDelete";
 import { toast } from "sonner";
 import { CallsheetUploader } from "@/components/callsheets/CallsheetUploader";
 import { ProjectInvoiceUploader } from "@/components/projects/ProjectInvoiceUploader";
 import { useUserProfile } from "@/contexts/UserProfileContext";
+import { useProjects } from "@/contexts/ProjectsContext";
 import { calculateTripEmissions } from "@/lib/emissions";
 import { parseLocaleNumber } from "@/lib/number";
 import { useTrips, type Trip } from "@/contexts/TripsContext";
@@ -53,17 +54,23 @@ interface ProjectDetailModalProps {
 export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetailModalProps) {
   const { t, tf, locale } = useI18n();
   const { profile } = useUserProfile();
-  const { trips, addTrip } = useTrips();
+  const { trips, addTrip, updateTrip } = useTrips();
+  const { refreshProjects } = useProjects();
   const { getAccessToken } = useAuth();
   const [realCallSheets, setRealCallSheets] = useState<ProjectDocument[]>([]);
   const [projectDocs, setProjectDocs] = useState<ProjectDocument[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [triggeringWorker, setTriggeringWorker] = useState(false);
   const realCallSheetsRef = useRef<ProjectDocument[]>([]);
+  const projectDocsRef = useRef<ProjectDocument[]>([]);
 
   useEffect(() => {
     realCallSheetsRef.current = realCallSheets;
   }, [realCallSheets]);
+
+  useEffect(() => {
+    projectDocsRef.current = projectDocs;
+  }, [projectDocs]);
 
   // Debug: verificar que project.id se pasa correctamente
   useEffect(() => {
@@ -74,11 +81,13 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
   const processedJobsRef = useRef<Set<string>>(new Set());
   const inFlightJobsRef = useRef<Set<string>>(new Set());
+  const processedInvoiceJobsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     // Reset per-project session state
     processedJobsRef.current = new Set();
     inFlightJobsRef.current = new Set();
+    processedInvoiceJobsRef.current = new Set();
   }, [project?.id, open]);
 
   const emissionsInput = useMemo(() => {
@@ -486,7 +495,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         }
 
         // 3) Poll invoice jobs too
-        const invoiceJobIds = projectDocs
+        const invoiceJobIds = projectDocsRef.current
           .map(d => d.invoice_job_id)
           .filter(Boolean);
 
@@ -509,6 +518,12 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                 .select("job_id, total_amount, currency, purpose")
                 .in("job_id", doneInvoiceJobIds);
               invoiceResults = data || [];
+            }
+
+            const newlyDone = doneInvoiceJobIds.filter((id: string) => !processedInvoiceJobsRef.current.has(id));
+            if (newlyDone.length > 0) {
+              for (const id of newlyDone) processedInvoiceJobsRef.current.add(id);
+              refreshProjects();
             }
 
             setProjectDocs((prev) => {
@@ -550,7 +565,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         const hasPending = (jobs ?? []).some(
           (j: any) => j?.status === "queued" || j?.status === "processing" || j?.status === "created",
         );
-        const hasInvoicePending = projectDocs.some(
+        const hasInvoicePending = projectDocsRef.current.some(
           (d: any) => d.status === "queued" || d.status === "processing" || d.status === "created"
         );
         
@@ -570,7 +585,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [open, project?.id, materializeTripFromJob]);
+  }, [open, project?.id, refreshProjects, materializeTripFromJob]);
 
   if (!project) return null;
 
@@ -788,24 +803,61 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   };
 
   const handleDeleteInvoice = async (doc: ProjectDocument) => {
-      if (doc.storage_path) {
-          // Project document
-           if (!confirm("¿Eliminar factura del proyecto?")) return;
-            try {
+    if (!confirm(t("projectDetail.confirmDeleteInvoice") as any)) return;
+
+    // Optimistic UI update
+    setProjectDocs((prev) => prev.filter((p) => p.id !== doc.id));
+
+    try {
+      if (doc.invoice_job_id) {
+        const { data: job, error: jobFetchError } = await supabase
+          .from("invoice_jobs")
+          .select("id, trip_id, storage_path")
+          .eq("id", doc.invoice_job_id)
+          .maybeSingle();
+
+        if (jobFetchError) throw jobFetchError;
+
+        const tripId = typeof (job as any)?.trip_id === "string" ? (job as any).trip_id : "";
+        const storagePath =
+          typeof (job as any)?.storage_path === "string"
+            ? (job as any).storage_path
+            : (doc.storage_path ?? "");
+
+        await cascadeDeleteInvoiceJobById(supabase, doc.invoice_job_id);
+
+        if (tripId) {
+          const target = trips.find((t) => t.id === tripId);
+          const nextDocs = (target?.documents ?? []).filter((d) => {
+            if (d?.invoiceJobId && d.invoiceJobId === doc.invoice_job_id) return false;
+            if (storagePath && d?.storagePath && d.storagePath === storagePath) return false;
+            return true;
+          });
+
+          await updateTrip(tripId, {
+            invoiceAmount: null,
+            invoiceCurrency: null,
+            invoiceJobId: null,
+            documents: nextDocs,
+          });
+        }
+      } else {
+        // Legacy: only a project_documents row
+        if (doc.storage_path) {
           const { error: storageError } = await supabase.storage.from("project_documents").remove([doc.storage_path]);
           if (storageError) throw storageError;
-
-          const { error } = await supabase.from("project_documents").delete().eq("id", doc.id);
-          if (error) throw error;
-                
-                setProjectDocs(prev => prev.filter(p => p.id !== doc.id));
-                toast.success(t("projectDetail.toastInvoiceDeleted"));
-            } catch (e: any) {
-                toast.error(tf("projectDetail.toastDeleteError", { message: e.message }));
-            }
-      } else {
-          toast.warning(t("projectDetail.toastInvoiceLinkedToTrip"));
+        }
+        const { error } = await supabase.from("project_documents").delete().eq("id", doc.id);
+        if (error) throw error;
       }
+
+      toast.success(t("projectDetail.toastInvoiceDeleted"));
+      refreshProjects();
+    } catch (e: any) {
+      // Rollback optimistic removal
+      setProjectDocs((prev) => (prev.some((p) => p.id === doc.id) ? prev : [doc, ...prev]));
+      toast.error(tf("projectDetail.toastDeleteError", { message: e.message }));
+    }
   };
 
   return (

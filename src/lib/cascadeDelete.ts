@@ -165,6 +165,68 @@ export async function cascadeDeleteCallsheetJobById(supabase: SupabaseClient, jo
   if (deleteError) throw deleteError;
 }
 
+export async function cascadeDeleteInvoiceJobById(supabase: SupabaseClient, jobId: string) {
+  const { data: job, error: fetchError } = await supabase
+    .from("invoice_jobs")
+    .select("id, storage_path, trip_id")
+    .eq("id", jobId)
+    .maybeSingle();
+
+  if (fetchError) throw fetchError;
+  if (!job) return;
+
+  const storagePath = String((job as AnyRow).storage_path ?? "").trim();
+  const tripId = String((job as AnyRow).trip_id ?? "").trim();
+
+  if (storagePath) {
+    await bestEffortRemoveFromBucket(supabase, "project_documents", [storagePath]);
+  }
+
+  // Remove project_documents rows that reference this job (best-effort: some schemas may not have invoice_job_id yet)
+  try {
+    const { error: deleteDocsError } = await supabase.from("project_documents").delete().eq("invoice_job_id", jobId);
+    if (deleteDocsError && !isMissingColumnOrSchema(deleteDocsError)) throw deleteDocsError;
+  } catch (err) {
+    if (!isMissingColumnOrSchema(err)) throw err;
+    console.warn("[cascadeDelete] project_documents.invoice_job_id missing; skipping invoice doc delete");
+  }
+
+  // If this invoice is linked to a trip, clear trip invoice fields and remove attached doc entries.
+  if (tripId) {
+    const { data: tripRow, error: tripFetchError } = await supabase
+      .from("trips")
+      .select("documents")
+      .eq("id", tripId)
+      .maybeSingle();
+
+    if (tripFetchError) throw tripFetchError;
+
+    const docs: AnyRow[] = Array.isArray((tripRow as AnyRow | null)?.documents) ? (tripRow as AnyRow).documents : [];
+    const nextDocs = docs.filter((d) => {
+      const sp = typeof d?.storagePath === "string" ? d.storagePath : typeof d?.path === "string" ? d.path : "";
+      const jid = typeof d?.invoiceJobId === "string" ? d.invoiceJobId : "";
+      if (jid && jid === jobId) return false;
+      if (storagePath && sp && sp === storagePath) return false;
+      return true;
+    });
+
+    const { error: tripUpdateError } = await supabase
+      .from("trips")
+      .update({
+        invoice_job_id: null,
+        invoice_amount: null,
+        invoice_currency: null,
+        documents: nextDocs,
+      })
+      .eq("id", tripId);
+
+    if (tripUpdateError) throw tripUpdateError;
+  }
+
+  const { error: deleteError } = await supabase.from("invoice_jobs").delete().eq("id", jobId);
+  if (deleteError) throw deleteError;
+}
+
 export async function cascadeDeleteProjectById(supabase: SupabaseClient, projectId: string) {
   // 1) Delete trips for this project
   const { data: tripRows, error: tripsFetchError } = await supabase

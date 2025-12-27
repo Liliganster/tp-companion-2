@@ -25,7 +25,7 @@ import { parseLocaleNumber } from "@/lib/number";
 export default function AdvancedCosts() {
   const navigate = useNavigate();
   const { t, tf, locale } = useI18n();
-  const { projects } = useProjects();
+  const { projects, refreshProjects } = useProjects();
   const { trips } = useTrips();
   const { profile } = useUserProfile();
   const [activeTab, setActiveTab] = useState("resumen");
@@ -397,6 +397,7 @@ export default function AdvancedCosts() {
 
       if (successCount > 0) toast.success(tf("advancedCosts.toastUploadedInvoices", { count: successCount }));
       if (failCount > 0) toast.error(tf("advancedCosts.toastFailedDocuments", { count: failCount }));
+      if (successCount > 0 || failCount > 0) refreshProjects();
     } catch (err: any) {
       console.error(err);
       toast.error(formatSupabaseError(err, t("advancedCosts.errorUploadInvoice")));

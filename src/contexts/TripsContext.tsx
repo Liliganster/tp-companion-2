@@ -17,9 +17,9 @@ export type Trip = {
   purpose: string;
   passengers: number;
   invoice?: string; // Legacy: invoice_number
-  invoiceAmount?: number; // New: extracted amount from invoice
-  invoiceCurrency?: string; // New: currency (EUR, USD, etc.)
-  invoiceJobId?: string; // New: link to invoice_job
+  invoiceAmount?: number | null; // New: extracted amount from invoice
+  invoiceCurrency?: string | null; // New: currency (EUR, USD, etc.)
+  invoiceJobId?: string | null; // New: link to invoice_job
   warnings?: string[];
   co2: number;
   distance: number;
@@ -111,9 +111,9 @@ export function TripsProvider({ children }: { children: ReactNode }) {
             purpose: t.purpose || "",
             passengers: t.passengers || 0,
             invoice: t.invoice_number,
-            invoiceAmount: t.invoice_amount,
-            invoiceCurrency: t.invoice_currency,
-            invoiceJobId: t.invoice_job_id,
+            invoiceAmount: t.invoice_amount ?? null,
+            invoiceCurrency: t.invoice_currency ?? null,
+            invoiceJobId: t.invoice_job_id ?? null,
             distance: t.distance_km || 0,
             co2: shouldUseFuelBasedEmissions
               ? calculateTripEmissions({ distanceKm: t.distance_km || 0, ...emissionsInput }).co2Kg
@@ -155,6 +155,40 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
     return () => { mounted = false; };
   }, [user, emissionsInput, shouldUseFuelBasedEmissions]);
+
+  // Keep invoice fields in sync when AI extraction updates trips in DB.
+  useEffect(() => {
+    if (!user || !supabase) return;
+
+    const channel = supabase
+      .channel("trips-invoice-sync")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "trips", filter: `user_id=eq.${user.id}` },
+        (payload: any) => {
+          const next = payload?.new as any;
+          if (!next?.id) return;
+          setTrips((prev) =>
+            prev.map((t) =>
+              t.id === next.id
+                ? {
+                    ...t,
+                    invoiceAmount: next.invoice_amount ?? null,
+                    invoiceCurrency: next.invoice_currency ?? null,
+                    invoiceJobId: next.invoice_job_id ?? null,
+                    documents: next.documents ?? t.documents,
+                  }
+                : t,
+            ),
+          );
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
 
   const addTrip = useCallback(async (trip: Trip): Promise<boolean> => {
     console.log("[TripsContext] addTrip called with:", trip);

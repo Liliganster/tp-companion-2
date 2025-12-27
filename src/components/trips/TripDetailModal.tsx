@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { MapPin, FileText, Paperclip, CircleDot, Download, Upload, Eye, ArrowLeft, ExternalLink, Receipt } from "lucide-react";
+import { MapPin, FileText, CircleDot, Download, Upload, Eye, ArrowLeft, ExternalLink, Receipt } from "lucide-react";
 import { useI18n } from "@/hooks/use-i18n";
 import { TripGoogleMap } from "@/components/trips/TripGoogleMap";
 import { Trip, useTrips } from "@/contexts/TripsContext";
@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import { useUserProfile } from "@/contexts/UserProfileContext";
+import { useProjects } from "@/contexts/ProjectsContext";
 
 interface TripDetailModalProps {
   trip: Trip | null;
@@ -24,13 +25,12 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
   const { t, tf, locale } = useI18n();
   const { profile } = useUserProfile();
   const { trips, updateTrip } = useTrips();
+  const { refreshProjects } = useProjects();
   const { getAccessToken } = useAuth();
   const { toast } = useToast();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewDocName, setPreviewDocName] = useState<string>("");
-  const [attachBusy, setAttachBusy] = useState(false);
   const [invoiceBusy, setInvoiceBusy] = useState(false);
-  const attachInputRef = useRef<HTMLInputElement>(null);
   const invoiceInputRef = useRef<HTMLInputElement>(null);
   const [invoicePurpose, setInvoicePurpose] = useState<string>("");
   const [invoiceStatus, setInvoiceStatus] = useState<string>("");
@@ -106,6 +106,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
         await updateTrip(liveTripId, { invoiceAmount: amount, invoiceCurrency: currency });
       }
 
+      refreshProjects();
       stop();
     };
 
@@ -115,7 +116,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
     return () => {
       stop();
     };
-  }, [invoiceJobId, liveTripId, open, updateTrip]);
+  }, [invoiceJobId, liveTripId, open, refreshProjects, updateTrip]);
 
   if (!liveTrip) return null;
 
@@ -147,64 +148,6 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
     if (liveTrip.invoiceJobId) return t("tripDetail.invoiceExtracting");
     return t("tripDetail.totalDocumentedEmpty");
   })();
-
-  const onAttachFiles = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    if (!supabase) return;
-
-    setAttachBusy(true);
-    try {
-      const { data, error } = await supabase.auth.getUser();
-      if (error || !data?.user) throw new Error(t("tripDetail.authRequired"));
-
-      const userId = data.user.id;
-      const uploadedDocs: NonNullable<Trip["documents"]> = [];
-
-      for (const file of Array.from(files)) {
-        const safeName = file.name.replace(/\s+/g, " ").trim();
-        const storagePath = `${userId}/trip-documents/${liveTrip.id}/${Date.now()}-${safeName}`;
-
-        const { error: uploadError } = await supabase.storage.from("callsheets").upload(storagePath, file, {
-          contentType: file.type || undefined,
-          upsert: false,
-        });
-        if (uploadError) throw uploadError;
-
-        uploadedDocs.push({
-          id: crypto.randomUUID(),
-          name: safeName,
-          mimeType: file.type || "application/octet-stream",
-          storagePath,
-          bucketId: "callsheets",
-          kind: "document",
-          createdAt: new Date().toISOString(),
-        });
-      }
-
-      const nextDocs = [...tripDocuments, ...uploadedDocs];
-      const ok = await updateTrip(liveTrip.id, { documents: nextDocs });
-      if (!ok) throw new Error(t("tripDetail.attachSaveFailed"));
-
-      toast({
-        title: t("tripDetail.invoicesTitle"),
-        description: tf("tripDetail.attachSavedBody", { count: uploadedDocs.length }),
-      });
-
-      // Preview the last uploaded
-      const last = uploadedDocs[uploadedDocs.length - 1];
-      if (last) void viewDocument(last);
-    } catch (e: any) {
-      console.error(e);
-      toast({
-        title: t("tripDetail.errorTitle"),
-        description: e?.message ?? t("tripDetail.attachFailed"),
-        variant: "destructive",
-      });
-    } finally {
-      setAttachBusy(false);
-      if (attachInputRef.current) attachInputRef.current.value = "";
-    }
-  };
 
   const onAttachInvoice = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -249,6 +192,25 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
         .select("id")
         .single();
       if (jobError) throw jobError;
+
+      // Also register under the project so it appears in project invoice list immediately.
+      if (liveTrip.projectId) {
+        const { error: projectDocError } = await supabase.from("project_documents").insert({
+          project_id: liveTrip.projectId,
+          user_id: userId,
+          name: safeName,
+          storage_path: storagePath,
+          type: "invoice",
+          invoice_job_id: jobData.id,
+        });
+        if (projectDocError) throw projectDocError;
+      } else {
+        toast({
+          title: t("tripDetail.errorTitle"),
+          description: t("tripDetail.missingProjectIdForInvoice"),
+          variant: "destructive",
+        });
+      }
 
       const invoiceDoc: NonNullable<Trip["documents"]>[number] = {
         id: crypto.randomUUID(),
@@ -297,6 +259,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
       });
 
       void viewDocument(invoiceDoc);
+      refreshProjects();
     } catch (e: any) {
       console.error(e);
       toast({
@@ -452,26 +415,6 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
                   >
                     <Receipt className="w-3 h-3" />
                     {t("tripDetail.attachInvoice")}
-                  </Button>
-
-                  <input
-                    ref={attachInputRef}
-                    type="file"
-                    className="hidden"
-                    multiple
-                    accept="application/pdf,image/*"
-                    onChange={(e) => void onAttachFiles(e.target.files)}
-                  />
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="gap-1"
-                    type="button"
-                    disabled={attachBusy}
-                    onClick={() => attachInputRef.current?.click()}
-                  >
-                    <Paperclip className="w-3 h-3" />
-                    {t("tripDetail.attachDocument")}
                   </Button>
                 </div>
               </div>

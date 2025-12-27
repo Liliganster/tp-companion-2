@@ -48,6 +48,7 @@ export type Project = {
 type ProjectsContextValue = {
   projects: Project[];
   loading: boolean;
+  refreshProjects: () => void;
   addProject: (project: Project) => Promise<void>;
   updateProject: (id: string, patch: Partial<Project>) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
@@ -62,6 +63,12 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const refreshProjects = useCallback(() => {
+    setLoading(true);
+    setRefreshKey((v) => v + 1);
+  }, []);
 
   useEffect(() => {
     if (!user || !supabase) {
@@ -153,7 +160,39 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     fetchProjects();
 
     return () => { mounted = false; };
-  }, [user]);
+  }, [user, refreshKey]);
+
+  useEffect(() => {
+    if (!user || !supabase) return;
+
+    let timer: any = null;
+    const schedule = () => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        refreshProjects();
+      }, 400);
+    };
+
+    const channel = supabase
+      .channel("projects-totals-refresh")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "invoice_jobs", filter: `user_id=eq.${user.id}` },
+        () => schedule(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "trips", filter: `user_id=eq.${user.id}` },
+        () => schedule(),
+      )
+      .subscribe();
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
+  }, [refreshProjects, user]);
 
   const addProject = useCallback(async (project: Project) => {
     if (!supabase || !user) return;
@@ -261,11 +300,12 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const value = useMemo<ProjectsContextValue>(() => ({ 
     projects, 
     loading, 
+    refreshProjects,
     addProject, 
     updateProject, 
     deleteProject, 
     toggleStar 
-  }), [projects, loading, addProject, updateProject, deleteProject, toggleStar]);
+  }), [projects, loading, refreshProjects, addProject, updateProject, deleteProject, toggleStar]);
 
   return <ProjectsContext.Provider value={value}>{children}</ProjectsContext.Provider>;
 }

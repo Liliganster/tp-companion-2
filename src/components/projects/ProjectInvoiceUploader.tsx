@@ -4,6 +4,7 @@ import { formatSupabaseError } from "@/lib/supabaseErrors";
 import { Button } from "@/components/ui/button";
 import { Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { useProjects } from "@/contexts/ProjectsContext";
 
 interface ProjectInvoiceUploaderProps {
   onUploadComplete?: () => void;
@@ -12,6 +13,7 @@ interface ProjectInvoiceUploaderProps {
 
 export function ProjectInvoiceUploader({ onUploadComplete, projectId }: ProjectInvoiceUploaderProps) {
   const [uploading, setUploading] = useState(false);
+  const { refreshProjects } = useProjects();
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -106,6 +108,7 @@ export function ProjectInvoiceUploader({ onUploadComplete, projectId }: ProjectI
       if (successCount > 0) toast.success(`Se subieron ${successCount} facturas. La extracción comenzará automáticamente.`);
       if (failCount > 0) toast.error(`Fallaron ${failCount} documentos`);
       onUploadComplete?.();
+      refreshProjects();
 
     } catch (err: any) {
       console.error(err);
