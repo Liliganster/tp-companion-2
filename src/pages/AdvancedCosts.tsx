@@ -78,6 +78,8 @@ export default function AdvancedCosts() {
   };
 
   const periodTrips = useMemo(() => {
+    if (periodFilter === "all") return trips;
+
     const now = new Date();
     const start = new Date(now);
 
@@ -348,6 +350,7 @@ export default function AdvancedCosts() {
                 <SelectValue />
               </SelectTrigger>
 	              <SelectContent>
+	                <SelectItem value="all">{t("advancedCosts.periodAllTime")}</SelectItem>
 	                <SelectItem value="1m">{t("advancedCosts.periodLastMonth")}</SelectItem>
 	                <SelectItem value="3m">{t("advancedCosts.periodLast3Months")}</SelectItem>
 	                <SelectItem value="6m">{t("advancedCosts.periodLast6Months")}</SelectItem>
