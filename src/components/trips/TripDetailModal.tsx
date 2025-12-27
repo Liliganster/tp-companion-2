@@ -6,7 +6,6 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { MapPin, FileText, Paperclip, CircleDot, Download, Upload, Eye, ArrowLeft, ExternalLink } from "lucide-react";
 import { useI18n } from "@/hooks/use-i18n";
-import { tf } from "@/lib/i18n";
 import { TripGoogleMap } from "@/components/trips/TripGoogleMap";
 import { Trip, useTrips } from "@/contexts/TripsContext";
 import { useProjects } from "@/contexts/ProjectsContext";
@@ -22,7 +21,7 @@ interface TripDetailModalProps {
 }
 
 export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalProps) {
-  const { t, locale, language } = useI18n();
+  const { t, tf, locale } = useI18n();
   const { profile } = useUserProfile();
   const { updateTrip } = useTrips();
   const { getAccessToken } = useAuth();
@@ -71,7 +70,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
     setAttachBusy(true);
     try {
       const { data, error } = await supabase.auth.getUser();
-      if (error || !data?.user) throw new Error("No estás autenticado");
+      if (error || !data?.user) throw new Error(t("tripDetail.authRequired"));
 
       const userId = data.user.id;
       const uploadedDocs: NonNullable<Trip["documents"]> = [];
@@ -97,16 +96,23 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
 
       const nextDocs = [...tripDocuments, ...uploadedDocs];
       const ok = await updateTrip(trip.id, { documents: nextDocs });
-      if (!ok) throw new Error("No se pudieron guardar los adjuntos");
+      if (!ok) throw new Error(t("tripDetail.attachSaveFailed"));
 
-      toast({ title: t("tripDetail.invoicesTitle"), description: `Se adjuntaron ${uploadedDocs.length} archivo(s).` });
+      toast({
+        title: t("tripDetail.invoicesTitle"),
+        description: tf("tripDetail.attachSavedBody", { count: uploadedDocs.length }),
+      });
 
       // Preview the last uploaded
       const last = uploadedDocs[uploadedDocs.length - 1];
       if (last) void viewDocument(last);
     } catch (e: any) {
       console.error(e);
-      toast({ title: "Error", description: e?.message ?? "No se pudo adjuntar el archivo", variant: "destructive" });
+      toast({
+        title: t("tripDetail.errorTitle"),
+        description: e?.message ?? t("tripDetail.attachFailed"),
+        variant: "destructive",
+      });
     } finally {
       setAttachBusy(false);
       if (attachInputRef.current) attachInputRef.current.value = "";
@@ -129,7 +135,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
         setPreviewDocName(doc.name);
       } catch (e) {
         console.error("Preview error:", e);
-        toast({ title: "Error", description: "No se pudo cargar la vista previa.", variant: "destructive" });
+        toast({ title: t("tripDetail.errorTitle"), description: t("tripDetail.previewLoadFailed"), variant: "destructive" });
       }
       return;
     }
@@ -146,14 +152,14 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
             `/api/google/drive/download?fileId=${encodeURIComponent(doc.driveFileId!)}&name=${encodeURIComponent(doc.name)}`,
             { headers: { Authorization: `Bearer ${token}` } },
         );
-        if (!response.ok) throw new Error("Failed to fetch from Drive");
+        if (!response.ok) throw new Error(t("tripDetail.driveFetchFailed"));
         
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
         setPreviewUrl(url);
         setPreviewDocName(doc.name);
     } catch {
-        toast({ title: "Drive", description: t("tripDetail.mapLoadError"), variant: "destructive" });
+        toast({ title: "Drive", description: t("tripDetail.driveFetchFailed"), variant: "destructive" });
     }
   };
 
@@ -245,7 +251,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
                   {t("tripDetail.attach")}
                 </Button>
               </div>
-              <p className="text-sm text-muted-foreground">{tf(language, "tripDetail.totalDocumented", { amount: documentedTotalLabel })}</p>
+	              <p className="text-sm text-muted-foreground">{tf("tripDetail.totalDocumented", { amount: documentedTotalLabel })}</p>
             </div>
           </div>
 
@@ -262,14 +268,14 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
                         <div className="flex flex-col h-full">
                             <div className="flex-1 bg-background rounded border border-border/50 overflow-hidden">
                                 {previewDocName.toLowerCase().endsWith(".pdf") || previewDocName.toLowerCase().endsWith(".jpg") || previewDocName.toLowerCase().endsWith(".png") ? (
-                                     <iframe src={previewUrl} className="w-full h-full" title="Vista previa" />
+                                     <iframe src={previewUrl} className="w-full h-full" title={t("tripDetail.previewFrameTitle")} />
                                 ) : (
                                     <div className="flex flex-col items-center justify-center h-full text-center p-4">
                                         <FileText className="w-12 h-12 text-muted-foreground mb-2" />
-                                        <p>Vista previa no disponible en el navegador.</p>
+                                        <p>{t("tripDetail.previewUnavailable")}</p>
                                         <Button variant="outline" size="sm" asChild className="mt-4">
                                             <a href={previewUrl} download={previewDocName}>
-                                                Descargar archivo
+                                                {t("tripDetail.downloadFile")}
                                             </a>
                                         </Button>
                                     </div>

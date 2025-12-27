@@ -50,7 +50,7 @@ interface ProjectDetailModalProps {
 }
 
 export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetailModalProps) {
-  const { t, locale, language } = useI18n();
+  const { t, tf, locale } = useI18n();
   const { profile } = useUserProfile();
   const { trips, addTrip } = useTrips();
   const { getAccessToken } = useAuth();
@@ -166,7 +166,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         if (extractedProject && normalizeProjectName(extractedProject) !== normalizeProjectName(project.name)) {
           console.warn("[Materialize] Project mismatch:", extractedProject, "vs", project.name);
           const reason = `Project mismatch: AI extracted "${extractedProject}" but file is in project "${project.name}"`;
-          toast.warning("El proyecto extraído por IA no coincide, pero se creará el viaje igualmente. Revisa el resultado.");
+          toast.warning(t("projectDetail.toastProjectMismatch"));
           // Best-effort persist a review hint without blocking trip creation.
           await supabase
             .from("callsheet_jobs")
@@ -178,7 +178,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         if (!date) {
           console.warn("[Materialize] Missing date value");
           const reason = "Missing date_value in extracted result";
-          toast.warning("No se pudo extraer la fecha. Revisa manualmente.");
+          toast.warning(t("projectDetail.toastMissingDate"));
           await supabase
             .from("callsheet_jobs")
             .update({ status: "needs_review", needs_review_reason: reason })
@@ -195,7 +195,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         if (rawLocations.length === 0) {
           console.warn("[Materialize] Missing locations");
           const reason = "Missing locations in extracted result";
-          toast.warning("No se pudieron extraer ubicaciones. Revisa manualmente.");
+          toast.warning(t("projectDetail.toastMissingLocations"));
           await supabase
             .from("callsheet_jobs")
             .update({ status: "needs_review", needs_review_reason: reason })
@@ -246,16 +246,16 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
         const ok = await addTrip(nextTrip);
         if (ok) {
-          toast.success("Viaje creado desde IA del proyecto");
+          toast.success(t("projectDetail.toastTripCreatedFromAi"));
         } else {
-          toast.error("No se pudo guardar el viaje creado por IA");
+          toast.error(t("projectDetail.toastTripCreatedFromAiFailed"));
         }
 
         processedJobsRef.current.add(job.id);
 
       } catch (e: any) {
         console.error(e);
-        toast.error("Error creando viaje desde extracción: " + (e?.message ?? String(e)));
+        toast.error(tf("projectDetail.toastTripCreatedFromAiError", { message: e?.message ?? String(e) }));
       } finally {
         inFlightJobsRef.current.delete(job.id);
       }
@@ -587,7 +587,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
   const handleJobCreated = () => {
     setRefreshTrigger(p => p + 1);
-    toast.success("Documento subido.");
+    toast.success(t("projectDetail.toastDocumentUploaded"));
   };
   
   const handleUploadComplete = () => {
@@ -602,10 +602,10 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             const url = URL.createObjectURL(data);
             window.open(url, "_blank");
           } catch (e: any) {
-            toast.error("Error al abrir PDF: " + e.message);
+            toast.error(tf("projectDetail.toastOpenPdfError", { message: e.message }));
           }
      } else {
-         toast.error("Ruta del archivo no disponible.");
+         toast.error(t("projectDetail.toastStoragePathMissing"));
      }
   };
 
@@ -614,10 +614,10 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
        try {
       await cascadeDeleteCallsheetJobById(supabase, doc.id);
         
-        toast.success("Hoja de llamada eliminada");
+        toast.success(t("projectDetail.toastCallsheetDeleted"));
         setRealCallSheets(prev => prev.filter(p => p.id !== doc.id));
     } catch (e: any) {
-        toast.error("Error al eliminar: " + e.message);
+        toast.error(tf("projectDetail.toastDeleteError", { message: e.message }));
     }
   };
   
@@ -673,10 +673,10 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             
       if (error) throw error;
         
-      toast.success(doc.status === 'done' ? "Re-procesamiento iniciado" : "Extracción iniciada. El proceso comenzará en breve.");
+      toast.success(doc.status === "done" ? t("projectDetail.toastReprocessingStarted") : t("projectDetail.toastExtractionStarted"));
       setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'queued' } : p));
     } catch (e: any) {
-      toast.error("Error al iniciar extracción: " + e.message);
+      toast.error(tf("projectDetail.toastExtractionStartError", { message: e.message }));
     }
   };
 
@@ -685,7 +685,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        toast.error("Sesión no válida");
+        toast.error(t("projectDetail.toastInvalidSession"));
         return;
       }
 
@@ -703,10 +703,10 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         throw new Error(data.message || 'Error al procesar');
       }
       
-      toast.success(`Worker ejecutado: ${data.processed || 0} trabajos procesados`);
+      toast.success(tf("projectDetail.toastWorkerExecuted", { count: data.processed || 0 }));
       setRefreshTrigger(p => p + 1);
     } catch (e: any) {
-      toast.error("Error al ejecutar worker: " + e.message);
+      toast.error(tf("projectDetail.toastWorkerError", { message: e.message }));
     } finally {
       setTriggeringWorker(false);
     }
@@ -721,7 +721,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             const url = URL.createObjectURL(data);
             window.open(url, "_blank");
           } catch (e: any) {
-            toast.error("Error al abrir documento: " + e.message);
+            toast.error(tf("projectDetail.toastOpenDocumentError", { message: e.message }));
           }
       } else {
           // Trip Invoice (likely linked to a trip)
@@ -743,7 +743,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     
     try {
       if (!doc.invoice_job_id) {
-        toast.error("Esta factura no tiene un job de extracción asociado");
+        toast.error(t("projectDetail.toastInvoiceNoJob"));
         return;
       }
 
@@ -759,7 +759,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       // Queue the job
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        toast.error("Sesión no válida");
+        toast.error(t("projectDetail.toastInvalidSession"));
         return;
       }
 
@@ -774,12 +774,12 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
       if (!res.ok) throw new Error('Error al encolar job');
 
-      toast.success(doc.status === 'done' ? "Re-procesamiento iniciado" : "Extracción iniciada");
+      toast.success(doc.status === "done" ? t("projectDetail.toastReprocessingStarted") : t("projectDetail.toastExtractionStartedShort"));
       setProjectDocs(prev => prev.map(p => 
         p.id === doc.id ? { ...p, status: 'queued' } : p
       ));
     } catch (e: any) {
-      toast.error("Error al iniciar extracción: " + e.message);
+      toast.error(tf("projectDetail.toastExtractionStartError", { message: e.message }));
     }
   };
 
@@ -795,12 +795,12 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           if (error) throw error;
                 
                 setProjectDocs(prev => prev.filter(p => p.id !== doc.id));
-                toast.success("Factura eliminada");
+                toast.success(t("projectDetail.toastInvoiceDeleted"));
             } catch (e: any) {
-                toast.error("Error al eliminar: " + e.message);
+                toast.error(tf("projectDetail.toastDeleteError", { message: e.message }));
             }
       } else {
-          toast.warning("Esta factura pertenece a un viaje. Elimínala desde el viaje asociado.");
+          toast.warning(t("projectDetail.toastInvoiceLinkedToTrip"));
       }
   };
 

@@ -67,7 +67,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const [reviewDistance, setReviewDistance] = useState("0");
   const [isOptimizing, setIsOptimizing] = useState(false);
   
-  const { t, locale } = useI18n();
+  const { t, tf, locale } = useI18n();
   const exampleText = t("bulk.examplePlaceholder");
   const { getAccessToken } = useAuth();
 
@@ -368,7 +368,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       }
 
       if (parsedTrips.length === 0) {
-        toast.error("No se encontraron viajes válidos para importar");
+        toast.error(t("bulk.errorNoValidTrips"));
         return;
       }
 
@@ -394,8 +394,8 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         }
       }
 
-      if (ok > 0) toast.success(`Importados ${ok} viajes`);
-      if (failed > 0) toast.error(`Fallaron ${failed} viajes`);
+      if (ok > 0) toast.success(tf("bulk.toastImportedTrips", { count: ok }));
+      if (failed > 0) toast.error(tf("bulk.toastFailedTrips", { count: failed }));
 
       // keep the text for user inspection; close if everything ok
       if (failed === 0) setOpen(false);
@@ -410,10 +410,10 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     try {
       const text = await readCsvTextFromFile(file);
       setCsvText(text);
-      toast.success("CSV cargado");
+      toast.success(t("bulk.toastCsvLoaded"));
     } catch (err) {
       console.error(err);
-      toast.error("No se pudo leer el CSV");
+      toast.error(t("bulk.errorCsvRead"));
     } finally {
       e.target.value = "";
     }
@@ -422,14 +422,14 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const importFromGoogleDrive = async () => {
     const token = await getAccessToken();
     if (!token) {
-      toast.error("Inicia sesión para importar desde Drive");
+      toast.error(t("bulk.errorLoginDrive"));
       return;
     }
 
-    const input = window.prompt("Pega el enlace de Google Drive o el fileId del CSV");
+    const input = window.prompt(t("bulk.promptDriveLink"));
     const fileId = parseDriveFileId(input ?? "");
     if (!fileId) {
-      toast.error("No se pudo detectar el fileId");
+      toast.error(t("bulk.errorDetectFileId"));
       return;
     }
 
@@ -439,14 +439,14 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       );
       if (!response.ok) {
         const text = await response.text().catch(() => "");
-        throw new Error(text || "Drive download failed");
+        throw new Error(text || t("bulk.errorDriveDownload"));
       }
       const text = await response.text();
       setCsvText(text.replace(/^\uFEFF/, ""));
-      toast.success("CSV importado desde Drive");
+      toast.success(t("bulk.toastCsvImportedDrive"));
     } catch (e: any) {
       console.error(e);
-      toast.error(e?.message ?? "No se pudo importar desde Drive");
+      toast.error(e?.message ?? t("bulk.errorDriveDownload"));
     }
   };
 
@@ -455,14 +455,14 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     if (files.length === 0) return;
 
     if (files.length > 20) {
-      toast.error("Máximo 20 documentos por vez");
+      toast.error(t("bulk.errorMaxDocuments"));
       e.target.value = "";
       return;
     }
 
     for (const file of files) {
       if (file.type !== "application/pdf") {
-        toast.error("Solo se permiten archivos PDF para la extracción AI");
+        toast.error(t("bulk.errorOnlyPdf"));
         e.target.value = "";
         return;
       }
@@ -478,7 +478,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     setAiStep("processing");
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) throw new Error("No estás autenticado");
+      if (authError || !user) throw new Error(t("bulk.errorNotAuthenticated"));
 
       const createdJobIds: string[] = [];
       const metaById: Record<string, { fileName: string; mimeType: string; storagePath: string }> = {};
@@ -532,12 +532,12 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
       if (successCount === 0) {
         setAiStep("upload");
-        toast.error("No se pudo subir ningún documento");
+        toast.error(t("bulk.errorUploadNone"));
         return;
       }
 
-      if (successCount > 0) toast.success(`Se subieron ${successCount} documentos`);
-      if (failCount > 0) toast.error(`Fallaron ${failCount} documentos`);
+      if (successCount > 0) toast.success(tf("bulk.toastUploadedDocs", { count: successCount }));
+      if (failCount > 0) toast.error(tf("bulk.toastFailedDocs", { count: failCount }));
 
       setJobIds(createdJobIds);
       setJobMetaById(metaById);
@@ -547,7 +547,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
     } catch (err: any) {
       console.error(err);
-      toast.error(err.message || "Error al subir documento");
+      toast.error(err.message || t("bulk.errorUploadDoc"));
     }
     finally {
       setAiLoading(false);
@@ -586,7 +586,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
             });
 
             // Show a single aggregated message.
-            toast.error(`Fallaron ${failedIds.length} documentos`);
+            toast.error(tf("bulk.toastFailedDocs", { count: failedIds.length }));
           }
 
           // If a job is done, move to review for the first completed one.
@@ -985,7 +985,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                                     </div>
                                 ))}
                                 {reviewLocations.length === 0 && (
-                                    <p className="text-sm text-muted-foreground italic">No se encontraron ubicaciones.</p>
+                                    <p className="text-sm text-muted-foreground italic">{t("bulk.noLocationsFound")}</p>
                                 )}
                             </CardContent>
                         </Card>
@@ -1002,7 +1002,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                         </Button>
                         <Button onClick={handleSaveTrip} className="gap-2">
                             <Save className="w-4 h-4" />
-                            Guardar Viaje
+                            {t("bulk.saveTrip")}
                         </Button>
                     </div>
                 </div>

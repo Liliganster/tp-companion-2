@@ -376,7 +376,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
   const { getAccessToken } = useAuth();
   const { projects, addProject } = useProjects();
   const { trips } = useTrips();
-  const { t, locale } = useI18n();
+  const { t, tf, locale } = useI18n();
   const isEditing = Boolean(trip);
   const [projectOpen, setProjectOpen] = useState(false);
   const settingsRateLabel = useMemo(() => profile.ratePerKm, [profile.ratePerKm]);
@@ -787,31 +787,31 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-full p-0">
-                  <Command>
-                    <CommandInput 
-                      placeholder="Buscar o crear proyecto..." 
-                      value={project}
-                      onValueChange={setProject}
-                    />
-                    <CommandList>
-                      <CommandEmpty>
-                          <div className="p-2">
-                             <p className="text-sm text-muted-foreground mb-2">No encontrado.</p>
-                             <Button 
-                               variant="secondary" 
-                               size="sm" 
-                               className="w-full" 
+	                  <Command>
+	                    <CommandInput 
+	                      placeholder={t("tripModal.projectSearchPlaceholder")}
+	                      value={project}
+	                      onValueChange={setProject}
+	                    />
+	                    <CommandList>
+	                      <CommandEmpty>
+	                          <div className="p-2">
+	                             <p className="text-sm text-muted-foreground mb-2">{t("tripModal.projectNotFound")}</p>
+	                             <Button 
+	                               variant="secondary" 
+	                               size="sm" 
+	                               className="w-full" 
                                disabled={!project.trim()}
                                onClick={() => {
                                  createProjectIfNeeded(project);
                                  setProject(project.trim());
-                                 setProjectOpen(false);
-                               }}
-                             >
-                              Crear "{project}"
-                             </Button>
-                          </div>
-                      </CommandEmpty>
+	                                 setProjectOpen(false);
+	                               }}
+	                             >
+	                              {tf("tripModal.createProjectNamed", { name: project })}
+	                             </Button>
+	                          </div>
+	                      </CommandEmpty>
                       <CommandGroup>
                         {projectOptions.map((name) => (
                           <CommandItem

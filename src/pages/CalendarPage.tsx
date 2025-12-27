@@ -437,21 +437,21 @@ export default function CalendarPage() {
               <RefreshCw className="w-4 h-4" />
               {t("calendar.refresh")}
             </Button>
-            {isConnected && calendars.length > 0 && (
-              <Button
-                variant="add"
-                onClick={() => openCreateForDate(new Date())}
-                disabled={loadingCalendars || loadingStatus}
-              >
-                <Plus className="w-4 h-4" />
-                Crear evento
-              </Button>
-            )}
-            {isConnected && (
-              <Button variant="outline" onClick={disconnectGoogle} disabled={loadingStatus}>
-                Desconectar
-              </Button>
-            )}
+	            {isConnected && calendars.length > 0 && (
+	              <Button
+	                variant="add"
+	                onClick={() => openCreateForDate(new Date())}
+	                disabled={loadingCalendars || loadingStatus}
+	              >
+	                <Plus className="w-4 h-4" />
+	                {t("calendar.createEventTitle")}
+	              </Button>
+	            )}
+	            {isConnected && (
+	              <Button variant="outline" onClick={disconnectGoogle} disabled={loadingStatus}>
+	                {t("calendar.disconnect")}
+	              </Button>
+	            )}
             {!isConnected && (
               <Button variant="add" onClick={connectGoogle} disabled={loadingStatus}>
                 <ExternalLink className="w-4 h-4" />
@@ -461,48 +461,48 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        {needsReconnect && isConnected && (
-          <div className="glass-card p-4 border-warning/30 bg-warning/5 animate-fade-in">
-            <h3 className="font-medium text-sm mb-2">Permisos insuficientes</h3>
-            <p className="text-xs text-muted-foreground mb-3">
-              Se necesita actualizar los permisos de Google Calendar para listar tus calendarios. Desconecta y vuelve a conectar.
-            </p>
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={disconnectGoogle} disabled={loadingStatus}>
-                Desconectar
-              </Button>
-              <Button size="sm" onClick={connectGoogle} disabled={loadingStatus}>
-                Reconectar
-              </Button>
-            </div>
-          </div>
-        )}
+	        {needsReconnect && isConnected && (
+	          <div className="glass-card p-4 border-warning/30 bg-warning/5 animate-fade-in">
+	            <h3 className="font-medium text-sm mb-2">{t("calendar.insufficientPermissionsTitle")}</h3>
+	            <p className="text-xs text-muted-foreground mb-3">
+	              {t("calendar.insufficientPermissionsBody")}
+	            </p>
+	            <div className="flex gap-2">
+	              <Button size="sm" variant="outline" onClick={disconnectGoogle} disabled={loadingStatus}>
+	                {t("calendar.disconnect")}
+	              </Button>
+	              <Button size="sm" onClick={connectGoogle} disabled={loadingStatus}>
+	                {t("calendar.reconnect")}
+	              </Button>
+	            </div>
+	          </div>
+	        )}
 
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Crear evento</DialogTitle>
+              <DialogTitle>{t("calendar.createEventTitle")}</DialogTitle>
             </DialogHeader>
 
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="event-title">Título</Label>
+                <Label htmlFor="event-title">{t("calendar.eventTitleLabel")}</Label>
                 <Input
                   id="event-title"
                   value={createForm.title}
                   onChange={(e) => setCreateForm((s) => ({ ...s, title: e.target.value }))}
-                  placeholder="Reunión / viaje / recordatorio"
+                  placeholder={t("calendar.eventTitlePlaceholder")}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label>Calendario</Label>
+                <Label>{t("calendar.calendarLabel")}</Label>
                 <Select
                   value={createForm.calendarId}
                   onValueChange={(v) => setCreateForm((s) => ({ ...s, calendarId: v }))}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecciona un calendario" />
+                    <SelectValue placeholder={t("calendar.selectCalendarPlaceholder")} />
                   </SelectTrigger>
                   <SelectContent>
                     {calendars.map((cal) => (
@@ -516,7 +516,7 @@ export default function CalendarPage() {
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="event-start">Inicio</Label>
+                  <Label htmlFor="event-start">{t("calendar.startLabel")}</Label>
                   <Input
                     id="event-start"
                     type="datetime-local"
@@ -525,7 +525,7 @@ export default function CalendarPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="event-end">Fin</Label>
+                  <Label htmlFor="event-end">{t("calendar.endLabel")}</Label>
                   <Input
                     id="event-end"
                     type="datetime-local"
@@ -538,10 +538,10 @@ export default function CalendarPage() {
 
             <DialogFooter>
               <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={createBusy}>
-                Cancelar
+                {t("calendar.cancel")}
               </Button>
               <Button onClick={createEvent} disabled={createBusy}>
-                {createBusy ? "Creando..." : "Crear"}
+                {createBusy ? t("calendar.creating") : t("calendar.create")}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -554,7 +554,7 @@ export default function CalendarPage() {
               <h2 className="font-semibold mb-3">{t("calendar.calendars")}</h2>
               <div className="space-y-3">
                 {loadingCalendars ? (
-                  <div className="text-sm text-muted-foreground">Cargando...</div>
+                  <div className="text-sm text-muted-foreground">{t("calendar.loading")}</div>
                 ) : null}
                 {calendars.map((cal) => (
                   <div key={cal.id} className="flex items-center justify-between">

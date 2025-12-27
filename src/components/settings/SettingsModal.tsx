@@ -159,7 +159,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     try {
       const token = await getAccessToken();
       if (!token) {
-        toast({ title: t("settings.deleteAccountTitle"), description: "Sesión inválida.", variant: "destructive" });
+        toast({ title: t("settings.deleteAccountTitle"), description: t("settings.sessionInvalid"), variant: "destructive" });
         return;
       }
 
@@ -175,19 +175,19 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
       if (!response.ok) {
         toast({
           title: t("settings.deleteAccountTitle"),
-          description: data?.message ?? "No se pudo eliminar la cuenta.",
+          description: data?.message ?? t("settings.deleteAccountFailed"),
           variant: "destructive",
         });
         return;
       }
 
-      toast({ title: t("settings.deleteAccountTitle"), description: "Cuenta eliminada." });
+      toast({ title: t("settings.deleteAccountTitle"), description: t("settings.accountDeleted") });
       await signOut();
       onOpenChange(false);
     } catch (e: any) {
       toast({
         title: t("settings.deleteAccountTitle"),
-        description: e?.message ?? "No se pudo eliminar la cuenta.",
+        description: e?.message ?? t("settings.deleteAccountFailed"),
         variant: "destructive",
       });
     }
@@ -208,7 +208,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     } catch (err: any) {
       toast({
         title: "Google",
-        description: err?.message ?? "No se pudo iniciar la conexión",
+        description: err?.message ?? t("settings.googleConnectFailed"),
         variant: "destructive",
       });
     }
@@ -226,7 +226,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     } catch (err: any) {
       toast({
         title: "Google",
-        description: err?.message ?? "No se pudo desconectar",
+        description: err?.message ?? t("settings.googleDisconnectFailed"),
         variant: "destructive",
       });
     }
@@ -235,8 +235,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const handleSave = () => {
     void saveProfile(profileData, {
       toastId: "settings-save",
-      loadingText: "Guardando ajustes…",
-      successText: "Ajustes guardados",
+      loadingText: t("settings.toastSaving"),
+      successText: t("settings.toastSaved"),
     });
     saveAppearance(draftAppearance);
     onOpenChange(false);
