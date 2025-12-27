@@ -8,12 +8,22 @@ import { useI18n } from "@/hooks/use-i18n";
 export default function Plans() {
   const { t, tf, language } = useI18n();
 
+  const priceFormatter = useMemo(() => {
+    const locale = language === "de" ? "de-DE" : language === "en" ? "en-US" : "es-ES";
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: "EUR",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    });
+  }, [language]);
+
   const plans = useMemo(() => {
     if (language === "de") {
       return [
         {
           name: "Kostenlos",
-          price: "€0",
+          priceEur: 0,
           period: "dauerhaft",
           description: "Perfekt zum Einstieg",
           features: ["Unbegrenzte Fahrten", "5 Projekte", "Basisberichte", "10 KI-Extraktionen/Monat", "CSV-Export"],
@@ -22,7 +32,7 @@ export default function Plans() {
         },
         {
           name: "Pro",
-          price: "€9.99",
+          priceEur: 9.99,
           period: "pro Monat",
           description: "Für Profis und Teams",
           features: [
@@ -46,7 +56,7 @@ export default function Plans() {
       return [
         {
           name: "Free",
-          price: "€0",
+          priceEur: 0,
           period: "forever",
           description: "Perfect for getting started",
           features: ["Unlimited trips", "5 projects", "Basic reports", "10 AI extractions/month", "CSV export"],
@@ -55,7 +65,7 @@ export default function Plans() {
         },
         {
           name: "Pro",
-          price: "€9.99",
+          priceEur: 9.99,
           period: "per month",
           description: "For professionals and teams",
           features: [
@@ -78,7 +88,7 @@ export default function Plans() {
     return [
       {
         name: "Gratis",
-        price: "€0",
+        priceEur: 0,
         period: "para siempre",
         description: "Perfecto para empezar",
         features: ["Viajes ilimitados", "5 proyectos", "Informes básicos", "10 extracciones IA/mes", "Exportación CSV"],
@@ -87,7 +97,7 @@ export default function Plans() {
       },
       {
         name: "Pro",
-        price: "€9.99",
+        priceEur: 9.99,
         period: "al mes",
         description: "Para profesionales y equipos",
         features: [
@@ -109,7 +119,14 @@ export default function Plans() {
 
   return (
     <MainLayout>
-      <div className="max-w-5xl mx-auto space-y-8">
+      <div className="relative">
+        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-violet-600/12 via-transparent to-fuchsia-500/10" />
+          <div className="absolute -top-40 -left-40 h-[34rem] w-[34rem] rounded-full bg-violet-500/10 blur-3xl" />
+          <div className="absolute -bottom-40 -right-40 h-[34rem] w-[34rem] rounded-full bg-fuchsia-500/10 blur-3xl" />
+        </div>
+
+        <div className="relative z-10 max-w-5xl mx-auto space-y-8">
         {/* Header */}
         <div className="text-center animate-fade-in">
           <h1 className="text-2xl sm:text-3xl font-bold flex items-center justify-center gap-3">
@@ -148,8 +165,8 @@ export default function Plans() {
                   <h2 className="text-xl font-semibold">{plan.name}</h2>
                 </div>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-bold gradient-text">
-                    {plan.price}
+                  <span className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-violet-200 via-violet-100 to-fuchsia-200 bg-clip-text text-transparent drop-shadow-sm">
+                    {priceFormatter.format(plan.priceEur)}
                   </span>
                   <span className="text-muted-foreground">/{plan.period}</span>
                 </div>
@@ -199,6 +216,7 @@ export default function Plans() {
           </p>
           <Button variant="outline">{t("plans.contactSales")}</Button>
         </div>
+      </div>
       </div>
     </MainLayout>
   );
