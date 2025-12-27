@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { CallsheetUploader } from "@/components/callsheets/CallsheetUploader";
 import { ProjectInvoiceUploader } from "@/components/projects/ProjectInvoiceUploader";
 import { useUserProfile } from "@/contexts/UserProfileContext";
+import { calculateTripEmissions } from "@/lib/emissions";
+import { parseLocaleNumber } from "@/lib/number";
 import { useTrips, type Trip } from "@/contexts/TripsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
@@ -78,7 +80,18 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     inFlightJobsRef.current = new Set();
   }, [project?.id, open]);
 
-  const calculateCO2 = useCallback((distance: number) => Math.round(distance * 0.12 * 10) / 10, []);
+  const emissionsInput = useMemo(() => {
+    return {
+      fuelType: profile.fuelType,
+      fuelLPer100Km: parseLocaleNumber(profile.fuelLPer100Km),
+      evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
+      gridKgCo2PerKwh: parseLocaleNumber(profile.gridKgCo2PerKwh),
+    };
+  }, [profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType, profile.gridKgCo2PerKwh]);
+
+  const calculateCO2 = useCallback((distance: number) => {
+    return calculateTripEmissions({ distanceKm: distance, ...emissionsInput }).co2Kg;
+  }, [emissionsInput]);
 
   const hasTripForJob = useCallback(
     (jobId: string | undefined, storagePath: string | undefined) => {

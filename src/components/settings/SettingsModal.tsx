@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Slider } from "@/components/ui/slider";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   User,
   Sparkles,
@@ -23,7 +24,7 @@ import {
   Sun,
   Moon,
   Upload,
-} from "lucide-react";
+  } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useI18n } from "@/hooks/use-i18n";
@@ -399,6 +400,73 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         className="bg-secondary/50"
                       />
                     </div>
+                  </div>
+
+                  <div className="pt-4">
+                    <h3 className="text-sm font-medium">{t("settings.vehicleSectionTitle")}</h3>
+                    <p className="text-xs text-muted-foreground mt-1">{t("settings.vehicleSectionBody")}</p>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>{t("settings.fuelType")}</Label>
+                      <Select
+                        value={profileData.fuelType}
+                        onValueChange={(value) =>
+                          setProfileData({ ...profileData, fuelType: value as typeof profileData.fuelType })
+                        }
+                      >
+                        <SelectTrigger className="bg-secondary/50">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="unknown">{t("settings.fuelTypeUnknown")}</SelectItem>
+                          <SelectItem value="gasoline">{t("settings.fuelTypeGasoline")}</SelectItem>
+                          <SelectItem value="diesel">{t("settings.fuelTypeDiesel")}</SelectItem>
+                          <SelectItem value="ev">{t("settings.fuelTypeEv")}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {(profileData.fuelType === "gasoline" || profileData.fuelType === "diesel") && (
+                      <div className="space-y-2">
+                        <Label htmlFor="fuelLPer100Km">{t("settings.fuelConsumption")}</Label>
+                        <Input
+                          id="fuelLPer100Km"
+                          inputMode="decimal"
+                          placeholder=""
+                          value={profileData.fuelLPer100Km}
+                          onChange={(e) => setProfileData({ ...profileData, fuelLPer100Km: e.target.value })}
+                          className="bg-secondary/50"
+                        />
+                      </div>
+                    )}
+
+                    {profileData.fuelType === "ev" && (
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="evKwhPer100Km">{t("settings.evConsumption")}</Label>
+                          <Input
+                            id="evKwhPer100Km"
+                            inputMode="decimal"
+                            value={profileData.evKwhPer100Km}
+                            onChange={(e) => setProfileData({ ...profileData, evKwhPer100Km: e.target.value })}
+                            className="bg-secondary/50"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="gridKgCo2PerKwh">{t("settings.gridFactor")}</Label>
+                          <Input
+                            id="gridKgCo2PerKwh"
+                            inputMode="decimal"
+                            value={profileData.gridKgCo2PerKwh}
+                            onChange={(e) => setProfileData({ ...profileData, gridKgCo2PerKwh: e.target.value })}
+                            className="bg-secondary/50"
+                          />
+                          <p className="text-xs text-muted-foreground">{t("settings.gridFactorHelp")}</p>
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   {/* Delete Account */}

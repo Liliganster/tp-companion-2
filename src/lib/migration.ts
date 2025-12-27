@@ -81,6 +81,10 @@ export async function checkAndMigrateData(userId: string): Promise<MigrationResu
         // image_url: profile.imageUrl, // Not in UserProfile type
         rate_per_km: parseLocaleFloat(profile.ratePerKm),
         passenger_surcharge: parseLocaleFloat(profile.passengerSurcharge),
+        fuel_type: profile.fuelType,
+        fuel_l_per_100km: parseLocaleFloat(profile.fuelLPer100Km),
+        ev_kwh_per_100km: parseLocaleFloat(profile.evKwhPer100Km),
+        grid_kgco2_per_kwh: parseLocaleFloat(profile.gridKgCo2PerKwh),
         currency: "EUR", // Default
         language: profile.language,
         // theme: profile.theme, // Not in UserProfile type

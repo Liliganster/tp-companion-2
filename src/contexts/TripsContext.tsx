@@ -4,7 +4,9 @@ import { formatSupabaseError } from "@/lib/supabaseErrors";
 import { useAuth } from "./AuthContext";
 import { toast } from "sonner";
 import { cascadeDeleteTripById } from "@/lib/cascadeDelete";
-import { calculateCO2KgFromKm } from "@/lib/emissions";
+import { calculateTripEmissions } from "@/lib/emissions";
+import { useUserProfile } from "@/contexts/UserProfileContext";
+import { parseLocaleNumber } from "@/lib/number";
 
 export type Trip = {
   id: string;
@@ -48,8 +50,30 @@ const TripsContext = createContext<TripsContextValue | null>(null);
 
 export function TripsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { profile } = useUserProfile();
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const emissionsInput = useMemo(() => {
+    return {
+      fuelType: profile.fuelType,
+      fuelLPer100Km: parseLocaleNumber(profile.fuelLPer100Km),
+      evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
+      gridKgCo2PerKwh: parseLocaleNumber(profile.gridKgCo2PerKwh),
+    };
+  }, [profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType, profile.gridKgCo2PerKwh]);
+
+  const shouldUseFuelBasedEmissions = useMemo(() => {
+    const fuelL = Number(emissionsInput.fuelLPer100Km);
+    const evKwh = Number(emissionsInput.evKwhPer100Km);
+    if (emissionsInput.fuelType === "gasoline" || emissionsInput.fuelType === "diesel") {
+      return Number.isFinite(fuelL) && fuelL > 0;
+    }
+    if (emissionsInput.fuelType === "ev") {
+      return Number.isFinite(evKwh) && evKwh > 0;
+    }
+    return false;
+  }, [emissionsInput.evKwhPer100Km, emissionsInput.fuelLPer100Km, emissionsInput.fuelType]);
 
   useEffect(() => {
     if (!user || !supabase) {
@@ -88,14 +112,37 @@ export function TripsProvider({ children }: { children: ReactNode }) {
             invoiceCurrency: t.invoice_currency,
             invoiceJobId: t.invoice_job_id,
             distance: t.distance_km || 0,
-            co2: Number.isFinite(Number(t.co2_kg)) && Number(t.co2_kg) > 0
-              ? Number(t.co2_kg)
-              : calculateCO2KgFromKm(t.distance_km || 0),
+            co2: shouldUseFuelBasedEmissions
+              ? calculateTripEmissions({ distanceKm: t.distance_km || 0, ...emissionsInput }).co2Kg
+              : (Number.isFinite(Number(t.co2_kg)) && Number(t.co2_kg) > 0
+                ? Number(t.co2_kg)
+                : calculateTripEmissions({ distanceKm: t.distance_km || 0, ...emissionsInput }).co2Kg),
             ratePerKmOverride: t.rate_per_km_override,
             specialOrigin: t.special_origin,
             documents: t.documents || []
           }));
           setTrips(mapped);
+
+          // Best-effort: if the user configured vehicle emissions, keep DB values in sync so views (e.g. project_totals) match.
+          if (shouldUseFuelBasedEmissions) {
+            const updates = (data as any[])
+              .map((t: any) => {
+                const distanceKm = t.distance_km || 0;
+                const next = calculateTripEmissions({ distanceKm, ...emissionsInput }).co2Kg;
+                const prev = Number(t.co2_kg);
+                const prevValid = Number.isFinite(prev) && prev > 0;
+                if (!prevValid || Math.abs(prev - next) > 0.1) return { id: t.id, co2_kg: next };
+                return null;
+              })
+              .filter(Boolean) as Array<{ id: string; co2_kg: number }>;
+
+            if (updates.length > 0) {
+              // Fire-and-forget updates; avoid blocking the UI.
+              Promise.allSettled(
+                updates.map((u) => supabase.from("trips").update({ co2_kg: u.co2_kg }).eq("id", u.id)),
+              ).catch(() => null);
+            }
+          }
         }
         setLoading(false);
       }
@@ -104,7 +151,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     fetchTrips();
 
     return () => { mounted = false; };
-  }, [user]);
+  }, [user, emissionsInput, shouldUseFuelBasedEmissions]);
 
   const addTrip = useCallback(async (trip: Trip) => {
     console.log("[TripsContext] addTrip called with:", trip);
@@ -121,7 +168,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       ...trip,
       co2: Number.isFinite(Number(trip.co2)) && Number(trip.co2) > 0
         ? Number(trip.co2)
-        : calculateCO2KgFromKm(trip.distance),
+        : calculateTripEmissions({ distanceKm: trip.distance, ...emissionsInput }).co2Kg,
     };
 
     setTrips(prev => [normalizedTrip, ...prev]);
@@ -167,12 +214,17 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     } else {
         console.log("[TripsContext] Trip saved successfully");
     }
-  }, [user]);
+  }, [user, emissionsInput]);
 
   const updateTrip = useCallback(async (id: string, patch: Partial<Trip>) => {
     if (!supabase || !user) return;
 
-    setTrips(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
+    const nextPatch: Partial<Trip> = { ...patch };
+    if (patch.distance !== undefined && patch.co2 === undefined) {
+      nextPatch.co2 = calculateTripEmissions({ distanceKm: patch.distance, ...emissionsInput }).co2Kg;
+    }
+
+    setTrips(prev => prev.map(t => t.id === id ? { ...t, ...nextPatch } : t));
 
     const dbPatch: any = {};
     if (patch.date !== undefined) {
@@ -180,8 +232,8 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     }
     if (patch.purpose !== undefined) dbPatch.purpose = patch.purpose;
     if (patch.passengers !== undefined) dbPatch.passengers = patch.passengers;
-    if (patch.distance !== undefined) dbPatch.distance_km = patch.distance;
-    if (patch.co2 !== undefined) dbPatch.co2_kg = patch.co2;
+    if (nextPatch.distance !== undefined) dbPatch.distance_km = nextPatch.distance;
+    if (nextPatch.co2 !== undefined) dbPatch.co2_kg = nextPatch.co2;
     if (patch.route !== undefined) dbPatch.route = patch.route;
     if (patch.ratePerKmOverride !== undefined) dbPatch.rate_per_km_override = patch.ratePerKmOverride;
     if (patch.specialOrigin !== undefined) dbPatch.special_origin = patch.specialOrigin;
@@ -200,7 +252,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         toast.error(formatSupabaseError(error, "Error actualizando viaje"));
       }
     }
-  }, [user]);
+  }, [user, emissionsInput]);
 
   const deleteTrip = useCallback(async (id: string) => {
     if (!supabase || !user) return;

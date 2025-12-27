@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { NotificationDropdown } from "@/components/dashboard/NotificationDropdown";
@@ -11,7 +12,8 @@ import { useProjects } from "@/contexts/ProjectsContext";
 import { getProjectsForDashboard } from "@/lib/projects";
 import { useI18n } from "@/hooks/use-i18n";
 import { useTrips } from "@/contexts/TripsContext";
-import { calculateCO2KgFromKm } from "@/lib/emissions";
+import { calculateTripEmissions } from "@/lib/emissions";
+import { parseLocaleNumber } from "@/lib/number";
 
 function parseTripDate(value: string): Date | null {
   if (!value) return null;
@@ -41,11 +43,14 @@ function sumKm(trips: Array<{ distance: number }>): number {
   return trips.reduce((acc, t) => acc + (Number.isFinite(Number(t.distance)) ? Number(t.distance) : 0), 0);
 }
 
-function sumCo2(trips: Array<{ co2?: number; distance: number }>): number {
+function sumCo2(
+  trips: Array<{ co2?: number; distance: number }>,
+  emissionsInput: { fuelType: any; fuelLPer100Km?: number | null; evKwhPer100Km?: number | null; gridKgCo2PerKwh?: number | null },
+): number {
   return trips.reduce((acc, t) => {
     const co2 = Number(t.co2);
     if (Number.isFinite(co2) && co2 > 0) return acc + co2;
-    return acc + calculateCO2KgFromKm(t.distance);
+    return acc + calculateTripEmissions({ distanceKm: t.distance, ...emissionsInput }).co2Kg;
   }, 0);
 }
 
@@ -59,8 +64,17 @@ export default function Index() {
   const kpiTitleClassName = "text-base font-semibold leading-tight text-foreground uppercase tracking-wide";
   const kpiTitleWrapperClassName = "p-0 rounded-none bg-transparent";
 
+  const emissionsInput = useMemo(() => {
+    return {
+      fuelType: profile.fuelType,
+      fuelLPer100Km: parseLocaleNumber(profile.fuelLPer100Km),
+      evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
+      gridKgCo2PerKwh: parseLocaleNumber(profile.gridKgCo2PerKwh),
+    };
+  }, [profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType, profile.gridKgCo2PerKwh]);
+
   const totalKm = sumKm(trips);
-  const co2Kg = sumCo2(trips);
+  const co2Kg = sumCo2(trips, emissionsInput);
 
   const now = new Date();
   const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -81,8 +95,8 @@ export default function Index() {
 
   const kmThisMonth = sumKm(tripsThisMonth);
   const kmPrevMonth = sumKm(tripsPrevMonth);
-  const co2ThisMonth = sumCo2(tripsThisMonth);
-  const co2PrevMonth = sumCo2(tripsPrevMonth);
+  const co2ThisMonth = sumCo2(tripsThisMonth, emissionsInput);
+  const co2PrevMonth = sumCo2(tripsPrevMonth, emissionsInput);
   // Rating matches the month-over-month bubble context (monthly emissions).
   const co2Rating = co2ThisMonth <= 500 ? "A" : co2ThisMonth <= 1000 ? "B" : co2ThisMonth <= 1500 ? "C" : "D";
     const co2TrendValue = percentageChange(co2ThisMonth, co2PrevMonth);

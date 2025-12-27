@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,9 +19,9 @@ import { Badge } from "@/components/ui/badge";
 import { computeTripWarnings } from "@/lib/trip-warnings";
 import { useI18n } from "@/hooks/use-i18n";
 import { useAuth } from "@/contexts/AuthContext";
-import { calculateCO2KgFromKm } from "@/lib/emissions";
+import { calculateTripEmissions } from "@/lib/emissions";
 
-const calculateCO2 = (distance: number) => calculateCO2KgFromKm(distance);
+// CO2 is calculated from user profile vehicle settings when saving a trip.
 const mockTripsData: Trip[] = [{
   id: "1",
   date: "2024-01-15",
@@ -30,7 +30,7 @@ const mockTripsData: Trip[] = [{
   purpose: "Location scouting",
   passengers: 2,
   distance: 584,
-  co2: calculateCO2(584),
+  co2: 0,
 }, {
   id: "2",
   date: "2024-01-14",
@@ -39,7 +39,7 @@ const mockTripsData: Trip[] = [{
   purpose: "Equipment transport",
   passengers: 0,
   distance: 575,
-  co2: calculateCO2(575),
+  co2: 0,
 }, {
   id: "3",
   date: "2024-01-13",
@@ -48,7 +48,7 @@ const mockTripsData: Trip[] = [{
   purpose: "Office meeting",
   passengers: 0,
   distance: 45,
-  co2: calculateCO2(45),
+  co2: 0,
 }, {
   id: "4",
   date: "2024-01-12",
@@ -58,7 +58,7 @@ const mockTripsData: Trip[] = [{
   passengers: 1,
   warnings: ["Unusual distance"],
   distance: 289,
-  co2: calculateCO2(289),
+  co2: 0,
 }, {
   id: "5",
   date: "2024-01-11",
@@ -67,12 +67,23 @@ const mockTripsData: Trip[] = [{
   purpose: "Return trip",
   passengers: 0,
   distance: 289,
-  co2: calculateCO2(289),
+  co2: 0,
 }];
 export default function Trips() {
   const { profile } = useUserProfile();
   const { t, tf, locale } = useI18n();
   const { getAccessToken } = useAuth();
+
+  const emissionsInput = useMemo(() => {
+    return {
+      fuelType: profile.fuelType,
+      fuelLPer100Km: parseLocaleNumber(profile.fuelLPer100Km),
+      evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
+      gridKgCo2PerKwh: parseLocaleNumber(profile.gridKgCo2PerKwh),
+    };
+  }, [profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType, profile.gridKgCo2PerKwh]);
+
+  const calculateCO2 = (distance: number) => calculateTripEmissions({ distanceKm: distance, ...emissionsInput }).co2Kg;
 
   const TRIPS_FILTERS_KEY = "filters:trips:v1";
   const loadTripsFilters = () => {

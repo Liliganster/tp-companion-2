@@ -33,7 +33,9 @@ import { cn } from "@/lib/utils";
 import { useI18n } from "@/hooks/use-i18n";
 import { useTrips } from "@/contexts/TripsContext";
 import { useProjects } from "@/contexts/ProjectsContext";
-import { calculateCO2KgFromKm } from "@/lib/emissions";
+import { calculateTreesNeeded, calculateTripEmissions } from "@/lib/emissions";
+import { useUserProfile } from "@/contexts/UserProfileContext";
+import { parseLocaleNumber } from "@/lib/number";
 
 type EmissionsResult = {
   id: string;
@@ -175,6 +177,7 @@ export default function AdvancedEmissions() {
   const { t, tf } = useI18n();
   const { trips } = useTrips();
   const { projects } = useProjects();
+  const { profile } = useUserProfile();
 
   const [isConfigured, setIsConfigured] = useState(() => loadAdvancedEmissionsConfig().isConfigured);
   const [configModalOpen, setConfigModalOpen] = useState(false);
@@ -208,7 +211,14 @@ export default function AdvancedEmissions() {
     const sumTripCo2 = (distanceKm: number, co2?: number) => {
       const c = Number(co2);
       if (Number.isFinite(c) && c > 0) return c;
-      return calculateCO2KgFromKm(distanceKm);
+      const res = calculateTripEmissions({
+        distanceKm,
+        fuelType: profile.fuelType,
+        fuelLPer100Km: parseLocaleNumber(profile.fuelLPer100Km),
+        evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
+        gridKgCo2PerKwh: parseLocaleNumber(profile.gridKgCo2PerKwh),
+      });
+      return res.co2Kg;
     };
 
     const inRange = (d: Date) => d >= start && d <= end;
@@ -296,11 +306,13 @@ export default function AdvancedEmissions() {
     const totalDistance = sorted.reduce((acc, r) => acc + r.distanceKm, 0);
     const avgEfficiency = totalDistance > 0 ? totalCo2 / totalDistance : 0;
 
-    const liters = fuelRate > 0 ? (totalDistance * fuelRate) / 100 : 0;
+    const profileFuelRate = parseLocaleNumber(profile.fuelLPer100Km);
+    const liters = (Number.isFinite(profileFuelRate) && Number(profileFuelRate) > 0)
+      ? (totalDistance * Number(profileFuelRate)) / 100
+      : (fuelRate > 0 ? (totalDistance * fuelRate) / 100 : 0);
 
-    // Rough placeholder estimate: 1 tree offsets ~21 kg CO2 (varies a lot by species/region/time).
-    const CO2_KG_PER_TREE = 21;
-    const treesNeeded = totalCo2 > 0 ? Math.ceil(totalCo2 / CO2_KG_PER_TREE) : 0;
+    // Approximation: 1 tree absorbs ~20 kg CO2 per year (tree-year).
+    const treesNeeded = calculateTreesNeeded(totalCo2, 20);
 
     return {
       results: sorted,
@@ -309,7 +321,7 @@ export default function AdvancedEmissions() {
       fuelLiters: clampRound(liters, 1),
       treesNeeded,
     };
-  }, [fuelEfficiency, projects, sortBy, timeRange, trips, viewMode]);
+  }, [fuelEfficiency, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType, profile.gridKgCo2PerKwh, projects, sortBy, timeRange, trips, viewMode]);
 
   const handleSaveConfig = () => {
     setIsConfigured(true);

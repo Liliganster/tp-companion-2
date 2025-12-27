@@ -14,6 +14,10 @@ export type UserProfile = {
   city: string;
   country: string;
   planTier: "free" | "pro"; // Added planTier
+  fuelType: "gasoline" | "diesel" | "ev" | "unknown";
+  fuelLPer100Km: string; // gasoline/diesel
+  evKwhPer100Km: string; // electric
+  gridKgCo2PerKwh: string; // electric
 };
 
 // Default profile for new users or offline fallback
@@ -27,7 +31,11 @@ const DEFAULT_PROFILE: UserProfile = {
   baseAddress: "",
   city: "",
   country: "",
-  planTier: "free"
+  planTier: "free",
+  fuelType: "unknown",
+  fuelLPer100Km: "",
+  evKwhPer100Km: "",
+  gridKgCo2PerKwh: ""
 };
 
 type UserProfileContextValue = {
@@ -86,6 +94,9 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
 
         if (mounted) {
           if (data) {
+            const rawFuelType = String((data as any).fuel_type ?? "unknown").toLowerCase();
+            const fuelType =
+              rawFuelType === "gasoline" || rawFuelType === "diesel" || rawFuelType === "ev" ? rawFuelType : "unknown";
             setProfile({
               fullName: data.full_name || "",
               vatId: data.vat_id || "",
@@ -96,7 +107,11 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
               baseAddress: data.base_address || "",
               city: data.city || "",
               country: data.country || "",
-              planTier: data.plan_tier || "free"
+              planTier: data.plan_tier || "free",
+              fuelType,
+              fuelLPer100Km: (data as any).fuel_l_per_100km == null ? "" : String((data as any).fuel_l_per_100km).replace(".", ","),
+              evKwhPer100Km: (data as any).ev_kwh_per_100km == null ? "" : String((data as any).ev_kwh_per_100km).replace(".", ","),
+              gridKgCo2PerKwh: (data as any).grid_kgco2_per_kwh == null ? "" : String((data as any).grid_kgco2_per_kwh).replace(".", ","),
             });
           } else {
              // New user? We could auto-create a profile here or wait for them to save.
@@ -135,6 +150,10 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
       city: nextProfile.city,
       country: nextProfile.country,
       plan_tier: nextProfile.planTier,
+      fuel_type: nextProfile.fuelType,
+      fuel_l_per_100km: parseProfileNumber(nextProfile.fuelLPer100Km),
+      ev_kwh_per_100km: parseProfileNumber(nextProfile.evKwhPer100Km),
+      grid_kgco2_per_kwh: parseProfileNumber(nextProfile.gridKgCo2PerKwh),
       updated_at: new Date().toISOString()
     };
 
