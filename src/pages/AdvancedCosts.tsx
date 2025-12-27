@@ -18,6 +18,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { formatSupabaseError } from "@/lib/supabaseErrors";
 import { toast } from "sonner";
 import { useI18n } from "@/hooks/use-i18n";
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 export default function AdvancedCosts() {
   const navigate = useNavigate();
@@ -51,13 +52,54 @@ export default function AdvancedCosts() {
     [locale],
   );
 
+  const compactCurrencyFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat(locale, {
+        style: "currency",
+        currency: "EUR",
+        notation: "compact",
+        maximumFractionDigits: 1,
+      }),
+    [locale],
+  );
+
+  const parseTripDate = (value: string): Date | null => {
+    if (!value) return null;
+    const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})/.exec(value);
+    if (m) {
+      const year = Number(m[1]);
+      const month = Number(m[2]);
+      const day = Number(m[3]);
+      if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+      return new Date(year, month - 1, day);
+    }
+    const dt = new Date(value);
+    return Number.isFinite(dt.getTime()) ? dt : null;
+  };
+
+  const periodTrips = useMemo(() => {
+    const now = new Date();
+    const start = new Date(now);
+
+    if (periodFilter === "1m") start.setMonth(start.getMonth() - 1);
+    else if (periodFilter === "3m") start.setMonth(start.getMonth() - 3);
+    else if (periodFilter === "6m") start.setMonth(start.getMonth() - 6);
+    else if (periodFilter === "1y") start.setFullYear(start.getFullYear() - 1);
+    else start.setMonth(start.getMonth() - 3);
+
+    return trips.filter((trip) => {
+      const dt = parseTripDate(trip.date);
+      return dt ? dt >= start && dt <= now : false;
+    });
+  }, [periodFilter, trips]);
+
   // Calculate real costs from trips and invoices
   const summaryData = useMemo(() => {
-    const totalDistance = trips.reduce((sum, t) => sum + (t.distance || 0), 0);
-    const totalTrips = trips.length;
+    const totalDistance = periodTrips.reduce((sum, t) => sum + (t.distance || 0), 0);
+    const totalTrips = periodTrips.length;
     
     // Sum all invoice amounts (converting to EUR if needed)
-    const totalInvoiced = trips.reduce((sum, t) => {
+    const totalInvoiced = periodTrips.reduce((sum, t) => {
       if (!t.invoiceAmount) return sum;
       const amount = t.invoiceAmount;
       if (t.invoiceCurrency === 'USD') return sum + (amount * 0.92);
@@ -73,7 +115,7 @@ export default function AdvancedCosts() {
       estimatedCost: totalInvoiced,
       costPerKm,
     };
-  }, [trips]);
+  }, [periodTrips]);
 
   const costBreakdown = useMemo(
     () => {
@@ -112,7 +154,7 @@ export default function AdvancedCosts() {
   }), [summaryData]);
 
   const projectCosts = useMemo(() => projects.map(p => {
-    const projectTrips = trips.filter(t => t.projectId === p.id);
+    const projectTrips = periodTrips.filter(t => t.projectId === p.id);
     const distance = projectTrips.reduce((sum, t) => sum + (t.distance || 0), 0);
     const invoiced = projectTrips.reduce((sum, t) => {
       if (!t.invoiceAmount) return sum;
@@ -123,19 +165,26 @@ export default function AdvancedCosts() {
     }, 0);
     
     return {
+      projectId: p.id,
       project: p.name,
       distance,
       trips: projectTrips.length,
       total: invoiced,
       perKm: distance > 0 ? invoiced / distance : 0,
     };
-  }), [projects, trips]);
+  }), [periodTrips, projects]);
+
+  const visibleProjectCosts = useMemo(() => {
+    if (projectFilter === "all") return projectCosts;
+    return projectCosts.filter((p) => p.projectId === projectFilter);
+  }, [projectCosts, projectFilter]);
 
   const monthlyCosts = useMemo(() => {
     const byMonth = new Map<string, { distance: number; trips: number; invoiced: number }>();
     
-    trips.forEach(t => {
-      const date = new Date(t.date);
+    periodTrips.forEach(t => {
+      const date = parseTripDate(t.date);
+      if (!date) return;
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       const existing = byMonth.get(monthKey) || { distance: 0, trips: 0, invoiced: 0 };
       
@@ -156,19 +205,26 @@ export default function AdvancedCosts() {
       .sort(([a], [b]) => b.localeCompare(a))
       .map(([monthKey, data]) => {
         const [year, month] = monthKey.split('-');
-        const monthName = new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString(locale, { month: "long", year: "numeric" });
+        const monthDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+        const monthName = monthDate.toLocaleDateString(locale, { month: "long", year: "numeric" });
+        const monthShort = monthDate.toLocaleDateString(locale, { month: "short", year: "numeric" });
         
         return {
+          monthKey,
           month: monthName,
+          monthShort,
           distance: data.distance,
           trips: data.trips,
           fuel: data.invoiced * 0.6,
           maintenance: data.invoiced * 0.25,
           other: data.invoiced * 0.15,
           total: data.invoiced,
+          perKm: data.distance > 0 ? data.invoiced / data.distance : 0,
         };
       });
-  }, [locale, trips]);
+	  }, [locale, periodTrips]);
+
+  const monthlyChartData = useMemo(() => [...monthlyCosts].slice().reverse(), [monthlyCosts]);
 
   const uploadInvoicesForProject = async (files: FileList | null) => {
     const chosenProjectId = projectFilter;
@@ -401,7 +457,7 @@ export default function AdvancedCosts() {
 	                <h3 className="font-semibold">{t("advancedCosts.projectAnalysisTitle")}</h3>
 	                <div className="flex items-center gap-2">
 	                  <span className="text-sm text-muted-foreground">{t("advancedCosts.projectLabel")}</span>
-	                  <Select value={projectFilter} onValueChange={setProjectFilter}>
+	                <Select value={projectFilter} onValueChange={setProjectFilter}>
 	                    <SelectTrigger className="w-[180px] bg-secondary/50">
 	                      <SelectValue />
 	                    </SelectTrigger>
@@ -417,14 +473,62 @@ export default function AdvancedCosts() {
 	                </div>
 	              </div>
 
-	              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-	                {/* Chart Placeholder */}
-	                <div className="h-64 flex items-end gap-1 px-4">
-	                  <div className="flex flex-col items-center flex-1">
-	                    <div className="text-xs text-muted-foreground mb-2">{currencyFormatter.format(4)}</div>
-	                    <div className="w-full border-t border-dashed border-border" />
-	                  </div>
-	                </div>
+		              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+		                {/* Chart */}
+		                <div className="h-64">
+                      {visibleProjectCosts.length === 0 ? (
+                        <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+                          {t("advancedCosts.chartNoData")}
+                        </div>
+                      ) : visibleProjectCosts.every((p) => (Number(p.total) || 0) <= 0) ? (
+                        <div className="h-full flex flex-col items-center justify-center text-sm text-muted-foreground text-center px-6 gap-2">
+                          <div>{t("advancedCosts.chartNoCostsTitle")}</div>
+                          <div className="text-xs">{t("advancedCosts.chartNoCostsBody")}</div>
+                        </div>
+                      ) : (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={visibleProjectCosts} margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                            <XAxis
+                              dataKey="project"
+                              stroke="hsl(var(--muted-foreground))"
+                              fontSize={11}
+                              tickLine={false}
+                              axisLine={false}
+                              interval={0}
+                              tick={{ fill: "hsl(var(--muted-foreground))" }}
+                              tickFormatter={(v: string) => (String(v).length > 12 ? `${String(v).slice(0, 12)}…` : v)}
+                            />
+                            <YAxis
+                              stroke="hsl(var(--muted-foreground))"
+                              fontSize={11}
+                              tickLine={false}
+                              axisLine={false}
+                              tickFormatter={(v: number) => compactCurrencyFormatter.format(Number(v) || 0)}
+                            />
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: "hsl(var(--card))",
+                                border: "1px solid hsl(var(--border))",
+                                borderRadius: "8px",
+                                padding: "8px 12px",
+                                color: "hsl(var(--foreground))",
+                              }}
+                              labelStyle={{ color: "hsl(var(--foreground))" }}
+                              formatter={(value: number, name: string, props: any) => {
+                                const p = props?.payload as any;
+                                const total = currencyFormatter.format(Number(p?.total) || 0);
+                                const perKm = currencyFormatter.format(Number(p?.perKm) || 0);
+                                const distance = `${distanceFormatter.format(Number(p?.distance) || 0)} km`;
+                                return [`${total} (${perKm}/km, ${distance})`, t("advancedCosts.chartSeriesTotal")];
+                              }}
+                              cursor={{ fill: "hsl(var(--secondary) / 0.4)" }}
+                            />
+                            <Bar dataKey="total" radius={[6, 6, 0, 0]} fill="hsl(210, 100%, 50%)" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      )}
+		                </div>
 
                 {/* Projects Table */}
                 <div className="overflow-x-auto">
@@ -449,9 +553,9 @@ export default function AdvancedCosts() {
 	                      </tr>
 	                    </thead>
                     <tbody>
-                      {projectCosts.map((item, index) => (
-                        <tr key={index} className="border-b border-border/50">
-                          <td className="py-3 px-3 font-medium">{item.project}</td>
+	                      {visibleProjectCosts.map((item, index) => (
+	                        <tr key={index} className="border-b border-border/50">
+	                          <td className="py-3 px-3 font-medium">{item.project}</td>
                           <td className="py-3 px-3 text-right text-muted-foreground">
                             {distanceFormatter.format(item.distance)} km
                           </td>
@@ -496,6 +600,86 @@ export default function AdvancedCosts() {
 	              </div>
 	            </div>
 
+              {/* Monthly Chart */}
+              <div className="glass-card p-4 sm:p-6 animate-fade-in animation-delay-250">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <h3 className="font-semibold">{t("advancedCosts.monthlyChartTitle")}</h3>
+                </div>
+                <div className="h-[260px] w-full">
+                  {monthlyCosts.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+                      {t("advancedCosts.chartNoData")}
+                    </div>
+                  ) : monthlyCosts.every((m) => (Number(m.total) || 0) <= 0) ? (
+                    <div className="h-full flex flex-col items-center justify-center text-sm text-muted-foreground text-center px-4">
+                      <div>{t("advancedCosts.chartNoCostsTitle")}</div>
+                      <div className="text-xs">{t("advancedCosts.chartNoCostsBody")}</div>
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={monthlyChartData} margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis
+                          dataKey="monthShort"
+                          stroke="hsl(var(--muted-foreground))"
+                          fontSize={11}
+                          tickLine={false}
+                          axisLine={false}
+                          interval={0}
+                          tick={{ fill: "hsl(var(--muted-foreground))" }}
+                        />
+                        <YAxis
+                          stroke="hsl(var(--muted-foreground))"
+                          fontSize={11}
+                          tickLine={false}
+                          axisLine={false}
+                          tickFormatter={(v: number) => compactCurrencyFormatter.format(Number(v) || 0)}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--card))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: "8px",
+                            padding: "8px 12px",
+                            color: "hsl(var(--foreground))",
+                          }}
+                          labelStyle={{ color: "hsl(var(--foreground))" }}
+                          labelFormatter={(_label: any, payload: any) => payload?.[0]?.payload?.month ?? _label}
+                          formatter={(value: number, name: string, props: any) => {
+                            const p = props?.payload as any;
+                            const total = currencyFormatter.format(Number(p?.total) || 0);
+                            const perKm = currencyFormatter.format(Number(p?.perKm) || 0);
+                            const distance = `${distanceFormatter.format(Number(p?.distance) || 0)} km`;
+                            return [
+                              `${currencyFormatter.format(Number(value) || 0)} (${t("advancedCosts.chartSeriesTotal")}: ${total}, ${t("advancedCosts.statAvgCostPerKm")}: ${perKm}, ${t("advancedCosts.statTotalDistance")}: ${distance})`,
+                              name,
+                            ];
+                          }}
+                          cursor={{ fill: "hsl(var(--secondary) / 0.4)" }}
+                        />
+                        <Legend
+                          wrapperStyle={{ color: "hsl(var(--muted-foreground))", fontSize: "12px" }}
+                          formatter={(value: any) => <span className="text-muted-foreground">{value}</span>}
+                        />
+                        <Bar
+                          dataKey="fuel"
+                          stackId="a"
+                          name={t("advancedCosts.breakdownFuelEnergy")}
+                          fill="hsl(210, 100%, 50%)"
+                        />
+                        <Bar
+                          dataKey="maintenance"
+                          stackId="a"
+                          name={t("advancedCosts.breakdownMaintenance")}
+                          fill="hsl(270, 100%, 60%)"
+                        />
+                        <Bar dataKey="other" stackId="a" name={t("advancedCosts.breakdownOther")} fill="hsl(150, 70%, 45%)" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+
 	            {/* Monthly Summary Table */}
 	            <div className="glass-card p-4 sm:p-6 animate-fade-in animation-delay-300">
 	              <h3 className="font-semibold mb-4">{t("advancedCosts.monthlySummaryTitle")}</h3>
@@ -530,32 +714,38 @@ export default function AdvancedCosts() {
 	                    </tr>
 	                  </thead>
                   <tbody>
-                    {monthlyCosts.map((item, index) => (
-                      <tr key={index} className="border-b border-border/50">
-                        <td className="py-4 px-3 font-medium whitespace-nowrap">{item.month}</td>
-	                        <td className="py-4 px-3 text-right text-muted-foreground whitespace-nowrap">
-	                          {distanceFormatter.format(item.distance)} km
-	                        </td>
-                        <td className="py-4 px-3 text-right text-muted-foreground">
-                          {item.trips}
+                    {monthlyCosts.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-6 px-3 text-center text-sm text-muted-foreground">
+                          {t("advancedCosts.chartNoData")}
                         </td>
-	                        <td className="py-4 px-3 text-right text-muted-foreground whitespace-nowrap">
-	                          {currencyFormatter.format(item.fuel)}
-	                        </td>
-	                        <td className="py-4 px-3 text-right text-muted-foreground whitespace-nowrap">
-	                          {currencyFormatter.format(item.maintenance)}
-	                        </td>
-	                        <td className="py-4 px-3 text-right text-muted-foreground whitespace-nowrap">
-	                          {currencyFormatter.format(item.other)}
-	                        </td>
-	                        <td className="py-4 px-3 text-right font-semibold whitespace-nowrap">
-	                          {currencyFormatter.format(item.total)}
-	                        </td>
-	                        <td className="py-4 px-3 text-right text-muted-foreground whitespace-nowrap">
-	                          {currencyFormatter.format(item.perKm)}
-	                        </td>
                       </tr>
-                    ))}
+                    ) : (
+                      monthlyCosts.map((item, index) => (
+                        <tr key={item.monthKey ?? index} className="border-b border-border/50">
+                          <td className="py-4 px-3 font-medium whitespace-nowrap">{item.month}</td>
+                          <td className="py-4 px-3 text-right text-muted-foreground whitespace-nowrap">
+                            {distanceFormatter.format(item.distance)} km
+                          </td>
+                          <td className="py-4 px-3 text-right text-muted-foreground">{item.trips}</td>
+                          <td className="py-4 px-3 text-right text-muted-foreground whitespace-nowrap">
+                            {currencyFormatter.format(item.fuel)}
+                          </td>
+                          <td className="py-4 px-3 text-right text-muted-foreground whitespace-nowrap">
+                            {currencyFormatter.format(item.maintenance)}
+                          </td>
+                          <td className="py-4 px-3 text-right text-muted-foreground whitespace-nowrap">
+                            {currencyFormatter.format(item.other)}
+                          </td>
+                          <td className="py-4 px-3 text-right font-semibold whitespace-nowrap">
+                            {currencyFormatter.format(item.total)}
+                          </td>
+                          <td className="py-4 px-3 text-right text-muted-foreground whitespace-nowrap">
+                            {currencyFormatter.format(item.perKm)}
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
