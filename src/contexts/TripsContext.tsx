@@ -32,6 +32,9 @@ export type Trip = {
     mimeType: string;
     driveFileId?: string;
     storagePath?: string;
+    bucketId?: "callsheets" | "project_documents";
+    kind?: "invoice" | "document";
+    invoiceJobId?: string;
     createdAt: string; // ISO
   }>; // For trip-specific documents only
 };

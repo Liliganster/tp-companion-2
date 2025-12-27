@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { MapPin, FileText, Paperclip, CircleDot, Download, Upload, Eye, ArrowLeft, ExternalLink } from "lucide-react";
+import { MapPin, FileText, Paperclip, CircleDot, Download, Upload, Eye, ArrowLeft, ExternalLink, Receipt } from "lucide-react";
 import { useI18n } from "@/hooks/use-i18n";
 import { TripGoogleMap } from "@/components/trips/TripGoogleMap";
 import { Trip, useTrips } from "@/contexts/TripsContext";
@@ -23,28 +23,41 @@ interface TripDetailModalProps {
 export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalProps) {
   const { t, tf, locale } = useI18n();
   const { profile } = useUserProfile();
-  const { updateTrip } = useTrips();
+  const { trips, updateTrip } = useTrips();
   const { getAccessToken } = useAuth();
   const { toast } = useToast();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewDocName, setPreviewDocName] = useState<string>("");
   const [attachBusy, setAttachBusy] = useState(false);
+  const [invoiceBusy, setInvoiceBusy] = useState(false);
   const attachInputRef = useRef<HTMLInputElement>(null);
+  const invoiceInputRef = useRef<HTMLInputElement>(null);
+  const [invoicePurpose, setInvoicePurpose] = useState<string>("");
+  const [invoiceStatus, setInvoiceStatus] = useState<string>("");
+  const [invoiceError, setInvoiceError] = useState<string>("");
+
+  const liveTrip = useMemo(() => {
+    if (!trip) return null;
+    return trips.find((t) => t.id === trip.id) ?? trip;
+  }, [trip, trips]);
 
   useEffect(() => {
     if (!open) {
       setPreviewUrl(null);
       setPreviewDocName("");
-    } else if (trip?.documents && trip.documents.length > 0) {
+      setInvoicePurpose("");
+      setInvoiceStatus("");
+      setInvoiceError("");
+    } else if (liveTrip?.documents && liveTrip.documents.length > 0) {
         // Auto-load the first document
-        viewDocument(trip.documents[0]);
+        viewDocument(liveTrip.documents[0]);
     }
-  }, [open, trip]);
+  }, [liveTrip, open]);
 
-  if (!trip) return null;
+  if (!liveTrip) return null;
 
   const formattedDate = (() => {
-    const raw = trip.date?.trim?.() ?? "";
+    const raw = liveTrip.date?.trim?.() ?? "";
     const time = Date.parse(raw);
     if (!raw) return "-";
     if (!Number.isFinite(time)) return raw;
@@ -61,7 +74,16 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
     maximumFractionDigits: 2,
   })} €`;
 
-  const tripDocuments = trip.documents ?? [];
+  const tripDocuments = liveTrip.documents ?? [];
+  const totalDocumentedDisplay = (() => {
+    const amount = Number(liveTrip.invoiceAmount);
+    if (Number.isFinite(amount) && amount > 0) {
+      const currency = (liveTrip.invoiceCurrency || "EUR").toUpperCase();
+      return `${amount.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+    }
+    if (liveTrip.invoiceJobId) return t("tripDetail.invoiceExtracting");
+    return t("tripDetail.totalDocumentedEmpty");
+  })();
 
   const onAttachFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -77,7 +99,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
 
       for (const file of Array.from(files)) {
         const safeName = file.name.replace(/\s+/g, " ").trim();
-        const storagePath = `${userId}/trip-documents/${trip.id}/${Date.now()}-${safeName}`;
+        const storagePath = `${userId}/trip-documents/${liveTrip.id}/${Date.now()}-${safeName}`;
 
         const { error: uploadError } = await supabase.storage.from("callsheets").upload(storagePath, file, {
           contentType: file.type || undefined,
@@ -90,12 +112,14 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
           name: safeName,
           mimeType: file.type || "application/octet-stream",
           storagePath,
+          bucketId: "callsheets",
+          kind: "document",
           createdAt: new Date().toISOString(),
         });
       }
 
       const nextDocs = [...tripDocuments, ...uploadedDocs];
-      const ok = await updateTrip(trip.id, { documents: nextDocs });
+      const ok = await updateTrip(liveTrip.id, { documents: nextDocs });
       if (!ok) throw new Error(t("tripDetail.attachSaveFailed"));
 
       toast({
@@ -119,13 +143,118 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
     }
   };
 
+  const onAttachInvoice = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    if (!supabase) return;
+
+    const list = Array.from(files);
+    if (list.length > 1) {
+      toast({
+        title: t("tripDetail.errorTitle"),
+        description: t("tripDetail.onlyOneInvoice"),
+        variant: "destructive",
+      });
+      if (invoiceInputRef.current) invoiceInputRef.current.value = "";
+      return;
+    }
+
+    setInvoiceBusy(true);
+    try {
+      const { data, error } = await supabase.auth.getUser();
+      if (error || !data?.user) throw new Error(t("tripDetail.authRequired"));
+
+      const userId = data.user.id;
+      const file = list[0]!;
+      const safeName = file.name.replace(/\s+/g, " ").trim();
+      const storagePath = `${userId}/trip-invoices/${liveTrip.id}/${crypto.randomUUID()}-${safeName}`;
+
+      const { error: uploadError } = await supabase.storage.from("project_documents").upload(storagePath, file, {
+        contentType: file.type || undefined,
+        upsert: false,
+      });
+      if (uploadError) throw uploadError;
+
+      const { data: jobData, error: jobError } = await supabase
+        .from("invoice_jobs")
+        .insert({
+          project_id: liveTrip.projectId ?? null,
+          trip_id: liveTrip.id,
+          user_id: userId,
+          storage_path: storagePath,
+          status: "created",
+        })
+        .select("id")
+        .single();
+      if (jobError) throw jobError;
+
+      const invoiceDoc: NonNullable<Trip["documents"]>[number] = {
+        id: crypto.randomUUID(),
+        name: safeName,
+        mimeType: file.type || "application/octet-stream",
+        storagePath,
+        bucketId: "project_documents",
+        kind: "invoice",
+        invoiceJobId: jobData.id,
+        createdAt: new Date().toISOString(),
+      };
+
+      const nextDocs = [...tripDocuments, invoiceDoc];
+      const ok = await updateTrip(liveTrip.id, { documents: nextDocs, invoiceJobId: jobData.id });
+      if (!ok) throw new Error(t("tripDetail.attachSaveFailed"));
+
+      // Queue for IA processing (preferred)
+      let queued = false;
+      try {
+        const token = await getAccessToken();
+        const res = await fetch("/api/invoices/queue", {
+          method: "POST",
+          headers: {
+            Authorization: token ? `Bearer ${token}` : "",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ jobId: jobData.id }),
+        });
+        queued = res.ok;
+      } catch (queueErr) {
+        console.warn("Failed to queue invoice job:", queueErr);
+      }
+
+      // Fallback: queue directly via RLS if API isn't reachable.
+      if (!queued) {
+        const { error: queueDbError } = await supabase.from("invoice_jobs").update({ status: "queued" }).eq("id", jobData.id);
+        if (!queueDbError) queued = true;
+      }
+
+      setInvoiceStatus(queued ? "queued" : "created");
+      setInvoiceError("");
+
+      toast({
+        title: t("tripDetail.invoiceAttachedTitle"),
+        description: t("tripDetail.invoiceAttachedBody"),
+      });
+
+      void viewDocument(invoiceDoc);
+    } catch (e: any) {
+      console.error(e);
+      toast({
+        title: t("tripDetail.errorTitle"),
+        description: e?.message ?? t("tripDetail.attachFailed"),
+        variant: "destructive",
+      });
+    } finally {
+      setInvoiceBusy(false);
+      if (invoiceInputRef.current) invoiceInputRef.current.value = "";
+    }
+  };
+
 
   const viewDocument = async (doc: NonNullable<Trip["documents"]>[number]) => {
     // Handle Supabase Storage files
     if (doc.storagePath) {
       try {
+        const bucket = doc.bucketId || "callsheets";
         const { data, error } = await supabase.storage
-          .from("callsheets")
+          .from(bucket)
           .download(doc.storagePath);
 
         if (error) throw error;
@@ -163,6 +292,67 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
     }
   };
 
+  // Poll invoice extraction while modal is open so the trip gets updated with the extracted amount/currency.
+  useEffect(() => {
+    if (!open || !supabase) return;
+    if (!liveTrip.invoiceJobId) return;
+
+    let stopped = false;
+    const jobId = liveTrip.invoiceJobId;
+    let interval: any = null;
+
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      if (interval) clearInterval(interval);
+      interval = null;
+    };
+
+    const tick = async () => {
+      if (stopped) return;
+      const { data: job, error: jobError } = await supabase
+        .from("invoice_jobs")
+        .select("id, status, needs_review_reason")
+        .eq("id", jobId)
+        .maybeSingle();
+
+      if (jobError || !job) return;
+      setInvoiceStatus(job.status || "");
+      setInvoiceError(job.needs_review_reason || "");
+
+      if (job.status === "failed" || job.status === "needs_review") {
+        stop();
+        return;
+      }
+
+      if (job.status !== "done") return;
+
+      const { data: result } = await supabase
+        .from("invoice_results")
+        .select("total_amount, currency, purpose")
+        .eq("job_id", jobId)
+        .maybeSingle();
+
+      if (!result) return;
+
+      setInvoicePurpose(result.purpose || "");
+      const amount = Number(result.total_amount);
+      const currency = (result.currency || "EUR").toUpperCase();
+      if (Number.isFinite(amount) && amount > 0) {
+        await updateTrip(liveTrip.id, { invoiceAmount: amount, invoiceCurrency: currency });
+      }
+
+      stop();
+    };
+
+    interval = setInterval(() => void tick(), 4000);
+    void tick();
+
+    return () => {
+      stop();
+    };
+  }, [liveTrip.id, liveTrip.invoiceJobId, open, updateTrip]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-4xl p-0 overflow-hidden">
@@ -179,7 +369,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
 
             <div>
               <Label className="text-xs uppercase tracking-wide text-muted-foreground">{t("tripDetail.project")}</Label>
-              <p className="font-semibold">{trip.project}</p>
+              <p className="font-semibold">{liveTrip.project}</p>
             </div>
 
             <div>
@@ -189,7 +379,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
 
             <div>
               <Label className="text-xs uppercase tracking-wide text-muted-foreground">{t("tripDetail.purpose")}</Label>
-              <p className="font-semibold">{trip.purpose}</p>
+              <p className="font-semibold">{liveTrip.purpose}</p>
             </div>
 
             <Separator />
@@ -200,14 +390,14 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
                 <Label className="text-xs uppercase tracking-wide text-muted-foreground">{t("tripDetail.route")}</Label>
               </div>
               <div className="space-y-2 ml-1">
-                {trip.route.map((stop, index) => (
+                {liveTrip.route.map((stop, index) => (
                   <div key={index} className="flex items-start gap-3">
                     <div className="flex flex-col items-center">
                       <CircleDot
-                        className={`w-4 h-4 ${index === 0 || index === trip.route.length - 1 ? "text-primary" : "text-muted-foreground"
+                        className={`w-4 h-4 ${index === 0 || index === liveTrip.route.length - 1 ? "text-primary" : "text-muted-foreground"
                           }`}
                       />
-                      {index < trip.route.length - 1 && <div className="w-0.5 h-6 bg-border" />}
+                      {index < liveTrip.route.length - 1 && <div className="w-0.5 h-6 bg-border" />}
                     </div>
                     <span className="text-sm">{stop}</span>
                   </div>
@@ -219,7 +409,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
 
             <div>
               <Label className="text-xs uppercase tracking-wide text-muted-foreground">{t("tripDetail.totalDistance")}</Label>
-              <p className="text-2xl font-bold text-primary">{trip.distance} km</p>
+              <p className="text-2xl font-bold text-primary">{liveTrip.distance} km</p>
             </div>
 
             <Separator />
@@ -230,28 +420,60 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
                   <Label className="text-xs uppercase tracking-wide text-muted-foreground block">
                     {t("tripDetail.invoicesTitle")}
                   </Label>
+                  {invoiceStatus ? (
+                    <p className="text-xs text-muted-foreground">
+                      {t("tripDetail.invoiceStatusLabel")}: {invoiceStatus}
+                      {invoiceStatus === "needs_review" && invoiceError ? ` — ${invoiceError}` : null}
+                    </p>
+                  ) : null}
+                  {invoicePurpose ? (
+                    <p className="text-xs text-muted-foreground truncate" title={invoicePurpose}>
+                      {invoicePurpose}
+                    </p>
+                  ) : null}
                 </div>
-                <input
-                  ref={attachInputRef}
-                  type="file"
-                  className="hidden"
-                  multiple
-                  accept="application/pdf,image/*"
-                  onChange={(e) => void onAttachFiles(e.target.files)}
-                />
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="gap-1"
-                  type="button"
-                  disabled={attachBusy}
-                  onClick={() => attachInputRef.current?.click()}
-                >
-                  <Paperclip className="w-3 h-3" />
-                  {t("tripDetail.attach")}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={invoiceInputRef}
+                    type="file"
+                    className="hidden"
+                    accept="application/pdf,image/*"
+                    onChange={(e) => void onAttachInvoice(e.target.files)}
+                  />
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="gap-1"
+                    type="button"
+                    disabled={invoiceBusy}
+                    onClick={() => invoiceInputRef.current?.click()}
+                  >
+                    <Receipt className="w-3 h-3" />
+                    {t("tripDetail.attachInvoice")}
+                  </Button>
+
+                  <input
+                    ref={attachInputRef}
+                    type="file"
+                    className="hidden"
+                    multiple
+                    accept="application/pdf,image/*"
+                    onChange={(e) => void onAttachFiles(e.target.files)}
+                  />
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="gap-1"
+                    type="button"
+                    disabled={attachBusy}
+                    onClick={() => attachInputRef.current?.click()}
+                  >
+                    <Paperclip className="w-3 h-3" />
+                    {t("tripDetail.attachDocument")}
+                  </Button>
+                </div>
               </div>
-	              <p className="text-sm text-muted-foreground">{tf("tripDetail.totalDocumented", { amount: documentedTotalLabel })}</p>
+              <p className="text-sm text-muted-foreground">{tf("tripDetail.totalDocumented", { amount: totalDocumentedDisplay })}</p>
             </div>
           </div>
 
@@ -259,7 +481,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
             <Tabs defaultValue="map" className="flex-1 flex flex-col">
               <div className="flex-1 relative">
                 <TabsContent value="map" className="absolute inset-0 m-0">
-                  <TripGoogleMap route={trip.route} open={open} />
+                  <TripGoogleMap route={liveTrip.route} open={open} />
                 </TabsContent>
 
                 <TabsContent value="document" className="absolute inset-0 m-0 bg-secondary/20">
