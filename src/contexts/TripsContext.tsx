@@ -39,8 +39,8 @@ export type Trip = {
 type TripsContextValue = {
   trips: Trip[];
   loading: boolean;
-  addTrip: (trip: Trip) => Promise<void>;
-  updateTrip: (id: string, patch: Partial<Trip>) => Promise<void>;
+  addTrip: (trip: Trip) => Promise<boolean>;
+  updateTrip: (id: string, patch: Partial<Trip>) => Promise<boolean>;
   deleteTrip: (id: string) => Promise<void>;
   // Deprecated compatibility
   // setTrips...
@@ -153,15 +153,15 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     return () => { mounted = false; };
   }, [user, emissionsInput, shouldUseFuelBasedEmissions]);
 
-  const addTrip = useCallback(async (trip: Trip) => {
+  const addTrip = useCallback(async (trip: Trip): Promise<boolean> => {
     console.log("[TripsContext] addTrip called with:", trip);
     if (!supabase) {
       console.error("[TripsContext] Supabase client is missing");
-      return;
+      return false;
     }
     if (!user) {
       console.error("[TripsContext] User is missing");
-      return;
+      return false;
     }
 
     const normalizedTrip: Trip = {
@@ -211,13 +211,15 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       console.error("[TripsContext] Error adding trip:", error);
       toast.error(formatSupabaseError(error, "Error guardando viaje: " + error.message));
       setTrips(prev => prev.filter(t => t.id !== normalizedTrip.id));
+      return false;
     } else {
         console.log("[TripsContext] Trip saved successfully");
+        return true;
     }
   }, [user, emissionsInput]);
 
-  const updateTrip = useCallback(async (id: string, patch: Partial<Trip>) => {
-    if (!supabase || !user) return;
+  const updateTrip = useCallback(async (id: string, patch: Partial<Trip>): Promise<boolean> => {
+    if (!supabase || !user) return false;
 
     const nextPatch: Partial<Trip> = { ...patch };
     if (patch.distance !== undefined && patch.co2 === undefined) {
@@ -250,8 +252,10 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error("Error updating trip:", error);
         toast.error(formatSupabaseError(error, "Error actualizando viaje"));
+        return false;
       }
     }
+    return true;
   }, [user, emissionsInput]);
 
   const deleteTrip = useCallback(async (id: string) => {

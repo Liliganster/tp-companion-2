@@ -265,10 +265,12 @@ export default function Trips() {
     };
 
     const exists = trips.some((t) => t.id === data.id);
-    if (exists) {
-      await updateTrip(data.id, nextTrip);
-    } else {
-      await addTrip(nextTrip);
+    const ok = exists ? await updateTrip(data.id, nextTrip) : await addTrip(nextTrip);
+    if (ok) {
+      toast({
+        title: exists ? t("trips.toastTripUpdatedTitle") : t("trips.toastTripCreatedTitle"),
+        description: exists ? t("trips.toastTripUpdatedBody") : t("trips.toastTripCreatedBody"),
+      });
     }
   };
 

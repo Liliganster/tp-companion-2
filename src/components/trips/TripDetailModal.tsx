@@ -96,7 +96,8 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
       }
 
       const nextDocs = [...tripDocuments, ...uploadedDocs];
-      await updateTrip(trip.id, { documents: nextDocs });
+      const ok = await updateTrip(trip.id, { documents: nextDocs });
+      if (!ok) throw new Error("No se pudieron guardar los adjuntos");
 
       toast({ title: t("tripDetail.invoicesTitle"), description: `Se adjuntaron ${uploadedDocs.length} archivo(s).` });
 

@@ -244,8 +244,12 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           ],
         };
 
-        await addTrip(nextTrip);
-        toast.success("Viaje creado desde IA del proyecto");
+        const ok = await addTrip(nextTrip);
+        if (ok) {
+          toast.success("Viaje creado desde IA del proyecto");
+        } else {
+          toast.error("No se pudo guardar el viaje creado por IA");
+        }
 
         processedJobsRef.current.add(job.id);
 

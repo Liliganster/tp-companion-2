@@ -41,7 +41,7 @@ const DEFAULT_PROFILE: UserProfile = {
 type UserProfileContextValue = {
   profile: UserProfile;
   loading: boolean;
-  saveProfile: (profile: UserProfile) => Promise<void>;
+  saveProfile: (profile: UserProfile, options?: { toastId?: string; loadingText?: string; successText?: string }) => Promise<boolean>;
   updateProfile: (patch: Partial<UserProfile>) => Promise<void>;
 };
 
@@ -131,10 +131,13 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
     return () => { mounted = false; };
   }, [user]);
 
-  const saveProfile = useCallback(async (nextProfile: UserProfile) => {
+  const saveProfile = useCallback(async (
+    nextProfile: UserProfile,
+    options?: { toastId?: string; loadingText?: string; successText?: string },
+  ): Promise<boolean> => {
     if (!supabase || !user) {
       setProfile(nextProfile);
-      return; 
+      return true;
     }
 
     // transform to snake_case for DB
@@ -159,20 +162,24 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
 
     setProfile(nextProfile); // Optimistic update
 
+    const toastId = options?.toastId ?? "profile-save";
+    toast.loading(options?.loadingText ?? "Guardando…", { id: toastId });
+
     const { error } = await supabase.from("user_profiles").upsert(dbPayload);
     if (error) {
       console.error("Error saving profile:", error);
-      toast.error("No se pudo guardar el perfil: " + error.message);
-      return;
+      toast.error("No se pudo guardar: " + error.message, { id: toastId });
+      return false;
     }
 
-    toast.success("Perfil guardado");
+    toast.success(options?.successText ?? "Perfil guardado", { id: toastId });
+    return true;
   }, [user]);
 
   const updateProfile = useCallback(async (patch: Partial<UserProfile>) => {
     setProfile(prev => {
       const next = { ...prev, ...patch };
-      saveProfile(next); // This triggers the DB call
+      void saveProfile(next); // Fire-and-forget; errors are handled inside saveProfile
       return next;
     });
   }, [saveProfile]);

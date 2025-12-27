@@ -233,7 +233,11 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   };
 
   const handleSave = () => {
-    saveProfile(profileData);
+    void saveProfile(profileData, {
+      toastId: "settings-save",
+      loadingText: "Guardando ajustes…",
+      successText: "Ajustes guardados",
+    });
     saveAppearance(draftAppearance);
     onOpenChange(false);
   };
