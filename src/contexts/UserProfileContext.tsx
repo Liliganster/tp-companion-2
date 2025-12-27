@@ -136,8 +136,11 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.from("user_profiles").upsert(dbPayload);
     if (error) {
       console.error("Error saving profile:", error);
-      // Ideally revert state or show toast, but keeping it simple
+      toast.error("No se pudo guardar el perfil: " + error.message);
+      return;
     }
+
+    toast.success("Perfil guardado");
   }, [user]);
 
   const updateProfile = useCallback(async (patch: Partial<UserProfile>) => {
