@@ -1,12 +1,23 @@
 import { useNavigate } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Route, BarChart3, Leaf, ChevronRight } from "lucide-react";
+import { useI18n } from "@/hooks/use-i18n";
+import { useMemo } from "react";
+import type { I18nKey } from "@/lib/i18n";
 
-const advancedSections = [
+const advancedSections: Array<{
+  id: string;
+  titleKey: I18nKey;
+  descriptionKey: I18nKey;
+  icon: typeof Route;
+  color: string;
+  bgColor: string;
+  path: string;
+}> = [
   {
     id: "routes",
-    title: "Plantilla de rutas",
-    description: "Gestiona tus rutas frecuentes y plantillas predefinidas",
+    titleKey: "advanced.routesTitle",
+    descriptionKey: "advanced.routesBody",
     icon: Route,
     color: "text-primary",
     bgColor: "bg-primary/10",
@@ -14,8 +25,8 @@ const advancedSections = [
   },
   {
     id: "costs",
-    title: "Análisis de costo",
-    description: "Análisis de gastos, combustible y mantenimiento",
+    titleKey: "advanced.costsTitle",
+    descriptionKey: "advanced.costsBody",
     icon: BarChart3,
     color: "text-yellow-400",
     bgColor: "bg-accent/10",
@@ -23,8 +34,8 @@ const advancedSections = [
   },
   {
     id: "emissions",
-    title: "CO₂ Emisiones",
-    description: "Seguimiento de huella de carbono y eficiencia ambiental",
+    titleKey: "advanced.emissionsTitle",
+    descriptionKey: "advanced.emissionsBody",
     icon: Leaf,
     color: "text-success",
     bgColor: "bg-success/10",
@@ -34,21 +45,32 @@ const advancedSections = [
 
 export default function Advanced() {
   const navigate = useNavigate();
+  const { t } = useI18n();
+
+  const resolvedSections = useMemo(
+    () =>
+      advancedSections.map((s) => ({
+        ...s,
+        title: t(s.titleKey),
+        description: t(s.descriptionKey),
+      })),
+    [t],
+  );
 
   return (
     <MainLayout>
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="animate-fade-in">
-          <h1 className="text-2xl sm:text-3xl font-bold">Avanzado</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">{t("advanced.title")}</h1>
           <p className="text-muted-foreground mt-1">
-            Herramientas avanzadas y análisis
+            {t("advanced.subtitle")}
           </p>
         </div>
 
         {/* Section Boxes */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in animation-delay-100">
-          {advancedSections.map((section) => (
+          {resolvedSections.map((section) => (
             <button
               key={section.id}
               onClick={() => navigate(section.path)}

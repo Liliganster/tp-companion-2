@@ -41,8 +41,8 @@ type EmissionsResult = {
   id: string;
   rank: number;
   name: string;
-  rating: string;
-  trend: string;
+  rating: "excellent" | "good" | "fair" | "poor";
+  trend: "stable" | "new" | "improving" | "worsening";
   co2Kg: number;
   efficiency: number;
   distanceKm: number;
@@ -119,23 +119,23 @@ function getRange(now: Date, timeRange: string): { start: Date; end: Date; prevS
   return { start, end, prevStart, prevEnd };
 }
 
-function getRatingFromEfficiencyKgPerKm(eff: number): string {
+function getRatingFromEfficiencyKgPerKm(eff: number): EmissionsResult["rating"] {
   // Simple heuristic categories: lower kg/km is better.
-  if (eff <= 0.12) return "Excelente";
-  if (eff <= 0.16) return "Buena";
-  if (eff <= 0.22) return "Regular";
-  return "Muy pobre";
+  if (eff <= 0.12) return "excellent";
+  if (eff <= 0.16) return "good";
+  if (eff <= 0.22) return "fair";
+  return "poor";
 }
 
-function getTrendLabel(current: number, previous: number): string {
+function getTrendLabel(current: number, previous: number): EmissionsResult["trend"] {
   // Lower is better. Compare % change and bucket it.
-  if (!Number.isFinite(current) || !Number.isFinite(previous)) return "Estable";
-  if (previous <= 0) return current > 0 ? "Nuevo" : "Estable";
+  if (!Number.isFinite(current) || !Number.isFinite(previous)) return "stable";
+  if (previous <= 0) return current > 0 ? "new" : "stable";
 
   const deltaPct = ((current - previous) / previous) * 100;
-  if (deltaPct <= -5) return "Mejorando";
-  if (deltaPct >= 5) return "Empeorando";
-  return "Estable";
+  if (deltaPct <= -5) return "improving";
+  if (deltaPct >= 5) return "worsening";
+  return "stable";
 }
 
 const ADV_EMISSIONS_CONFIG_KEY = "advancedEmissions:config:v1";
@@ -178,6 +178,41 @@ export default function AdvancedEmissions() {
   const { trips } = useTrips();
   const { projects } = useProjects();
   const { profile } = useUserProfile();
+
+  const ratingLabel = useMemo(
+    () => (rating: EmissionsResult["rating"]) => {
+      switch (rating) {
+        case "excellent":
+          return t("advancedEmissions.ratingExcellent");
+        case "good":
+          return t("advancedEmissions.ratingGood");
+        case "fair":
+          return t("advancedEmissions.ratingFair");
+        default:
+          return t("advancedEmissions.ratingPoor");
+      }
+    },
+    [t],
+  );
+
+  const trendLabel = useMemo(
+    () => (trend: EmissionsResult["trend"]) => {
+      switch (trend) {
+        case "improving":
+          return t("advancedEmissions.trendImproving");
+        case "worsening":
+          return t("advancedEmissions.trendWorsening");
+        case "new":
+          return t("advancedEmissions.trendNew");
+        default:
+          return t("advancedEmissions.trendStable");
+      }
+    },
+    [t],
+  );
+
+  const fallbackTripName = t("advancedEmissions.fallbackTripName");
+  const fallbackProjectName = t("advancedEmissions.fallbackProjectName");
 
   const [isConfigured, setIsConfigured] = useState(() => loadAdvancedEmissionsConfig().isConfigured);
   const [configModalOpen, setConfigModalOpen] = useState(false);
@@ -250,7 +285,7 @@ export default function AdvancedEmissions() {
 
         if (viewMode === "all") {
           const key = tr.id;
-          const name = tr.project || "Viaje";
+          const name = tr.project || fallbackTripName;
           const cur = map.get(key) ?? { id: key, name, co2Kg: 0, distanceKm: 0, trips: 0 };
           cur.co2Kg += co2;
           cur.distanceKm += distance;
@@ -259,7 +294,7 @@ export default function AdvancedEmissions() {
         } else {
           const key = tr.projectId || (tr.project || "unknown").trim().toLowerCase();
           const resolvedName = tr.projectId ? (projectNameById.get(tr.projectId) ?? tr.project) : tr.project;
-          const name = resolvedName || "Proyecto";
+          const name = resolvedName || fallbackProjectName;
           const cur = map.get(key) ?? { id: String(key), name, co2Kg: 0, distanceKm: 0, trips: 0 };
           cur.co2Kg += co2;
           cur.distanceKm += distance;
@@ -321,7 +356,7 @@ export default function AdvancedEmissions() {
       fuelLiters: clampRound(liters, 1),
       treesNeeded,
     };
-  }, [fuelEfficiency, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType, profile.gridKgCo2PerKwh, projects, sortBy, timeRange, trips, viewMode]);
+  }, [fallbackProjectName, fallbackTripName, fuelEfficiency, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType, profile.gridKgCo2PerKwh, projects, sortBy, timeRange, trips, viewMode]);
 
   const handleSaveConfig = () => {
     setIsConfigured(true);
@@ -359,8 +394,8 @@ export default function AdvancedEmissions() {
           r.efficiency,
           r.distanceKm,
           r.trips,
-          r.rating,
-          r.trend,
+          ratingLabel(r.rating),
+          trendLabel(r.trend),
         ].map(escape).join(","),
       );
     }
@@ -496,13 +531,17 @@ export default function AdvancedEmissions() {
                       <div className="flex items-center gap-3 mb-4">
                         <h4 className="font-semibold">{result.name}</h4>
                         <span className="px-2 py-0.5 text-xs rounded-full bg-destructive/20 text-destructive">
-                          {result.rating}
+                          {ratingLabel(result.rating)}
                         </span>
                         <span className={cn(
                           "px-2 py-0.5 text-xs rounded-full flex items-center gap-1",
-                          result.trend === "Mejorando" ? "bg-success/20 text-success" : result.trend === "Empeorando" ? "bg-destructive/20 text-destructive" : "bg-secondary/40 text-muted-foreground"
+                          result.trend === "improving"
+                            ? "bg-success/20 text-success"
+                            : result.trend === "worsening"
+                              ? "bg-destructive/20 text-destructive"
+                              : "bg-secondary/40 text-muted-foreground"
                         )}>
-                          {result.trend === "Mejorando" ? "↓" : result.trend === "Empeorando" ? "↑" : "→"} {result.trend}
+                          {result.trend === "improving" ? "↓" : result.trend === "worsening" ? "↑" : "→"} {trendLabel(result.trend)}
                         </span>
                       </div>
 

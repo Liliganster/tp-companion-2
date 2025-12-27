@@ -124,7 +124,7 @@ export default function AdvancedRoutes() {
         setTemplates(rows.map(mapDbToUi));
       } catch (err: any) {
         console.error("Failed to load route templates:", err);
-        toast.error(String(err?.message ?? "No se pudieron cargar las plantillas"));
+        toast.error(String(err?.message ?? t("advancedRoutes.toastLoadError")));
       } finally {
         if (mounted) setLoading(false);
       }
@@ -134,7 +134,7 @@ export default function AdvancedRoutes() {
     return () => {
       mounted = false;
     };
-  }, [user]);
+  }, [t, user]);
 
   const categories = [
     { id: "all", label: t("advancedRoutes.categoryAll") },
@@ -184,13 +184,13 @@ export default function AdvancedRoutes() {
 
   const handleSaveTemplate = async () => {
     if (!supabase || !user) {
-      toast.error("Inicia sesión para guardar plantillas");
+      toast.error(t("advancedRoutes.toastLoginRequired"));
       return;
     }
 
     const name = formData.name.trim();
     if (!name) {
-      toast.error("Pon un nombre a la plantilla");
+      toast.error(t("advancedRoutes.toastNameRequired"));
       return;
     }
 
@@ -216,12 +216,12 @@ export default function AdvancedRoutes() {
           .maybeSingle();
 
         if (error) throw error;
-        if (!data) throw new Error("No se pudo actualizar la plantilla");
+        if (!data) throw new Error(t("advancedRoutes.errorUpdateFailed"));
 
         const updated = mapDbToUi(data as DbRouteTemplate);
         setTemplates((prev) => prev.map((t) => (t.id === editingTemplateId ? { ...t, ...updated } : t)));
         closeModal();
-        toast.success("Plantilla actualizada");
+        toast.success(t("advancedRoutes.toastUpdated"));
       } else {
         const payload = {
           user_id: user.id,
@@ -242,15 +242,15 @@ export default function AdvancedRoutes() {
           .maybeSingle();
 
         if (error) throw error;
-        if (!data) throw new Error("No se pudo crear la plantilla");
+        if (!data) throw new Error(t("advancedRoutes.errorCreateFailed"));
 
         setTemplates((prev) => [mapDbToUi(data as DbRouteTemplate), ...prev]);
         closeModal();
-        toast.success("Plantilla creada");
+        toast.success(t("advancedRoutes.toastCreated"));
       }
     } catch (err: any) {
       console.error("Failed to save route template:", err);
-      toast.error(String(err?.message ?? "No se pudo guardar la plantilla"));
+      toast.error(String(err?.message ?? t("advancedRoutes.toastSaveFailed")));
     } finally {
       setLoading(false);
     }
@@ -266,7 +266,7 @@ export default function AdvancedRoutes() {
       .eq("id", template.id);
     if (error) {
       console.error("Failed to update uses:", error);
-      toast.error("No se pudo actualizar el contador");
+      toast.error(t("advancedRoutes.toastUsesUpdateFailed"));
       setTemplates((prev) => prev.map((t) => (t.id === template.id ? { ...t, uses: template.uses } : t)));
     }
   };
