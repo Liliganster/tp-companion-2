@@ -54,6 +54,69 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
     }
   }, [liveTrip, open]);
 
+  // Poll invoice extraction while modal is open so the trip gets updated with the extracted amount/currency.
+  const invoiceJobId = liveTrip?.invoiceJobId ?? null;
+  const liveTripId = liveTrip?.id ?? null;
+
+  useEffect(() => {
+    if (!open || !supabase) return;
+    if (!invoiceJobId || !liveTripId) return;
+
+    let stopped = false;
+    let interval: any = null;
+
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      if (interval) clearInterval(interval);
+      interval = null;
+    };
+
+    const tick = async () => {
+      if (stopped) return;
+      const { data: job, error: jobError } = await supabase
+        .from("invoice_jobs")
+        .select("id, status, needs_review_reason")
+        .eq("id", invoiceJobId)
+        .maybeSingle();
+
+      if (jobError || !job) return;
+      setInvoiceStatus(job.status || "");
+      setInvoiceError(job.needs_review_reason || "");
+
+      if (job.status === "failed" || job.status === "needs_review") {
+        stop();
+        return;
+      }
+
+      if (job.status !== "done") return;
+
+      const { data: result } = await supabase
+        .from("invoice_results")
+        .select("total_amount, currency, purpose")
+        .eq("job_id", invoiceJobId)
+        .maybeSingle();
+
+      if (!result) return;
+
+      setInvoicePurpose(result.purpose || "");
+      const amount = Number(result.total_amount);
+      const currency = (result.currency || "EUR").toUpperCase();
+      if (Number.isFinite(amount) && amount > 0) {
+        await updateTrip(liveTripId, { invoiceAmount: amount, invoiceCurrency: currency });
+      }
+
+      stop();
+    };
+
+    interval = setInterval(() => void tick(), 4000);
+    void tick();
+
+    return () => {
+      stop();
+    };
+  }, [invoiceJobId, liveTripId, open, updateTrip]);
+
   if (!liveTrip) return null;
 
   const formattedDate = (() => {
@@ -291,67 +354,6 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
         toast({ title: "Drive", description: t("tripDetail.driveFetchFailed"), variant: "destructive" });
     }
   };
-
-  // Poll invoice extraction while modal is open so the trip gets updated with the extracted amount/currency.
-  useEffect(() => {
-    if (!open || !supabase) return;
-    if (!liveTrip.invoiceJobId) return;
-
-    let stopped = false;
-    const jobId = liveTrip.invoiceJobId;
-    let interval: any = null;
-
-    const stop = () => {
-      if (stopped) return;
-      stopped = true;
-      if (interval) clearInterval(interval);
-      interval = null;
-    };
-
-    const tick = async () => {
-      if (stopped) return;
-      const { data: job, error: jobError } = await supabase
-        .from("invoice_jobs")
-        .select("id, status, needs_review_reason")
-        .eq("id", jobId)
-        .maybeSingle();
-
-      if (jobError || !job) return;
-      setInvoiceStatus(job.status || "");
-      setInvoiceError(job.needs_review_reason || "");
-
-      if (job.status === "failed" || job.status === "needs_review") {
-        stop();
-        return;
-      }
-
-      if (job.status !== "done") return;
-
-      const { data: result } = await supabase
-        .from("invoice_results")
-        .select("total_amount, currency, purpose")
-        .eq("job_id", jobId)
-        .maybeSingle();
-
-      if (!result) return;
-
-      setInvoicePurpose(result.purpose || "");
-      const amount = Number(result.total_amount);
-      const currency = (result.currency || "EUR").toUpperCase();
-      if (Number.isFinite(amount) && amount > 0) {
-        await updateTrip(liveTrip.id, { invoiceAmount: amount, invoiceCurrency: currency });
-      }
-
-      stop();
-    };
-
-    interval = setInterval(() => void tick(), 4000);
-    void tick();
-
-    return () => {
-      stop();
-    };
-  }, [liveTrip.id, liveTrip.invoiceJobId, open, updateTrip]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
