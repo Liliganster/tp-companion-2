@@ -31,6 +31,7 @@ import { useI18n } from "@/hooks/use-i18n";
 import { useAppearance } from "@/contexts/AppearanceContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 
 interface SettingsModalProps {
   open: boolean;
@@ -41,6 +42,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState("profile");
   const { t } = useI18n();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const handleCheckUpdates = () => {
     toast({
@@ -57,10 +59,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   };
 
   const handleViewDocs = () => {
-    toast({
-      title: t("settings.docsTitle"),
-      description: "La documentación integrada aún no está disponible.",
-    });
+    onOpenChange(false);
+    navigate("/docs");
   };
 
   const handleContactSupport = () => {

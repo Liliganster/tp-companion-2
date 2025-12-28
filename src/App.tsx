@@ -19,6 +19,7 @@ import AdvancedRoutes from "./pages/AdvancedRoutes";
 import AdvancedCosts from "./pages/AdvancedCosts";
 import AdvancedEmissions from "./pages/AdvancedEmissions";
 import Plans from "./pages/Plans";
+import Docs from "./pages/Docs";
 import Auth from "./pages/Auth";
 import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
@@ -128,6 +129,14 @@ const App = () => (
                         element={
                           <RequireAuth>
                             <Plans />
+                          </RequireAuth>
+                        }
+                      />
+                      <Route
+                        path="/docs"
+                        element={
+                          <RequireAuth>
+                            <Docs />
                           </RequireAuth>
                         }
                       />
