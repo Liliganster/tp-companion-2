@@ -2,9 +2,13 @@ import { supabaseAdmin } from "../../src/lib/supabaseServer.js";
 
 export type PlanTier = "free" | "pro";
 
-export type QuotaDecision =
-  | { allowed: true; tier: PlanTier; limit: number; used: number }
-  | { allowed: false; tier: PlanTier; limit: number; used: number; reason: string };
+export type QuotaDecision = {
+  allowed: boolean;
+  tier: PlanTier;
+  limit: number;
+  used: number;
+  reason?: string;
+};
 
 function envTruthy(name: string): boolean {
   const v = process.env[name];
@@ -82,4 +86,3 @@ export async function checkAiMonthlyQuota(userId: string): Promise<QuotaDecision
 
   return { allowed: true, tier, limit, used };
 }
-

@@ -115,11 +115,12 @@ export default withApiObservability(async function handler(req: any, res: any, {
         if (userId) {
           const quota = await checkAiMonthlyQuota(userId);
           if (!quota.allowed) {
+            const reason = quota.reason ?? "monthly_quota_exceeded";
             await supabaseAdmin
               .from("callsheet_jobs")
-              .update({ status: "needs_review", needs_review_reason: quota.reason })
+              .update({ status: "needs_review", needs_review_reason: reason })
               .eq("id", job.id);
-            processedResults.push({ id: job.id, status: "needs_review", error: quota.reason });
+            processedResults.push({ id: job.id, status: "needs_review", error: reason });
             return;
           }
         }

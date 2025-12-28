@@ -1,4 +1,4 @@
-import { Ratelimit } from "@upstash/ratelimit";
+import { Ratelimit, type Duration } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
 type LimitResult = {
@@ -69,7 +69,7 @@ function getLimiter(name: string, limit: number, window: string): Ratelimit | nu
   if (!ratelimiters[cacheKey]) {
     ratelimiters[cacheKey] = new Ratelimit({
       redis,
-      limiter: Ratelimit.slidingWindow(limit, window),
+      limiter: Ratelimit.slidingWindow(limit, window as Duration),
       analytics: true,
       prefix: "tp",
     });
@@ -105,4 +105,3 @@ export async function enforceRateLimit(params: {
   sendRateLimited(res, result, requestId);
   return false;
 }
-
