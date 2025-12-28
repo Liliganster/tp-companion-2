@@ -145,12 +145,12 @@ export default function Plans() {
               key={plan.name}
               className={cn(
                 "glass-card p-6 animate-slide-up relative",
-                plan.popular && "border-primary/50 shadow-lg shadow-primary/10"
+                plan.popular && "border-yellow-500/40 shadow-lg shadow-yellow-500/10"
               )}
               style={{ animationDelay: `${index * 100}ms` }}
             >
               {plan.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-gradient-to-r from-primary to-accent text-xs font-medium text-primary-foreground">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-yellow-400 text-xs font-semibold text-black shadow-lg shadow-yellow-500/30 ring-1 ring-yellow-200/60">
                   {t("plans.mostPopular")}
                 </div>
               )}
@@ -158,9 +158,9 @@ export default function Plans() {
               <div className="mb-6">
                 <div className="flex items-center gap-2 mb-2">
                   {plan.name === "Pro" ? (
-                    <Sparkles className="w-5 h-5 text-accent" />
+                    <Sparkles className="w-5 h-5 text-yellow-300" />
                   ) : (
-                    <Zap className="w-5 h-5 text-muted-foreground" />
+                    <Zap className="w-5 h-5 text-sky-400" />
                   )}
                   <h2 className="text-xl font-semibold">{plan.name}</h2>
                 </div>
