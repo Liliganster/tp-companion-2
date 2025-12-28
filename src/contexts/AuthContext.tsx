@@ -1,6 +1,7 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
+import { setSentryUser } from "@/lib/sentryClient";
 
 type AuthContextValue = {
   session: Session | null;
@@ -23,6 +24,11 @@ function requireSupabase() {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const id = session?.user?.id ? String(session.user.id) : null;
+    setSentryUser(id ? { id } : null);
+  }, [session?.user?.id]);
 
   useEffect(() => {
     let mounted = true;

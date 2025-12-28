@@ -1,7 +1,9 @@
 import { requireSupabaseUser, sendJson } from "../_utils/supabase.js";
 import { supabaseAdmin } from "../../src/lib/supabaseServer.js";
+import { withApiObservability } from "../_utils/observability.js";
+import { enforceRateLimit } from "../_utils/rateLimit.js";
 
-export default async function handler(req: any, res: any) {
+export default withApiObservability(async function handler(req: any, res: any, { log }) {
   if (req.method !== "POST") {
     res.statusCode = 405;
     res.setHeader("Allow", "POST");
@@ -11,6 +13,17 @@ export default async function handler(req: any, res: any) {
 
   const user = await requireSupabaseUser(req, res);
   if (!user) return;
+
+  // Rate limit: prevent spamming queue endpoints (Gemini cost amplifier)
+  const allowed = await enforceRateLimit({
+    req,
+    res,
+    name: "invoice_queue",
+    identifier: user.id,
+    limit: 10,
+    windowMs: 10_000,
+  });
+  if (!allowed) return;
 
   const { jobId } = req.body;
   if (!jobId) {
@@ -41,13 +54,13 @@ export default async function handler(req: any, res: any) {
       .eq("id", jobId);
 
     if (updateError) {
-      console.error("[invoice/queue] Update error:", updateError);
+      log.error({ updateError }, "[invoice/queue] Update error");
       return sendJson(res, 500, { error: "update_failed", message: updateError.message });
     }
 
     return sendJson(res, 200, { ok: true, jobId });
   } catch (e: any) {
-    console.error("[invoice/queue] error:", e);
+    log.error({ err: e }, "[invoice/queue] error");
     return sendJson(res, 500, { error: "queue_failed", message: e?.message ?? "Failed to queue invoice job" });
   }
-}
+}, { name: "invoices/queue" });

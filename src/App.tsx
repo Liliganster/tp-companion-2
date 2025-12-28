@@ -24,6 +24,7 @@ import Auth from "./pages/Auth";
 import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
 import { RequireAuth } from "@/components/auth/RequireAuth";
+import { AnalyticsListener } from "@/components/AnalyticsListener";
 
 import { DataMigration } from "@/components/DataMigration";
 
@@ -41,6 +42,7 @@ const App = () => (
                 <TooltipProvider>
                   <Sonner />
                   <BrowserRouter>
+                    <AnalyticsListener />
                     <Routes>
                       <Route path="/auth" element={<Auth />} />
                       <Route path="/auth/callback" element={<AuthCallback />} />

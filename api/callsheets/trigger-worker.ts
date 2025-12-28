@@ -1,7 +1,9 @@
 import { requireSupabaseUser, sendJson } from "../_utils/supabase.js";
 import { supabaseAdmin } from "../../src/lib/supabaseServer.js";
+import { withApiObservability } from "../_utils/observability.js";
+import { enforceRateLimit } from "../_utils/rateLimit.js";
 
-export default async function handler(req: any, res: any) {
+export default withApiObservability(async function handler(req: any, res: any, { log }) {
   if (req.method !== "POST") {
     res.statusCode = 405;
     res.setHeader("Allow", "POST");
@@ -11,6 +13,17 @@ export default async function handler(req: any, res: any) {
 
   const user = await requireSupabaseUser(req, res);
   if (!user) return;
+
+  // Rate limit: triggering workers can multiply Gemini costs if abused.
+  const allowed = await enforceRateLimit({
+    req,
+    res,
+    name: "callsheets_trigger_worker",
+    identifier: user.id,
+    limit: 3,
+    windowMs: 60_000,
+  });
+  if (!allowed) return;
 
   try {
     // Instead of calling the worker via HTTP, process jobs directly here
@@ -23,7 +36,7 @@ export default async function handler(req: any, res: any) {
       .limit(8);
 
     if (error) {
-      console.error("[trigger-worker] Error fetching jobs:", error);
+      log.error({ error }, "[trigger-worker] Error fetching jobs");
       return sendJson(res, 500, { error: "fetch_failed", message: error.message });
     }
 
@@ -36,7 +49,7 @@ export default async function handler(req: any, res: any) {
     const workerUrl = `${protocol}://${req.headers.host}/api/worker`;
     const cronSecret = process.env.CRON_SECRET;
 
-    console.log("[trigger-worker] Calling worker with", jobs.length, "queued jobs");
+    log.info({ queuedJobs: jobs.length }, "[trigger-worker] Calling worker");
 
     const workerRes = await fetch(workerUrl, {
       method: "POST",
@@ -48,7 +61,7 @@ export default async function handler(req: any, res: any) {
 
     if (!workerRes.ok) {
       const errorText = await workerRes.text();
-      console.error("[trigger-worker] worker failed:", workerRes.status, errorText);
+      log.error({ status: workerRes.status, errorText }, "[trigger-worker] worker failed");
       return sendJson(res, 500, { 
         error: "worker_failed", 
         message: errorText || "Worker execution failed",
@@ -57,10 +70,10 @@ export default async function handler(req: any, res: any) {
     }
 
     const result = await workerRes.json() as Record<string, any>;
-    console.log("[trigger-worker] Worker completed:", result);
+    log.info({ result }, "[trigger-worker] Worker completed");
     return sendJson(res, 200, { ok: true, ...result });
   } catch (e: any) {
-    console.error("[trigger-worker] error:", e);
+    log.error({ err: e }, "[trigger-worker] error");
     return sendJson(res, 500, { error: "trigger_failed", message: e?.message ?? "Trigger failed" });
   }
-}
+}, { name: "callsheets/trigger-worker" });

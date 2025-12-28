@@ -2,12 +2,15 @@ import { supabaseAdmin } from "../src/lib/supabaseServer.js";
 import { generateContentFromPDF } from "../src/lib/ai/geminiClient.js";
 import { buildUniversalExtractorPrompt } from "../src/lib/ai/prompts.js";
 import { extractionSchema } from "../src/lib/ai/schema.js";
+import { captureServerException, logger, withApiObservability } from "./_utils/observability.js";
+import { enforceRateLimit } from "./_utils/rateLimit.js";
+import { checkAiMonthlyQuota } from "./_utils/aiQuota.js";
 
 // Geocoding function with direct access to env vars
 async function geocodeAddress(address: string) {
   const apiKey = process.env.GOOGLE_MAPS_SERVER_KEY;
   if (!apiKey) {
-    console.error("Missing GOOGLE_MAPS_SERVER_KEY");
+    logger.warn("Missing GOOGLE_MAPS_SERVER_KEY");
     return null;
   }
 
@@ -28,12 +31,12 @@ async function geocodeAddress(address: string) {
     }
     return null;
   } catch (error) {
-    console.error("Geocoding error:", error);
+    logger.error({ err: error }, "Geocoding error");
     return null;
   }
 }
 
-export default async function handler(req: any, res: any) {
+export default withApiObservability(async function handler(req: any, res: any, { log, requestId }) {
   // CRON authentication
   const authHeader = req.headers?.authorization;
   const cronSecret = process.env.CRON_SECRET;
@@ -65,6 +68,17 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
+  // Best-effort rate limit (mainly for dev / misconfig); in prod the CRON_SECRET already protects this endpoint.
+  const cronAllowed = await enforceRateLimit({
+    req,
+    res,
+    name: "callsheet_worker",
+    limit: 10,
+    windowMs: 60_000,
+    requestId,
+  });
+  if (!cronAllowed) return;
+
   try {
     // 1. Fetch queued jobs (up to 8 concurrently)
     const { data: jobs, error } = await supabaseAdmin
@@ -88,13 +102,27 @@ export default async function handler(req: any, res: any) {
         .update({ status: "processing", processed_at: new Date().toISOString() })
         .eq("id", job.id)
         .eq("status", "queued")
-        .select("id, storage_path")
+        .select("id, storage_path, user_id")
         .maybeSingle();
 
       if (claimError || !claimed) return; // already taken or not claimable
 
       try {
-        console.log(`[Job ${job.id}] Starting processing...`);
+        log.info({ jobId: job.id }, "callsheet_job_start");
+
+        // Monthly quota (counts only when jobs reach `done`).
+        const userId = String((claimed as any).user_id ?? (job as any).user_id ?? "").trim();
+        if (userId) {
+          const quota = await checkAiMonthlyQuota(userId);
+          if (!quota.allowed) {
+            await supabaseAdmin
+              .from("callsheet_jobs")
+              .update({ status: "needs_review", needs_review_reason: quota.reason })
+              .eq("id", job.id);
+            processedResults.push({ id: job.id, status: "needs_review", error: quota.reason });
+            return;
+          }
+        }
 
         // A. Download PDF
         const { data: fileData, error: downloadError } = await supabaseAdmin.storage
@@ -102,20 +130,20 @@ export default async function handler(req: any, res: any) {
           .download(claimed.storage_path);
 
         if (downloadError) {
-          console.error(`[Job ${job.id}] Download error:`, downloadError);
+          log.error({ jobId: job.id, downloadError }, "callsheet_download_error");
           throw new Error(`Failed to download PDF: ${downloadError.message}`);
         }
         if (!fileData) {
           throw new Error("Failed to download PDF: no data returned");
         }
 
-        console.log(`[Job ${job.id}] PDF downloaded, size: ${fileData.size} bytes`);
+        log.info({ jobId: job.id, bytes: fileData.size }, "callsheet_downloaded");
 
         const arrayBuffer = await fileData.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
         // B. Process PDF with Gemini Vision
-        console.log(`[Job ${job.id}] Calling Gemini API...`);
+        log.info({ jobId: job.id }, "callsheet_gemini_call");
         const systemInstruction = buildUniversalExtractorPrompt("[PDF CONTENT ATTACHED]");
         const resultText = await generateContentFromPDF(
           "gemini-2.5-flash",
@@ -125,7 +153,7 @@ export default async function handler(req: any, res: any) {
           extractionSchema
         );
 
-        console.log(`[Job ${job.id}] Gemini response received, length: ${resultText?.length || 0}`);
+        log.info({ jobId: job.id, length: resultText?.length || 0 }, "callsheet_gemini_response");
 
         let extractedJson: any = null;
         try {
@@ -137,7 +165,7 @@ export default async function handler(req: any, res: any) {
         if (!extractedJson) throw new Error("Empty extraction result");
 
         const extractedLocationCount = Array.isArray(extractedJson.locations) ? extractedJson.locations.length : 0;
-        console.log(`[Job ${job.id}] Extraction parsed (locations=${extractedLocationCount})`);
+        log.info({ jobId: job.id, locations: extractedLocationCount }, "callsheet_extraction_parsed");
 
         // Validate extracted data
         if (!extractedJson.date) {
@@ -159,11 +187,11 @@ export default async function handler(req: any, res: any) {
         });
 
         if (resultInsertError) {
-          console.error(`[Job ${job.id}] Failed to insert result:`, resultInsertError);
+          log.error({ jobId: job.id, resultInsertError }, "callsheet_result_insert_failed");
           throw new Error(`Failed to insert result: ${resultInsertError.message}`);
         }
 
-        console.log(`[Job ${job.id}] Saved extraction result successfully`);
+        log.info({ jobId: job.id }, "callsheet_result_saved");
 
         if (Array.isArray(extractedJson.locations)) {
           const locs: any[] = [];
@@ -185,25 +213,20 @@ export default async function handler(req: any, res: any) {
           if (locs.length > 0) {
             const { error: locsInsertError } = await supabaseAdmin.from("callsheet_locations").insert(locs);
             if (locsInsertError) {
-              console.error(`[Job ${job.id}] Failed to insert locations:`, locsInsertError);
+              log.error({ jobId: job.id, locsInsertError }, "callsheet_locations_insert_failed");
               throw new Error(`Failed to insert locations: ${locsInsertError.message}`);
             }
-            console.log(`[Job ${job.id}] Saved ${locs.length} locations successfully`);
+            log.info({ jobId: job.id, locations: locs.length }, "callsheet_locations_saved");
           }
         }
 
         await supabaseAdmin.from("callsheet_jobs").update({ status: "done" }).eq("id", job.id);
-        console.log(`[Job ${job.id}] Marked as done`);
+        log.info({ jobId: job.id }, "callsheet_job_done");
         processedResults.push({ id: job.id, status: "success" });
       } catch (jobErr: any) {
-        console.error(`[Job ${job.id}] Processing error:`, jobErr);
+        log.error({ jobId: job.id, err: jobErr }, "callsheet_job_failed");
         const errorMessage = jobErr?.message || String(jobErr);
-        const errorDetails = {
-          message: errorMessage,
-          stack: jobErr?.stack,
-          name: jobErr?.name
-        };
-        console.error(`[Job ${job.id}] Error details:`, JSON.stringify(errorDetails, null, 2));
+        captureServerException(jobErr, { requestId, jobId: job.id, kind: "callsheet" });
         
         await supabaseAdmin
           .from("callsheet_jobs")
@@ -221,7 +244,8 @@ export default async function handler(req: any, res: any) {
 
     res.status(200).json({ processed: processedResults.length, details: processedResults });
   } catch (err: any) {
-    console.error("Worker error:", err);
+    log.error({ err }, "worker_error");
+    captureServerException(err, { requestId, kind: "callsheet_worker" });
     res.status(500).json({ error: err.message });
   }
-}
+}, { name: "worker" });
