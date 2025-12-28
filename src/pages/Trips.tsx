@@ -229,6 +229,20 @@ export default function Trips() {
     return roundTo(trip.distance * baseRate + trip.distance * trip.passengers * settingsPassengerSurchargePerKm, 2);
   };
 
+  const formatTripInvoiceCell = (trip: Trip) => {
+    const amount = Number((trip as any).invoiceAmount);
+    if (Number.isFinite(amount) && amount > 0) {
+      const currency = String((trip as any).invoiceCurrency || "EUR").toUpperCase();
+      return `${amount.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+    }
+
+    if ((trip as any).invoiceJobId) {
+      return <Badge variant="secondary">{t("tripDetail.invoiceExtracting")}</Badge>;
+    }
+
+    return trip.invoice || "-";
+  };
+
   type SavedTrip = {
     id: string;
     date: string;
@@ -624,7 +638,7 @@ export default function Trips() {
                   </span>
                 </TableCell>
                 <TableCell className="text-right text-emerald-500 whitespace-nowrap">{trip.co2} kg</TableCell>
-                <TableCell className="text-right whitespace-nowrap">{trip.invoice || "-"}</TableCell>
+                <TableCell className="text-right whitespace-nowrap">{formatTripInvoiceCell(trip)}</TableCell>
                 <TableCell className="text-right text-muted-foreground hidden lg:table-cell">{trip.passengers || "-"}</TableCell>
                 <TableCell className="text-right text-primary font-medium whitespace-nowrap">{calculateTripReimbursement(trip).toFixed(2)} €</TableCell>
                 <TableCell className="text-right font-semibold whitespace-nowrap">{trip.distance} km</TableCell>
