@@ -20,6 +20,7 @@ import { computeTripWarnings } from "@/lib/trip-warnings";
 import { useI18n } from "@/hooks/use-i18n";
 import { useAuth } from "@/contexts/AuthContext";
 import { calculateTripEmissions } from "@/lib/emissions";
+import { supabase } from "@/lib/supabaseClient";
 
 // CO2 is calculated from user profile vehicle settings when saving a trip.
 const mockTripsData: Trip[] = [{
@@ -115,6 +116,52 @@ export default function Trips() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [tripToEdit, setTripToEdit] = useState<Trip | null>(null);
   const { toast } = useToast();
+  const [invoiceResultsByJobId, setInvoiceResultsByJobId] = useState<Record<string, { total_amount?: any; currency?: any }>>(
+    {},
+  );
+
+  useEffect(() => {
+    if (!supabase) return;
+
+    const jobIds = Array.from(
+      new Set(
+        (trips ?? [])
+          .map((tr) => (typeof (tr as any).invoiceJobId === "string" ? (tr as any).invoiceJobId : ""))
+          .filter(Boolean),
+      ),
+    );
+
+    if (jobIds.length === 0) {
+      setInvoiceResultsByJobId({});
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("invoice_results")
+        .select("job_id, total_amount, currency")
+        .in("job_id", jobIds);
+
+      if (cancelled) return;
+      if (error) {
+        if (import.meta.env.DEV) console.warn("[Trips] Failed to fetch invoice_results:", error);
+        return;
+      }
+
+      const next: Record<string, { total_amount?: any; currency?: any }> = {};
+      for (const row of data ?? []) {
+        const jobId = String((row as any).job_id ?? "");
+        if (!jobId) continue;
+        next[jobId] = { total_amount: (row as any).total_amount, currency: (row as any).currency };
+      }
+      setInvoiceResultsByJobId(next);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [trips]);
 
   useEffect(() => {
     try {
@@ -229,15 +276,36 @@ export default function Trips() {
     return roundTo(trip.distance * baseRate + trip.distance * trip.passengers * settingsPassengerSurchargePerKm, 2);
   };
 
+  const formatInvoiceCountLabel = (count: number) => {
+    const lang = String(locale || "").toLowerCase();
+    if (lang.startsWith("de")) return count === 1 ? "1 Rechnung" : `${count} Rechnungen`;
+    if (lang.startsWith("en")) return count === 1 ? "1 invoice" : `${count} invoices`;
+    return count === 1 ? "1 factura" : `${count} facturas`;
+  };
+
   const formatTripInvoiceCell = (trip: Trip) => {
+    const docs = Array.isArray((trip as any).documents) ? ((trip as any).documents as any[]) : [];
+    const invoiceDocCount = docs.filter((d) => d?.kind === "invoice" || typeof d?.invoiceJobId === "string").length;
+
     const amount = Number((trip as any).invoiceAmount);
     if (Number.isFinite(amount) && amount > 0) {
       const currency = String((trip as any).invoiceCurrency || "EUR").toUpperCase();
       return `${amount.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
     }
 
-    if ((trip as any).invoiceJobId) {
+    const jobId = typeof (trip as any).invoiceJobId === "string" ? ((trip as any).invoiceJobId as string) : "";
+    if (jobId) {
+      const fromResults = invoiceResultsByJobId[jobId];
+      const extracted = Number(fromResults?.total_amount);
+      if (Number.isFinite(extracted) && extracted > 0) {
+        const currency = String(fromResults?.currency || "EUR").toUpperCase();
+        return `${extracted.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+      }
       return <Badge variant="secondary">{t("tripDetail.invoiceExtracting")}</Badge>;
+    }
+
+    if (invoiceDocCount > 0) {
+      return <Badge variant="outline">{formatInvoiceCountLabel(invoiceDocCount)}</Badge>;
     }
 
     return trip.invoice || "-";
