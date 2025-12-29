@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import tripHeaderImage from "@/assets/trip-modal-header.jpg";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Link } from "react-router-dom";
 
 export default function Auth() {
   const { t } = useI18n();
@@ -208,13 +209,13 @@ export default function Auth() {
 
           <p className="text-center text-xs text-muted-foreground mt-6">
             {t("auth.byContinuing")}{" "}
-            <a href="#" className="text-primary hover:underline">
+            <Link to="/legal/terms" className="text-primary hover:underline">
               {t("auth.terms")}
-            </a>{" "}
+            </Link>{" "}
             {t("auth.and")}{" "}
-            <a href="#" className="text-primary hover:underline">
+            <Link to="/legal/privacy" className="text-primary hover:underline">
               {t("auth.privacy")}
-            </a>
+            </Link>
           </p>
         </div>
       </div>

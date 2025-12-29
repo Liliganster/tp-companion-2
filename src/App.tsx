@@ -26,6 +26,9 @@ const AdvancedCosts = lazy(() => import("./pages/AdvancedCosts"));
 const AdvancedEmissions = lazy(() => import("./pages/AdvancedEmissions"));
 const Plans = lazy(() => import("./pages/Plans"));
 const Docs = lazy(() => import("./pages/Docs"));
+const LegalTerms = lazy(() => import("./pages/LegalTerms"));
+const LegalPrivacy = lazy(() => import("./pages/LegalPrivacy"));
+const LegalCookies = lazy(() => import("./pages/LegalCookies"));
 const Auth = lazy(() => import("./pages/Auth"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -64,6 +67,9 @@ const App = () => (
                       <Routes>
                         <Route path="/auth" element={<Auth />} />
                         <Route path="/auth/callback" element={<AuthCallback />} />
+                        <Route path="/legal/terms" element={<LegalTerms />} />
+                        <Route path="/legal/privacy" element={<LegalPrivacy />} />
+                        <Route path="/legal/cookies" element={<LegalCookies />} />
                         <Route
                           path="/"
                           element={
