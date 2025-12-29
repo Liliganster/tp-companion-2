@@ -8,6 +8,7 @@ import { AppearanceProvider } from "@/contexts/AppearanceContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { AnalyticsListener } from "@/components/AnalyticsListener";
+import { CookieConsentBanner } from "@/components/analytics/CookieConsentBanner";
 import { DataMigration } from "@/components/DataMigration";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
@@ -63,6 +64,7 @@ const App = () => (
                   <Sonner />
                   <BrowserRouter>
                     <AnalyticsListener />
+                    <CookieConsentBanner />
                     <Suspense fallback={<RouteFallback />}>
                       <Routes>
                         <Route path="/auth" element={<Auth />} />
