@@ -592,21 +592,24 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
             const quotaJob = failedJobs.find(
               (j: any) => j.status === "needs_review" && parseMonthlyQuotaExceededReason(j.needs_review_reason),
             );
+            let failureDescription: string | undefined;
             if (quotaJob) {
               const parsed = parseMonthlyQuotaExceededReason(quotaJob.needs_review_reason);
-              const description =
+              failureDescription =
                 parsed?.used != null && parsed?.limit != null
                   ? tf("aiQuota.monthlyLimitReachedBody", { used: String(parsed.used), limit: String(parsed.limit) })
                   : t("aiQuota.monthlyLimitReachedBodyGeneric");
-              toast.error(t("aiQuota.monthlyLimitReachedTitle"), { description });
             } else {
               const firstReason = String(failedJobs[0]?.needs_review_reason ?? "").trim();
-              if (firstReason) {
-                toast.error(t("bulk.errorUploadDoc"), { description: firstReason });
-              }
+              if (firstReason) failureDescription = firstReason;
             }
 
+            toast.error(tf("bulk.toastFailedDocs", { count: failedIds.length }), {
+              description: failureDescription,
+            });
+
             // Remove failed jobs from the queue so we don't keep polling them.
+            const remainingJobIds = jobIds.filter((id) => !failedIds.includes(id));
             setJobIds((prev) => prev.filter((id) => !failedIds.includes(id)));
             setJobMetaById((prev) => {
               const next = { ...prev };
@@ -616,8 +619,18 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
               return next;
             });
 
-            // Show a single aggregated message.
-            toast.error(tf("bulk.toastFailedDocs", { count: failedIds.length }));
+            // If everything failed (no remaining queued jobs and no done jobs), stop the processing UI.
+            if (remainingJobIds.length === 0 && doneIds.length === 0) {
+              clearInterval(interval);
+              setAiStep("upload");
+              setAiLoading(false);
+              setSelectedFiles([]);
+              setJobIds([]);
+              setCurrentJobId(null);
+              setJobMetaById({});
+              setProcessingTotal(0);
+              setProcessingDone(0);
+            }
           }
 
           // If a job is done, move to review for the first completed one.
