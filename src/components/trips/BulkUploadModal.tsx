@@ -545,6 +545,19 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       setCurrentJobId(null);
       setProcessingTotal(createdJobIds.length);
       setProcessingDone(0);
+      // Kick the worker once so users don't have to wait for cron.
+      try {
+        const token = await getAccessToken();
+        await fetch("/api/callsheets/trigger-worker", {
+          method: "POST",
+          headers: {
+            Authorization: token ? `Bearer ${token}` : "",
+            "Content-Type": "application/json",
+          },
+        });
+      } catch {
+        // ignore: polling will still update if cron runs
+      }
 
     } catch (err: any) {
       console.error(err);
@@ -586,6 +599,11 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                   ? tf("aiQuota.monthlyLimitReachedBody", { used: String(parsed.used), limit: String(parsed.limit) })
                   : t("aiQuota.monthlyLimitReachedBodyGeneric");
               toast.error(t("aiQuota.monthlyLimitReachedTitle"), { description });
+            } else {
+              const firstReason = String(failedJobs[0]?.needs_review_reason ?? "").trim();
+              if (firstReason) {
+                toast.error(t("bulk.errorUploadDoc"), { description: firstReason });
+              }
             }
 
             // Remove failed jobs from the queue so we don't keep polling them.
