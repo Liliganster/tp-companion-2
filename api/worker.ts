@@ -2,6 +2,7 @@ import { supabaseAdmin } from "../src/lib/supabaseServer.js";
 import { generateContentFromPDF } from "../src/lib/ai/geminiClient.js";
 import { buildUniversalExtractorPrompt } from "../src/lib/ai/prompts.js";
 import { extractionSchema } from "../src/lib/ai/schema.js";
+import { CallsheetExtractionResultSchema } from "../src/lib/ai/validation.js";
 import { captureServerException, logger, withApiObservability } from "./_utils/observability.js";
 import { enforceRateLimit } from "./_utils/rateLimit.js";
 import { checkAiMonthlyQuota } from "./_utils/aiQuota.js";
@@ -185,26 +186,27 @@ export default withApiObservability(async function handler(req: any, res: any, {
 
         if (!extractedJson) throw new Error("Empty extraction result");
 
-        const extractedLocationCount = Array.isArray(extractedJson.locations) ? extractedJson.locations.length : 0;
-        log.info({ jobId: job.id, locations: extractedLocationCount }, "callsheet_extraction_parsed");
+        const validated = CallsheetExtractionResultSchema.safeParse(extractedJson);
+        if (!validated.success) {
+          const reason = `invalid_callsheet_extraction:${validated.error.issues.map((i) => i.message).join("; ")}`;
+          await supabaseAdmin
+            .from("callsheet_jobs")
+            .update({ status: "failed", needs_review_reason: reason })
+            .eq("id", job.id);
+          processedResults.push({ id: job.id, status: "failed", error: reason });
+          log.warn({ jobId: job.id, reason }, "callsheet_extraction_invalid");
+          return;
+        }
 
-        // Validate extracted data
-        if (!extractedJson.date) {
-          throw new Error("Missing date in extraction result");
-        }
-        if (!extractedJson.projectName) {
-          throw new Error("Missing projectName in extraction result");
-        }
-        if (!Array.isArray(extractedJson.locations) || extractedJson.locations.length === 0) {
-          throw new Error("Missing or empty locations in extraction result");
-        }
+        const extracted = validated.data;
+        log.info({ jobId: job.id, locations: extracted.locations.length }, "callsheet_extraction_parsed");
 
         // D. Save Results
         const { error: resultInsertError } = await supabaseAdmin.from("callsheet_results").insert({
           job_id: job.id,
-          date_value: extractedJson.date,
-          project_value: extractedJson.projectName,
-          producer_value: extractedJson.productionCompanies?.[0],
+          date_value: extracted.date,
+          project_value: extracted.projectName,
+          producer_value: extracted.productionCompanies?.[0],
         });
 
         if (resultInsertError) {
@@ -214,9 +216,9 @@ export default withApiObservability(async function handler(req: any, res: any, {
 
         log.info({ jobId: job.id }, "callsheet_result_saved");
 
-        if (Array.isArray(extractedJson.locations)) {
+        if (Array.isArray(extracted.locations)) {
           const locs: any[] = [];
-          for (const locStr of extractedJson.locations) {
+          for (const locStr of extracted.locations) {
             const geo = skipGeocode ? null : await geocodeAddress(locStr);
             locs.push({
               job_id: job.id,

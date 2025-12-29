@@ -8,6 +8,7 @@ import { calculateTripEmissions } from "@/lib/emissions";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { parseLocaleNumber } from "@/lib/number";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { TripInputSchema } from "@/lib/schemas";
 
 export type Trip = {
   id: string;
@@ -215,6 +216,21 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       return false;
     }
 
+    const parsedInput = TripInputSchema.safeParse({
+      id: trip.id,
+      date: trip.date,
+      distance: Number(trip.distance),
+      passengers: Number(trip.passengers),
+      purpose: trip.purpose,
+      projectId: trip.projectId ?? null,
+    });
+
+    if (!parsedInput.success) {
+      const issues = parsedInput.error.issues.map((i) => i.message).join("; ");
+      toast.error(`Datos del viaje inválidos. ${issues}`);
+      return false;
+    }
+
     const normalizedTrip: Trip = {
       ...trip,
       co2: Number.isFinite(Number(trip.co2)) && Number(trip.co2) > 0
@@ -267,6 +283,23 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     const nextPatch: Partial<Trip> = { ...patch };
     if (patch.distance !== undefined && patch.co2 === undefined) {
       nextPatch.co2 = calculateTripEmissions({ distanceKm: patch.distance, ...emissionsInput }).co2Kg;
+    }
+
+    if (nextPatch.date !== undefined || nextPatch.distance !== undefined || nextPatch.passengers !== undefined || nextPatch.projectId !== undefined) {
+      const candidate = {
+        id,
+        date: nextPatch.date ?? "1970-01-01",
+        distance: nextPatch.distance !== undefined ? Number(nextPatch.distance) : 1,
+        passengers: nextPatch.passengers !== undefined ? Number(nextPatch.passengers) : 0,
+        purpose: nextPatch.purpose,
+        projectId: nextPatch.projectId ?? null,
+      };
+      const parsed = TripInputSchema.safeParse(candidate);
+      if (!parsed.success) {
+        const issues = parsed.error.issues.map((i) => i.message).join("; ");
+        toast.error(`Datos del viaje inválidos. ${issues}`);
+        return false;
+      }
     }
 
     queryClient.setQueryData<Trip[]>(queryKey, (prev) =>

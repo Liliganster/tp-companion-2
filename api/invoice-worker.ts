@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "../src/lib/supabaseServer.js";
 import { generateContentFromPDF } from "../src/lib/ai/geminiClient.js";
 import { buildInvoiceExtractorPrompt, invoiceExtractionSchema } from "../src/lib/ai/invoicePrompt.js";
+import { InvoiceExtractionResultSchema } from "../src/lib/ai/validation.js";
 import { captureServerException, withApiObservability } from "./_utils/observability.js";
 import { enforceRateLimit } from "./_utils/rateLimit.js";
 import { checkAiMonthlyQuota } from "./_utils/aiQuota.js";
@@ -158,22 +159,30 @@ export default withApiObservability(async function handler(req: any, res: any, {
 
         if (!extractedJson) throw new Error("Empty extraction result");
 
-        log.info({ jobId: job.id }, "invoice_extraction_parsed");
-
-        // Validate extracted data
-        if (!extractedJson.totalAmount && extractedJson.totalAmount !== 0) {
-          throw new Error("Missing totalAmount in extraction result");
+        const validated = InvoiceExtractionResultSchema.safeParse(extractedJson);
+        if (!validated.success) {
+          const reason = `invalid_invoice_extraction:${validated.error.issues.map((i) => i.message).join("; ")}`;
+          await supabaseAdmin
+            .from("invoice_jobs")
+            .update({ status: "needs_review", needs_review_reason: reason })
+            .eq("id", job.id);
+          processedResults.push({ id: job.id, status: "needs_review", error: reason });
+          log.warn({ jobId: job.id, reason }, "invoice_extraction_invalid");
+          return;
         }
+
+        const extracted = validated.data;
+        log.info({ jobId: job.id }, "invoice_extraction_parsed");
 
         // D. Save Results
         const { error: resultInsertError } = await supabaseAdmin.from("invoice_results").insert({
           job_id: job.id,
-          total_amount: extractedJson.totalAmount,
-          currency: extractedJson.currency || "EUR",
-          invoice_number: extractedJson.invoiceNumber || null,
-          invoice_date: extractedJson.invoiceDate || null,
-          vendor_name: extractedJson.vendorName || null,
-          purpose: extractedJson.purpose || null,
+          total_amount: extracted.totalAmount,
+          currency: extracted.currency || "EUR",
+          invoice_number: extracted.invoiceNumber || null,
+          invoice_date: extracted.invoiceDate || null,
+          vendor_name: extracted.vendorName || null,
+          purpose: extracted.purpose || null,
         });
 
         if (resultInsertError) {

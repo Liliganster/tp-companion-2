@@ -86,7 +86,7 @@ describe("TripsContext", () => {
             id: "trip-1",
             trip_date: "2025-01-01",
             route: ["A", "B"],
-            project_id: "project-1",
+            project_id: "11111111-1111-1111-1111-111111111111",
             purpose: "Test",
             passengers: 0,
             distance_km: 10,
@@ -118,7 +118,7 @@ describe("TripsContext", () => {
       date: "2025-01-01",
       route: ["A", "B"],
       project: "Project",
-      projectId: "project-1",
+      projectId: "11111111-1111-1111-1111-111111111111",
       purpose: "Test",
       passengers: 0,
       distance: 10,
@@ -136,7 +136,7 @@ describe("TripsContext", () => {
     expect(mocks.insert.mock.calls[0]?.[0]).toMatchObject({
       id: "trip-1",
       user_id: "user-1",
-      project_id: "project-1",
+      project_id: "11111111-1111-1111-1111-111111111111",
       distance_km: 10,
     });
   });

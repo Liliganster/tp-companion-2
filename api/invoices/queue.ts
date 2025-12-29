@@ -2,6 +2,7 @@ import { requireSupabaseUser, sendJson } from "../_utils/supabase.js";
 import { supabaseAdmin } from "../../src/lib/supabaseServer.js";
 import { withApiObservability } from "../_utils/observability.js";
 import { enforceRateLimit } from "../_utils/rateLimit.js";
+import { z } from "zod";
 
 export default withApiObservability(async function handler(req: any, res: any, { log }) {
   if (req.method !== "POST") {
@@ -25,10 +26,10 @@ export default withApiObservability(async function handler(req: any, res: any, {
   });
   if (!allowed) return;
 
-  const { jobId } = req.body;
-  if (!jobId) {
-    return sendJson(res, 400, { error: "missing_job_id" });
-  }
+  const bodySchema = z.object({ jobId: z.string().uuid() });
+  const parsed = bodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) return sendJson(res, 400, { error: "invalid_body", details: parsed.error.issues });
+  const { jobId } = parsed.data;
 
   try {
     // Verify job belongs to user and is in "created" state
