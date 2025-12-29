@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { NotificationDropdown } from "@/components/dashboard/NotificationDropdown";
@@ -14,6 +14,8 @@ import { useI18n } from "@/hooks/use-i18n";
 import { useTrips } from "@/contexts/TripsContext";
 import { calculateTripEmissions } from "@/lib/emissions";
 import { parseLocaleNumber } from "@/lib/number";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabaseClient";
 
 function parseTripDate(value: string): Date | null {
   if (!value) return null;
@@ -54,12 +56,64 @@ function sumCo2(
   }, 0);
 }
 
+function startOfCurrentMonthUtcIso(): string {
+  const now = new Date();
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+  return start.toISOString();
+}
+
 export default function Index() {
   const { profile } = useUserProfile();
+  const { user } = useAuth();
   const { t, locale } = useI18n();
   const { projects } = useProjects();
   const { trips } = useTrips();
   const dashboardProjects = getProjectsForDashboard(projects);
+
+  const aiLimit = profile.planTier === "pro" ? 100 : 5;
+  const [aiUsedThisMonth, setAiUsedThisMonth] = useState<number | null>(null);
+  const [aiQuotaLoading, setAiQuotaLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchAiUsed() {
+      if (!supabase || !user?.id) {
+        setAiUsedThisMonth(null);
+        return;
+      }
+
+      setAiQuotaLoading(true);
+      const sinceIso = startOfCurrentMonthUtcIso();
+
+      const countTable = async (table: "invoice_jobs" | "callsheet_jobs") => {
+        const { count } = await supabase
+          .from(table)
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .eq("status", "done")
+          .gte("processed_at", sinceIso);
+        return typeof count === "number" ? count : 0;
+      };
+
+      try {
+        const [invoiceDone, callsheetDone] = await Promise.all([countTable("invoice_jobs"), countTable("callsheet_jobs")]);
+        if (!cancelled) setAiUsedThisMonth(invoiceDone + callsheetDone);
+      } catch (e) {
+        console.error("Error fetching AI quota:", e);
+        if (!cancelled) setAiUsedThisMonth(null);
+      } finally {
+        if (!cancelled) setAiQuotaLoading(false);
+      }
+    }
+
+    void fetchAiUsed();
+    const id = setInterval(fetchAiUsed, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [user?.id]);
 
   const kpiTitleClassName = "text-base font-semibold leading-tight text-foreground uppercase tracking-wide";
   const kpiTitleWrapperClassName = "p-0 rounded-none bg-transparent";
@@ -147,6 +201,10 @@ export default function Index() {
           : "239,68,68";
 
   const co2BubbleStyle = getTintedBubbleStyle(co2BubbleTint);
+  const aiQuotaText = aiQuotaLoading ? "…" : aiUsedThisMonth == null ? `—/${aiLimit}` : `${aiUsedThisMonth}/${aiLimit}`;
+  const aiQuotaTextColor =
+    aiUsedThisMonth != null && aiUsedThisMonth >= aiLimit ? "text-amber-200" : "text-zinc-50";
+
   return <MainLayout>
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
@@ -166,7 +224,7 @@ export default function Index() {
               {/* AI Quota */}
               <div className="flex items-center gap-2 px-3 py-2 border rounded border-inherit bg-[#311084]">
                 <Sparkles className="w-4 h-4 text-[#fcfcfc]" />
-                <span className="text-sm font-medium">47/100</span>
+                <span className={`text-sm font-medium tabular-nums ${aiQuotaTextColor}`}>{aiQuotaText}</span>
               </div>
               {/* Warnings Bell */}
               <NotificationDropdown />
