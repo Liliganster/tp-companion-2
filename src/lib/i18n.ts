@@ -632,6 +632,7 @@ const es = {
   "aiQuota.monthlyLimitReachedTitle": "Límite de IA alcanzado",
   "aiQuota.monthlyLimitReachedBody": "Has alcanzado tu cuota mensual de IA ({used}/{limit}).",
   "aiQuota.monthlyLimitReachedBodyGeneric": "Has alcanzado tu cuota mensual de IA. Actualiza a Pro o espera al próximo mes.",
+  "aiQuota.outOfQuotaBadge": "Cuota agotada",
 } as const;
 
 export type I18nKey = keyof typeof es;
@@ -1247,6 +1248,7 @@ const en: Record<I18nKey, string> = {
   "aiQuota.monthlyLimitReachedTitle": "AI limit reached",
   "aiQuota.monthlyLimitReachedBody": "You reached your monthly AI quota ({used}/{limit}).",
   "aiQuota.monthlyLimitReachedBodyGeneric": "You reached your monthly AI quota. Upgrade to Pro or wait until next month.",
+  "aiQuota.outOfQuotaBadge": "Out of quota",
 };
 
 const de: Record<I18nKey, string> = {
@@ -1860,6 +1862,7 @@ const de: Record<I18nKey, string> = {
   "aiQuota.monthlyLimitReachedTitle": "KI-Limit erreicht",
   "aiQuota.monthlyLimitReachedBody": "Du hast dein monatliches KI-Kontingent erreicht ({used}/{limit}).",
   "aiQuota.monthlyLimitReachedBodyGeneric": "Du hast dein monatliches KI-Kontingent erreicht. Upgrade auf Pro oder warte bis nǬchsten Monat.",
+  "aiQuota.outOfQuotaBadge": "Kontingent voll",
 };
 
 const dict: Record<AppLanguage, Record<I18nKey, string>> = { es, en, de };

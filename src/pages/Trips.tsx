@@ -320,6 +320,18 @@ export default function Trips() {
       const status = String(job?.status ?? "");
       const reason = String(job?.needs_review_reason ?? "");
 
+      if (status === "out_of_quota") {
+        return (
+          <Badge
+            variant="outline"
+            className="border-violet-400/40 text-violet-200"
+            title={reason || undefined}
+          >
+            {t("aiQuota.outOfQuotaBadge")}
+          </Badge>
+        );
+      }
+
       if (status === "needs_review") {
         return (
           <Badge

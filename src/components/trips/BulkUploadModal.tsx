@@ -583,15 +583,13 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
           if (jobsError || !jobs) return;
 
           const doneIds = jobs.filter((j: any) => j.status === "done").map((j: any) => j.id);
-          const failedJobs = jobs.filter((j: any) => j.status === "failed" || j.status === "needs_review");
+          const failedJobs = jobs.filter((j: any) => j.status === "failed" || j.status === "needs_review" || j.status === "out_of_quota");
           const failedIds = failedJobs.map((j: any) => j.id);
 
           setProcessingDone(doneIds.length);
 
           if (failedIds.length > 0) {
-            const quotaJob = failedJobs.find(
-              (j: any) => j.status === "needs_review" && parseMonthlyQuotaExceededReason(j.needs_review_reason),
-            );
+            const quotaJob = failedJobs.find((j: any) => parseMonthlyQuotaExceededReason(j.needs_review_reason));
             let failureDescription: string | undefined;
             if (quotaJob) {
               const parsed = parseMonthlyQuotaExceededReason(quotaJob.needs_review_reason);

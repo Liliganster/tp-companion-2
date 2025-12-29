@@ -486,7 +486,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           for (const it of items ?? []) {
             const id = String((it as any).id ?? "");
             if (!id) continue;
-            if (String((it as any).status ?? "") !== "needs_review") continue;
+            const status = String((it as any).status ?? "");
+            if (status !== "out_of_quota" && status !== "needs_review") continue;
             const reason = String((it as any).needs_review_reason ?? "");
             if (!parseMonthlyQuotaExceededReason(reason)) continue;
             if (quotaNotifiedRef.current.has(id)) continue;
@@ -1003,6 +1004,11 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                             Revisar
                           </span>
                         ) : null}
+                        {doc.status === 'out_of_quota' ? (
+                          <span title={doc.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-full cursor-help bg-violet-500/20 text-violet-200">
+                            {t("aiQuota.outOfQuotaBadge")}
+                          </span>
+                        ) : null}
                         {doc.status === 'failed' ? (
                           <span title={doc.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-full cursor-help bg-red-500/20 text-red-500">
                             Error
@@ -1083,6 +1089,11 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                         {sheet.status === 'needs_review' ? (
                           <span title={sheet.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-full cursor-help bg-orange-500/20 text-orange-500">
                             Revisar
+                          </span>
+                        ) : null}
+                        {sheet.status === 'out_of_quota' ? (
+                          <span title={sheet.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-full cursor-help bg-violet-500/20 text-violet-200">
+                            {t("aiQuota.outOfQuotaBadge")}
                           </span>
                         ) : null}
                         {sheet.status === 'failed' ? (

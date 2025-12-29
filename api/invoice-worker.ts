@@ -90,9 +90,9 @@ export default withApiObservability(async function handler(req: any, res: any, {
             const reason = quota.reason ?? "monthly_quota_exceeded";
             await supabaseAdmin
               .from("invoice_jobs")
-              .update({ status: "needs_review", needs_review_reason: reason })
+              .update({ status: "out_of_quota", needs_review_reason: reason })
               .eq("id", job.id);
-            processedResults.push({ id: job.id, status: "needs_review", error: reason });
+            processedResults.push({ id: job.id, status: "out_of_quota", error: reason });
             return;
           }
         }

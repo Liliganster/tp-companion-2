@@ -23,6 +23,11 @@ function startOfCurrentMonthUtcIso(): string {
   return start.toISOString();
 }
 
+function processingCutoffIso(minutes: number): string {
+  const now = Date.now();
+  return new Date(now - minutes * 60_000).toISOString();
+}
+
 function limitForTier(tier: PlanTier): number {
   return tier === "pro" ? 100 : 5;
 }
@@ -43,21 +48,38 @@ async function readUserTier(userId: string): Promise<PlanTier> {
   }
 }
 
-async function countDoneExtractionsThisMonth(userId: string, sinceIso: string): Promise<number> {
-  const countTable = async (table: "invoice_jobs" | "callsheet_jobs") => {
-    const { count, error } = await supabaseAdmin
+async function countExtractionsThisMonth(
+  userId: string,
+  sinceIso: string,
+): Promise<{ done: number; processing: number }> {
+  const cutoffIso = processingCutoffIso(30);
+
+  const countTable = async (table: "invoice_jobs" | "callsheet_jobs", status: "done" | "processing") => {
+    let q = supabaseAdmin
       .from(table)
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
-      .eq("status", "done")
-      .gte("processed_at", sinceIso);
+      .eq("status", status);
 
+    // done counts since month start; processing is "reserved" only while recent to avoid blocking forever.
+    q = q.gte("processed_at", status === "done" ? sinceIso : cutoffIso);
+
+    const { count, error } = await q;
     if (error) return 0;
     return typeof count === "number" ? count : 0;
   };
 
-  const [invoice, callsheet] = await Promise.all([countTable("invoice_jobs"), countTable("callsheet_jobs")]);
-  return invoice + callsheet;
+  const [invoiceDone, callsheetDone, invoiceProcessing, callsheetProcessing] = await Promise.all([
+    countTable("invoice_jobs", "done"),
+    countTable("callsheet_jobs", "done"),
+    countTable("invoice_jobs", "processing"),
+    countTable("callsheet_jobs", "processing"),
+  ]);
+
+  return {
+    done: invoiceDone + callsheetDone,
+    processing: invoiceProcessing + callsheetProcessing,
+  };
 }
 
 export async function checkAiMonthlyQuota(userId: string): Promise<QuotaDecision> {
@@ -72,17 +94,20 @@ export async function checkAiMonthlyQuota(userId: string): Promise<QuotaDecision
   const tier = await readUserTier(userId);
   const limit = limitForTier(tier);
   const sinceIso = startOfCurrentMonthUtcIso();
-  const used = await countDoneExtractionsThisMonth(userId, sinceIso);
+  const counts = await countExtractionsThisMonth(userId, sinceIso);
+  const reserved = counts.done + counts.processing;
 
-  if (used >= limit) {
+  // Only "done" is billed/visible as usage, but we also reserve slots while jobs are processing
+  // to avoid spawning more Gemini calls than the plan allows.
+  if (reserved >= limit) {
     return {
       allowed: false,
       tier,
       limit,
-      used,
-      reason: `monthly_quota_exceeded:${tier}:${used}/${limit}`,
+      used: reserved,
+      reason: `monthly_quota_exceeded:${tier}:${reserved}/${limit}:done=${counts.done}:processing=${counts.processing}`,
     };
   }
 
-  return { allowed: true, tier, limit, used };
+  return { allowed: true, tier, limit, used: counts.done };
 }

@@ -87,8 +87,8 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
       setInvoiceStatus(job.status || "");
       setInvoiceError(job.needs_review_reason || "");
 
-      if (job.status === "failed" || job.status === "needs_review") {
-        if (!quotaToastShownRef.current && job.status === "needs_review") {
+      if (job.status === "failed" || job.status === "needs_review" || job.status === "out_of_quota") {
+        if (!quotaToastShownRef.current && (job.status === "out_of_quota" || job.status === "needs_review")) {
           const parsed = parseMonthlyQuotaExceededReason(job.needs_review_reason);
           if (parsed) {
             quotaToastShownRef.current = true;
@@ -167,6 +167,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
       return `${amount.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
     }
     if (liveTrip.invoiceJobId) {
+      if (invoiceStatus === "out_of_quota") return t("aiQuota.outOfQuotaBadge");
       if (invoiceStatus === "needs_review") return t("tripDetail.invoiceNeedsReview");
       if (invoiceStatus === "failed") return t("tripDetail.invoiceFailed");
       return t("tripDetail.invoiceExtracting");

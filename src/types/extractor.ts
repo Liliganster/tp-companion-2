@@ -1,4 +1,4 @@
-export type JobStatus = 'created' | 'queued' | 'processing' | 'done' | 'failed' | 'needs_review';
+export type JobStatus = 'created' | 'queued' | 'processing' | 'done' | 'failed' | 'needs_review' | 'out_of_quota';
 export type PdfKind = 'native_text' | 'scanned' | 'unknown';
 
 export interface CallsheetJob {
