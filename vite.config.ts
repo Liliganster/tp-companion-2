@@ -132,6 +132,23 @@ export default defineConfig(({ mode }) => {
       host: "::",
       port: 8080,
     },
+    test: {
+      environment: "jsdom",
+      setupFiles: ["./src/test/setup.ts"],
+      globals: true,
+      css: true,
+      restoreMocks: true,
+      clearMocks: true,
+      exclude: ["e2e/**", "node_modules/**", "dist/**"],
+      coverage: {
+        provider: "v8",
+        reporter: ["text", "html"],
+        lines: 60,
+        functions: 60,
+        branches: 60,
+        statements: 60,
+      },
+    },
     plugins: [
       react(),
       mode === "development" && googleApiProxy(env.GOOGLE_MAPS_SERVER_KEY),
