@@ -41,6 +41,12 @@ Para que la extracción de IA funcione correctamente, necesitas configurar estas
 - Ya deberían estar configuradas desde el setup inicial de Supabase
 - Si no, las encuentras en Settings → API en tu proyecto de Supabase
 
+## Validación de variables (fail-fast)
+La app valida variables críticas al iniciar:
+- **Frontend (React)**: si faltan `VITE_SUPABASE_URL` o `VITE_SUPABASE_ANON_KEY` en producción, la app falla rápido para evitar un deploy a medias.
+- **Workers (IA)**: si falta `GEMINI_API_KEY`, el worker falla rápido (no intenta hacer llamadas a IA sin clave).
+- **Supabase server**: si faltan `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`, los endpoints de servidor fallan con error claro.
+
 ## Cómo Configurar en Vercel
 
 1. Ve a tu proyecto en [https://vercel.com](https://vercel.com)
