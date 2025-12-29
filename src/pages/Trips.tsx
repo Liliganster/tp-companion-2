@@ -119,6 +119,9 @@ export default function Trips() {
   const [invoiceResultsByJobId, setInvoiceResultsByJobId] = useState<Record<string, { total_amount?: any; currency?: any }>>(
     {},
   );
+  const [invoiceJobsById, setInvoiceJobsById] = useState<Record<string, { status?: string; needs_review_reason?: string }>>(
+    {},
+  );
 
   useEffect(() => {
     if (!supabase) return;
@@ -133,17 +136,35 @@ export default function Trips() {
 
     if (jobIds.length === 0) {
       setInvoiceResultsByJobId({});
+      setInvoiceJobsById({});
       return;
     }
 
     let cancelled = false;
     (async () => {
+      const { data: jobRows, error: jobsError } = await supabase
+        .from("invoice_jobs")
+        .select("id, status, needs_review_reason")
+        .in("id", jobIds);
+
       const { data, error } = await supabase
         .from("invoice_results")
         .select("job_id, total_amount, currency")
         .in("job_id", jobIds);
 
       if (cancelled) return;
+      if (jobsError) {
+        if (import.meta.env.DEV) console.warn("[Trips] Failed to fetch invoice_jobs:", jobsError);
+      } else {
+        const nextJobs: Record<string, { status?: string; needs_review_reason?: string }> = {};
+        for (const row of jobRows ?? []) {
+          const id = String((row as any).id ?? "");
+          if (!id) continue;
+          nextJobs[id] = { status: (row as any).status, needs_review_reason: (row as any).needs_review_reason };
+        }
+        setInvoiceJobsById(nextJobs);
+      }
+
       if (error) {
         if (import.meta.env.DEV) console.warn("[Trips] Failed to fetch invoice_results:", error);
         return;
@@ -295,6 +316,30 @@ export default function Trips() {
 
     const jobId = typeof (trip as any).invoiceJobId === "string" ? ((trip as any).invoiceJobId as string) : "";
     if (jobId) {
+      const job = invoiceJobsById[jobId];
+      const status = String(job?.status ?? "");
+      const reason = String(job?.needs_review_reason ?? "");
+
+      if (status === "needs_review") {
+        return (
+          <Badge
+            variant="outline"
+            className="border-orange-500/40 text-orange-500"
+            title={reason || undefined}
+          >
+            {t("tripDetail.invoiceNeedsReview")}
+          </Badge>
+        );
+      }
+
+      if (status === "failed") {
+        return (
+          <Badge variant="destructive" title={reason || undefined}>
+            {t("tripDetail.invoiceFailed")}
+          </Badge>
+        );
+      }
+
       const fromResults = invoiceResultsByJobId[jobId];
       const extracted = Number(fromResults?.total_amount);
       if (Number.isFinite(extracted) && extracted > 0) {

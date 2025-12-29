@@ -627,6 +627,11 @@ const es = {
   "settings.supportBody": "¿Necesitas ayuda? Contáctanos",
   "settings.contactSupport": "Contactar soporte",
   "settings.build": "Build:",
+  "tripDetail.invoiceNeedsReview": "Revisar",
+  "tripDetail.invoiceFailed": "Error",
+  "aiQuota.monthlyLimitReachedTitle": "Límite de IA alcanzado",
+  "aiQuota.monthlyLimitReachedBody": "Has alcanzado tu cuota mensual de IA ({used}/{limit}).",
+  "aiQuota.monthlyLimitReachedBodyGeneric": "Has alcanzado tu cuota mensual de IA. Actualiza a Pro o espera al próximo mes.",
 } as const;
 
 export type I18nKey = keyof typeof es;
@@ -1237,6 +1242,11 @@ const en: Record<I18nKey, string> = {
   "settings.supportBody": "Need help? Contact us",
   "settings.contactSupport": "Contact support",
   "settings.build": "Build:",
+  "tripDetail.invoiceNeedsReview": "Needs review",
+  "tripDetail.invoiceFailed": "Error",
+  "aiQuota.monthlyLimitReachedTitle": "AI limit reached",
+  "aiQuota.monthlyLimitReachedBody": "You reached your monthly AI quota ({used}/{limit}).",
+  "aiQuota.monthlyLimitReachedBodyGeneric": "You reached your monthly AI quota. Upgrade to Pro or wait until next month.",
 };
 
 const de: Record<I18nKey, string> = {
@@ -1845,6 +1855,11 @@ const de: Record<I18nKey, string> = {
   "settings.supportBody": "Brauchst du Hilfe? Kontaktiere uns",
   "settings.contactSupport": "Support kontaktieren",
   "settings.build": "Build:",
+  "tripDetail.invoiceNeedsReview": "Prüfen",
+  "tripDetail.invoiceFailed": "Fehler",
+  "aiQuota.monthlyLimitReachedTitle": "KI-Limit erreicht",
+  "aiQuota.monthlyLimitReachedBody": "Du hast dein monatliches KI-Kontingent erreicht ({used}/{limit}).",
+  "aiQuota.monthlyLimitReachedBodyGeneric": "Du hast dein monatliches KI-Kontingent erreicht. Upgrade auf Pro oder warte bis nǬchsten Monat.",
 };
 
 const dict: Record<AppLanguage, Record<I18nKey, string>> = { es, en, de };

@@ -17,6 +17,7 @@ import { useProjects } from "@/contexts/ProjectsContext";
 import { uuidv4 } from "@/lib/utils";
 import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
 import { useAuth } from "@/contexts/AuthContext";
+import { parseMonthlyQuotaExceededReason } from "@/lib/aiQuotaReason";
 
 interface SavedTrip {
   id: string;
@@ -563,18 +564,30 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         try {
           const { data: jobs, error: jobsError } = await supabase
             .from("callsheet_jobs")
-            .select("id, status, error")
+            .select("id, status, needs_review_reason")
             .in("id", jobIds);
 
           if (jobsError || !jobs) return;
 
           const doneIds = jobs.filter((j: any) => j.status === "done").map((j: any) => j.id);
-          const failedJobs = jobs.filter((j: any) => j.status === "failed");
+          const failedJobs = jobs.filter((j: any) => j.status === "failed" || j.status === "needs_review");
           const failedIds = failedJobs.map((j: any) => j.id);
 
           setProcessingDone(doneIds.length);
 
           if (failedIds.length > 0) {
+            const quotaJob = failedJobs.find(
+              (j: any) => j.status === "needs_review" && parseMonthlyQuotaExceededReason(j.needs_review_reason),
+            );
+            if (quotaJob) {
+              const parsed = parseMonthlyQuotaExceededReason(quotaJob.needs_review_reason);
+              const description =
+                parsed?.used != null && parsed?.limit != null
+                  ? tf("aiQuota.monthlyLimitReachedBody", { used: String(parsed.used), limit: String(parsed.limit) })
+                  : t("aiQuota.monthlyLimitReachedBodyGeneric");
+              toast.error(t("aiQuota.monthlyLimitReachedTitle"), { description });
+            }
+
             // Remove failed jobs from the queue so we don't keep polling them.
             setJobIds((prev) => prev.filter((id) => !failedIds.includes(id)));
             setJobMetaById((prev) => {

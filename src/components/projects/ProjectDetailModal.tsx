@@ -18,6 +18,7 @@ import { useTrips, type Trip } from "@/contexts/TripsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
 import { uuidv4 } from "@/lib/utils";
+import { parseMonthlyQuotaExceededReason } from "@/lib/aiQuotaReason";
 
 const DEBUG = import.meta.env.DEV;
 
@@ -63,6 +64,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const [triggeringWorker, setTriggeringWorker] = useState(false);
   const realCallSheetsRef = useRef<ProjectDocument[]>([]);
   const projectDocsRef = useRef<ProjectDocument[]>([]);
+  const quotaNotifiedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     realCallSheetsRef.current = realCallSheets;
@@ -71,6 +73,10 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   useEffect(() => {
     projectDocsRef.current = projectDocs;
   }, [projectDocs]);
+
+  useEffect(() => {
+    if (!open) quotaNotifiedRef.current = new Set();
+  }, [open]);
 
   // Debug: verificar que project.id se pasa correctamente
   useEffect(() => {
@@ -475,6 +481,32 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
         const { data: jobs } = await q;
 
+        const notifyQuotaIfNeeded = (items: Array<{ id: string; status?: string; needs_review_reason?: string }>) => {
+          const newlyHit: Array<{ id: string; reason?: string }> = [];
+          for (const it of items ?? []) {
+            const id = String((it as any).id ?? "");
+            if (!id) continue;
+            if (String((it as any).status ?? "") !== "needs_review") continue;
+            const reason = String((it as any).needs_review_reason ?? "");
+            if (!parseMonthlyQuotaExceededReason(reason)) continue;
+            if (quotaNotifiedRef.current.has(id)) continue;
+            quotaNotifiedRef.current.add(id);
+            newlyHit.push({ id, reason });
+          }
+
+          if (newlyHit.length === 0) return;
+
+          const parsed = parseMonthlyQuotaExceededReason(newlyHit[0]?.reason);
+          const description =
+            parsed?.used != null && parsed?.limit != null
+              ? tf("aiQuota.monthlyLimitReachedBody", { used: String(parsed.used), limit: String(parsed.limit) })
+              : t("aiQuota.monthlyLimitReachedBodyGeneric");
+
+          toast.error(t("aiQuota.monthlyLimitReachedTitle"), { description });
+        };
+
+        notifyQuotaIfNeeded((jobs as any[]) ?? []);
+
         // 1) Keep UI in sync so spinners stop when status changes.
         if (jobs && jobs.length > 0) {
           setRealCallSheets((prev) => {
@@ -534,6 +566,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             .in("id", invoiceJobIds);
 
           if (invoiceJobs && invoiceJobs.length > 0) {
+            notifyQuotaIfNeeded((invoiceJobs as any[]) ?? []);
             // Fetch results for done jobs
             const doneInvoiceJobIds = invoiceJobs
               .filter((j: any) => j.status === "done")
