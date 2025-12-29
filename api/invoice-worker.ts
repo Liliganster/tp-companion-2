@@ -12,6 +12,8 @@ export default withApiObservability(async function handler(req: any, res: any, {
   const vercelEnv = process.env.VERCEL_ENV; // "production" | "preview" | "development" | undefined
   const requireSecret = vercelEnv ? vercelEnv !== "development" : process.env.NODE_ENV === "production";
   const isVercelCron = Boolean(req.headers?.["x-vercel-cron"]);
+  const manual = String(req.query?.manual ?? "").trim() === "1";
+  const maxJobs = manual ? 1 : 8;
 
   const queryKey = typeof req.query?.key === "string" ? req.query.key : null;
 
@@ -55,7 +57,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
       .from("invoice_jobs")
       .select("*")
       .eq("status", "queued")
-      .limit(8);
+      .limit(maxJobs);
 
     if (error) throw error;
     if (!jobs || jobs.length === 0) {

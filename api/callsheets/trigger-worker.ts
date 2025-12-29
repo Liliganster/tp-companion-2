@@ -46,7 +46,9 @@ export default withApiObservability(async function handler(req: any, res: any, {
 
     // Trigger the worker endpoint with CRON_SECRET
     const protocol = req.headers.host?.includes('localhost') ? 'http' : 'https';
-    const workerUrl = `${protocol}://${req.headers.host}/api/worker`;
+    // Manual trigger: keep the request short to avoid function timeouts in UI.
+    // Cron will still process the rest in background.
+    const workerUrl = `${protocol}://${req.headers.host}/api/worker?manual=1&skipGeocode=1`;
     const cronSecret = process.env.CRON_SECRET;
 
     log.info({ queuedJobs: jobs.length }, "[trigger-worker] Calling worker");
