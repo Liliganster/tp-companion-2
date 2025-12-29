@@ -97,6 +97,22 @@ export default withApiObservability(async function handler(req: any, res: any, {
           }
         }
 
+        // Cache: if results already exist for this job, don't call Gemini again.
+        const { data: existingResult, error: existingError } = await supabaseAdmin
+          .from("invoice_results")
+          .select("id")
+          .eq("job_id", job.id)
+          .maybeSingle();
+
+        if (existingError) {
+          log.warn({ jobId: job.id, existingError }, "invoice_existing_result_check_failed");
+        } else if (existingResult?.id) {
+          await supabaseAdmin.from("invoice_jobs").update({ status: "done" }).eq("id", job.id);
+          processedResults.push({ id: job.id, status: "done", cached: true });
+          log.info({ jobId: job.id }, "invoice_job_cached_done");
+          return;
+        }
+
         // A. Download PDF/Image from project_documents bucket
         const { data: fileData, error: downloadError } = await supabaseAdmin.storage
           .from("project_documents")

@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { formatSupabaseError } from "@/lib/supabaseErrors";
 import { useAuth } from "./AuthContext";
@@ -7,6 +7,7 @@ import { cascadeDeleteTripById } from "@/lib/cascadeDelete";
 import { calculateTripEmissions } from "@/lib/emissions";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { parseLocaleNumber } from "@/lib/number";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 export type Trip = {
   id: string;
@@ -54,8 +55,8 @@ const TripsContext = createContext<TripsContextValue | null>(null);
 export function TripsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { profile } = useUserProfile();
-  const [trips, setTrips] = useState<Trip[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const queryKey = useMemo(() => ["trips", user?.id ?? "anon"] as const, [user?.id]);
 
   const emissionsInput = useMemo(() => {
     return {
@@ -78,18 +79,13 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     return false;
   }, [emissionsInput.evKwhPer100Km, emissionsInput.fuelLPer100Km, emissionsInput.fuelType]);
 
-  useEffect(() => {
-    if (!user || !supabase) {
-      setTrips([]);
-      setLoading(false);
-      return;
-    }
+  const tripsQuery = useQuery({
+    queryKey,
+    enabled: Boolean(user && supabase),
+    queryFn: async (): Promise<Trip[]> => {
+      if (!supabase || !user) return [];
 
-    let mounted = true;
-
-    async function fetchTrips() {
-      // Join with projects to get name
-      const { data, error } = await supabase!
+      const { data, error } = await supabase
         .from("trips")
         .select("*, projects(name)")
         .order("trip_date", { ascending: false });
@@ -97,64 +93,80 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error("Error fetching trips:", error);
         toast.error(formatSupabaseError(error, "Error cargando viajes"));
+        return [];
       }
 
-      if (mounted) {
-        if (data) {
-          const mapped: Trip[] = data.map((t: any) => ({
-            id: t.id,
-            date: t.trip_date || t.date_value || "",
-            route: t.route || [],
-            project: t.projects?.name || "Unknown",
-            projectId: t.project_id,
-            callsheet_job_id: t.callsheet_job_id,
-            purpose: t.purpose || "",
-            passengers: t.passengers || 0,
-            invoice: t.invoice_number,
-            invoiceAmount: t.invoice_amount ?? null,
-            invoiceCurrency: t.invoice_currency ?? null,
-            invoiceJobId: t.invoice_job_id ?? null,
-            distance: t.distance_km || 0,
-            co2: shouldUseFuelBasedEmissions
-              ? calculateTripEmissions({ distanceKm: t.distance_km || 0, ...emissionsInput }).co2Kg
-              : (Number.isFinite(Number(t.co2_kg)) && Number(t.co2_kg) > 0
-                ? Number(t.co2_kg)
-                : calculateTripEmissions({ distanceKm: t.distance_km || 0, ...emissionsInput }).co2Kg),
-            ratePerKmOverride: t.rate_per_km_override,
-            specialOrigin: t.special_origin,
-            documents: t.documents || []
-          }));
-          setTrips(mapped);
+      return (data ?? []).map((t: any) => ({
+        id: t.id,
+        date: t.trip_date || t.date_value || "",
+        route: t.route || [],
+        project: t.projects?.name || "Unknown",
+        projectId: t.project_id,
+        callsheet_job_id: t.callsheet_job_id,
+        purpose: t.purpose || "",
+        passengers: t.passengers || 0,
+        invoice: t.invoice_number,
+        invoiceAmount: t.invoice_amount ?? null,
+        invoiceCurrency: t.invoice_currency ?? null,
+        invoiceJobId: t.invoice_job_id ?? null,
+        distance: t.distance_km || 0,
+        co2: Number.isFinite(Number(t.co2_kg)) ? Number(t.co2_kg) : 0,
+        ratePerKmOverride: t.rate_per_km_override,
+        specialOrigin: t.special_origin,
+        documents: t.documents || [],
+      }));
+    },
+  });
 
-          // Best-effort: if the user configured vehicle emissions, keep DB values in sync so views (e.g. project_totals) match.
-          if (shouldUseFuelBasedEmissions) {
-            const updates = (data as any[])
-              .map((t: any) => {
-                const distanceKm = t.distance_km || 0;
-                const next = calculateTripEmissions({ distanceKm, ...emissionsInput }).co2Kg;
-                const prev = Number(t.co2_kg);
-                const prevValid = Number.isFinite(prev) && prev > 0;
-                if (!prevValid || Math.abs(prev - next) > 0.1) return { id: t.id, co2_kg: next };
-                return null;
-              })
-              .filter(Boolean) as Array<{ id: string; co2_kg: number }>;
+  const trips: Trip[] = useMemo(() => {
+    const base = (tripsQuery.data ?? []) as Trip[];
+    return base.map((t) => {
+      const stored = Number(t.co2);
+      const storedValid = Number.isFinite(stored) && stored > 0;
+      const computed = calculateTripEmissions({ distanceKm: t.distance, ...emissionsInput }).co2Kg;
+      return {
+        ...t,
+        co2: shouldUseFuelBasedEmissions ? computed : storedValid ? stored : computed,
+      };
+    });
+  }, [emissionsInput, shouldUseFuelBasedEmissions, tripsQuery.data]);
 
-            if (updates.length > 0) {
-              // Fire-and-forget updates; avoid blocking the UI.
-              Promise.allSettled(
-                updates.map((u) => supabase.from("trips").update({ co2_kg: u.co2_kg }).eq("id", u.id)),
-              ).catch(() => null);
-            }
-          }
-        }
-        setLoading(false);
-      }
-    }
+  const loading = tripsQuery.isLoading;
 
-    fetchTrips();
+  // Best-effort: if the user configured vehicle emissions, keep DB values in sync so views (e.g. project_totals) match.
+  const lastEmissionsSyncKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!user || !supabase) return;
+    if (!shouldUseFuelBasedEmissions) return;
+    const key = JSON.stringify(emissionsInput);
+    if (lastEmissionsSyncKeyRef.current === key) return;
+    lastEmissionsSyncKeyRef.current = key;
 
-    return () => { mounted = false; };
-  }, [user, emissionsInput, shouldUseFuelBasedEmissions]);
+    const base = (tripsQuery.data ?? []) as Trip[];
+    if (base.length === 0) return;
+
+    const updates = base
+      .map((t) => {
+        const next = calculateTripEmissions({ distanceKm: t.distance, ...emissionsInput }).co2Kg;
+        const prev = Number(t.co2);
+        const prevValid = Number.isFinite(prev) && prev > 0;
+        if (!prevValid || Math.abs(prev - next) > 0.1) return { id: t.id, co2: next };
+        return null;
+      })
+      .filter(Boolean) as Array<{ id: string; co2: number }>;
+
+    if (updates.length === 0) return;
+
+    // Update cache immediately so other views can use consistent values.
+    queryClient.setQueryData<Trip[]>(queryKey, (prev) => {
+      const list = prev ?? [];
+      const map = new Map(updates.map((u) => [u.id, u.co2]));
+      return list.map((t) => (map.has(t.id) ? { ...t, co2: map.get(t.id)! } : t));
+    });
+
+    // Fire-and-forget DB updates.
+    void Promise.allSettled(updates.map((u) => supabase.from("trips").update({ co2_kg: u.co2 }).eq("id", u.id)));
+  }, [emissionsInput, queryClient, queryKey, shouldUseFuelBasedEmissions, tripsQuery.data, user]);
 
   // Keep invoice fields in sync when AI extraction updates trips in DB.
   useEffect(() => {
@@ -168,8 +180,8 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         (payload: any) => {
           const next = payload?.new as any;
           if (!next?.id) return;
-          setTrips((prev) =>
-            prev.map((t) =>
+          queryClient.setQueryData<Trip[]>(queryKey, (prev) =>
+            (prev ?? []).map((t) =>
               t.id === next.id
                 ? {
                     ...t,
@@ -177,6 +189,8 @@ export function TripsProvider({ children }: { children: ReactNode }) {
                     invoiceCurrency: next.invoice_currency ?? null,
                     invoiceJobId: next.invoice_job_id ?? null,
                     documents: next.documents ?? t.documents,
+                    co2: Number.isFinite(Number(next.co2_kg)) ? Number(next.co2_kg) : t.co2,
+                    distance: Number.isFinite(Number(next.distance_km)) ? Number(next.distance_km) : t.distance,
                   }
                 : t,
             ),
@@ -188,7 +202,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [queryClient, queryKey, user]);
 
   const addTrip = useCallback(async (trip: Trip): Promise<boolean> => {
     console.log("[TripsContext] addTrip called with:", trip);
@@ -208,17 +222,8 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         : calculateTripEmissions({ distanceKm: trip.distance, ...emissionsInput }).co2Kg,
     };
 
-    setTrips(prev => [normalizedTrip, ...prev]);
-
-    // Lookup project_id if not provided but name exists?
-    // This is risky. Better to rely on projectId if passed.
-    // Ideally consumers (AddTripModal) pass the ID.
-    // If not, we define project_id as null.
-    // But if we want to save, we construct payload.
-    
-    // NOTE: This assumes caller provided projectId if they want relational link.
-    // AddTripModal currently DOES NOT have projectId in state, only name. 
-    // We need to fix AddTripModal to resolve ID from name.
+    const prevTrips = (queryClient.getQueryData<Trip[]>(queryKey) ?? []) as Trip[];
+    queryClient.setQueryData<Trip[]>(queryKey, [normalizedTrip, ...prevTrips]);
 
     const dbPayload = {
       id: normalizedTrip.id,
@@ -247,13 +252,14 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     if (error) {
       console.error("[TripsContext] Error adding trip:", error);
       toast.error(formatSupabaseError(error, "Error guardando viaje: " + error.message));
-      setTrips(prev => prev.filter(t => t.id !== normalizedTrip.id));
+      queryClient.setQueryData<Trip[]>(queryKey, (prev) => (prev ?? []).filter((t) => t.id !== normalizedTrip.id));
       return false;
     } else {
         console.log("[TripsContext] Trip saved successfully");
+        queryClient.invalidateQueries({ queryKey }).catch(() => null);
         return true;
     }
-  }, [user, emissionsInput]);
+  }, [emissionsInput, queryClient, queryKey, user]);
 
   const updateTrip = useCallback(async (id: string, patch: Partial<Trip>): Promise<boolean> => {
     if (!supabase || !user) return false;
@@ -263,7 +269,9 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       nextPatch.co2 = calculateTripEmissions({ distanceKm: patch.distance, ...emissionsInput }).co2Kg;
     }
 
-    setTrips(prev => prev.map(t => t.id === id ? { ...t, ...nextPatch } : t));
+    queryClient.setQueryData<Trip[]>(queryKey, (prev) =>
+      (prev ?? []).map((t) => (t.id === id ? { ...t, ...nextPatch } : t)),
+    );
 
     const dbPatch: any = {};
     if (patch.date !== undefined) {
@@ -289,32 +297,34 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error("Error updating trip:", error);
         toast.error(formatSupabaseError(error, "Error actualizando viaje"));
+        queryClient.invalidateQueries({ queryKey }).catch(() => null);
         return false;
       }
     }
     return true;
-  }, [user, emissionsInput]);
+  }, [emissionsInput, queryClient, queryKey, user]);
 
   const deleteTrip = useCallback(async (id: string) => {
     if (!supabase || !user) return;
 
-    let removedTrip: Trip | undefined;
-    setTrips((prev) => {
-      removedTrip = prev.find((t) => t.id === id);
-      return prev.filter((t) => t.id !== id);
-    });
+    const prevTrips = (queryClient.getQueryData<Trip[]>(queryKey) ?? []) as Trip[];
+    const removedTrip = prevTrips.find((t) => t.id === id);
+    queryClient.setQueryData<Trip[]>(queryKey, prevTrips.filter((t) => t.id !== id));
 
     try {
       await cascadeDeleteTripById(supabase, id);
+      queryClient.invalidateQueries({ queryKey }).catch(() => null);
     } catch (err) {
       console.error("[TripsContext] Cascade delete failed:", err);
       toast.error(formatSupabaseError(err, "No se pudo borrar el viaje y sus datos asociados"));
       if (removedTrip) {
-        setTrips((prev) => (prev.some((t) => t.id === removedTrip!.id) ? prev : [removedTrip!, ...prev]));
+        queryClient.setQueryData<Trip[]>(queryKey, (prev) =>
+          (prev ?? []).some((t) => t.id === removedTrip.id) ? (prev ?? []) : [removedTrip, ...(prev ?? [])],
+        );
       }
       throw err;
     }
-  }, [user]);
+  }, [queryClient, queryKey, user]);
 
   const value = useMemo<TripsContextValue>(() => ({ 
     trips, 

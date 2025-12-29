@@ -1,9 +1,10 @@
-import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "./AuthContext";
 import { toast } from "sonner";
 import { cascadeDeleteProjectById } from "@/lib/cascadeDelete";
 import { formatSupabaseError } from "@/lib/supabaseErrors";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 const PROJECT_TOTALS_AVAILABLE_KEY = "fbp.project_totals.available";
 const PROJECT_TOTALS_MISSING_NOTIFIED_KEY = "fbp.project_totals.missing_notified";
@@ -61,27 +62,21 @@ const ProjectsContext = createContext<ProjectsContextValue | null>(null);
 
 export function ProjectsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const queryClient = useQueryClient();
+  const queryKey = useMemo(() => ["projects", user?.id ?? "anon"] as const, [user?.id]);
 
   const refreshProjects = useCallback(() => {
-    setLoading(true);
-    setRefreshKey((v) => v + 1);
-  }, []);
+    if (!user) return;
+    void queryClient.invalidateQueries({ queryKey });
+  }, [queryClient, queryKey, user]);
 
-  useEffect(() => {
-    if (!user || !supabase) {
-      setProjects([]);
-      setLoading(false);
-      return;
-    }
+  const projectsQuery = useQuery({
+    queryKey,
+    enabled: Boolean(user && supabase),
+    queryFn: async (): Promise<Project[]> => {
+      if (!user || !supabase) return [];
 
-    let mounted = true;
-
-    async function fetchProjects() {
-      // Fetch projects with computed totals from project_totals view
-      const { data: projectsData, error: projectsError } = await supabase!
+      const { data: projectsData, error: projectsError } = await supabase
         .from("projects")
         .select("*")
         .order("created_at", { ascending: false });
@@ -89,17 +84,13 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       if (projectsError) {
         console.error("Error fetching projects:", projectsError);
         toast.error("Error loading projects: " + projectsError.message);
-        if (mounted) setLoading(false);
-        return;
+        return [];
       }
 
-      // Fetch totals from the view
       let totalsData: any[] | null = null;
       const cachedAvailability = readLocalStorageFlag(PROJECT_TOTALS_AVAILABLE_KEY);
       if (cachedAvailability !== false) {
-        const { data, error: totalsError, status } = await supabase!
-          .from("project_totals")
-          .select("*");
+        const { data, error: totalsError, status } = await supabase.from("project_totals").select("*");
 
         if (totalsError) {
           const missing = status === 404 || /Could not find the relation/i.test(totalsError.message ?? "");
@@ -120,47 +111,37 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Create a map of totals by project_id
-      const totalsMap = new Map(
-        (totalsData || []).map((t: any) => [t.project_id, t])
-      );
+      const totalsMap = new Map((totalsData || []).map((t: any) => [t.project_id, t]));
 
-      if (mounted) {
-        if (projectsData) {
-          const mapped = projectsData.map((p: any) => {
-            const totals = totalsMap.get(p.id);
-            const totalKm = totals?.total_distance_km || 0;
-            const trips = totals?.total_trips || 0;
-            const totalInvoiced = (totals?.total_invoiced_eur || 0) + (totals?.total_trip_invoices_eur || 0);
-            
-            return {
-              id: p.id,
-              name: p.name,
-              producer: p.producer,
-              description: p.description,
-              ratePerKm: p.rate_per_km ? Number(p.rate_per_km) : 0,
-              starred: p.starred,
-              archived: p.archived,
-              trips: trips,
-              totalKm: totalKm,
-              documents: 0, // Could be calculated from project_documents count
-              invoices: totalInvoiced,
-              estimatedCost: totalKm * (p.rate_per_km || 0),
-              shootingDays: trips, // Approximate: 1 trip = 1 day
-              kmPerDay: trips > 0 ? totalKm / trips : 0,
-              co2Emissions: totals?.total_co2_kg || 0,
-            };
-          });
-          setProjects(mapped);
-        }
-        setLoading(false);
-      }
-    }
+      return (projectsData ?? []).map((p: any) => {
+        const totals = totalsMap.get(p.id);
+        const totalKm = totals?.total_distance_km || 0;
+        const trips = totals?.total_trips || 0;
+        const totalInvoiced = (totals?.total_invoiced_eur || 0) + (totals?.total_trip_invoices_eur || 0);
 
-    fetchProjects();
+        return {
+          id: p.id,
+          name: p.name,
+          producer: p.producer,
+          description: p.description,
+          ratePerKm: p.rate_per_km ? Number(p.rate_per_km) : 0,
+          starred: p.starred,
+          archived: p.archived,
+          trips: trips,
+          totalKm: totalKm,
+          documents: 0,
+          invoices: totalInvoiced,
+          estimatedCost: totalKm * (p.rate_per_km || 0),
+          shootingDays: trips,
+          kmPerDay: trips > 0 ? totalKm / trips : 0,
+          co2Emissions: totals?.total_co2_kg || 0,
+        };
+      });
+    },
+  });
 
-    return () => { mounted = false; };
-  }, [user, refreshKey]);
+  const projects = projectsQuery.data ?? [];
+  const loading = projectsQuery.isLoading;
 
   useEffect(() => {
     if (!user || !supabase) return;
@@ -218,7 +199,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     }
 
     // Optimistic update
-    setProjects(prev => [project, ...prev]);
+    const prev = (queryClient.getQueryData<Project[]>(queryKey) ?? []) as Project[];
+    queryClient.setQueryData<Project[]>(queryKey, [project, ...prev]);
 
     const { error } = await supabase.from("projects").insert({
       id: project.id, // Use client-generated ID if provided, else DB generates? Schema has gen_random_uuid() default but allows insert
@@ -242,14 +224,17 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       }
       
       // Revert optimistic update
-      setProjects(prev => prev.filter(p => p.id !== project.id));
+      queryClient.setQueryData<Project[]>(
+        queryKey,
+        (cur) => (cur ?? []).filter((p) => p.id !== project.id),
+      );
     }
-  }, [user]);
+  }, [queryClient, queryKey, user]);
 
   const updateProject = useCallback(async (id: string, patch: Partial<Project>) => {
     if (!supabase || !user) return;
 
-    setProjects(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p));
+    queryClient.setQueryData<Project[]>(queryKey, (prev) => (prev ?? []).map((p) => (p.id === id ? { ...p, ...patch } : p)));
 
     // Map patch to DB columns
     const dbPatch: any = {};
@@ -265,30 +250,38 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     
     if (Object.keys(dbPatch).length > 0) {
       const { error } = await supabase.from("projects").update(dbPatch).eq("id", id);
-      if (error) console.error("Error updating project:", error);
+      if (error) {
+        console.error("Error updating project:", error);
+        void queryClient.invalidateQueries({ queryKey });
+      }
     }
-  }, [user]);
+  }, [queryClient, queryKey, user]);
 
   const deleteProject = useCallback(async (id: string) => {
     if (!supabase || !user) return;
 
-    let removedProject: Project | undefined;
-    setProjects((prev) => {
-      removedProject = prev.find((p) => p.id === id);
-      return prev.filter((p) => p.id !== id);
-    });
+    const prev = (queryClient.getQueryData<Project[]>(queryKey) ?? []) as Project[];
+    const removedProject = prev.find((p) => p.id === id);
+    queryClient.setQueryData<Project[]>(
+      queryKey,
+      prev.filter((p) => p.id !== id),
+    );
 
     try {
       await cascadeDeleteProjectById(supabase, id);
+      void queryClient.invalidateQueries({ queryKey });
     } catch (err) {
       console.error("[ProjectsContext] Cascade delete failed:", err);
       toast.error(formatSupabaseError(err, "No se pudo borrar el proyecto y sus datos asociados"));
       if (removedProject) {
-        setProjects((prev) => (prev.some((p) => p.id === removedProject!.id) ? prev : [removedProject!, ...prev]));
+        queryClient.setQueryData<Project[]>(
+          queryKey,
+          (cur) => ((cur ?? []).some((p) => p.id === removedProject.id) ? (cur ?? []) : [removedProject, ...(cur ?? [])]),
+        );
       }
       throw err;
     }
-  }, [user]);
+  }, [queryClient, queryKey, user]);
 
   const toggleStar = useCallback(async (id: string) => {
     const project = projects.find(p => p.id === id);

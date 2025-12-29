@@ -129,6 +129,22 @@ export default withApiObservability(async function handler(req: any, res: any, {
           }
         }
 
+        // Cache: if results already exist for this job, don't call Gemini again.
+        const { data: existingResult, error: existingError } = await supabaseAdmin
+          .from("callsheet_results")
+          .select("job_id")
+          .eq("job_id", job.id)
+          .maybeSingle();
+
+        if (existingError) {
+          log.warn({ jobId: job.id, existingError }, "callsheet_existing_result_check_failed");
+        } else if (existingResult?.job_id) {
+          await supabaseAdmin.from("callsheet_jobs").update({ status: "done" }).eq("id", job.id);
+          processedResults.push({ id: job.id, status: "done", cached: true });
+          log.info({ jobId: job.id }, "callsheet_job_cached_done");
+          return;
+        }
+
         // A. Download PDF
         const { data: fileData, error: downloadError } = await supabaseAdmin.storage
           .from("callsheets")

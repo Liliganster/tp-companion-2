@@ -60,7 +60,12 @@ function getUpstashRedis() {
 }
 
 let ratelimiters: Record<string, Ratelimit> | null = null;
-function getLimiter(name: string, limit: number, window: string): Ratelimit | null {
+function windowMsToDuration(windowMs: number): Duration {
+  const seconds = Math.max(1, Math.ceil(windowMs / 1000));
+  return `${seconds} s` as unknown as Duration;
+}
+
+function getLimiter(name: string, limit: number, window: Duration): Ratelimit | null {
   const redis = getUpstashRedis();
   if (!redis) return null;
 
@@ -69,7 +74,7 @@ function getLimiter(name: string, limit: number, window: string): Ratelimit | nu
   if (!ratelimiters[cacheKey]) {
     ratelimiters[cacheKey] = new Ratelimit({
       redis,
-      limiter: Ratelimit.slidingWindow(limit, window as Duration),
+      limiter: Ratelimit.slidingWindow(limit, window),
       analytics: true,
       prefix: "tp",
     });
@@ -91,7 +96,7 @@ export async function enforceRateLimit(params: {
   const key = `${name}:${identifier}`;
 
   // Prefer Upstash if configured
-  const limiter = getLimiter(name, limit, `${Math.ceil(windowMs / 1000)} s`);
+  const limiter = getLimiter(name, limit, windowMsToDuration(windowMs));
   if (limiter) {
     const result = await limiter.limit(key);
     if (result.success) return true;

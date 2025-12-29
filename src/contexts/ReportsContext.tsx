@@ -1,6 +1,7 @@
-import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "./AuthContext";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 export type SavedReport = {
   id: string;
@@ -37,50 +38,38 @@ const ReportsContext = createContext<ReportsContextValue | null>(null);
 
 export function ReportsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [reports, setReports] = useState<SavedReport[]>([]);
+  const queryClient = useQueryClient();
+  const queryKey = useMemo(() => ["reports", user?.id ?? "anon"] as const, [user?.id]);
 
-  useEffect(() => {
-    if (!user || !supabase) {
-      setReports([]);
-      return;
-    }
-
-    let mounted = true;
-
-    async function fetchReports() {
-      const { data, error } = await supabase!
-        .from("reports")
-        .select("*")
-        .order("created_at", { ascending: false });
-
+  const reportsQuery = useQuery({
+    queryKey,
+    enabled: Boolean(user && supabase),
+    queryFn: async (): Promise<SavedReport[]> => {
+      if (!user || !supabase) return [];
+      const { data, error } = await supabase.from("reports").select("*").order("created_at", { ascending: false });
       if (error) {
         console.error("Error fetching reports:", error);
+        return [];
       }
+      return (data ?? []).map((r: any) => ({
+        id: r.id,
+        createdAt: r.created_at || new Date().toISOString(),
+        month: r.month || "",
+        year: r.year || "",
+        project: r.project_filter || "all",
+        tripIds: r.trip_ids || [],
+        startDate: r.start_date || "",
+        endDate: r.end_date || "",
+        totalDistanceKm: Number(r.total_km || 0),
+        tripsCount: r.trips_count || 0,
+        driver: r.driver || "",
+        address: r.address || "",
+        licensePlate: r.license_plate || "",
+      }));
+    },
+  });
 
-      if (mounted && data) {
-        const mapped: SavedReport[] = data.map((r: any) => ({
-          id: r.id,
-          createdAt: r.created_at || new Date().toISOString(),
-          month: r.month || "",
-          year: r.year || "",
-          project: r.project_filter || "all",
-          tripIds: r.trip_ids || [],
-          startDate: r.start_date || "",
-          endDate: r.end_date || "",
-          totalDistanceKm: Number(r.total_km || 0),
-          tripsCount: r.trips_count || 0,
-          driver: r.driver || "",
-          address: r.address || "",
-          licensePlate: r.license_plate || ""
-        }));
-        setReports(mapped);
-      }
-    }
-
-    fetchReports();
-
-    return () => { mounted = false; };
-  }, [user]);
+  const reports = reportsQuery.data ?? [];
 
   const addReport = useCallback<ReportsContextValue["addReport"]>(async (report) => {
     if (!user || !supabase) {
@@ -104,7 +93,8 @@ export function ReportsProvider({ children }: { children: ReactNode }) {
       licensePlate: report.licensePlate,
     };
 
-    setReports((prev) => [nextReport, ...prev]);
+    const prev = (queryClient.getQueryData<SavedReport[]>(queryKey) ?? []) as SavedReport[];
+    queryClient.setQueryData<SavedReport[]>(queryKey, [nextReport, ...prev]);
 
     const { error } = await supabase.from("reports").insert({
         id: nextReport.id,
@@ -125,37 +115,35 @@ export function ReportsProvider({ children }: { children: ReactNode }) {
 
     if (error) {
         console.error("Error saving report:", error);
-        setReports(prev => prev.filter(r => r.id !== nextReport.id));
+        queryClient.setQueryData<SavedReport[]>(queryKey, (cur) => (cur ?? []).filter((r) => r.id !== nextReport.id));
     }
 
     return nextReport;
-  }, [user]);
+  }, [queryClient, queryKey, user]);
 
   const deleteReport = useCallback(async (id: string) => {
     if (!user || !supabase) return;
     
-    setReports((prev) => prev.filter((r) => r.id !== id));
+    queryClient.setQueryData<SavedReport[]>(
+      queryKey,
+      (cur) => (cur ?? []).filter((r) => r.id !== id),
+    );
     
     const { error } = await supabase.from("reports").delete().eq("id", id);
     if (error) {
         console.error("Error deleting report:", error);
+        void queryClient.invalidateQueries({ queryKey });
     }
-  }, [user]);
+  }, [queryClient, queryKey, user]);
 
   const clearReports = useCallback(async () => {
     if (!user || !supabase) return;
 
-    setReports([]);
-    // Delete all for user? Or just local state clear? 
-    // "clearReports" usually implied deleting all.
-    // BE CAREFUL: Do we really want to delete all DB reports?
-    // The previous implementation wiped localStorage.
-    // For safety, let's assuming purging all reports for this user.
-    
-    const { error } = await supabase.from("reports").delete().neq("id", "00000000-0000-0000-0000-000000000000"); // Delete all (using user RLS)
+    queryClient.setQueryData<SavedReport[]>(queryKey, []);
+    const { error } = await supabase.from("reports").delete().eq("user_id", user.id);
     if (error) console.error("Error clearing reports:", error);
 
-  }, [user]);
+  }, [queryClient, queryKey, user]);
 
   const value = useMemo<ReportsContextValue>(() => ({ reports, addReport, deleteReport, clearReports }), [reports, addReport, deleteReport, clearReports]);
 
@@ -167,4 +155,3 @@ export function useReports() {
   if (!ctx) throw new Error("useReports must be used within a ReportsProvider");
   return ctx;
 }
-
