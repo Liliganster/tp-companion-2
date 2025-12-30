@@ -1,5 +1,6 @@
 import { requireSupabaseUser, sendJson } from "../../_utils/supabase.js";
 import { getGoogleAccessTokenForUser } from "../_utils.js";
+import { enforceRateLimit } from "../../_utils/rateLimit.js";
 
 function safeFilename(input: string) {
   const cleaned = String(input ?? "document")
@@ -21,6 +22,16 @@ export default async function handler(req: any, res: any) {
 
   const user = await requireSupabaseUser(req, res);
   if (!user) return;
+
+  const allowed = await enforceRateLimit({
+    req,
+    res,
+    name: "google_drive_download",
+    identifier: user.id,
+    limit: 60,
+    windowMs: 60_000,
+  });
+  if (!allowed) return;
 
   const fileId = typeof req.query?.fileId === "string" ? req.query.fileId : "";
   const name = typeof req.query?.name === "string" ? req.query.name : "document";

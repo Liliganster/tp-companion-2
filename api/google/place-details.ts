@@ -1,4 +1,5 @@
 import { requireSupabaseUser } from "../_utils/supabase.js";
+import { enforceRateLimit } from "../_utils/rateLimit.js";
 
 const GOOGLE_BASE = "https://maps.googleapis.com/maps/api";
 
@@ -71,6 +72,16 @@ export default async function handler(req: any, res: any) {
 
     const user = await requireSupabaseUser(req, res);
     if (!user) return;
+
+    const allowed = await enforceRateLimit({
+        req,
+        res,
+        name: "google_place_details",
+        identifier: user.id,
+        limit: 120,
+        windowMs: 60_000,
+    });
+    if (!allowed) return;
 
     const key = process.env.GOOGLE_MAPS_SERVER_KEY;
     if (!key) {

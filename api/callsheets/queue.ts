@@ -1,62 +1,63 @@
 import { supabaseAdmin } from "../../src/lib/supabaseServer.js";
+import { withApiObservability } from "../_utils/observability.js";
+import { requireSupabaseUser, sendJson } from "../_utils/supabase.js";
+import { enforceRateLimit } from "../_utils/rateLimit.js";
+import { z } from "zod";
 
-export default async function handler(req: any, res: any) {
+const BodySchema = z.object({ jobId: z.string().uuid() });
+
+export default withApiObservability(async function handler(req: any, res: any, { log, requestId }) {
   if (req.method !== "POST") {
-    res.status(405).json({ error: "Method not allowed" });
+    res.statusCode = 405;
+    res.setHeader("Allow", "POST");
+    res.end();
     return;
   }
 
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    res.status(401).json({ error: "Missing authorization header" });
-    return;
-  }
+  const user = await requireSupabaseUser(req, res);
+  if (!user) return;
 
-  const token = authHeader.replace("Bearer ", "");
-  const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+  // Rate limit: prevent queue spam (Gemini cost amplifier)
+  const allowed = await enforceRateLimit({
+    req,
+    res,
+    name: "callsheet_queue",
+    identifier: user.id,
+    limit: 10,
+    windowMs: 10_000,
+    requestId,
+  });
+  if (!allowed) return;
 
-  if (authError || !user) {
-    res.status(401).json({ error: "Invalid token" });
-    return;
-  }
-
-  const { jobId } = req.body;
-
-  if (!jobId) {
-    res.status(400).json({ error: "Missing jobId" });
-    return;
-  }
+  const parsed = BodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) return sendJson(res, 400, { error: "invalid_body", details: parsed.error.issues });
+  const { jobId } = parsed.data;
 
   try {
-    // Verify job belongs to user and is in 'created' state
     const { data: job, error: fetchError } = await supabaseAdmin
       .from("callsheet_jobs")
-      .select("*")
+      .select("id, status, user_id")
       .eq("id", jobId)
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
     if (fetchError || !job) {
-      res.status(404).json({ error: "Job not found" });
-      return;
+      return sendJson(res, 404, { error: "job_not_found" });
     }
 
-    if (job.status !== "created") {
-      res.status(400).json({ error: "Job already queued or processed" });
-      return;
+    if (job.status !== "created" && job.status !== "failed") {
+      return sendJson(res, 400, { error: "job_already_queued_or_done", status: job.status });
     }
 
-    // Mark as queued
-    const { error: updateError } = await supabaseAdmin
-      .from("callsheet_jobs")
-      .update({ status: "queued" })
-      .eq("id", jobId);
+    const { error: updateError } = await supabaseAdmin.from("callsheet_jobs").update({ status: "queued" }).eq("id", jobId);
+    if (updateError) {
+      log.error({ updateError }, "[callsheets/queue] Update error");
+      return sendJson(res, 500, { error: "update_failed", message: updateError.message });
+    }
 
-    if (updateError) throw updateError;
-
-    res.status(200).json({ success: true, status: "queued" });
+    return sendJson(res, 200, { ok: true, jobId });
   } catch (err: any) {
-    console.error("Queue error:", err);
-    res.status(500).json({ error: err.message });
+    log.error({ err }, "[callsheets/queue] error");
+    return sendJson(res, 500, { error: "queue_failed", message: err?.message ?? "Queue failed" });
   }
-}
+}, { name: "callsheets/queue" });

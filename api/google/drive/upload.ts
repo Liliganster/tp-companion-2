@@ -1,5 +1,6 @@
 import { requireSupabaseUser, sendJson } from "../../_utils/supabase.js";
 import { getGoogleAccessTokenForUser } from "../_utils.js";
+import { enforceRateLimit } from "../../_utils/rateLimit.js";
 
 function readBody(req: any) {
   if (req?.body == null) return null;
@@ -31,6 +32,16 @@ export default async function handler(req: any, res: any) {
 
   const user = await requireSupabaseUser(req, res);
   if (!user) return;
+
+  const allowed = await enforceRateLimit({
+    req,
+    res,
+    name: "google_drive_upload",
+    identifier: user.id,
+    limit: 20,
+    windowMs: 60_000,
+  });
+  if (!allowed) return;
 
   const body = readBody(req);
   const name = typeof body?.name === "string" ? body.name : "document";

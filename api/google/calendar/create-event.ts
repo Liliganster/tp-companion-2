@@ -1,5 +1,6 @@
 import { requireSupabaseUser, sendJson } from "../../_utils/supabase.js";
 import { getGoogleAccessTokenForUser } from "../_utils.js";
+import { enforceRateLimit } from "../../_utils/rateLimit.js";
 
 function readBody(req: any) {
   if (req?.body == null) return null;
@@ -23,6 +24,16 @@ export default async function handler(req: any, res: any) {
 
   const user = await requireSupabaseUser(req, res);
   if (!user) return;
+
+  const allowed = await enforceRateLimit({
+    req,
+    res,
+    name: "google_calendar_create_event",
+    identifier: user.id,
+    limit: 20,
+    windowMs: 60_000,
+  });
+  if (!allowed) return;
 
   const body = readBody(req);
   const calendarId = typeof body?.calendarId === "string" && body.calendarId.trim() ? body.calendarId.trim() : "primary";
@@ -60,4 +71,3 @@ export default async function handler(req: any, res: any) {
     return sendJson(res, 400, { error: "not_connected", message: e?.message ?? "Google not connected" });
   }
 }
-

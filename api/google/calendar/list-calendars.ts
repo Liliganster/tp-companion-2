@@ -1,5 +1,6 @@
 import { requireSupabaseUser, sendJson } from "../../_utils/supabase.js";
 import { getGoogleAccessTokenForUser } from "../_utils.js";
+import { enforceRateLimit } from "../../_utils/rateLimit.js";
 
 export default async function handler(req: any, res: any) {
   if (req.method !== "GET") {
@@ -11,6 +12,16 @@ export default async function handler(req: any, res: any) {
 
   const user = await requireSupabaseUser(req, res);
   if (!user) return;
+
+  const allowed = await enforceRateLimit({
+    req,
+    res,
+    name: "google_calendar_list_calendars",
+    identifier: user.id,
+    limit: 30,
+    windowMs: 60_000,
+  });
+  if (!allowed) return;
 
   try {
     const { accessToken } = await getGoogleAccessTokenForUser(user.id);
