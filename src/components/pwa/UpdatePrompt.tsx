@@ -11,11 +11,11 @@ export function UpdatePrompt() {
     onRegistered(r) {
       console.log("SW Registered: " + r);
       if (r) {
-        // Check for updates every hour
+        // Check for updates every 10 minutes
         setInterval(() => {
           console.log("Checking for SW update...");
           r.update();
-        }, 60 * 60 * 1000);
+        }, 10 * 60 * 1000);
       }
     },
     onRegisterError(error) {
