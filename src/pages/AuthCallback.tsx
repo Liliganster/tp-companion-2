@@ -1,22 +1,41 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function AuthCallback() {
   const navigate = useNavigate();
+  const processedRef = useRef(false);
 
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      const hash = typeof window !== "undefined" ? window.location.hash : "";
-      const isRecovery = hash.includes("type=recovery");
-      await supabase?.auth.getSession();
-      if (!mounted) return;
-      navigate(isRecovery ? "/auth/reset" : "/");
-    })();
+    if (processedRef.current) return;
+    processedRef.current = true;
+
+    // Check URL immediately for recovery flag (works for both hash and query)
+    const isRecoveryUrl = window.location.href.includes("type=recovery");
+
+    // Listen for Auth events (most reliable for PKCE)
+    const { data: { subscription } } = supabase!.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        navigate("/auth/reset");
+      } else if (event === "SIGNED_IN") {
+        // If we found the recovery flag in URL, prefer that over generic sign-in
+        if (isRecoveryUrl) {
+          navigate("/auth/reset");
+        } else {
+          // Default to home, but small delay to ensure we don't miss PASSWORD_RECOVERY event
+          setTimeout(() => {
+             navigate("/");
+          }, 0);
+        }
+      }
+    });
+    
+    // Trigger session check
+    supabase?.auth.getSession();
+
     return () => {
-      mounted = false;
+      subscription.unsubscribe();
     };
   }, [navigate]);
 
@@ -24,7 +43,7 @@ export default function AuthCallback() {
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="text-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
-        <p className="text-muted-foreground">Completing authentication...</p>
+        <p className="text-muted-foreground">Verifying authentication...</p>
       </div>
     </div>
   );
