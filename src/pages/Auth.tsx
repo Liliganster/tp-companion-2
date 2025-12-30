@@ -77,6 +77,7 @@ export default function Auth() {
         description: "Revisa tu bandeja de entrada para restablecer la contraseña.",
       });
     } catch (err: any) {
+      console.error("Password reset error:", err);
       toast({
         title: "No se pudo enviar",
         description: err?.message ?? "Unexpected error",
