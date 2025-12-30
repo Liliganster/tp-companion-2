@@ -32,7 +32,15 @@ export default function AuthCallback() {
     });
     
     // Trigger session check
-    supabase?.auth.getSession();
+    supabase?.auth.getSession().then(({ data: { session }, error }) => {
+      if (error || !session) {
+        // If no session found and no recovery/event fired, redirect to login
+        // We delay slightly to let onAuthStateChange have a chance if it's firing
+        setTimeout(() => {
+             navigate("/auth");
+        }, 500);
+      }
+    });
 
     return () => {
       subscription.unsubscribe();
