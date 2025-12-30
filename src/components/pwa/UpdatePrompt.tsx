@@ -10,6 +10,13 @@ export function UpdatePrompt() {
   } = useRegisterSW({
     onRegistered(r) {
       console.log("SW Registered: " + r);
+      if (r) {
+        // Check for updates every hour
+        setInterval(() => {
+          console.log("Checking for SW update...");
+          r.update();
+        }, 60 * 60 * 1000);
+      }
     },
     onRegisterError(error) {
       console.log("SW registration error", error);
