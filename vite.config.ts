@@ -1,6 +1,6 @@
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
-import { VitePWA } from "vite-plugin-pwa/vite";
+import { VitePWA } from "vite-plugin-pwa";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
