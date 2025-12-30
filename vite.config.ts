@@ -177,6 +177,10 @@ export default defineConfig(({ mode }) => {
         },
         devOptions: {
            enabled: true
+        },
+        workbox: {
+          clientsClaim: true,
+          cleanupOutdatedCaches: true,
         }
       }),
     ].filter(Boolean),
