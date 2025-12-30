@@ -12,6 +12,7 @@ import { CookieConsentBanner } from "@/components/analytics/CookieConsentBanner"
 import { DataMigration } from "@/components/DataMigration";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { UpdatePrompt } from "@/components/pwa/UpdatePrompt";
 import { Suspense, lazy } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -63,6 +64,7 @@ const App = () => (
               <ReportsProvider>
                 <TooltipProvider>
                   <Sonner />
+                  <UpdatePrompt />
                   <BrowserRouter>
                     <AnalyticsListener />
                     <CookieConsentBanner />
