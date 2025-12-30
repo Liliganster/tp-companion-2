@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { cascadeDeleteProjectById } from "@/lib/cascadeDelete";
 import { formatSupabaseError } from "@/lib/supabaseErrors";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { isOffline, readOfflineCache, writeOfflineCache } from "@/lib/offlineCache";
 
 const PROJECT_TOTALS_AVAILABLE_KEY = "fbp.project_totals.available";
 const PROJECT_TOTALS_MISSING_NOTIFIED_KEY = "fbp.project_totals.missing_notified";
@@ -64,6 +65,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ["projects", user?.id ?? "anon"] as const, [user?.id]);
+  const offlineCacheKey = useMemo(() => (user?.id ? `cache:projects:v1:${user.id}` : null), [user?.id]);
 
   const refreshProjects = useCallback(() => {
     if (!user) return;
@@ -74,7 +76,14 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     queryKey,
     enabled: Boolean(user && supabase),
     queryFn: async (): Promise<Project[]> => {
-      if (!user || !supabase) return [];
+      if (!user || !supabase) {
+        if (offlineCacheKey) return readOfflineCache<Project[]>(offlineCacheKey, 30 * 24 * 60 * 60 * 1000) ?? [];
+        return [];
+      }
+
+      if (offlineCacheKey && isOffline()) {
+        return readOfflineCache<Project[]>(offlineCacheKey, 30 * 24 * 60 * 60 * 1000) ?? [];
+      }
 
       const { data: projectsData, error: projectsError } = await supabase
         .from("projects")
@@ -83,7 +92,9 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
       if (projectsError) {
         console.error("Error fetching projects:", projectsError);
-        toast.error("Error loading projects: " + projectsError.message);
+        const cached = offlineCacheKey ? readOfflineCache<Project[]>(offlineCacheKey, 30 * 24 * 60 * 60 * 1000) : null;
+        if (cached && cached.length > 0) return cached;
+        if (!isOffline()) toast.error("Error loading projects: " + projectsError.message);
         return [];
       }
 
@@ -113,7 +124,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
       const totalsMap = new Map((totalsData || []).map((t: any) => [t.project_id, t]));
 
-      return (projectsData ?? []).map((p: any) => {
+      const mapped = (projectsData ?? []).map((p: any) => {
         const totals = totalsMap.get(p.id);
         const totalKm = totals?.total_distance_km || 0;
         const trips = totals?.total_trips || 0;
@@ -137,6 +148,9 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
           co2Emissions: totals?.total_co2_kg || 0,
         };
       });
+
+      if (offlineCacheKey) writeOfflineCache(offlineCacheKey, mapped);
+      return mapped;
     },
   });
 

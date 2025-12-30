@@ -9,6 +9,7 @@ import { useUserProfile } from "@/contexts/UserProfileContext";
 import { parseLocaleNumber } from "@/lib/number";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { TripInputSchema } from "@/lib/schemas";
+import { isOffline, readOfflineCache, writeOfflineCache } from "@/lib/offlineCache";
 
 export type Trip = {
   id: string;
@@ -58,6 +59,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
   const { profile } = useUserProfile();
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ["trips", user?.id ?? "anon"] as const, [user?.id]);
+  const offlineCacheKey = useMemo(() => (user?.id ? `cache:trips:v1:${user.id}` : null), [user?.id]);
 
   const emissionsInput = useMemo(() => {
     return {
@@ -84,7 +86,14 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     queryKey,
     enabled: Boolean(user && supabase),
     queryFn: async (): Promise<Trip[]> => {
-      if (!supabase || !user) return [];
+      if (!supabase || !user) {
+        if (offlineCacheKey) return readOfflineCache<Trip[]>(offlineCacheKey, 30 * 24 * 60 * 60 * 1000) ?? [];
+        return [];
+      }
+
+      if (offlineCacheKey && isOffline()) {
+        return readOfflineCache<Trip[]>(offlineCacheKey, 30 * 24 * 60 * 60 * 1000) ?? [];
+      }
 
       const { data, error } = await supabase
         .from("trips")
@@ -93,11 +102,13 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error("Error fetching trips:", error);
-        toast.error(formatSupabaseError(error, "Error cargando viajes"));
+        const cached = offlineCacheKey ? readOfflineCache<Trip[]>(offlineCacheKey, 30 * 24 * 60 * 60 * 1000) : null;
+        if (cached && cached.length > 0) return cached;
+        if (!isOffline()) toast.error(formatSupabaseError(error, "Error cargando viajes"));
         return [];
       }
 
-      return (data ?? []).map((t: any) => ({
+      const mapped = (data ?? []).map((t: any) => ({
         id: t.id,
         date: t.trip_date || t.date_value || "",
         route: t.route || [],
@@ -116,6 +127,9 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         specialOrigin: t.special_origin,
         documents: t.documents || [],
       }));
+
+      if (offlineCacheKey) writeOfflineCache(offlineCacheKey, mapped);
+      return mapped;
     },
   });
 

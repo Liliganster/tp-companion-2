@@ -10,6 +10,8 @@ import { RequireAuth } from "@/components/auth/RequireAuth";
 import { AnalyticsListener } from "@/components/AnalyticsListener";
 import { CookieConsentBanner } from "@/components/analytics/CookieConsentBanner";
 import { DataMigration } from "@/components/DataMigration";
+import { GlobalLoadingBar } from "@/components/app/GlobalLoadingBar";
+import { NetworkStatusBanner } from "@/components/app/NetworkStatusBanner";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { UpdatePrompt } from "@/components/pwa/UpdatePrompt";
@@ -65,9 +67,11 @@ const App = () => (
                 <TooltipProvider>
                   <Sonner />
                   <UpdatePrompt />
+                  <GlobalLoadingBar />
                   <BrowserRouter>
                     <AnalyticsListener />
                     <CookieConsentBanner />
+                    <NetworkStatusBanner />
                     <Suspense fallback={<RouteFallback />}>
                       <Routes>
                         <Route path="/auth" element={<Auth />} />

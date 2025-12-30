@@ -2,6 +2,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "./AuthContext";
 import { toast } from "sonner";
+import { isOffline, readOfflineCache, writeOfflineCache } from "@/lib/offlineCache";
 
 export type UserProfile = {
   fullName: string;
@@ -74,6 +75,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
   const [loading, setLoading] = useState(true);
+  const offlineCacheKey = useMemo(() => (user?.id ? `cache:profile:v1:${user.id}` : null), [user?.id]);
 
   // Fetch profile when user changes
   useEffect(() => {
@@ -87,6 +89,16 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
     
     async function fetchProfile() {
       if (!supabase) return;
+
+      if (offlineCacheKey) {
+        const cached = readOfflineCache<UserProfile>(offlineCacheKey, 90 * 24 * 60 * 60 * 1000);
+        if (cached && mounted) setProfile(cached);
+      }
+
+      if (isOffline()) {
+        if (mounted) setLoading(false);
+        return;
+      }
       
       try {
         const { data, error } = await supabase
@@ -97,7 +109,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
 
         if (error) {
           console.error("Error fetching profile:", error);
-          toast.error("Error loading profile: " + error.message);
+          if (!isOffline()) toast.error("Error loading profile: " + error.message);
         }
 
         if (mounted) {
@@ -125,6 +137,28 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
               maintenanceEurPerKm: (data as any).maintenance_eur_per_km == null ? "" : String((data as any).maintenance_eur_per_km).replace(".", ","),
               otherEurPerKm: (data as any).other_eur_per_km == null ? "" : String((data as any).other_eur_per_km).replace(".", ","),
             });
+            if (offlineCacheKey) {
+              writeOfflineCache(offlineCacheKey, {
+                fullName: data.full_name || "",
+                vatId: data.vat_id || "",
+                licensePlate: data.license_plate || "",
+                language: (data.language as any) || "es",
+                ratePerKm: data.rate_per_km == null ? "" : String(data.rate_per_km).replace(".", ","),
+                passengerSurcharge: data.passenger_surcharge == null ? "" : String(data.passenger_surcharge).replace(".", ","),
+                baseAddress: data.base_address || "",
+                city: data.city || "",
+                country: data.country || "",
+                planTier: data.plan_tier || "free",
+                fuelType,
+                fuelLPer100Km: (data as any).fuel_l_per_100km == null ? "" : String((data as any).fuel_l_per_100km).replace(".", ","),
+                evKwhPer100Km: (data as any).ev_kwh_per_100km == null ? "" : String((data as any).ev_kwh_per_100km).replace(".", ","),
+                gridKgCo2PerKwh: (data as any).grid_kgco2_per_kwh == null ? "" : String((data as any).grid_kgco2_per_kwh).replace(".", ","),
+                fuelPricePerLiter: (data as any).fuel_price_per_liter == null ? "" : String((data as any).fuel_price_per_liter).replace(".", ","),
+                electricityPricePerKwh: (data as any).electricity_price_per_kwh == null ? "" : String((data as any).electricity_price_per_kwh).replace(".", ","),
+                maintenanceEurPerKm: (data as any).maintenance_eur_per_km == null ? "" : String((data as any).maintenance_eur_per_km).replace(".", ","),
+                otherEurPerKm: (data as any).other_eur_per_km == null ? "" : String((data as any).other_eur_per_km).replace(".", ","),
+              });
+            }
           } else {
              // New user? We could auto-create a profile here or wait for them to save.
              // For now, keep defaults but respect browser language.
@@ -141,12 +175,13 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
     fetchProfile();
 
     return () => { mounted = false; };
-  }, [user]);
+  }, [offlineCacheKey, user]);
 
   const saveProfile = useCallback(async (
     nextProfile: UserProfile,
     options?: { toastId?: string; loadingText?: string; successText?: string },
   ): Promise<boolean> => {
+    if (offlineCacheKey) writeOfflineCache(offlineCacheKey, nextProfile);
     if (!supabase || !user) {
       setProfile(nextProfile);
       return true;
