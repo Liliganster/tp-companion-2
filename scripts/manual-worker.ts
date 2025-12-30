@@ -1,6 +1,5 @@
-/* eslint-disable no-undef */
 import { createClient } from "@supabase/supabase-js";
-// @ts-ignore
+// @ts-expect-error pdf-parse ships CJS typings; this script is best-effort for local debugging.
 import pdflib from "pdf-parse";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as dotenv from "dotenv";

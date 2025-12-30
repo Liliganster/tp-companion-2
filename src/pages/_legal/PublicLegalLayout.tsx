@@ -49,7 +49,7 @@ export function PublicLegalLayout(props: {
         <div className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-radial from-accent/5 via-transparent to-transparent" />
       </div>
 
-      <div className="relative z-10 mx-auto max-w-3xl px-4 py-10">
+      <main className="relative z-10 mx-auto max-w-3xl px-4 py-10">
         <div className="flex items-center justify-between gap-4">
           <Button type="button" variant="ghost" onClick={() => navigate(-1)}>
             {ui.back}
@@ -97,8 +97,7 @@ export function PublicLegalLayout(props: {
             </section>
           ))}
         </div>
-      </div>
+      </main>
     </div>
   );
 }
-

@@ -16,8 +16,6 @@ export function CallsheetStatus({ jobId }: CallsheetStatusProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-
     const fetchStatus = async () => {
       try {
         const { data: session } = await supabase.auth.getSession();
@@ -63,8 +61,8 @@ export function CallsheetStatus({ jobId }: CallsheetStatusProps) {
       }
     };
 
-    fetchStatus();
-    interval = setInterval(fetchStatus, 3000); // Poll every 3s
+    const interval = setInterval(fetchStatus, 3000); // Poll every 3s
+    void fetchStatus();
 
     return () => clearInterval(interval);
   }, [jobId]);

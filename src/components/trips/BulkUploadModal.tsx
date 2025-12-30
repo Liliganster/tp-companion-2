@@ -182,7 +182,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
 
     // DD-MM-YYYY or DD/MM/YYYY
-    const dmy = /^([0-9]{1,2})[\/-]([0-9]{1,2})[\/-]([0-9]{4})$/.exec(v);
+    const dmy = /^([0-9]{1,2})[/-]([0-9]{1,2})[/-]([0-9]{4})$/.exec(v);
     if (dmy) {
       const dd = String(Number(dmy[1])).padStart(2, "0");
       const mm = String(Number(dmy[2])).padStart(2, "0");
@@ -672,7 +672,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const optimizeRoute = async (rawLocations: any[]) => {
       setIsOptimizing(true);
       // Use raw strings if formatted_address is missing/null
-      let currentLocs = rawLocations.map(l => l.formatted_address || l.address_raw);
+      const currentLocs = rawLocations.map(l => l.formatted_address || l.address_raw);
 
       try {
         const token = await getAccessToken();

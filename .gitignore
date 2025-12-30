@@ -11,6 +11,10 @@ node_modules
 dist
 dist-ssr
 *.local
+dev-dist
+test-results
+playwright-report
+coverage
 
 # Vercel
 .vercel

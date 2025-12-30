@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, staging]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint / Typecheck / Test / Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Dummy values for build-time env validation (no real secrets in CI).
+      VITE_SUPABASE_URL: https://example.supabase.co
+      VITE_SUPABASE_ANON_KEY: dummy_dummy_dummy_dummy_dummy_dummy_dummy
+      GEMINI_API_KEY: dummy_dummy_dummy_dummy_dummy_dummy_dummy
+      SUPABASE_SERVICE_ROLE_KEY: dummy_dummy_dummy_dummy_dummy_dummy_dummy
+      # Keep optional vars empty so they don't block.
+      VITE_GA_MEASUREMENT_ID: ""
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test:run
+
+      - name: Build
+        run: npm run build
+
+  deploy-staging:
+    name: Deploy (staging)
+    needs: [checks, e2e]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/staging' && secrets.VERCEL_TOKEN != '' && secrets.VERCEL_PROJECT_ID != '' && secrets.VERCEL_ORG_ID != ''
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Vercel CLI
+        run: npm i -g vercel@latest
+
+      - name: Deploy to Vercel (preview/staging)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          vercel pull --yes --environment=preview --token "$VERCEL_TOKEN"
+          vercel deploy --yes --token "$VERCEL_TOKEN"
+
+  e2e:
+    name: E2E + A11y (Playwright)
+    needs: [checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Dummy values for runtime env (keep consistent with checks job)
+      VITE_SUPABASE_URL: https://example.supabase.co
+      VITE_SUPABASE_ANON_KEY: dummy_dummy_dummy_dummy_dummy_dummy_dummy
+      GEMINI_API_KEY: dummy_dummy_dummy_dummy_dummy_dummy_dummy
+      SUPABASE_SERVICE_ROLE_KEY: dummy_dummy_dummy_dummy_dummy_dummy_dummy
+      VITE_GA_MEASUREMENT_ID: ""
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Run Playwright tests
+        run: npm run test:e2e
