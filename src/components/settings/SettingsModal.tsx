@@ -14,6 +14,7 @@ import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   User,
+  Lock,
   Sparkles,
   Palette,
   Languages,
@@ -471,6 +472,25 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         </div>
                       </>
                     )}
+                  </div>
+
+                  {/* Password / Security */}
+                  <div className="pt-4">
+                    <h3 className="text-sm font-medium">Seguridad</h3>
+                    <p className="text-xs text-muted-foreground mt-1 mb-3">
+                      Establece o actualiza tu contraseña para iniciar sesión con email.
+                    </p>
+                    <Button 
+                      variant="outline" 
+                      className="w-full sm:w-auto" 
+                      onClick={() => {
+                        onOpenChange(false);
+                        navigate("/auth/reset");
+                      }}
+                    >
+                      <Lock className="w-4 h-4 mr-2" />
+                      Cambiar Contraseña
+                    </Button>
                   </div>
 
                   {/* Delete Account */}
