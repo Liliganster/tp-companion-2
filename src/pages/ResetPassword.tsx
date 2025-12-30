@@ -59,7 +59,9 @@ export default function ResetPassword() {
 
     setBusy(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password: nextPassword.trim() });
+      console.log("Attempting to update user password...");
+      const { data, error } = await supabase.auth.updateUser({ password: nextPassword.trim() });
+      console.log("Update User Result:", { data, error });
       if (error) throw error;
       toast({
         title: "Contraseña actualizada",

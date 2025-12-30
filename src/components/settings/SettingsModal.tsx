@@ -73,7 +73,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
   const { profile, saveProfile } = useUserProfile();
   const { appearance, saveAppearance, previewAppearance, resetPreview } = useAppearance();
-  const { getAccessToken, signOut } = useAuth();
+  const { getAccessToken, signOut, user } = useAuth();
 
   // Draft form state for profile
   const [profileData, setProfileData] = useState(profile);
@@ -480,6 +480,20 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                     <p className="text-xs text-muted-foreground mt-1 mb-3">
                       Establece o actualiza tu contraseña para iniciar sesión con email.
                     </p>
+                    
+                    {/* Debug Info: Show Providers */}
+                    <div className="mb-4 text-xs p-3 bg-secondary/30 rounded border border-border/50">
+                       <span className="font-semibold block mb-1">Proveedores conectados:</span>
+                       <div className="flex gap-2">
+                         {user?.identities?.map((id) => (
+                           <span key={id.id} className="px-2 py-1 bg-background rounded border shadow-sm capitalize">
+                             {id.provider}
+                           </span>
+                         ))}
+                         {(!user?.identities || user.identities.length === 0) && "No identities found"}
+                       </div>
+                    </div>
+
                     <Button 
                       variant="outline" 
                       className="w-full sm:w-auto" 
