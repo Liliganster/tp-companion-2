@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +14,7 @@ import { Link } from "react-router-dom";
 
 export default function Auth() {
   const { t } = useI18n();
-  const { signInWithPassword, signUpWithPassword, signInWithGoogle, requestPasswordReset } = useAuth();
+  const { signInWithPassword, signUpWithPassword, signInWithGoogle, requestPasswordReset, user, loading } = useAuth();
   const { toast } = useToast();
   const [isLogin, setIsLogin] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -21,6 +22,14 @@ export default function Auth() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [showVerifyEmailNotice, setShowVerifyEmailNotice] = useState(false);
+  const navigate = useNavigate();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!isLoading && !loading && user) {
+      navigate("/");
+    }
+  }, [user, loading, isLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
