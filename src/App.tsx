@@ -71,6 +71,7 @@ const App = () => (
                         <Route path="/auth" element={<Auth />} />
                         <Route path="/auth/callback" element={<AuthCallback />} />
                         <Route path="/auth/reset" element={<ResetPassword />} />
+
                         <Route path="/legal/terms" element={<LegalTerms />} />
                         <Route path="/legal/privacy" element={<LegalPrivacy />} />
                         <Route path="/legal/cookies" element={<LegalCookies />} />
