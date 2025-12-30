@@ -2,6 +2,28 @@ import * as Sentry from "@sentry/react";
 
 let initialized = false;
 
+function eventText(event: Sentry.Event): string {
+  const parts: string[] = [];
+  if (event.message) parts.push(String(event.message));
+  const values = event.exception?.values ?? [];
+  for (const v of values) {
+    if (v?.type) parts.push(String(v.type));
+    if (v?.value) parts.push(String(v.value));
+  }
+  const extra = event.extra as any;
+  if (extra?.error?.message) parts.push(String(extra.error.message));
+  return parts.join("\n").toLowerCase();
+}
+
+function isExpectedAuthFailure(event: Sentry.Event): boolean {
+  const text = eventText(event);
+  return (
+    text.includes("invalid login credentials") ||
+    text.includes("invalid_login_credentials") ||
+    text.includes("authapierror") && text.includes("invalid")
+  );
+}
+
 function readNumber(value: unknown, fallback: number) {
   const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
   return Number.isFinite(n) ? n : fallback;
@@ -29,7 +51,7 @@ export function initSentryClient() {
       Sentry.replayIntegration(),
     ],
     beforeSend(event) {
-      // Avoid leaking local dev noise if desired.
+      if (isExpectedAuthFailure(event)) return null;
       return event;
     },
   });

@@ -7,7 +7,7 @@ export const dateIsoSchema = z
 export const TripInputSchema = z.object({
   id: z.string().min(1),
   date: dateIsoSchema,
-  distance: z.number().finite().positive().max(10_000),
+  distance: z.number().finite().min(0).max(10_000),
   passengers: z.number().int().min(0).max(99).optional(),
   purpose: z.string().max(500).optional(),
   projectId: z.string().uuid().nullable().optional(),
@@ -25,4 +25,3 @@ export const ReportInputSchema = z.object({
   totalDistanceKm: z.number().finite().min(0).max(10_000_000),
   tripsCount: z.number().int().min(0).max(10_000_000),
 });
-

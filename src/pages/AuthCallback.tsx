@@ -9,9 +9,11 @@ export default function AuthCallback() {
   useEffect(() => {
     let mounted = true;
     (async () => {
+      const hash = typeof window !== "undefined" ? window.location.hash : "";
+      const isRecovery = hash.includes("type=recovery");
       await supabase?.auth.getSession();
       if (!mounted) return;
-      navigate("/");
+      navigate(isRecovery ? "/auth/reset" : "/");
     })();
     return () => {
       mounted = false;

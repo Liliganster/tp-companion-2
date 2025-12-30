@@ -1,4 +1,10 @@
-export type TripWarningType = "duplicate" | "improbable_distance";
+export type TripWarningType =
+  | "duplicate"
+  | "improbable_distance"
+  | "zero_distance"
+  | "missing_route"
+  | "invalid_date"
+  | "missing_project";
 
 export type TripWarning = {
   type: TripWarningType;
@@ -11,9 +17,14 @@ export type TripWarningInput = {
   date: string;
   route: string[];
   distance: number;
+  projectId?: string | null;
 };
 
 const IMPROBABLE_DISTANCE_KM = 1500;
+
+function pushWarning(byId: Record<string, TripWarning[]>, tripId: string, warning: TripWarning) {
+  (byId[tripId] ??= []).push(warning);
+}
 
 function normalizeRoute(route: string[]) {
   return route
@@ -35,16 +46,53 @@ export function computeTripWarnings(trips: TripWarningInput[]) {
   const duplicateKeyToIds = new Map<string, string[]>();
 
   for (const trip of trips) {
-    const key = `${trip.date}|${normalizeRoute(trip.route)}`;
-    const list = duplicateKeyToIds.get(key);
-    if (list) list.push(trip.id);
-    else duplicateKeyToIds.set(key, [trip.id]);
+    const distance = Number(trip.distance);
+    const routeClean = Array.isArray(trip.route) ? trip.route.map((s) => String(s ?? "").trim()).filter(Boolean) : [];
+    const routeNormalized = normalizeRoute(routeClean);
+    const hasValidDate = Number.isFinite(Date.parse(trip.date));
 
-    if (trip.distance > IMPROBABLE_DISTANCE_KM) {
-      (byId[trip.id] ??= []).push({
+    if (hasValidDate && routeNormalized) {
+      const key = `${trip.date}|${routeNormalized}`;
+      const list = duplicateKeyToIds.get(key);
+      if (list) list.push(trip.id);
+      else duplicateKeyToIds.set(key, [trip.id]);
+    }
+
+    if (!hasValidDate) {
+      pushWarning(byId, trip.id, {
+        type: "invalid_date",
+        title: "Fecha inválida",
+        details: trip.date ? String(trip.date) : "Sin fecha",
+      });
+    }
+
+    if (routeClean.length < 2) {
+      pushWarning(byId, trip.id, {
+        type: "missing_route",
+        title: "Ruta incompleta",
+        details: "Faltan origen/destino",
+      });
+    }
+
+    if (!Number.isFinite(distance) || distance <= 0) {
+      pushWarning(byId, trip.id, {
+        type: "zero_distance",
+        title: "Distancia 0 km",
+        details: Number.isFinite(distance) ? `${distance} km` : "Sin distancia",
+      });
+    } else if (distance > IMPROBABLE_DISTANCE_KM) {
+      pushWarning(byId, trip.id, {
         type: "improbable_distance",
         title: "Distancia improbable",
-        details: `${trip.distance} km`,
+        details: `${distance} km`,
+      });
+    }
+
+    if (trip.projectId == null) {
+      pushWarning(byId, trip.id, {
+        type: "missing_project",
+        title: "Sin proyecto",
+        details: "Asigna un proyecto para agrupar y reportar",
       });
     }
   }
@@ -55,7 +103,7 @@ export function computeTripWarnings(trips: TripWarningInput[]) {
     const routeLabel = routePart ? routePart.replace(/\s*->\s*/g, " -> ") : "";
 
     for (const id of ids) {
-      (byId[id] ??= []).push({
+      pushWarning(byId, id, {
         type: "duplicate",
         title: "Viaje duplicado",
         details: routeLabel ? `Misma fecha y ruta (${routeLabel})` : "Misma fecha y ruta",
@@ -82,11 +130,10 @@ export function computeTripWarnings(trips: TripWarningInput[]) {
           id: `${trip.id}:${w.type}`,
           type: "warning" as const,
           title: w.title,
-          message: `${dateLabel} • ${routeLabel}${w.type === "improbable_distance" ? ` • ${trip.distance} km` : ""}`,
+          message: [dateLabel, routeLabel, w.details].filter(Boolean).join(" · "),
           tripId: trip.id,
         }));
       });
     },
   };
 }
-

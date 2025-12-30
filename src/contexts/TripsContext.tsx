@@ -15,7 +15,7 @@ export type Trip = {
   date: string;
   route: string[];
   project: string; 
-  projectId?: string; // Added for relational link
+  projectId?: string | null; // Added for relational link
   purpose: string;
   passengers: number;
   invoice?: string; // Legacy: invoice_number

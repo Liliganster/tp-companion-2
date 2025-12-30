@@ -10,6 +10,7 @@ type AuthContextValue = {
   signInWithPassword: (email: string, password: string) => Promise<void>;
   signUpWithPassword: (email: string, password: string, fullName?: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   getAccessToken: () => Promise<string | null>;
 };
@@ -87,6 +88,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   }, []);
 
+  const requestPasswordReset = useCallback(async (email: string) => {
+    const { error } = await requireSupabase().auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/callback`,
+    });
+    if (error) throw error;
+  }, []);
+
   const signOut = useCallback(async () => {
     const { error } = await requireSupabase().auth.signOut();
     if (error) throw error;
@@ -105,10 +113,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signInWithPassword,
       signUpWithPassword,
       signInWithGoogle,
+      requestPasswordReset,
       signOut,
       getAccessToken,
     }),
-    [session, loading, signInWithPassword, signUpWithPassword, signInWithGoogle, signOut, getAccessToken],
+    [session, loading, signInWithPassword, signUpWithPassword, signInWithGoogle, requestPasswordReset, signOut, getAccessToken],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -13,7 +13,7 @@ import { Link } from "react-router-dom";
 
 export default function Auth() {
   const { t } = useI18n();
-  const { signInWithPassword, signUpWithPassword, signInWithGoogle } = useAuth();
+  const { signInWithPassword, signUpWithPassword, signInWithGoogle, requestPasswordReset } = useAuth();
   const { toast } = useToast();
   const [isLogin, setIsLogin] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -36,8 +36,39 @@ export default function Auth() {
         setShowVerifyEmailNotice(true);
       }
     } catch (err: any) {
+      const message = String(err?.message ?? "");
+      const isInvalidLogin = message.toLowerCase().includes("invalid login credentials");
       toast({
-        title: "Auth error",
+        title: isInvalidLogin ? "Credenciales incorrectas" : "Auth error",
+        description: isInvalidLogin ? "Email o contraseña incorrectos." : err?.message ?? "Unexpected error",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      toast({
+        title: "Introduce tu email",
+        description: "Escribe tu email arriba para enviarte un enlace de recuperación.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await requestPasswordReset(cleanEmail);
+      toast({
+        title: "Email enviado",
+        description: "Revisa tu bandeja de entrada para restablecer la contraseña.",
+      });
+    } catch (err: any) {
+      toast({
+        title: "No se pudo enviar",
         description: err?.message ?? "Unexpected error",
         variant: "destructive",
       });
@@ -157,7 +188,12 @@ export default function Auth() {
 
               {isLogin && (
                 <div className="flex justify-end">
-                  <button type="button" className="text-xs text-primary hover:underline">
+                  <button
+                    type="button"
+                    className="text-xs text-primary hover:underline"
+                    onClick={handleForgotPassword}
+                    disabled={isLoading}
+                  >
                     {t("auth.forgotPassword")}
                   </button>
                 </div>
