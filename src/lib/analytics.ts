@@ -51,8 +51,11 @@ export function initAnalytics(opts?: { force?: boolean }) {
   window.dataLayer = window.dataLayer || [];
   window.gtag =
     window.gtag ||
-    function gtag(...args: any[]) {
-      window.dataLayer!.push(args);
+    function gtag() {
+      // Use the official gtag queue shape (IArguments), not arrays,
+      // so gtag.js can consume queued calls reliably.
+      // eslint-disable-next-line prefer-rest-params
+      window.dataLayer!.push(arguments as any);
     };
 
   window.gtag("js", new Date());
