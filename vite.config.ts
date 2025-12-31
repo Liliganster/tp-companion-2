@@ -156,7 +156,8 @@ export default defineConfig(({ mode }) => {
       mode === "development" && componentTagger(),
       VitePWA({
         registerType: 'prompt',
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+        // Keep assets list in sync with files present in /public (Vercel serves them at /).
+        includeAssets: ['favicon.ico', 'logo.svg'],
         manifest: {
           name: 'Trip Companion',
           short_name: 'TripComp',
@@ -164,14 +165,16 @@ export default defineConfig(({ mode }) => {
           theme_color: '#ffffff',
           icons: [
             {
-              src: 'pwa-192x192.png',
-              sizes: '192x192',
-              type: 'image/png'
+              src: 'logo.svg',
+              sizes: 'any',
+              type: 'image/svg+xml',
+              purpose: 'any'
             },
             {
-              src: 'pwa-512x512.png',
-              sizes: '512x512',
-              type: 'image/png'
+              src: 'favicon.ico',
+              sizes: '48x48',
+              type: 'image/x-icon',
+              purpose: 'any'
             }
           ]
         },

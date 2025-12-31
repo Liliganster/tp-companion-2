@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -538,6 +539,9 @@ export default function Projects() {
               <DialogContent className="glass max-w-lg">
                 <DialogHeader>
                   <DialogTitle>{editingProjectId ? t("projects.edit") : t("projects.createNewProject")}</DialogTitle>
+                  <DialogDescription className="sr-only">
+                    {editingProjectId ? t("projects.edit") : t("projects.createNewProject")}
+                  </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">

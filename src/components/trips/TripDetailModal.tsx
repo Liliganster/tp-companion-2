@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -410,10 +410,11 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-4xl p-0 overflow-hidden">
         <DialogHeader className="p-4 pb-0">
           <DialogTitle>{t("tripDetail.title")}</DialogTitle>
+          <DialogDescription className="sr-only">{t("tripDetail.title")}</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col md:flex-row h-[600px]">

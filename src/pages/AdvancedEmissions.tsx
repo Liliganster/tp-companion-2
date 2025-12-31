@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -579,9 +580,7 @@ export default function AdvancedEmissions() {
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>{t("advancedEmissions.configTitle")}</DialogTitle>
-            <p className="text-sm text-muted-foreground">
-              {t("advancedEmissions.configSubtitle")}
-            </p>
+            <DialogDescription>{t("advancedEmissions.configSubtitle")}</DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-6 py-4">

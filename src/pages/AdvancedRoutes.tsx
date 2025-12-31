@@ -9,6 +9,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -374,6 +375,9 @@ export default function AdvancedRoutes() {
             <DialogTitle>
               {editingTemplateId ? t("advancedRoutes.editTemplateTitle") : t("advancedRoutes.createTemplateTitle")}
             </DialogTitle>
+            <DialogDescription className="sr-only">
+              {editingTemplateId ? t("advancedRoutes.editTemplateTitle") : t("advancedRoutes.createTemplateTitle")}
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6 py-4">

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -482,6 +482,7 @@ export default function CalendarPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>{t("calendar.createEventTitle")}</DialogTitle>
+              <DialogDescription className="sr-only">{t("calendar.createEventTitle")}</DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4">

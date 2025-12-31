@@ -3,6 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export default function AuthCallback() {
   const navigate = useNavigate();
   const processedRef = useRef(false);
@@ -11,8 +15,16 @@ export default function AuthCallback() {
     if (processedRef.current) return;
     processedRef.current = true;
 
-    // Check URL immediately for recovery flag (works for both hash and query)
-    const isRecoveryUrl = window.location.href.includes("type=recovery");
+    if (!supabase) {
+      navigate("/auth");
+      return;
+    }
+
+    const href = window.location.href;
+    const url = new URL(href);
+    const code = url.searchParams.get("code");
+    const isRecoveryUrl = href.includes("type=recovery");
+    const hasImplicitTokens = window.location.hash.includes("access_token=");
 
     // Listen for Auth events (most reliable for PKCE)
     const { data: { subscription } } = supabase!.auth.onAuthStateChange((event, session) => {
@@ -23,24 +35,47 @@ export default function AuthCallback() {
         if (isRecoveryUrl) {
           navigate("/auth/reset");
         } else {
-          // Default to home, but small delay to ensure we don't miss PASSWORD_RECOVERY event
-          setTimeout(() => {
-             navigate("/");
-          }, 0);
+          navigate("/");
         }
       }
     });
     
-    // Trigger session check
-    supabase?.auth.getSession().then(({ data: { session }, error }) => {
-      if (error || !session) {
-        // If no session found and no recovery/event fired, redirect to login
-        // We delay slightly to let onAuthStateChange have a chance if it's firing
-        setTimeout(() => {
-             navigate("/auth");
-        }, 500);
+    const run = async () => {
+      // Manually handle session recovery in this route (we disabled detectSessionInUrl globally).
+      try {
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) throw error;
+        } else if (hasImplicitTokens) {
+          // Gotrue warns if the device clock is behind even by ~1s; a short delay prevents false positives.
+          await sleep(1200);
+          const { error } = await (supabase.auth as any).getSessionFromUrl?.({ storeSession: true });
+          if (error) throw error;
+        }
+      } catch {
+        navigate("/auth");
+        return;
+      } finally {
+        // Remove auth artifacts from the URL to avoid reprocessing on refresh.
+        try {
+          window.history.replaceState({}, document.title, url.pathname);
+        } catch {
+          // ignore
+        }
       }
-    });
+
+      const { data, error } = await supabase.auth.getSession();
+      if (error || !data.session) {
+        navigate("/auth");
+        return;
+      }
+
+      // If no event fired (race), navigate based on URL flags.
+      if (isRecoveryUrl) navigate("/auth/reset");
+      else navigate("/");
+    };
+
+    void run();
 
     return () => {
       subscription.unsubscribe();

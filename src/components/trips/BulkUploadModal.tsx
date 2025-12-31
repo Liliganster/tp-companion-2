@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -808,6 +808,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader className="flex flex-row items-center justify-between">
           <DialogTitle>{t("bulk.title")}</DialogTitle>
+          <DialogDescription className="sr-only">{t("bulk.title")}</DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="csv" className="w-full">

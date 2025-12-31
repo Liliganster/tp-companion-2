@@ -87,9 +87,11 @@ export default function Index() {
       const sinceIso = startOfCurrentMonthUtcIso();
 
       const countTable = async (table: "invoice_jobs" | "callsheet_jobs") => {
+        // Avoid HEAD requests (some proxies/browsers can fail them); GET + limit(0) still returns `count`.
         const { count } = await supabase
           .from(table)
-          .select("id", { count: "exact", head: true })
+          .select("id", { count: "exact" })
+          .limit(0)
           .eq("user_id", user.id)
           .eq("status", "done")
           .gte("processed_at", sinceIso);

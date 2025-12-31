@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -470,6 +471,7 @@ export default function Reports() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{t("reports.verifyTitle")}</DialogTitle>
+            <DialogDescription className="sr-only">{t("reports.verifyTitle")}</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">

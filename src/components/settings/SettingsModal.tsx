@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -273,10 +274,11 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent className="max-w-3xl w-[800px] h-[600px] p-0 gap-0 overflow-hidden flex flex-col">
         <DialogHeader className="px-6 py-4 border-b border-border shrink-0">
           <DialogTitle className="text-xl font-semibold">{t("settings.title")}</DialogTitle>
+          <DialogDescription className="sr-only">{t("settings.title")}</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-1 overflow-hidden">
