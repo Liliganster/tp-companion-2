@@ -304,7 +304,7 @@ Dark mode: Clase "dark" con CSS variables
 
 #### Quota Management
 
-- 📊 **Plan Free:** 5 extracciones AI/mes
+- 📊 **Plan Free:** 5 extracciones AI/mes (unificado UI + lógica)
 - 📊 **Plan Pro:** 100 extracciones AI/mes
 - 📈 Dashboard muestra uso actual
 - ⚠️ Alertas cuando se alcanza límite
