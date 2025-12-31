@@ -62,6 +62,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const [projectDocs, setProjectDocs] = useState<ProjectDocument[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [triggeringWorker, setTriggeringWorker] = useState(false);
+  const [pendingTrips, setPendingTrips] = useState<Trip[]>([]);
+  const [showPendingTrips, setShowPendingTrips] = useState(false);
   const realCallSheetsRef = useRef<ProjectDocument[]>([]);
   const projectDocsRef = useRef<ProjectDocument[]>([]);
   const quotaNotifiedRef = useRef<Set<string>>(new Set());
@@ -124,23 +126,23 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const normalizeProjectName = useCallback((value: string) => value.trim().toLowerCase(), []);
 
   const materializeTripFromJob = useCallback(
-    async (job: { id: string; storage_path?: string | null; status?: string | null }) => {
-      if (!project) return;
-      if (!job?.id) return;
-      if (processedJobsRef.current.has(job.id)) return;
-      if (inFlightJobsRef.current.has(job.id)) return;
+    async (job: { id: string; storage_path?: string | null; status?: string | null }, autoSave: boolean = false) => {
+      if (!project) return null;
+      if (!job?.id) return null;
+      if (processedJobsRef.current.has(job.id)) return null;
+      if (inFlightJobsRef.current.has(job.id)) return null;
 
       const storagePath = (job.storage_path ?? "").trim();
       if (!storagePath) {
           console.warn("[Materialize] Job missing storage path:", job.id);
-          return;
+          return null;
       }
 
       // Avoid duplicates if the trip already exists
       if (hasTripForJob(job.id, storagePath)) {
         if (DEBUG) console.log("[Materialize] Trip already exists for job:", job.id);
         processedJobsRef.current.add(job.id);
-        return;
+        return null;
       }
 
       if (DEBUG) console.log("[Materialize] Processing job:", job.id);
@@ -260,21 +262,30 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           ],
         };
 
-        const ok = await addTrip(nextTrip);
-        if (ok) {
-          toast.success(t("projectDetail.toastTripCreatedFromAi"));
+        if (autoSave) {
+          const ok = await addTrip(nextTrip);
+          if (ok) {
+            toast.success(t("projectDetail.toastTripCreatedFromAi"));
+          } else {
+            toast.error(t("projectDetail.toastTripCreatedFromAiFailed"));
+          }
+          processedJobsRef.current.add(job.id);
         } else {
-          toast.error(t("projectDetail.toastTripCreatedFromAiFailed"));
+          // Add to pending trips list for batch review
+          processedJobsRef.current.add(job.id);
+          return nextTrip;
         }
-
-        processedJobsRef.current.add(job.id);
 
       } catch (e: any) {
         console.error(e);
-        toast.error(tf("projectDetail.toastTripCreatedFromAiError", { message: e?.message ?? String(e) }));
+        if (autoSave) {
+          toast.error(tf("projectDetail.toastTripCreatedFromAiError", { message: e?.message ?? String(e) }));
+        }
+        return null;
       } finally {
         inFlightJobsRef.current.delete(job.id);
       }
+      return null;
     },
     [addTrip, calculateCO2, getAccessToken, hasTripForJob, normalizeProjectName, profile, project]
   );
@@ -344,12 +355,21 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         const doneJobs = allDocs.filter(doc => doc.status === 'done');
         if (doneJobs.length > 0) {
           // Use setTimeout to avoid blocking the UI and to run after state is set
-          setTimeout(() => {
-            Promise.all(doneJobs.map(doc => materializeTripFromJob({
+          setTimeout(async () => {
+            const results = await Promise.allSettled(doneJobs.map(doc => materializeTripFromJob({
               id: doc.id,
               storage_path: doc.storage_path,
               status: doc.status
-            }))).catch(console.error);
+            }, false)));
+            
+            const newPendingTrips = results
+              .filter(r => r.status === 'fulfilled' && r.value !== null)
+              .map(r => (r as PromiseFulfilledResult<Trip>).value);
+            
+            if (newPendingTrips.length > 0) {
+              setPendingTrips(newPendingTrips);
+              setShowPendingTrips(true);
+            }
           }, 100);
         }
       };
@@ -551,7 +571,15 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           // Only materialize jobs that haven't been processed yet
           const unprocessedDone = doneJobs.filter((j: any) => !processedJobsRef.current.has(j.id));
           if (unprocessedDone.length > 0) {
-            await Promise.allSettled(unprocessedDone.map((j: any) => materializeTripFromJob(j)));
+            const results = await Promise.allSettled(unprocessedDone.map((j: any) => materializeTripFromJob(j, false)));
+            const newPendingTrips = results
+              .filter(r => r.status === 'fulfilled' && r.value !== null)
+              .map(r => (r as PromiseFulfilledResult<Trip>).value);
+            
+            if (newPendingTrips.length > 0) {
+              setPendingTrips(prev => [...prev, ...newPendingTrips]);
+              setShowPendingTrips(true);
+            }
           }
         }
 
@@ -922,8 +950,101 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     }
   };
 
+  const handleSaveAllPendingTrips = async () => {
+    if (pendingTrips.length === 0) return;
+    
+    const results = await Promise.allSettled(pendingTrips.map(trip => addTrip(trip)));
+    const succeeded = results.filter(r => r.status === 'fulfilled').length;
+    const failed = results.length - succeeded;
+    
+    if (failed === 0) {
+      toast.success(tf("projectDetail.toastTripsCreatedFromAi", { count: succeeded }));
+    } else if (succeeded === 0) {
+      toast.error(tf("projectDetail.toastTripsCreatedFromAiFailed", { count: failed }));
+    } else {
+      toast.warning(`${succeeded} viajes guardados, ${failed} fallaron`);
+    }
+    
+    setPendingTrips([]);
+    setShowPendingTrips(false);
+  };
+
+  const handleDiscardPendingTrips = () => {
+    // Mark jobs as processed but don't create trips
+    setPendingTrips([]);
+    setShowPendingTrips(false);
+  };
+
+  const handleRemovePendingTrip = (tripId: string) => {
+    setPendingTrips(prev => prev.filter(t => t.id !== tripId));
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      {/* Pending Trips Review Dialog */}
+      <Dialog open={showPendingTrips} onOpenChange={setShowPendingTrips}>
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] p-0 gap-0 overflow-hidden">
+          <DialogHeader className="p-6 pb-4">
+            <DialogTitle className="text-xl font-semibold">
+              Viajes procesados ({pendingTrips.length})
+            </DialogTitle>
+            <DialogDescription>
+              Revisa los viajes extraídos automáticamente y guárdalos todos juntos
+            </DialogDescription>
+          </DialogHeader>
+
+          <ScrollArea className="max-h-[calc(90vh-200px)] px-6">
+            <div className="space-y-4 pb-4">
+              {pendingTrips.map((trip, index) => (
+                <div key={trip.id} className="glass-card p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-lg">Viaje {index + 1}</span>
+                      <span className="text-sm text-muted-foreground">{trip.date}</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive"
+                      onClick={() => handleRemovePendingTrip(trip.id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  
+                  <div className="text-sm space-y-1">
+                    <p><span className="text-muted-foreground">Propósito:</span> {trip.purpose}</p>
+                    <p><span className="text-muted-foreground">Distancia:</span> {trip.distance.toFixed(1)} km</p>
+                    <p><span className="text-muted-foreground">CO2:</span> {trip.co2.toFixed(2)} kg</p>
+                    <div>
+                      <span className="text-muted-foreground">Ruta:</span>
+                      <ul className="ml-4 mt-1 space-y-0.5">
+                        {trip.route.map((loc, i) => (
+                          <li key={i} className="text-xs">
+                            {i + 1}. {loc}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+
+          <div className="p-6 pt-4 border-t flex items-center justify-between gap-4">
+            <Button variant="outline" onClick={handleDiscardPendingTrips}>
+              Descartar todos
+            </Button>
+            <Button onClick={handleSaveAllPendingTrips} disabled={pendingTrips.length === 0}>
+              Guardar {pendingTrips.length} viajes
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Main Project Detail Dialog */}
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] p-0 gap-0 overflow-hidden">
         <DialogHeader className="p-6 pb-4">
           <DialogTitle className="text-xl font-semibold">{project.name}</DialogTitle>
@@ -1132,5 +1253,6 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         </ScrollArea>
       </DialogContent>
     </Dialog>
+    </>
   );
 }
