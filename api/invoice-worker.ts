@@ -5,6 +5,7 @@ import { InvoiceExtractionResultSchema } from "../src/lib/ai/validation.js";
 import { captureServerException, withApiObservability } from "./_utils/observability.js";
 import { enforceRateLimit } from "./_utils/rateLimit.js";
 import { checkAiMonthlyQuota } from "./_utils/aiQuota.js";
+import { calculateNextRetry, isJobStuck, shouldRetry, DEFAULT_RETRY_STRATEGY } from "./_utils/retry.js";
 
 export default withApiObservability(async function handler(req: any, res: any, { log, requestId }) {
   // CRON authentication
@@ -53,35 +54,98 @@ export default withApiObservability(async function handler(req: any, res: any, {
   if (!cronAllowed) return;
 
   try {
-    // 1. Fetch queued invoice jobs (up to 8 concurrently)
-    const { data: jobs, error } = await supabaseAdmin
+    // 1. Detect and reset stuck jobs
+    const stuckTimeout = DEFAULT_RETRY_STRATEGY.timeoutMinutes;
+    const stuckThreshold = new Date(Date.now() - stuckTimeout * 60 * 1000).toISOString();
+    
+    const { data: stuckJobs } = await supabaseAdmin
+      .from("invoice_jobs")
+      .select("id, retry_count, max_retries")
+      .eq("status", "processing")
+      .lt("processing_started_at", stuckThreshold);
+
+    if (stuckJobs && stuckJobs.length > 0) {
+      log.warn({ count: stuckJobs.length }, "invoice_stuck_jobs_detected");
+      
+      for (const stuck of stuckJobs) {
+        const retryCount = (stuck.retry_count || 0) + 1;
+        const maxRetries = stuck.max_retries || DEFAULT_RETRY_STRATEGY.maxRetries;
+        
+        if (retryCount > maxRetries) {
+          await supabaseAdmin
+            .from("invoice_jobs")
+            .update({ 
+              status: "failed", 
+              last_error: "Job stuck in processing, exceeded max retries",
+              retry_count: retryCount 
+            })
+            .eq("id", stuck.id);
+        } else {
+          const nextRetry = calculateNextRetry(retryCount);
+          await supabaseAdmin
+            .from("invoice_jobs")
+            .update({ 
+              status: "failed", 
+              last_error: "Job stuck in processing, will retry",
+              retry_count: retryCount,
+              next_retry_at: nextRetry
+            })
+            .eq("id", stuck.id);
+        }
+      }
+    }
+
+    // 2. Fetch jobs ready for processing
+    const now = new Date().toISOString();
+    const { data: queuedJobs, error: queuedError } = await supabaseAdmin
       .from("invoice_jobs")
       .select("*")
       .eq("status", "queued")
       .limit(maxJobs);
 
-    if (error) throw error;
-    if (!jobs || jobs.length === 0) {
-      res.status(200).json({ message: "No invoice jobs queued" });
+    const { data: retryJobs, error: retryError } = await supabaseAdmin
+      .from("invoice_jobs")
+      .select("*")
+      .eq("status", "failed")
+      .not("next_retry_at", "is", null)
+      .lte("next_retry_at", now)
+      .lt("retry_count", DEFAULT_RETRY_STRATEGY.maxRetries)
+      .limit(maxJobs);
+
+    if (queuedError) throw queuedError;
+    if (retryError) log.warn({ retryError }, "invoice_retry_fetch_error");
+
+    const jobs = [...(queuedJobs || []), ...(retryJobs || [])].slice(0, maxJobs);
+
+    if (jobs.length === 0) {
+      res.status(200).json({ message: "No invoice jobs queued or ready for retry" });
       return;
     }
 
     const processedResults: any[] = [];
 
     async function processInvoiceJob(job: any) {
+      const jobId = job.id;
+      const currentRetry = job.retry_count || 0;
+      
       // Atomically claim the job
       const { data: claimed, error: claimError } = await supabaseAdmin
         .from("invoice_jobs")
-        .update({ status: "processing", processed_at: new Date().toISOString() })
-        .eq("id", job.id)
-        .eq("status", "queued")
-        .select("id, storage_path, user_id")
+        .update({ 
+          status: "processing", 
+          processed_at: new Date().toISOString(),
+          processing_started_at: new Date().toISOString(),
+          retry_count: currentRetry
+        })
+        .eq("id", jobId)
+        .in("status", ["queued", "failed"])
+        .select("id, storage_path, user_id, retry_count")
         .maybeSingle();
 
       if (claimError || !claimed) return;
 
       try {
-        log.info({ jobId: job.id }, "invoice_job_start");
+        log.info({ jobId, retryCount: currentRetry }, "invoice_job_start");
 
         // Monthly quota (counts only when jobs reach `done`).
         const userId = String((claimed as any).user_id ?? (job as any).user_id ?? "").trim();
@@ -190,25 +254,54 @@ export default withApiObservability(async function handler(req: any, res: any, {
           throw new Error(`Failed to insert result: ${resultInsertError.message}`);
         }
 
-        log.info({ jobId: job.id }, "invoice_result_saved");
+        log.info({ jobId }, "invoice_result_saved");
 
-        await supabaseAdmin.from("invoice_jobs").update({ status: "done" }).eq("id", job.id);
-        log.info({ jobId: job.id }, "invoice_job_done");
-        processedResults.push({ id: job.id, status: "success" });
+        await supabaseAdmin.from("invoice_jobs").update({ status: "done", retry_count: currentRetry }).eq("id", jobId);
+        log.info({ jobId, retryCount: currentRetry }, "invoice_job_done");
+        processedResults.push({ id: jobId, status: "success", retries: currentRetry });
       } catch (jobErr: any) {
-        log.error({ jobId: job.id, err: jobErr }, "invoice_job_failed");
+        log.error({ jobId, err: jobErr, retryCount: currentRetry }, "invoice_job_failed");
         const errorMessage = jobErr?.message || String(jobErr);
-        captureServerException(jobErr, { requestId, jobId: job.id, kind: "invoice" });
+        captureServerException(jobErr, { requestId, jobId, kind: "invoice" });
         
-        await supabaseAdmin
-          .from("invoice_jobs")
-          .update({ 
-            status: "failed", 
-            needs_review_reason: errorMessage 
-          })
-          .eq("id", job.id);
+        const nextRetry = currentRetry + 1;
+        const maxRetries = job.max_retries || DEFAULT_RETRY_STRATEGY.maxRetries;
+        
+        if (nextRetry > maxRetries) {
+          // Exceeded max retries, mark as permanently failed
+          await supabaseAdmin
+            .from("invoice_jobs")
+            .update({ 
+              status: "failed", 
+              needs_review_reason: errorMessage,
+              last_error: errorMessage,
+              retry_count: nextRetry
+            })
+            .eq("id", jobId);
           
-        processedResults.push({ id: job.id, status: "failed", error: errorMessage });
+          processedResults.push({ id: jobId, status: "failed", error: errorMessage, retries: nextRetry });
+        } else {
+          // Schedule retry with exponential backoff
+          const nextRetryAt = calculateNextRetry(nextRetry);
+          await supabaseAdmin
+            .from("invoice_jobs")
+            .update({ 
+              status: "failed", 
+              needs_review_reason: `Will retry (${nextRetry}/${maxRetries})`,
+              last_error: errorMessage,
+              retry_count: nextRetry,
+              next_retry_at: nextRetryAt
+            })
+            .eq("id", jobId);
+          
+          processedResults.push({ 
+            id: jobId, 
+            status: "scheduled_retry", 
+            error: errorMessage, 
+            retries: nextRetry, 
+            nextRetryAt 
+          });
+        }
       }
     }
 
