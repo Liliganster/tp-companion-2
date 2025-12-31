@@ -23,9 +23,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
       theme={theme as ToasterProps["theme"]}
       position={isDesktop ? "bottom-right" : "top-center"}
       visibleToasts={isDesktop ? 5 : 1}
-      expand={isDesktop}
+      expand={true}
       closeButton
       duration={5000}
+      offset={isDesktop ? "16px" : undefined}
+      gap={12}
       className="toaster group"
       toastOptions={{
         classNames: {

@@ -270,6 +270,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             toast.error(t("projectDetail.toastTripCreatedFromAiFailed"));
           }
           processedJobsRef.current.add(job.id);
+          return null;
         } else {
           // Add to pending trips list for batch review
           processedJobsRef.current.add(job.id);
@@ -285,7 +286,6 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       } finally {
         inFlightJobsRef.current.delete(job.id);
       }
-      return null;
     },
     [addTrip, calculateCO2, getAccessToken, hasTripForJob, normalizeProjectName, profile, project]
   );
