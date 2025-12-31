@@ -8,6 +8,11 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function parseHashParams(hash: string): URLSearchParams {
+  const raw = hash.startsWith("#") ? hash.slice(1) : hash;
+  return new URLSearchParams(raw);
+}
+
 export default function AuthCallback() {
   const navigate = useNavigate();
   const processedRef = useRef(false);
@@ -56,9 +61,17 @@ export default function AuthCallback() {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) throw error;
         } else if (hasImplicitTokens) {
-          // Gotrue warns if the device clock is behind even by ~1s; a short delay prevents false positives.
+          const params = parseHashParams(window.location.hash);
+          const accessToken = params.get("access_token");
+          const refreshToken = params.get("refresh_token");
+
+          if (!accessToken || !refreshToken) {
+            throw new Error("Missing tokens in callback URL");
+          }
+
+          // Some environments can report small clock skew; a short delay prevents false positives in gotrue.
           await sleep(1200);
-          const { error } = await (supabase.auth as any).getSessionFromUrl?.({ storeSession: true });
+          const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
           if (error) throw error;
         } else {
           toast.error("No se recibió respuesta de Google", { description: "Vuelve a intentarlo desde la pantalla de acceso." });
