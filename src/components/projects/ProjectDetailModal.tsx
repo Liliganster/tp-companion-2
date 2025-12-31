@@ -90,12 +90,31 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const processedJobsRef = useRef<Set<string>>(new Set());
   const inFlightJobsRef = useRef<Set<string>>(new Set());
   const processedInvoiceJobsRef = useRef<Set<string>>(new Set());
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     // Reset per-project session state
     processedJobsRef.current = new Set();
     inFlightJobsRef.current = new Set();
     processedInvoiceJobsRef.current = new Set();
+    
+    // Create new abort controller when modal opens
+    if (open) {
+      abortControllerRef.current = new AbortController();
+    }
+    
+    // Cleanup when modal closes or project changes
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      // Clear pending trips when closing
+      if (!open) {
+        setPendingTrips([]);
+        setShowPendingTrips(false);
+      }
+    };
   }, [project?.id, open]);
 
   const emissionsInput = useMemo(() => {
@@ -356,17 +375,27 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         if (doneJobs.length > 0) {
           // Use setTimeout to avoid blocking the UI and to run after state is set
           setTimeout(async () => {
+            // Check if modal was closed while waiting
+            if (abortControllerRef.current?.signal.aborted) {
+              return;
+            }
+            
             const results = await Promise.allSettled(doneJobs.map(doc => materializeTripFromJob({
               id: doc.id,
               storage_path: doc.storage_path,
               status: doc.status
             }, false)));
             
+            // Check again after async operation
+            if (abortControllerRef.current?.signal.aborted) {
+              return;
+            }
+            
             const newPendingTrips = results
               .filter(r => r.status === 'fulfilled' && r.value !== null)
               .map(r => (r as PromiseFulfilledResult<Trip>).value);
             
-            if (newPendingTrips.length > 0) {
+            if (newPendingTrips.length > 0 && !abortControllerRef.current?.signal.aborted) {
               setPendingTrips(newPendingTrips);
               setShowPendingTrips(true);
             }
@@ -483,6 +512,15 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     if (!open || !project?.id) return;
 
     const tick = async () => {
+      // Check if aborted
+      if (abortControllerRef.current?.signal.aborted) {
+        if (interval) {
+          clearInterval(interval);
+          interval = null;
+        }
+        return;
+      }
+
       try {
         const visibleIds = (realCallSheetsRef.current ?? []).map((d) => d.id).filter(Boolean);
 
@@ -500,6 +538,15 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         }
 
         const { data: jobs } = await q;
+        
+        // Check again after async operation
+        if (abortControllerRef.current?.signal.aborted) {
+          if (interval) {
+            clearInterval(interval);
+            interval = null;
+          }
+          return;
+        }
 
         const notifyQuotaIfNeeded = (items: Array<{ id: string; status?: string; needs_review_reason?: string }>) => {
           const newlyHit: Array<{ id: string; reason?: string }> = [];
@@ -568,15 +615,34 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         // 2) Materialize trips for completed jobs.
         const doneJobs = (jobs ?? []).filter((j: any) => j.status === "done");
         if (doneJobs.length > 0) {
+          // Check if aborted before processing
+          if (abortControllerRef.current?.signal.aborted) {
+            if (interval) {
+              clearInterval(interval);
+              interval = null;
+            }
+            return;
+          }
+          
           // Only materialize jobs that haven't been processed yet
           const unprocessedDone = doneJobs.filter((j: any) => !processedJobsRef.current.has(j.id));
           if (unprocessedDone.length > 0) {
             const results = await Promise.allSettled(unprocessedDone.map((j: any) => materializeTripFromJob(j, false)));
+            
+            // Check again after async operation
+            if (abortControllerRef.current?.signal.aborted) {
+              if (interval) {
+                clearInterval(interval);
+                interval = null;
+              }
+              return;
+            }
+            
             const newPendingTrips = results
               .filter(r => r.status === 'fulfilled' && r.value !== null)
               .map(r => (r as PromiseFulfilledResult<Trip>).value);
             
-            if (newPendingTrips.length > 0) {
+            if (newPendingTrips.length > 0 && !abortControllerRef.current?.signal.aborted) {
               setPendingTrips(prev => [...prev, ...newPendingTrips]);
               setShowPendingTrips(true);
             }
@@ -652,6 +718,14 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         }
 
         // 4) If nothing is pending, stop polling.
+        if (abortControllerRef.current?.signal.aborted) {
+          if (interval) {
+            clearInterval(interval);
+            interval = null;
+          }
+          return;
+        }
+        
         const hasPending = (jobs ?? []).some(
           (j: any) => j?.status === "queued" || j?.status === "processing" || j?.status === "created",
         );
@@ -665,6 +739,15 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           interval = null;
         }
       } catch (err) {
+        // Ignore abort errors
+        if (err instanceof Error && err.name === 'AbortError') {
+          if (DEBUG) console.log("[Polling] Aborted");
+          if (interval) {
+            clearInterval(interval);
+            interval = null;
+          }
+          return;
+        }
         console.error("[Polling] Error:", err);
       }
     };
@@ -673,7 +756,11 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     void tick();
 
     return () => {
-      if (interval) clearInterval(interval);
+      if (DEBUG) console.log("[Polling] Cleanup: stopping interval");
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
     };
   }, [open, project?.id, refreshProjects, materializeTripFromJob]);
 
