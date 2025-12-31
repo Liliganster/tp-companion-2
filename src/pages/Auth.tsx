@@ -245,7 +245,25 @@ export default function Auth() {
               </div>
             </div>
 
-            <Button variant="outline" className="w-full" type="button" onClick={() => signInWithGoogle()}>
+            <Button
+              variant="outline"
+              className="w-full"
+              type="button"
+              disabled={isLoading}
+              onClick={async () => {
+                setIsLoading(true);
+                try {
+                  await signInWithGoogle();
+                } catch (err: any) {
+                  toast({
+                    title: "No se pudo iniciar sesión con Google",
+                    description: err?.message ?? "Revisa la configuración del proveedor en Supabase/Google.",
+                    variant: "destructive",
+                  });
+                  setIsLoading(false);
+                }
+              }}
+            >
               <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   fill="currentColor"

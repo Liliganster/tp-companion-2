@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { toast } from "sonner";
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -23,6 +24,8 @@ export default function AuthCallback() {
     const href = window.location.href;
     const url = new URL(href);
     const code = url.searchParams.get("code");
+    const oauthError = url.searchParams.get("error");
+    const oauthErrorDescription = url.searchParams.get("error_description");
     const isRecoveryUrl = href.includes("type=recovery");
     const hasImplicitTokens = window.location.hash.includes("access_token=");
 
@@ -41,6 +44,12 @@ export default function AuthCallback() {
     });
     
     const run = async () => {
+      if (oauthError) {
+        toast.error("Error de autenticación", { description: oauthErrorDescription ?? oauthError });
+        navigate("/auth");
+        return;
+      }
+
       // Manually handle session recovery in this route (we disabled detectSessionInUrl globally).
       try {
         if (code) {
@@ -51,8 +60,13 @@ export default function AuthCallback() {
           await sleep(1200);
           const { error } = await (supabase.auth as any).getSessionFromUrl?.({ storeSession: true });
           if (error) throw error;
+        } else {
+          toast.error("No se recibió respuesta de Google", { description: "Vuelve a intentarlo desde la pantalla de acceso." });
+          navigate("/auth");
+          return;
         }
       } catch {
+        toast.error("No se pudo completar el inicio de sesión", { description: "Revisa la configuración de Google en Supabase." });
         navigate("/auth");
         return;
       } finally {
@@ -66,6 +80,7 @@ export default function AuthCallback() {
 
       const { data, error } = await supabase.auth.getSession();
       if (error || !data.session) {
+        toast.error("Sesión no válida", { description: "No se pudo recuperar la sesión tras el login." });
         navigate("/auth");
         return;
       }
