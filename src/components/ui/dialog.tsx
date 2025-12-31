@@ -12,6 +12,34 @@ const DialogPortal = DialogPrimitive.Portal;
 
 const DialogClose = DialogPrimitive.Close;
 
+function hasChildWithDisplayName(children: React.ReactNode, name: string): boolean {
+  let found = false;
+
+  const visit = (node: React.ReactNode) => {
+    if (found || node == null) return;
+    if (typeof node === "string" || typeof node === "number" || typeof node === "boolean") return;
+
+    if (Array.isArray(node)) {
+      for (const child of node) visit(child);
+      return;
+    }
+
+    if (!React.isValidElement(node)) return;
+
+    const type: any = node.type;
+    const displayName = typeof type === "function" || typeof type === "object" ? type?.displayName : undefined;
+    if (displayName === name) {
+      found = true;
+      return;
+    }
+
+    if (node.props?.children) visit(node.props.children);
+  };
+
+  visit(children);
+  return found;
+}
+
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
@@ -42,6 +70,12 @@ const DialogContent = React.forwardRef<
       )}
       {...props}
     >
+      {!hasChildWithDisplayName(children, "DialogTitle") ? (
+        <DialogPrimitive.Title className="sr-only">Dialog</DialogPrimitive.Title>
+      ) : null}
+      {!hasChildWithDisplayName(children, "DialogDescription") ? (
+        <DialogPrimitive.Description className="sr-only">Dialog</DialogPrimitive.Description>
+      ) : null}
       {children}
       <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-accent data-[state=open]:text-muted-foreground hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
         <X className="h-4 w-4" />
