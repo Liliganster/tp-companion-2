@@ -1,17 +1,29 @@
 import { useTheme } from "next-themes";
 import { Toaster as Sonner, toast } from "sonner";
+import { useEffect, useState } from "react";
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme();
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const checkDesktop = () => {
+      setIsDesktop(window.innerWidth >= 768); // md breakpoint
+    };
+    
+    checkDesktop();
+    window.addEventListener("resize", checkDesktop);
+    return () => window.removeEventListener("resize", checkDesktop);
+  }, []);
 
   return (
     <Sonner
       theme={theme as ToasterProps["theme"]}
-      position="top-center"
-      visibleToasts={1}
-      expand={false}
+      position={isDesktop ? "bottom-right" : "top-center"}
+      visibleToasts={isDesktop ? 5 : 1}
+      expand={isDesktop}
       closeButton
       duration={5000}
       className="toaster group"
