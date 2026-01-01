@@ -1,10 +1,10 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload, Sparkles, FileSpreadsheet, CloudUpload, Loader2, Link, MapPin, Calendar, Building2, CheckCircle, Save } from "lucide-react";
+import { Upload, Sparkles, FileSpreadsheet, CloudUpload, Loader2, MapPin, Calendar, Building2, CheckCircle, Save } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useI18n } from "@/hooks/use-i18n";
 import { supabase } from "@/lib/supabaseClient";
@@ -31,12 +31,13 @@ interface SavedTrip {
   distance: number;
   ratePerKmOverride?: number | null;
   specialOrigin?: "base" | "continue" | "return";
+  callsheet_job_id?: string;
   documents?: any[];
 }
 
 interface BulkUploadModalProps {
   trigger: React.ReactNode;
-  onSave?: (data: SavedTrip) => void;
+  onSave?: (data: SavedTrip) => Promise<boolean> | boolean | void;
 }
 
 export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
@@ -48,29 +49,44 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const [aiStep, setAiStep] = useState<"upload" | "processing" | "review">("upload");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [jobIds, setJobIds] = useState<string[]>([]);
-  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [jobMetaById, setJobMetaById] = useState<
     Record<string, { fileName: string; mimeType: string; storagePath: string }>
   >({});
-  const [extractedData, setExtractedData] = useState<any>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [processingTotal, setProcessingTotal] = useState(0);
   const [processingDone, setProcessingDone] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const csvFileInputRef = useRef<HTMLInputElement>(null);
   
-  // Review form state
-  const [reviewDate, setReviewDate] = useState("");
-  const [reviewProject, setReviewProject] = useState("");
-  const [reviewProducer, setReviewProducer] = useState("");
-  const [reviewLocations, setReviewLocations] = useState<string[]>([]);
-  
-  const [reviewDistance, setReviewDistance] = useState("0");
-  const [isOptimizing, setIsOptimizing] = useState(false);
+  type JobStatus = "created" | "queued" | "processing" | "done" | "failed" | "needs_review" | "out_of_quota" | string;
+  type JobState = { status: JobStatus; needsReviewReason?: string | null };
+  type ReviewTrip = {
+    date: string;
+    project: string;
+    producer: string;
+    rawLocations: string[];
+    locations: string[];
+    distance: string;
+    distanceDirty: boolean;
+    optimizing: boolean;
+  };
+
+  const [jobStateById, setJobStateById] = useState<Record<string, JobState>>({});
+  const [reviewByJobId, setReviewByJobId] = useState<Record<string, ReviewTrip>>({});
+  const [savingByJobId, setSavingByJobId] = useState<Record<string, boolean>>({});
+  const [savedByJobId, setSavedByJobId] = useState<Record<string, boolean>>({});
+
+  const jobResultsLoadingRef = useRef(new Set<string>());
+  const failureToastShownRef = useRef(new Set<string>());
+  const optimizeChainRef = useRef(Promise.resolve());
+  const reviewByJobIdRef = useRef<Record<string, ReviewTrip>>({});
+  const savedByJobIdRef = useRef<Record<string, boolean>>({});
   
   const { t, tf, locale } = useI18n();
   const exampleText = t("bulk.examplePlaceholder");
   const { getAccessToken } = useAuth();
+  const { profile } = useUserProfile();
+  const { projects, addProject } = useProjects();
 
   // Reset state when modal closes or tab changes
   useEffect(() => {
@@ -83,22 +99,26 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     setAiStep("upload");
     setSelectedFiles([]);
     setJobIds([]);
-    setCurrentJobId(null);
     setJobMetaById({});
-    setExtractedData(null);
     setAiLoading(false);
-    setIsOptimizing(false);
     setProcessingTotal(0);
     setProcessingDone(0);
-    setReviewDate("");
-    setReviewProject("");
-    setReviewProducer("");
-    setReviewLocations([]);
-    setReviewDistance("0");
-    setReviewLocations([]);
-    setReviewDistance("0");
+    setJobStateById({});
+    setReviewByJobId({});
+    setSavingByJobId({});
+    setSavedByJobId({});
+    jobResultsLoadingRef.current.clear();
+    failureToastShownRef.current.clear();
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
+
+  useEffect(() => {
+    reviewByJobIdRef.current = reviewByJobId;
+  }, [reviewByJobId]);
+
+  useEffect(() => {
+    savedByJobIdRef.current = savedByJobId;
+  }, [savedByJobId]);
 
   const normalizeHeaderKey = (raw: string): string =>
     String(raw ?? "")
@@ -481,6 +501,13 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError || !user) throw new Error(t("bulk.errorNotAuthenticated"));
 
+      setJobStateById({});
+      setReviewByJobId({});
+      setSavingByJobId({});
+      setSavedByJobId({});
+      jobResultsLoadingRef.current.clear();
+      failureToastShownRef.current.clear();
+
       const createdJobIds: string[] = [];
       const metaById: Record<string, { fileName: string; mimeType: string; storagePath: string }> = {};
       let successCount = 0;
@@ -542,7 +569,6 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
       setJobIds(createdJobIds);
       setJobMetaById(metaById);
-      setCurrentJobId(null);
       setProcessingTotal(createdJobIds.length);
       setProcessingDone(0);
       // Kick the worker once so users don't have to wait for cron.
@@ -568,142 +594,357 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     }
   };
 
-  // Polling Effect
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-
-    if (aiStep === "processing" && jobIds.length > 0) {
-      const checkStatus = async () => {
-        try {
-          const { data: jobs, error: jobsError } = await supabase
-            .from("callsheet_jobs")
-            .select("id, status, needs_review_reason")
-            .in("id", jobIds);
-
-          if (jobsError || !jobs) return;
-
-          const doneIds = jobs.filter((j: any) => j.status === "done").map((j: any) => j.id);
-          const failedJobs = jobs.filter((j: any) => j.status === "failed" || j.status === "needs_review" || j.status === "out_of_quota");
-          const failedIds = failedJobs.map((j: any) => j.id);
-
-          setProcessingDone(doneIds.length);
-
-          if (failedIds.length > 0) {
-            const quotaJob = failedJobs.find((j: any) => parseMonthlyQuotaExceededReason(j.needs_review_reason));
-            let failureDescription: string | undefined;
-            if (quotaJob) {
-              const parsed = parseMonthlyQuotaExceededReason(quotaJob.needs_review_reason);
-              failureDescription =
-                parsed?.used != null && parsed?.limit != null
-                  ? tf("aiQuota.monthlyLimitReachedBody", { used: String(parsed.used), limit: String(parsed.limit) })
-                  : t("aiQuota.monthlyLimitReachedBodyGeneric");
-            } else {
-              const firstReason = String(failedJobs[0]?.needs_review_reason ?? "").trim();
-              if (firstReason) failureDescription = firstReason;
-            }
-
-            toast.error(tf("bulk.toastFailedDocs", { count: failedIds.length }), {
-              description: failureDescription,
-            });
-
-            // Remove failed jobs from the queue so we don't keep polling them.
-            const remainingJobIds = jobIds.filter((id) => !failedIds.includes(id));
-            setJobIds((prev) => prev.filter((id) => !failedIds.includes(id)));
-            setJobMetaById((prev) => {
-              const next = { ...prev };
-              failedIds.forEach((id) => {
-                delete next[id];
-              });
-              return next;
-            });
-
-            // If everything failed (no remaining queued jobs and no done jobs), stop the processing UI.
-            if (remainingJobIds.length === 0 && doneIds.length === 0) {
-              clearInterval(interval);
-              setAiStep("upload");
-              setAiLoading(false);
-              setSelectedFiles([]);
-              setJobIds([]);
-              setCurrentJobId(null);
-              setJobMetaById({});
-              setProcessingTotal(0);
-              setProcessingDone(0);
-            }
-          }
-
-          // If a job is done, move to review for the first completed one.
-          const nextReadyJobId = doneIds[0];
-          if (nextReadyJobId) {
-            clearInterval(interval);
-            setCurrentJobId(nextReadyJobId);
-
-            const { data: result, error: resultError } = await supabase
-              .from("callsheet_results")
-              .select("*")
-              .eq("job_id", nextReadyJobId)
-              .maybeSingle();
-
-            const { data: locs, error: locsError } = await supabase
-              .from("callsheet_locations")
-              .select("*")
-              .eq("job_id", nextReadyJobId);
-
-            if (resultError || locsError) return;
-            if (!result) return;
-
-            setExtractedData({ result, locations: locs || [] });
-            setReviewDate(result.date_value || "");
-            setReviewProject(result.project_value || "");
-            setReviewProducer(result.producer_value || "");
-            optimizeRoute(locs || []);
-          }
-        } catch (e) {
-          console.error("Polling error", e);
-        }
-      };
-
-      interval = setInterval(checkStatus, 2000);
-      void checkStatus();
-    }
-
-    return () => clearInterval(interval);
-  }, [aiStep, jobIds]);
-
-  const optimizeRoute = async (rawLocations: any[]) => {
-      setIsOptimizing(true);
-      // Use raw strings if formatted_address is missing/null
-      const currentLocs = rawLocations.map(l => l.formatted_address || l.address_raw);
-
-      try {
-        const token = await getAccessToken();
-        const { locations: normalizedLocs, distanceKm } = await optimizeCallsheetLocationsAndDistance({
-        profile,
-        rawLocations: currentLocs,
-        accessToken: token,
+  // Multi-job: carga resultados para TODOS los documentos completados y los muestra en paralelo.
+  const enqueueOptimization = (jobId: string, rawLocations: string[]) => {
+    optimizeChainRef.current = optimizeChainRef.current
+      .then(async () => {
+        setReviewByJobId((prev) => {
+          const cur = prev[jobId];
+          if (!cur) return prev;
+          return { ...prev, [jobId]: { ...cur, optimizing: true } };
         });
 
-        setReviewLocations(normalizedLocs);
-        if (typeof distanceKm === "number") setReviewDistance(String(distanceKm));
+        const token = await getAccessToken();
+        const { locations: normalizedLocs, distanceKm } = await optimizeCallsheetLocationsAndDistance({
+          profile,
+          rawLocations,
+          accessToken: token,
+        });
 
-      } catch (e) {
-          console.error("Optimization failed", e);
-          // Still create the trip with what we have
-          setReviewLocations(currentLocs);
-      } finally {
-          setIsOptimizing(false);
-          setAiLoading(false);
-          setAiStep("review");
-      }
+        setReviewByJobId((prev) => {
+          const cur = prev[jobId];
+          if (!cur) return prev;
+          const nextDistance = cur.distanceDirty
+            ? cur.distance
+            : typeof distanceKm === "number"
+              ? String(distanceKm)
+              : cur.distance;
+          return {
+            ...prev,
+            [jobId]: {
+              ...cur,
+              locations: Array.isArray(normalizedLocs) ? normalizedLocs : cur.locations,
+              distance: nextDistance,
+              optimizing: false,
+            },
+          };
+        });
+      })
+      .catch((e) => {
+        console.error("Optimization failed", e);
+        setReviewByJobId((prev) => {
+          const cur = prev[jobId];
+          if (!cur) return prev;
+          return { ...prev, [jobId]: { ...cur, optimizing: false } };
+        });
+      });
   };
 
-  const { profile } = useUserProfile();
-  const { projects, addProject } = useProjects();
+  const loadJobResult = async (jobId: string) => {
+    if (jobResultsLoadingRef.current.has(jobId)) return;
+    if (reviewByJobIdRef.current[jobId]) return;
+    if (savedByJobIdRef.current[jobId]) return;
 
-// Duplicate SavedTrip interface removed; projectId is declared in the top SavedTrip interface.
+    jobResultsLoadingRef.current.add(jobId);
+    try {
+      const [{ data: result, error: resultError }, { data: locs, error: locsError }] = await Promise.all([
+        supabase.from("callsheet_results").select("*").eq("job_id", jobId).maybeSingle(),
+        supabase.from("callsheet_locations").select("*").eq("job_id", jobId),
+      ]);
+
+      if (resultError || locsError || !result) return;
+
+      const rawLocations = (locs ?? [])
+        .map((l: any) => String(l?.formatted_address || l?.address_raw || l?.name_raw || "").trim())
+        .filter(Boolean);
+
+      setReviewByJobId((prev) => {
+        if (prev[jobId]) return prev;
+        return {
+          ...prev,
+          [jobId]: {
+            date: String((result as any).date_value ?? ""),
+            project: String((result as any).project_value ?? ""),
+            producer: String((result as any).producer_value ?? ""),
+            rawLocations,
+            locations: rawLocations,
+            distance: "0",
+            distanceDirty: false,
+            optimizing: false,
+          },
+        };
+      });
+
+      if (rawLocations.length > 0) enqueueOptimization(jobId, rawLocations);
+    } finally {
+      jobResultsLoadingRef.current.delete(jobId);
+    }
+  };
+
+  // Poll job statuses y carga resultados según vayan llegando.
+  useEffect(() => {
+    const active = (aiStep === "processing" || aiStep === "review") && jobIds.length > 0;
+    if (!active) return;
+
+    const checkStatus = async () => {
+      try {
+        const { data: jobs, error: jobsError } = await supabase
+          .from("callsheet_jobs")
+          .select("id, status, needs_review_reason")
+          .in("id", jobIds);
+
+        if (jobsError || !jobs) return;
+
+        const doneIds = jobs.filter((j: any) => j.status === "done").map((j: any) => String(j.id));
+        const failedJobs = jobs.filter(
+          (j: any) => j.status === "failed" || j.status === "needs_review" || j.status === "out_of_quota",
+        );
+
+        setProcessingDone(doneIds.length);
+        setJobStateById((prev) => {
+          const next = { ...prev };
+          for (const j of jobs as any[]) {
+            next[String(j.id)] = { status: String(j.status) as JobStatus, needsReviewReason: j.needs_review_reason ?? null };
+          }
+          return next;
+        });
+
+        for (const j of failedJobs as any[]) {
+          const id = String(j.id);
+          if (failureToastShownRef.current.has(id)) continue;
+          failureToastShownRef.current.add(id);
+
+          const parsed = parseMonthlyQuotaExceededReason(j.needs_review_reason);
+          const isQuota = Boolean(parsed);
+          const description =
+            isQuota && parsed?.used != null && parsed?.limit != null
+              ? tf("aiQuota.monthlyLimitReachedBody", { used: String(parsed.used), limit: String(parsed.limit) })
+              : isQuota
+                ? t("aiQuota.monthlyLimitReachedBodyGeneric")
+                : String(j.needs_review_reason ?? "").trim() || undefined;
+
+          toast.error("No se pudo procesar un documento", { description });
+        }
+
+        const pendingLoads = doneIds.filter((id) => !reviewByJobIdRef.current[id] && !savedByJobIdRef.current[id]);
+        if (pendingLoads.length > 0) await Promise.allSettled(pendingLoads.map((id) => loadJobResult(id)));
+
+        if (aiStep === "processing" && doneIds.length > 0) setAiStep("review");
+      } catch (e) {
+        console.error("Polling error", e);
+      }
+    };
+
+    const interval = setInterval(checkStatus, 2000);
+    void checkStatus();
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [aiStep, jobIds, t, tf]);
+
+  const createdProjectsByNameRef = useRef<Record<string, string>>({});
+
+  const resolveProjectId = async (projectName: string, producer: string, fileName: string): Promise<string | undefined> => {
+    const trimmed = projectName.trim();
+    if (!trimmed) return undefined;
+
+    const key = trimmed.toLowerCase();
+    const cached = createdProjectsByNameRef.current[key];
+    if (cached) return cached;
+
+    const existingProject = projects.find((p) => p.name.trim().toLowerCase() === key);
+    if (existingProject?.id) {
+      createdProjectsByNameRef.current[key] = existingProject.id;
+      return existingProject.id;
+    }
+
+    const newProjectId = uuidv4();
+    await addProject({
+      id: newProjectId,
+      name: trimmed,
+      producer,
+      description: `Creado desde IA: ${fileName}`,
+      ratePerKm: 0.3,
+      starred: false,
+      trips: 0,
+      totalKm: 0,
+      documents: 0,
+      invoices: 0,
+      estimatedCost: 0,
+      shootingDays: 0,
+      kmPerDay: 0,
+      co2Emissions: 0,
+    } as any);
+
+    // Best-effort: if the project already existed, fetch its real id by name.
+    const { data } = await supabase.from("projects").select("id").eq("name", trimmed).limit(1).maybeSingle();
+    const id = data?.id ? String((data as any).id) : newProjectId;
+    createdProjectsByNameRef.current[key] = id;
+    return id;
+  };
+
+  const updateReview = (jobId: string, patch: Partial<ReviewTrip>) => {
+    setReviewByJobId((prev) => {
+      const cur = prev[jobId];
+      if (!cur) return prev;
+      return { ...prev, [jobId]: { ...cur, ...patch } };
+    });
+  };
+
+  const saveTripForJob = async (jobId: string): Promise<boolean> => {
+    if (!onSave) return false;
+    const meta = jobMetaById[jobId];
+    const review = reviewByJobId[jobId];
+    if (!meta || !review) return false;
+    if (savingByJobId[jobId] || savedByJobId[jobId]) return true;
+
+    setSavingByJobId((prev) => ({ ...prev, [jobId]: true }));
+    try {
+      const trimmedProjectName = review.project.trim();
+      const projectIdToUse = await resolveProjectId(trimmedProjectName, review.producer, meta.fileName);
+
+      const baseAddress = (profile.baseAddress ?? "").trim();
+      const stops = review.locations.map((l) => (l ?? "").trim()).filter(Boolean);
+      const route = baseAddress ? [baseAddress, ...stops, baseAddress] : stops;
+
+      const newTrip: SavedTrip = {
+        id: uuidv4(),
+        date: review.date,
+        project: trimmedProjectName,
+        projectId: projectIdToUse,
+        purpose: review.producer ? `Rodaje: ${review.producer}` : "Rodaje",
+        route,
+        passengers: 0,
+        distance: Number.parseFloat(String(review.distance).replace(",", ".")) || 0,
+        specialOrigin: "base",
+        documents: meta.storagePath
+          ? [
+              {
+                id: crypto.randomUUID(),
+                name: meta.fileName || "Documento original",
+                mimeType: meta.mimeType || "application/pdf",
+                storagePath: meta.storagePath,
+                bucketId: "callsheets",
+                kind: "document",
+                createdAt: new Date().toISOString(),
+              },
+            ]
+          : undefined,
+        callsheet_job_id: jobId,
+      };
+
+      const out = await Promise.resolve(onSave(newTrip));
+      const ok = typeof out === "boolean" ? out : true;
+      if (ok) setSavedByJobId((prev) => ({ ...prev, [jobId]: true }));
+      return ok;
+    } catch (e) {
+      console.error(e);
+      toast.error("No se pudo guardar el viaje");
+      return false;
+    } finally {
+      setSavingByJobId((prev) => ({ ...prev, [jobId]: false }));
+    }
+  };
+
+  const saveAllReadyTrips = async () => {
+    const readyIds = Object.keys(reviewByJobId).filter((id) => {
+      if (savedByJobId[id]) return false;
+      const review = reviewByJobId[id];
+      return Boolean(review) && !review.optimizing;
+    });
+    if (readyIds.length === 0) return;
+
+    let okCount = 0;
+    let failCount = 0;
+
+    for (const id of readyIds) {
+      const ok = await saveTripForJob(id);
+      if (ok) okCount += 1;
+      else failCount += 1;
+    }
+
+    if (okCount > 0) toast.success(`Guardados ${okCount} viajes`);
+    if (failCount > 0) toast.error(`Fallaron ${failCount} viajes`);
+  };
+
+  const jobsForUi = useMemo(() => {
+    return jobIds.map((id) => {
+      const meta = jobMetaById[id];
+      const state = jobStateById[id];
+      const review = reviewByJobId[id];
+      const saving = Boolean(savingByJobId[id]);
+      const saved = Boolean(savedByJobId[id]);
+      return {
+        id,
+        fileName: meta?.fileName ?? id,
+        status: (state?.status ?? "queued") as JobStatus,
+        reason: state?.needsReviewReason ?? null,
+        review,
+        saving,
+        saved,
+      };
+    });
+  }, [jobIds, jobMetaById, jobStateById, reviewByJobId, savingByJobId, savedByJobId]);
+
+  const jobStats = useMemo(() => {
+    const total = jobsForUi.length;
+    const done = jobsForUi.filter((j) => j.status === "done").length;
+    const ready = jobsForUi.filter((j) => Boolean(j.review) && !j.saved && !j.review?.optimizing).length;
+    const saved = jobsForUi.filter((j) => j.saved).length;
+    const failed = jobsForUi.filter((j) => j.status === "failed" || j.status === "needs_review" || j.status === "out_of_quota").length;
+    const pending = total - done - failed;
+    return { total, done, ready, saved, failed, pending };
+  }, [jobsForUi]);
+
+  const renderJobStatusBadge = (status: JobStatus, saved: boolean) => {
+    if (saved) {
+      return (
+        <Badge variant="outline" className="border-green-500/40 text-green-500">
+          Guardado
+        </Badge>
+      );
+    }
+
+    switch (status) {
+      case "done":
+        return (
+          <Badge variant="outline" className="border-green-500/40 text-green-500">
+            Listo
+          </Badge>
+        );
+      case "processing":
+        return <Badge variant="secondary">Procesando</Badge>;
+      case "queued":
+      case "created":
+        return <Badge variant="secondary">En cola</Badge>;
+      case "failed":
+        return <Badge variant="destructive">Fallido</Badge>;
+      case "needs_review":
+        return (
+          <Badge variant="outline" className="border-orange-500/40 text-orange-500">
+            Revision
+          </Badge>
+        );
+      case "out_of_quota":
+        return (
+          <Badge variant="outline" className="border-violet-400/40 text-violet-200">
+            Limite
+          </Badge>
+        );
+      default:
+        return (
+          <Badge variant="outline" title={String(status)}>
+            {String(status)}
+          </Badge>
+        );
+    }
+  };
 
   const handleSaveTrip = async () => {
-    if (!onSave) return;
-    if (!currentJobId) return;
+    await saveAllReadyTrips();
+    return;
+    /*
     const currentMeta = jobMetaById[currentJobId];
     if (!currentMeta) return;
     
@@ -800,6 +1041,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     } else {
       setOpen(false);
     }
+    */
   };
 
   return (
@@ -948,21 +1190,49 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
             )}
 
             {aiStep === "processing" && (
-                <div className="text-center py-12 space-y-4">
-                    <Loader2 className="w-16 h-16 text-primary animate-spin mx-auto" />
-                    <div>
-                        <h3 className="text-lg font-medium">
-                    {isOptimizing ? "Optimizando ruta y direcciones..." : "Analizando documentos..."}
-                        </h3>
-                  <p className="text-muted-foreground">
-                    {processingTotal > 1 ? `Completados ${processingDone}/${processingTotal}` : "Esto puede tomar unos segundos."}
-                  </p>
-                    </div>
+              <div className="space-y-4">
+                <div className="text-center py-10 space-y-3">
+                  <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto" />
+                  <div>
+                    <h3 className="text-lg font-medium">Analizando documentos...</h3>
+                    <p className="text-muted-foreground">
+                      {jobStats.total > 0
+                        ? `Completados ${jobStats.done}/${jobStats.total} | Pendientes ${jobStats.pending} | Fallidos ${jobStats.failed}`
+                        : "Esto puede tardar unos segundos."}
+                    </p>
+                  </div>
                 </div>
+
+                {jobsForUi.length > 0 && (
+                  <Card className="bg-secondary/20">
+                    <CardContent className="p-3 space-y-2 max-h-64 overflow-y-auto">
+                      {jobsForUi.map((job) => (
+                        <div
+                          key={job.id}
+                          className="flex items-center justify-between gap-3 p-2 bg-background rounded border border-border/50"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{job.fileName}</p>
+                            {job.reason && <p className="text-xs text-muted-foreground truncate">{job.reason}</p>}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {job.review?.optimizing && (
+                              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                            )}
+                            {renderJobStatusBadge(job.status, job.saved)}
+                          </div>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
             )}
 
             {aiStep === "review" && (
-                <div className="space-y-6 animate-fade-in">
+              <>
+                {/*
+                 <div className="space-y-6 animate-fade-in">
                     <div className="flex items-center gap-2 text-green-500 mb-4">
                         <CheckCircle className="w-5 h-5" />
                         <span className="font-medium">Datos extraídos exitosamente</span>
@@ -1049,6 +1319,184 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                         </Button>
                     </div>
                 </div>
+                */}
+
+                <div className="space-y-4 animate-fade-in">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2 text-green-500">
+                      <CheckCircle className="w-5 h-5" />
+                      <div>
+                        <p className="font-medium">Revision en paralelo</p>
+                        <p className="text-sm text-muted-foreground">
+                          Listos {jobStats.ready} | Guardados {jobStats.saved} | Pendientes {jobStats.pending} | Fallidos{" "}
+                          {jobStats.failed}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 shrink-0">
+                      <Button variant="outline" type="button" onClick={resetAiState}>
+                        Volver
+                      </Button>
+                      <Button
+                        type="button"
+                        className="gap-2"
+                        onClick={() => void saveAllReadyTrips()}
+                        disabled={!onSave || jobStats.ready === 0}
+                      >
+                        <Save className="w-4 h-4" />
+                        Guardar todos
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                    {jobsForUi.map((job) => {
+                      const review = job.review;
+                      const showProcessing = job.status === "processing" || job.status === "queued" || job.status === "created";
+                      const showFailed = job.status === "failed" || job.status === "needs_review" || job.status === "out_of_quota";
+                      const showDoneNoReview = job.status === "done" && !review;
+
+                      return (
+                        <Card key={job.id} className="bg-secondary/10">
+                          <CardContent className="p-4 space-y-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="font-medium truncate">{job.fileName}</p>
+                                {job.reason && <p className="text-xs text-muted-foreground truncate">{job.reason}</p>}
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {review?.optimizing && (
+                                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                                )}
+                                {renderJobStatusBadge(job.status, job.saved)}
+                              </div>
+                            </div>
+
+                            {review && job.status === "done" && (
+                              <>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                  <div className="space-y-2">
+                                    <Label>Proyecto</Label>
+                                    <Input
+                                      value={review.project}
+                                      onChange={(e) => updateReview(job.id, { project: e.target.value })}
+                                      className="bg-secondary/30"
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Fecha</Label>
+                                    <div className="relative">
+                                      <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                      <Input
+                                        value={review.date}
+                                        onChange={(e) => updateReview(job.id, { date: e.target.value })}
+                                        className="pl-9 bg-secondary/30"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="space-y-2 sm:col-span-2">
+                                    <Label>Productora</Label>
+                                    <div className="relative">
+                                      <Building2 className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                      <Input
+                                        value={review.producer}
+                                        onChange={(e) => updateReview(job.id, { producer: e.target.value })}
+                                        className="pl-9 bg-secondary/30"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="space-y-2 sm:col-span-2">
+                                    <Label>Distancia (km)</Label>
+                                    <Input
+                                      type="number"
+                                      value={review.distance}
+                                      onChange={(e) =>
+                                        updateReview(job.id, { distance: e.target.value, distanceDirty: true })
+                                      }
+                                      className="bg-secondary/30"
+                                    />
+                                    {review.optimizing && (
+                                      <p className="text-xs text-muted-foreground">Optimizando ruta y direcciones...</p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <Label>Ubicaciones / Ruta ({review.locations.length})</Label>
+
+                                  <div className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                                    <MapPin className="w-3 h-3 text-green-500" />
+                                    <span className="font-semibold">Origen:</span> {profile.baseAddress || "No definido"}
+                                  </div>
+
+                                  <Card className="bg-secondary/20">
+                                    <CardContent className="p-3 max-h-48 overflow-y-auto space-y-2">
+                                      {review.locations.map((loc, idx) => (
+                                        <div
+                                          key={idx}
+                                          className="flex items-start gap-2 text-sm p-2 bg-background rounded border border-border/50"
+                                        >
+                                          <MapPin className="w-4 h-4 mt-0.5 text-primary shrink-0" />
+                                          <span>{loc}</span>
+                                        </div>
+                                      ))}
+                                      {review.locations.length === 0 && (
+                                        <p className="text-sm text-muted-foreground italic">{t("bulk.noLocationsFound")}</p>
+                                      )}
+                                    </CardContent>
+                                  </Card>
+
+                                  <div className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5">
+                                    <MapPin className="w-3 h-3 text-red-500" />
+                                    <span className="font-semibold">Destino:</span> {profile.baseAddress || "No definido"}
+                                  </div>
+                                </div>
+
+                                <div className="flex justify-end gap-2">
+                                  <Button
+                                    type="button"
+                                    className="gap-2"
+                                    onClick={() => void saveTripForJob(job.id)}
+                                    disabled={!onSave || job.saving || job.saved || review.optimizing}
+                                  >
+                                    {job.saving ? (
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                      <Save className="w-4 h-4" />
+                                    )}
+                                    {job.saved ? "Guardado" : t("bulk.saveTrip")}
+                                  </Button>
+                                </div>
+                              </>
+                            )}
+
+                            {showProcessing && (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <span>{job.status === "processing" ? "Procesando..." : "En cola..."}</span>
+                              </div>
+                            )}
+
+                            {showDoneNoReview && (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <span>Cargando resultados...</span>
+                              </div>
+                            )}
+
+                            {showFailed && (
+                              <div className="text-sm text-muted-foreground">
+                                {job.reason || "No se pudo procesar este documento."}
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
             )}
           </TabsContent>
         </Tabs>

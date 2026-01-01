@@ -380,6 +380,7 @@ export default function Trips() {
     distance: number;
     ratePerKmOverride?: number | null;
     specialOrigin?: "base" | "continue" | "return";
+    callsheet_job_id?: string;
     documents?: Trip["documents"];
   };
 
@@ -400,6 +401,7 @@ export default function Trips() {
       co2: calculateCO2(data.distance),
       ratePerKmOverride: data.ratePerKmOverride ?? null,
       specialOrigin: data.specialOrigin ?? "base",
+      callsheet_job_id: data.callsheet_job_id,
       documents: data.documents,
     };
 
