@@ -1047,7 +1047,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="w-[95vw] sm:max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader className="flex flex-row items-center justify-between">
           <DialogTitle>{t("bulk.title")}</DialogTitle>
           <DialogDescription className="sr-only">{t("bulk.title")}</DialogDescription>
@@ -1350,7 +1350,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                     </div>
                   </div>
 
-                  <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                     {jobsForUi.map((job) => {
                       const review = job.review;
                       const showProcessing = job.status === "processing" || job.status === "queued" || job.status === "created";

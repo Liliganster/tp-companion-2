@@ -413,6 +413,7 @@ export default function Trips() {
         description: exists ? t("trips.toastTripUpdatedBody") : t("trips.toastTripCreatedBody"),
       });
     }
+    return ok;
   };
 
   const tripsByDateDesc = [...trips].sort((a, b) => getTripTime(b) - getTripTime(a) || a.id.localeCompare(b.id));
