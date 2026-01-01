@@ -325,10 +325,27 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             .eq("project_id", project.id);
             
         // 2. Fetch by Project Name (Legacy/Extracted results)
-        const { data: results, error: resultsError } = await supabase
+        let results: any[] | null = null;
+        let resultsError: any = null;
+        let resultsIncludeJobProjectId = true;
+
+        const resWithProject = await supabase
           .from("callsheet_results")
-          .select("job_id, project_value, callsheet_jobs!inner(id, storage_path, created_at, status, needs_review_reason)")
+          .select("job_id, project_value, callsheet_jobs!inner(id, project_id, storage_path, created_at, status, needs_review_reason)")
           .ilike("project_value", project.name.trim());
+
+        if (resWithProject.error) {
+          resultsIncludeJobProjectId = false;
+          const resWithoutProject = await supabase
+            .from("callsheet_results")
+            .select("job_id, project_value, callsheet_jobs!inner(id, storage_path, created_at, status, needs_review_reason)")
+            .ilike("project_value", project.name.trim());
+          results = resWithoutProject.data as any[] | null;
+          resultsError = resWithoutProject.error;
+        } else {
+          results = resWithProject.data as any[] | null;
+          resultsError = null;
+        }
 
         if (jobsError) console.error("Error fetching project jobs:", jobsError);
         if (resultsError) console.error("Error fetching project results:", resultsError);
@@ -359,6 +376,16 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         if (results) {
             results.forEach((item: any) => {
                 const job = item.callsheet_jobs;
+                const jobProjectId =
+                  resultsIncludeJobProjectId && job && typeof job.project_id === "string"
+                    ? String(job.project_id)
+                    : null;
+
+                // Avoid showing jobs that are explicitly linked to a different project.
+                // We only want "legacy" jobs where project_id is NULL (or matches this project).
+                if (jobProjectId && jobProjectId !== project.id) {
+                  return;
+                }
                 if (!seenIds.has(job.id)) {
                     seenIds.add(job.id);
                     const path = job.storage_path || "Unknown";
@@ -384,6 +411,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
               return 5;
             case "created":
               return 4;
+            case "cancelled":
+              return 2.5;
             case "done":
               return 3;
             case "needs_review":
@@ -712,7 +741,19 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
               .map(r => (r as PromiseFulfilledResult<Trip>).value);
             
             if (newPendingTrips.length > 0 && !abortControllerRef.current?.signal.aborted) {
-              setPendingTrips(prev => [...prev, ...newPendingTrips]);
+              setPendingTrips((prev) => {
+                const seen = new Set<string>(
+                  (prev ?? []).map((t) => String((t as any)?.callsheet_job_id ?? "").trim()).filter(Boolean),
+                );
+                const next = [...(prev ?? [])];
+                for (const trip of newPendingTrips) {
+                  const key = String((trip as any)?.callsheet_job_id ?? "").trim();
+                  if (key && seen.has(key)) continue;
+                  if (key) seen.add(key);
+                  next.push(trip);
+                }
+                return next;
+              });
               setShowPendingTrips(true);
             }
           }
@@ -1127,7 +1168,17 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const handleSaveAllPendingTrips = async () => {
     if (pendingTrips.length === 0) return;
     
-    const results = await Promise.allSettled(pendingTrips.map(trip => addTrip(trip)));
+    const existingJobIds = new Set<string>(
+      (trips ?? []).map((t) => String((t as any)?.callsheet_job_id ?? "").trim()).filter(Boolean),
+    );
+
+    const uniquePending = pendingTrips.filter((trip) => {
+      const key = String((trip as any)?.callsheet_job_id ?? "").trim();
+      if (!key) return true;
+      return !existingJobIds.has(key);
+    });
+
+    const results = await Promise.allSettled(uniquePending.map((trip) => addTrip(trip)));
     const succeeded = results.filter(r => r.status === 'fulfilled').length;
     const failed = results.length - succeeded;
     

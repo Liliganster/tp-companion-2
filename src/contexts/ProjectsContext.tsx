@@ -6,6 +6,7 @@ import { cascadeDeleteProjectById } from "@/lib/cascadeDelete";
 import { formatSupabaseError } from "@/lib/supabaseErrors";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isOffline, readOfflineCache, writeOfflineCache } from "@/lib/offlineCache";
+import type { Trip } from "@/contexts/TripsContext";
 
 const PROJECT_TOTALS_AVAILABLE_KEY = "fbp.project_totals.available";
 const PROJECT_TOTALS_MISSING_NOTIFIED_KEY = "fbp.project_totals.missing_notified";
@@ -281,9 +282,23 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       prev.filter((p) => p.id !== id),
     );
 
+    const tripsQueryKey = ["trips", user.id] as const;
+    const reportsQueryKey = ["reports", user.id] as const;
+    const prevTrips = (queryClient.getQueryData<Trip[]>(tripsQueryKey) ?? []) as Trip[];
+
+    // Optimistic: remove trips that belong to this project so the UI updates immediately.
+    if (prevTrips.length > 0) {
+      queryClient.setQueryData<Trip[]>(
+        tripsQueryKey,
+        prevTrips.filter((t) => String((t as any)?.projectId ?? "") !== id),
+      );
+    }
+
     try {
       await cascadeDeleteProjectById(supabase, id);
       void queryClient.invalidateQueries({ queryKey });
+      void queryClient.invalidateQueries({ queryKey: tripsQueryKey });
+      void queryClient.invalidateQueries({ queryKey: reportsQueryKey });
     } catch (err) {
       console.error("[ProjectsContext] Cascade delete failed:", err);
       toast.error(formatSupabaseError(err, "No se pudo borrar el proyecto y sus datos asociados"));
@@ -293,6 +308,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
           (cur) => ((cur ?? []).some((p) => p.id === removedProject.id) ? (cur ?? []) : [removedProject, ...(cur ?? [])]),
         );
       }
+      queryClient.setQueryData<Trip[]>(tripsQueryKey, prevTrips);
       throw err;
     }
   }, [queryClient, queryKey, user]);

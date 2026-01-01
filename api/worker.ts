@@ -86,6 +86,35 @@ export default withApiObservability(async function handler(req: any, res: any, {
   if (!cronAllowed) return;
 
   try {
+    const recordUsage = async (params: { userId: string; jobId: string; runAt?: string | null }) => {
+      const userId = String(params.userId ?? "").trim();
+      const jobId = String(params.jobId ?? "").trim();
+      if (!userId || !jobId) return;
+
+      try {
+        const runAt = params.runAt ? String(params.runAt) : new Date().toISOString();
+        const { error } = await supabaseAdmin
+          .from("ai_usage_events")
+          .upsert(
+            {
+              user_id: userId,
+              kind: "callsheet",
+              job_id: jobId,
+              run_at: runAt,
+              status: "done",
+            } as any,
+            { onConflict: "kind,job_id,run_at", ignoreDuplicates: true } as any,
+          );
+
+        if (error) {
+          // Best-effort only. Avoid breaking extractions if migrations weren't applied yet.
+          log.warn({ jobId, err: error }, "callsheet_usage_event_failed");
+        }
+      } catch (err) {
+        log.warn({ jobId, err }, "callsheet_usage_event_exception");
+      }
+    };
+
     // 1. Detect and reset stuck jobs
     const stuckTimeout = DEFAULT_RETRY_STRATEGY.timeoutMinutes;
     const stuckThreshold = new Date(Date.now() - stuckTimeout * 60 * 1000).toISOString();
@@ -173,7 +202,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
         })
         .eq("id", jobId)
         .in("status", ["queued", "failed"])
-        .select("id, storage_path, user_id, retry_count")
+        .select("id, storage_path, user_id, retry_count, processed_at")
         .maybeSingle();
 
       if (claimError || !claimed) return; // already taken or not claimable
@@ -335,11 +364,26 @@ export default withApiObservability(async function handler(req: any, res: any, {
           }
         }
 
-        await supabaseAdmin
+        const { data: doneRow, error: doneError } = await supabaseAdmin
           .from("callsheet_jobs")
           .update({ status: "done", retry_count: currentRetry })
           .eq("id", jobId)
-          .eq("status", "processing");
+          .eq("status", "processing")
+          .select("id")
+          .maybeSingle();
+
+        if (doneError) throw doneError;
+        if (!doneRow) {
+          log.info({ jobId }, "callsheet_job_cancelled_before_done");
+          processedResults.push({ id: jobId, status: "cancelled" });
+          return;
+        }
+
+        await recordUsage({
+          userId: String((claimed as any).user_id ?? (job as any).user_id ?? ""),
+          jobId,
+          runAt: (claimed as any).processed_at ?? null,
+        });
         log.info({ jobId, retryCount: currentRetry }, "callsheet_job_done");
         processedResults.push({ id: jobId, status: "success", retries: currentRetry });
       } catch (jobErr: any) {

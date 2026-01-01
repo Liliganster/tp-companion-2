@@ -23,6 +23,17 @@ function startOfCurrentMonthUtcIso(): string {
   return start.toISOString();
 }
 
+function isMissingRelation(err: any): boolean {
+  const code = String(err?.code ?? "");
+  const msg = String(err?.message ?? "").toLowerCase();
+  return (
+    code === "PGRST205" ||
+    code === "42P01" ||
+    msg.includes("could not find the relation") ||
+    msg.includes("schema cache")
+  );
+}
+
 function processingCutoffIso(minutes: number): string {
   const now = Date.now();
   return new Date(now - minutes * 60_000).toISOString();
@@ -54,6 +65,24 @@ async function countExtractionsThisMonth(
 ): Promise<{ done: number; processing: number }> {
   const cutoffIso = processingCutoffIso(30);
 
+  const countDoneFromUsage = async (): Promise<number | null> => {
+    const { count, error } = await supabaseAdmin
+      .from("ai_usage_events")
+      .select("id", { count: "exact" })
+      .range(0, 0)
+      .eq("user_id", userId)
+      .eq("status", "done")
+      .gte("run_at", sinceIso);
+
+    if (error) {
+      if (isMissingRelation(error)) return null;
+      // Best-effort: fall back to job tables if something went wrong.
+      return null;
+    }
+
+    return typeof count === "number" ? count : 0;
+  };
+
   const countTable = async (table: "invoice_jobs" | "callsheet_jobs", status: "done" | "processing") => {
     let q = supabaseAdmin
       .from(table)
@@ -72,7 +101,8 @@ async function countExtractionsThisMonth(
     return typeof count === "number" ? count : 0;
   };
 
-  const [invoiceDone, callsheetDone, invoiceProcessing, callsheetProcessing] = await Promise.all([
+  const [doneFromUsage, invoiceDone, callsheetDone, invoiceProcessing, callsheetProcessing] = await Promise.all([
+    countDoneFromUsage(),
     countTable("invoice_jobs", "done"),
     countTable("callsheet_jobs", "done"),
     countTable("invoice_jobs", "processing"),
@@ -80,7 +110,7 @@ async function countExtractionsThisMonth(
   ]);
 
   return {
-    done: invoiceDone + callsheetDone,
+    done: typeof doneFromUsage === "number" ? doneFromUsage : invoiceDone + callsheetDone,
     processing: invoiceProcessing + callsheetProcessing,
   };
 }

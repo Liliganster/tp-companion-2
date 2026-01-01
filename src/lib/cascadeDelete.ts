@@ -108,45 +108,108 @@ async function removeTripIdFromReports(supabase: SupabaseClient, tripId: string)
 
 export async function cascadeDeleteTripById(supabase: SupabaseClient, tripId: string) {
   // 1) Load documents and project_id
-  const { data: tripRow, error: tripFetchError } = await supabase
+  let tripRow: AnyRow | null = null;
+
+  const extendedTrip = await supabase
     .from("trips")
-    .select("documents, project_id")
+    .select("documents, project_id, invoice_job_id, callsheet_job_id")
     .eq("id", tripId)
     .maybeSingle();
 
-  if (tripFetchError) throw tripFetchError;
+  if (extendedTrip.error) {
+    if (!isMissingColumnOrSchema(extendedTrip.error)) throw extendedTrip.error;
 
-  const projectId = (tripRow as AnyRow | null)?.project_id || null;
-  const docs: AnyRow[] = Array.isArray((tripRow as AnyRow | null)?.documents) ? (tripRow as AnyRow).documents : [];
-  const storagePaths = uniqStrings(
-    docs.map((d) => {
-      if (typeof d?.storagePath === "string") return d.storagePath;
-      if (typeof d?.path === "string") return d.path;
-      return "";
-    }),
+    const minimalTrip = await supabase
+      .from("trips")
+      .select("documents, project_id")
+      .eq("id", tripId)
+      .maybeSingle();
+
+    if (minimalTrip.error) throw minimalTrip.error;
+    tripRow = (minimalTrip.data as AnyRow | null) ?? null;
+  } else {
+    tripRow = (extendedTrip.data as AnyRow | null) ?? null;
+  }
+
+  const projectId = tripRow?.project_id || null;
+  const docs: AnyRow[] = Array.isArray(tripRow?.documents) ? (tripRow as AnyRow).documents : [];
+
+  const callsheetPaths = uniqStrings(
+    docs
+      .filter((d) => String((d as AnyRow)?.bucketId ?? "").trim() !== "project_documents")
+      .map((d) => {
+        if (typeof (d as AnyRow)?.storagePath === "string") return String((d as AnyRow).storagePath);
+        if (typeof (d as AnyRow)?.path === "string") return String((d as AnyRow).path);
+        return "";
+      }),
+  );
+
+  const projectDocumentPaths = uniqStrings(
+    docs
+      .filter((d) => String((d as AnyRow)?.bucketId ?? "").trim() === "project_documents")
+      .map((d) => {
+        if (typeof (d as AnyRow)?.storagePath === "string") return String((d as AnyRow).storagePath);
+        if (typeof (d as AnyRow)?.path === "string") return String((d as AnyRow).path);
+        return "";
+      }),
   );
 
   // 2) Remove references in reports first (so we can still abort safely)
   await removeTripIdFromReports(supabase, tripId);
 
-  // 3) Delete associated callsheet files (if any)
-  if (storagePaths.length > 0) {
-    await bestEffortRemoveFromBucket(supabase, "callsheets", storagePaths);
+  // 3) Delete invoice jobs linked to this trip (and their files/results/docs)
+  try {
+    const { data: invoiceJobs, error: invoiceJobsError } = await supabase
+      .from("invoice_jobs")
+      .select("id")
+      .eq("trip_id", tripId);
 
-    // 4) Delete extractor jobs for these storage paths (cascades results/locations/etc)
+    if (invoiceJobsError) {
+      if (!isMissingColumnOrSchema(invoiceJobsError)) throw invoiceJobsError;
+    } else {
+      const ids = uniqStrings((invoiceJobs ?? []).map((j: AnyRow) => String(j.id)));
+      for (const id of ids) {
+        await cascadeDeleteInvoiceJobById(supabase, id);
+      }
+    }
+  } catch (err) {
+    if (!isMissingColumnOrSchema(err)) throw err;
+  }
+
+  // 4) Delete associated callsheet files/jobs (if any)
+  if (callsheetPaths.length > 0) {
+    await bestEffortRemoveFromBucket(supabase, "callsheets", callsheetPaths);
+
     const { error: jobsDeleteError } = await supabase
       .from("callsheet_jobs")
       .delete()
-      .in("storage_path", storagePaths);
+      .in("storage_path", callsheetPaths);
 
     if (jobsDeleteError) throw jobsDeleteError;
   }
 
-  // 5) Delete trip row
+  // 5) Delete project_documents files/rows referenced by this trip's documents (best-effort)
+  if (projectDocumentPaths.length > 0) {
+    await bestEffortRemoveFromBucket(supabase, "project_documents", projectDocumentPaths);
+
+    try {
+      const { error: deleteDocsError } = await supabase
+        .from("project_documents")
+        .delete()
+        .in("storage_path", projectDocumentPaths);
+
+      if (deleteDocsError && !isMissingColumnOrSchema(deleteDocsError)) throw deleteDocsError;
+    } catch (err) {
+      if (!isMissingColumnOrSchema(err)) throw err;
+      console.warn("[cascadeDelete] project_documents missing; skipping trip project document cleanup");
+    }
+  }
+
+  // 6) Delete trip row
   const { error: deleteTripError } = await supabase.from("trips").delete().eq("id", tripId);
   if (deleteTripError) throw deleteTripError;
 
-  // 6) Check if project is now empty and delete it if so
+  // 7) Check if project is now empty and delete it if so
   if (projectId) {
     const { count, error: countError } = await supabase
       .from("trips")

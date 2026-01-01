@@ -62,6 +62,12 @@ function startOfCurrentMonthUtcIso(): string {
   return start.toISOString();
 }
 
+function isMissingRelation(err: any): boolean {
+  const code = String(err?.code ?? "");
+  const msg = String(err?.message ?? "").toLowerCase();
+  return code === "PGRST205" || code === "42P01" || msg.includes("could not find the relation") || msg.includes("schema cache");
+}
+
 export default function Index() {
   const { profile } = useUserProfile();
   const { user } = useAuth();
@@ -100,8 +106,31 @@ export default function Index() {
       };
 
       try {
-        const [invoiceDone, callsheetDone] = await Promise.all([countTable("invoice_jobs"), countTable("callsheet_jobs")]);
-        if (!cancelled) setAiUsedThisMonth(invoiceDone + callsheetDone);
+        let used: number | null = null;
+
+        const { count: usageCount, error: usageError } = await supabase
+          .from("ai_usage_events")
+          .select("id", { count: "exact" })
+          .range(0, 0)
+          .eq("user_id", user.id)
+          .eq("status", "done")
+          .gte("run_at", sinceIso);
+
+        if (!usageError) {
+          used = typeof usageCount === "number" ? usageCount : 0;
+        } else if (!isMissingRelation(usageError)) {
+          console.warn("Error fetching ai_usage_events:", usageError);
+        }
+
+        if (used == null) {
+          const [invoiceDone, callsheetDone] = await Promise.all([
+            countTable("invoice_jobs"),
+            countTable("callsheet_jobs"),
+          ]);
+          used = invoiceDone + callsheetDone;
+        }
+
+        if (!cancelled) setAiUsedThisMonth(used);
       } catch (e) {
         console.error("Error fetching AI quota:", e);
         if (!cancelled) setAiUsedThisMonth(null);
