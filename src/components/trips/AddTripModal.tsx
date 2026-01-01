@@ -538,8 +538,6 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
   const [project, setProject] = useState("");
   const [purpose, setPurpose] = useState("");
   const [specialOrigin, setSpecialOrigin] = useState<NonNullable<TripData["specialOrigin"]>>("base");
-  const [originTouched, setOriginTouched] = useState(false);
-  const [destinationTouched, setDestinationTouched] = useState(false);
   const [tripRate, setTripRate] = useState("");
   const [distanceLoading, setDistanceLoading] = useState(false);
   const [locationBias, setLocationBias] = useState<{ lat: number; lng: number } | undefined>(undefined);
@@ -578,10 +576,9 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
   const handleSpecialOriginChange = (next: SpecialOrigin) => {
     const prevSpecialOrigin = specialOrigin;
     const nextOriginValue = next === "base" ? baseLocation : previousDestinationEffective;
-    const shouldAutoUpdateOrigin = !originTouched;
-    const shouldRestoreDestination = prevSpecialOrigin === "return" && next !== "return" && !destinationTouched;
 
-    if (next === "return" && !destinationTouched) {
+    // Switching into "return" forces destination to base, so keep the user's last destination to restore later.
+    if (next === "return" && prevSpecialOrigin !== "return") {
       const currentDestination =
         (stopDraftsRef.current.destination ?? stops.find((s) => s.id === "destination")?.value ?? "").trim();
       destinationBeforeReturnRef.current = currentDestination || null;
@@ -589,13 +586,10 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
 
     setSpecialOrigin(next);
 
-    if (next === "return") {
-      setDestinationTouched(false);
-    }
-
     setStops((prev) =>
       prev.map((stop) => {
-        if (stop.id === "origin" && shouldAutoUpdateOrigin) {
+        // Special origin drives the origin value: base -> baseLocation, continue/return -> previousDestination.
+        if (stop.id === "origin") {
           stopDraftsRef.current.origin = nextOriginValue;
           return { ...stop, value: nextOriginValue };
         }
@@ -605,7 +599,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
             return { ...stop, value: baseLocation };
           }
 
-          if (shouldRestoreDestination) {
+          if (prevSpecialOrigin === "return" && next !== "return") {
             const restored = destinationBeforeReturnRef.current ?? "";
             if (restored) stopDraftsRef.current.destination = restored;
             else delete stopDraftsRef.current.destination;
@@ -631,8 +625,6 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
     setProject(trip?.project || "");
     setPurpose(trip?.purpose || "");
     setSpecialOrigin(defaultSpecialOrigin || "base");
-    setOriginTouched(false);
-    setDestinationTouched(false);
     setTripRate(trip?.ratePerKmOverride != null ? formatLocaleNumber(trip.ratePerKmOverride) : "");
   }, [isOpen, trip, baseLocation, previousDestinationEffective]);
 
@@ -750,8 +742,6 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
   };
 
   const updateStop = (id: string, value: string) => {
-    if (id === "origin") setOriginTouched(true);
-    if (id === "destination") setDestinationTouched(true);
     stopDraftsRef.current[id] = value;
     setStops((prev) =>
       prev.map((s) => (s.id === id ? { ...s, value } : s))
