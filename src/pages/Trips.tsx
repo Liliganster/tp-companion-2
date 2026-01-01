@@ -352,6 +352,10 @@ export default function Trips() {
         );
       }
 
+      if (status === "cancelled") {
+        return <Badge variant="outline">{t("tripDetail.invoiceCancelled")}</Badge>;
+      }
+
       const fromResults = invoiceResultsByJobId[jobId];
       const extracted = Number(fromResults?.total_amount);
       if (Number.isFinite(extracted) && extracted > 0) {

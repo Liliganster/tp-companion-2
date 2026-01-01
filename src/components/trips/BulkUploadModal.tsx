@@ -18,6 +18,7 @@ import { uuidv4 } from "@/lib/utils";
 import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
 import { useAuth } from "@/contexts/AuthContext";
 import { parseMonthlyQuotaExceededReason } from "@/lib/aiQuotaReason";
+import { cancelCallsheetJobs } from "@/lib/aiJobCancellation";
 
 interface SavedTrip {
   id: string;
@@ -81,6 +82,9 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const optimizeChainRef = useRef(Promise.resolve());
   const reviewByJobIdRef = useRef<Record<string, ReviewTrip>>({});
   const savedByJobIdRef = useRef<Record<string, boolean>>({});
+  const activeJobIdsRef = useRef<string[]>([]);
+  const cancelRequestedRef = useRef(false);
+  const triggerWorkerAbortRef = useRef<AbortController | null>(null);
   
   const { t, tf, locale } = useI18n();
   const exampleText = t("bulk.examplePlaceholder");
@@ -90,9 +94,13 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
   // Reset state when modal closes or tab changes
   useEffect(() => {
-    if (!open) {
-      resetAiState();
+    if (open) {
+      cancelRequestedRef.current = false;
+      activeJobIdsRef.current = [];
+      return;
     }
+
+    resetAiState();
   }, [open]);
 
   const resetAiState = () => {
@@ -498,6 +506,9 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     setAiLoading(true);
     setAiStep("processing");
     try {
+      cancelRequestedRef.current = false;
+      activeJobIdsRef.current = [];
+
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError || !user) throw new Error(t("bulk.errorNotAuthenticated"));
 
@@ -515,6 +526,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       let reusedCount = 0;
 
       for (const file of selectedFiles) {
+        if (cancelRequestedRef.current) break;
         let createdJobId: string | null = null;
         try {
           // Avoid duplicates: if the same file was already uploaded previously (user closed modal / re-tried),
@@ -572,12 +584,13 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
               const best = candidates[0];
               if (!createdJobIds.includes(best.id)) createdJobIds.push(best.id);
+              activeJobIdsRef.current.push(best.id);
               metaById[best.id] = { fileName: file.name, mimeType: file.type, storagePath: best.storagePath };
               reusedCount += 1;
               successCount += 1;
 
               // If it was left in "created"/"failed", re-queue it so processing continues (no new AI cost multiplier).
-              if (best.status === "created" || best.status === "failed") {
+              if (best.status === "created" || best.status === "failed" || best.status === "cancelled") {
                 try {
                   await supabase
                     .from("callsheet_jobs")
@@ -592,6 +605,8 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
             }
           }
 
+          if (cancelRequestedRef.current) break;
+
           // 1. Create Job
           const { data: job, error: jobError } = await supabase
             .from("callsheet_jobs")
@@ -605,11 +620,16 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
           if (jobError) throw jobError;
           createdJobId = job.id;
+          activeJobIdsRef.current.push(job.id);
+
+          if (cancelRequestedRef.current) break;
 
           // 2. Upload File
           const filePath = `${user.id}/${job.id}/${file.name}`;
           const { error: uploadError } = await supabase.storage.from("callsheets").upload(filePath, file);
           if (uploadError) throw uploadError;
+
+          if (cancelRequestedRef.current) break;
 
           // 3. Queue Job
           const { error: updateError } = await supabase
@@ -619,6 +639,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
           if (updateError) throw updateError;
 
           createdJobIds.push(job.id);
+          activeJobIdsRef.current.push(job.id);
           metaById[job.id] = { fileName: file.name, mimeType: file.type, storagePath: filePath };
           successCount += 1;
         } catch (err) {
@@ -632,6 +653,11 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
             }
           }
         }
+      }
+
+      if (cancelRequestedRef.current) {
+        void cancelCallsheetJobs(createdJobIds);
+        return;
       }
 
       if (successCount === 0) {
@@ -650,13 +676,18 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       setProcessingDone(0);
       // Kick the worker once so users don't have to wait for cron.
       try {
+        if (cancelRequestedRef.current) return;
         const token = await getAccessToken();
+        triggerWorkerAbortRef.current?.abort();
+        const controller = new AbortController();
+        triggerWorkerAbortRef.current = controller;
         await fetch("/api/callsheets/trigger-worker", {
           method: "POST",
           headers: {
             Authorization: token ? `Bearer ${token}` : "",
             "Content-Type": "application/json",
           },
+          signal: controller.signal,
         });
       } catch {
         // ignore: polling will still update if cron runs
@@ -669,6 +700,16 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     finally {
       setAiLoading(false);
     }
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      cancelRequestedRef.current = true;
+      triggerWorkerAbortRef.current?.abort();
+      void cancelCallsheetJobs([...jobIds, ...activeJobIdsRef.current]);
+    }
+
+    setOpen(nextOpen);
   };
 
   // Multi-job: carga resultados para TODOS los documentos completados y los muestra en paralelo.
@@ -1122,7 +1163,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="w-[95vw] sm:max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader className="flex flex-row items-center justify-between">

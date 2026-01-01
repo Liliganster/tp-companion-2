@@ -62,8 +62,8 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
           const existingStatus = String((existing as any)?.status ?? "").trim();
 
           if (!existingError && existingId && existingStoragePath && existingStoragePath !== "pending") {
-            // If it's stuck in "created"/"failed", re-queue it so it can process.
-            if (existingStatus === "created" || existingStatus === "failed") {
+            // If it's stuck in "created"/"failed"/"cancelled", re-queue it so it can process.
+            if (existingStatus === "created" || existingStatus === "failed" || existingStatus === "cancelled") {
               try {
                 await supabase
                   .from("callsheet_jobs")

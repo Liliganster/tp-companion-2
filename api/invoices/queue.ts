@@ -44,7 +44,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
       return sendJson(res, 404, { error: "job_not_found" });
     }
 
-    if (job.status !== "created" && job.status !== "failed") {
+    if (job.status !== "created" && job.status !== "failed" && job.status !== "cancelled") {
       return sendJson(res, 400, { error: "job_already_queued_or_done", status: job.status });
     }
 

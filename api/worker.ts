@@ -190,7 +190,8 @@ export default withApiObservability(async function handler(req: any, res: any, {
             await supabaseAdmin
               .from("callsheet_jobs")
               .update({ status: "out_of_quota", needs_review_reason: reason })
-              .eq("id", job.id);
+              .eq("id", job.id)
+              .eq("status", "processing");
             processedResults.push({ id: job.id, status: "out_of_quota", error: reason });
             return;
           }
@@ -206,7 +207,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
         if (existingError) {
           log.warn({ jobId: job.id, existingError }, "callsheet_existing_result_check_failed");
         } else if (existingResult?.job_id) {
-          await supabaseAdmin.from("callsheet_jobs").update({ status: "done" }).eq("id", job.id);
+          await supabaseAdmin.from("callsheet_jobs").update({ status: "done" }).eq("id", job.id).eq("status", "processing");
           processedResults.push({ id: job.id, status: "done", cached: true });
           log.info({ jobId: job.id }, "callsheet_job_cached_done");
           return;
@@ -231,6 +232,18 @@ export default withApiObservability(async function handler(req: any, res: any, {
         const buffer = Buffer.from(arrayBuffer);
 
         // B. Process PDF with Gemini Vision
+        const { data: preAiJob } = await supabaseAdmin
+          .from("callsheet_jobs")
+          .select("status")
+          .eq("id", jobId)
+          .maybeSingle();
+
+        if (String((preAiJob as any)?.status ?? "") === "cancelled") {
+          log.info({ jobId }, "callsheet_job_cancelled_pre_ai");
+          processedResults.push({ id: jobId, status: "cancelled" });
+          return;
+        }
+
         log.info({ jobId: job.id }, "callsheet_gemini_call");
         const systemInstruction = buildUniversalExtractorPrompt("[PDF CONTENT ATTACHED]");
         const resultText = await generateContentFromPDF(
@@ -258,7 +271,8 @@ export default withApiObservability(async function handler(req: any, res: any, {
           await supabaseAdmin
             .from("callsheet_jobs")
             .update({ status: "failed", needs_review_reason: reason })
-            .eq("id", job.id);
+            .eq("id", job.id)
+            .eq("status", "processing");
           processedResults.push({ id: job.id, status: "failed", error: reason });
           log.warn({ jobId: job.id, reason }, "callsheet_extraction_invalid");
           return;
@@ -266,6 +280,18 @@ export default withApiObservability(async function handler(req: any, res: any, {
 
         const extracted = validated.data;
         log.info({ jobId: job.id, locations: extracted.locations.length }, "callsheet_extraction_parsed");
+
+        const { data: preSaveJob } = await supabaseAdmin
+          .from("callsheet_jobs")
+          .select("status")
+          .eq("id", jobId)
+          .maybeSingle();
+
+        if (String((preSaveJob as any)?.status ?? "") === "cancelled") {
+          log.info({ jobId }, "callsheet_job_cancelled_pre_save");
+          processedResults.push({ id: jobId, status: "cancelled" });
+          return;
+        }
 
         // D. Save Results
         const { error: resultInsertError } = await supabaseAdmin.from("callsheet_results").insert({
@@ -309,7 +335,11 @@ export default withApiObservability(async function handler(req: any, res: any, {
           }
         }
 
-        await supabaseAdmin.from("callsheet_jobs").update({ status: "done", retry_count: currentRetry }).eq("id", jobId);
+        await supabaseAdmin
+          .from("callsheet_jobs")
+          .update({ status: "done", retry_count: currentRetry })
+          .eq("id", jobId)
+          .eq("status", "processing");
         log.info({ jobId, retryCount: currentRetry }, "callsheet_job_done");
         processedResults.push({ id: jobId, status: "success", retries: currentRetry });
       } catch (jobErr: any) {
@@ -330,7 +360,8 @@ export default withApiObservability(async function handler(req: any, res: any, {
               last_error: errorMessage,
               retry_count: nextRetry
             })
-            .eq("id", jobId);
+            .eq("id", jobId)
+            .eq("status", "processing");
           
           processedResults.push({ id: jobId, status: "failed", error: errorMessage, retries: nextRetry });
         } else {
@@ -345,7 +376,8 @@ export default withApiObservability(async function handler(req: any, res: any, {
               retry_count: nextRetry,
               next_retry_at: nextRetryAt
             })
-            .eq("id", jobId);
+            .eq("id", jobId)
+            .eq("status", "processing");
           
           processedResults.push({ 
             id: jobId, 

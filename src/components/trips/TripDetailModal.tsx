@@ -15,6 +15,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { cascadeDeleteInvoiceJobById } from "@/lib/cascadeDelete";
 import { parseMonthlyQuotaExceededReason } from "@/lib/aiQuotaReason";
+import { cancelInvoiceJobs } from "@/lib/aiJobCancellation";
 
 interface TripDetailModalProps {
   trip: Trip | null;
@@ -61,6 +62,13 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
   const invoiceJobId = liveTrip?.invoiceJobId ?? null;
   const liveTripId = liveTrip?.id ?? null;
 
+  const handleDialogOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && invoiceJobId) {
+      void cancelInvoiceJobs([invoiceJobId]);
+    }
+    onOpenChange(nextOpen);
+  };
+
   useEffect(() => {
     if (!open || !supabase) return;
     if (!invoiceJobId || !liveTripId) return;
@@ -86,6 +94,11 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
       if (jobError || !job) return;
       setInvoiceStatus(job.status || "");
       setInvoiceError(job.needs_review_reason || "");
+
+      if (job.status === "cancelled") {
+        stop();
+        return;
+      }
 
       if (job.status === "failed" || job.status === "needs_review" || job.status === "out_of_quota") {
         if (!quotaToastShownRef.current && (job.status === "out_of_quota" || job.status === "needs_review")) {
@@ -170,6 +183,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
       if (invoiceStatus === "out_of_quota") return t("aiQuota.outOfQuotaBadge");
       if (invoiceStatus === "needs_review") return t("tripDetail.invoiceNeedsReview");
       if (invoiceStatus === "failed") return t("tripDetail.invoiceFailed");
+      if (invoiceStatus === "cancelled") return t("tripDetail.invoiceCancelled");
       return t("tripDetail.invoiceExtracting");
     }
     return t("tripDetail.totalDocumentedEmpty");
@@ -410,7 +424,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
   };
 
   return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent className="sm:max-w-4xl p-0 overflow-hidden">
         <DialogHeader className="p-4 pb-0">
           <DialogTitle>{t("tripDetail.title")}</DialogTitle>

@@ -19,6 +19,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
 import { uuidv4 } from "@/lib/utils";
 import { parseMonthlyQuotaExceededReason } from "@/lib/aiQuotaReason";
+import { cancelCallsheetJobs, cancelInvoiceJobs } from "@/lib/aiJobCancellation";
 
 const DEBUG = import.meta.env.DEV;
 
@@ -92,12 +93,16 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const inFlightJobsRef = useRef<Set<string>>(new Set());
   const processedInvoiceJobsRef = useRef<Set<string>>(new Set());
   const abortControllerRef = useRef<AbortController | null>(null);
+  const cancelCallsheetJobIdsRef = useRef<Set<string>>(new Set());
+  const cancelInvoiceJobIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     // Reset per-project session state
     processedJobsRef.current = new Set();
     inFlightJobsRef.current = new Set();
     processedInvoiceJobsRef.current = new Set();
+    cancelCallsheetJobIdsRef.current = new Set();
+    cancelInvoiceJobIdsRef.current = new Set();
     
     // Create new abort controller when modal opens
     if (open) {
@@ -845,13 +850,27 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     maximumFractionDigits: 2,
   })} €`;
 
-  const handleJobCreated = () => {
-    setRefreshTrigger(p => p + 1);
+  const handleJobCreated = (jobId: string) => {
+    const id = String(jobId ?? "").trim();
+    if (id) cancelCallsheetJobIdsRef.current.add(id);
+    setRefreshTrigger((p) => p + 1);
     toast.success(t("projectDetail.toastDocumentUploaded"));
   };
-  
-  const handleUploadComplete = () => {
-     setRefreshTrigger(p => p + 1);
+
+  const handleUploadComplete = (jobIds: string[]) => {
+    for (const jobId of jobIds ?? []) {
+      const id = String(jobId ?? "").trim();
+      if (id) cancelInvoiceJobIdsRef.current.add(id);
+    }
+    setRefreshTrigger((p) => p + 1);
+  };
+
+  const handleDialogOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      void cancelCallsheetJobs(Array.from(cancelCallsheetJobIdsRef.current));
+      void cancelInvoiceJobs(Array.from(cancelInvoiceJobIdsRef.current));
+    }
+    onOpenChange(nextOpen);
   };
 
   const handleViewCallSheet = async (doc: ProjectDocument) => {
@@ -932,6 +951,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         .eq("id", doc.id);
             
       if (error) throw error;
+
+      cancelCallsheetJobIdsRef.current.add(doc.id);
         
       toast.success(doc.status === "done" ? t("projectDetail.toastReprocessingStarted") : t("projectDetail.toastExtractionStarted"));
       setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'queued' } : p));
@@ -1033,6 +1054,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       });
 
       if (!res.ok) throw new Error('Error al encolar job');
+
+      cancelInvoiceJobIdsRef.current.add(doc.invoice_job_id);
 
       toast.success(doc.status === "done" ? t("projectDetail.toastReprocessingStarted") : t("projectDetail.toastExtractionStartedShort"));
       setProjectDocs(prev => prev.map(p => 
@@ -1195,7 +1218,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       </Dialog>
 
       {/* Main Project Detail Dialog */}
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] p-0 gap-0 overflow-hidden">
         <DialogHeader className="p-6 pb-4">
           <DialogTitle className="text-xl font-semibold">{project.name}</DialogTitle>

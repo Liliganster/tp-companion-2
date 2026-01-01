@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { useProjects } from "@/contexts/ProjectsContext";
 
 interface ProjectInvoiceUploaderProps {
-  onUploadComplete?: () => void;
+  onUploadComplete?: (jobIds: string[]) => void;
   projectId: string;
 }
 
@@ -42,6 +42,7 @@ export function ProjectInvoiceUploader({ onUploadComplete, projectId }: ProjectI
 
       let successCount = 0;
       let failCount = 0;
+      const createdJobIds: string[] = [];
 
       for (const file of files) {
         try {
@@ -62,6 +63,7 @@ export function ProjectInvoiceUploader({ onUploadComplete, projectId }: ProjectI
             .single();
 
           if (jobError) throw jobError;
+          createdJobIds.push(jobData.id);
 
           // Auto-queue the job for processing
           try {
@@ -107,7 +109,7 @@ export function ProjectInvoiceUploader({ onUploadComplete, projectId }: ProjectI
 
       if (successCount > 0) toast.success(`Se subieron ${successCount} facturas. La extracción comenzará automáticamente.`);
       if (failCount > 0) toast.error(`Fallaron ${failCount} documentos`);
-      onUploadComplete?.();
+      onUploadComplete?.(createdJobIds);
       refreshProjects();
 
     } catch (err: any) {
