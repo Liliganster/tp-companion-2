@@ -478,15 +478,65 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
     const parts = [profile.baseAddress, profile.city, profile.country].map((p) => p.trim()).filter(Boolean);
     return parts.join(", ");
   }, [profile.baseAddress, profile.city, profile.country]);
-  const previousDestinationEffective = useMemo(() => {
-    const value = (previousDestination ?? "").trim();
-    return value || baseLocation;
-  }, [previousDestination, baseLocation]);
+
+  const parseTripDateToTime = useCallback((value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    // YYYY-MM-DD (preferred)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      const time = Date.parse(trimmed);
+      return Number.isFinite(time) ? time : null;
+    }
+
+    // DD/MM/YYYY (legacy strings)
+    const dmy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(trimmed);
+    if (dmy) {
+      const day = Number(dmy[1]);
+      const month = Number(dmy[2]);
+      const year = Number(dmy[3]);
+      if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) return null;
+      if (year < 1900 || year > 3000) return null;
+      if (month < 1 || month > 12) return null;
+      if (day < 1 || day > 31) return null;
+      return Date.UTC(year, month - 1, day);
+    }
+
+    const fallback = Date.parse(trimmed);
+    return Number.isFinite(fallback) ? fallback : null;
+  }, []);
+
+  const resolvePreviousDestinationForDate = useCallback(
+    (targetDate: string) => {
+      const parsedTarget = parseTripDateToTime(targetDate);
+      if (parsedTarget == null) {
+        const fallback = (previousDestination ?? "").trim();
+        return fallback || baseLocation;
+      }
+
+      // "Continuación" depends on the trip date: use the destination of the most recent trip strictly BEFORE targetDate.
+      const previousTrip = trips.find((candidate) => {
+        if (candidate.id === trip?.id) return false;
+        const parsedCandidate = parseTripDateToTime(candidate.date);
+        return parsedCandidate != null && parsedCandidate < parsedTarget;
+      });
+
+      if (!previousTrip) {
+        const fallback = (previousDestination ?? "").trim();
+        return baseLocation || fallback;
+      }
+
+      const route = Array.isArray(previousTrip.route) ? previousTrip.route : [];
+      const destination = route.length > 0 ? String(route[route.length - 1] ?? "").trim() : "";
+      return destination || baseLocation;
+    },
+    [baseLocation, parseTripDateToTime, previousDestination, trip?.id, trips]
+  );
 
   const getInitialStops = (): Stop[] => {
     const defaultSpecialOrigin: TripData["specialOrigin"] = trip?.specialOrigin ?? "base";
 
-    const originDefault = defaultSpecialOrigin === "base" ? baseLocation : previousDestinationEffective;
+    const originDefault = defaultSpecialOrigin === "base" ? baseLocation : resolvePreviousDestinationForDate(trip?.date || "");
     const destinationDefault = baseLocation;
 
     if (!trip) {
@@ -503,7 +553,9 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
         const isLast = index === trip.route!.length - 1;
 
         const value = isFirst
-          ? trimmed || originDefault
+          ? defaultSpecialOrigin === "base"
+            ? trimmed || originDefault
+            : originDefault
           : isLast
             ? defaultSpecialOrigin === "return"
               ? baseLocation
@@ -575,7 +627,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
 
   const handleSpecialOriginChange = (next: SpecialOrigin) => {
     const prevSpecialOrigin = specialOrigin;
-    const nextOriginValue = next === "base" ? baseLocation : previousDestinationEffective;
+    const nextOriginValue = next === "base" ? baseLocation : resolvePreviousDestinationForDate(date);
 
     // Switching into "return" forces destination to base, so keep the user's last destination to restore later.
     if (next === "return" && prevSpecialOrigin !== "return") {
@@ -626,16 +678,16 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
     setPurpose(trip?.purpose || "");
     setSpecialOrigin(defaultSpecialOrigin || "base");
     setTripRate(trip?.ratePerKmOverride != null ? formatLocaleNumber(trip.ratePerKmOverride) : "");
-  }, [isOpen, trip, baseLocation, previousDestinationEffective]);
+  }, [isOpen, trip, baseLocation, resolvePreviousDestinationForDate]);
 
   const handleStopDraftChange = useCallback((id: string, value: string) => {
     stopDraftsRef.current[id] = value;
   }, []);
 
   const originPlaceholder = useMemo(() => {
-    const fallback = specialOrigin === "base" ? baseLocation : previousDestinationEffective;
+    const fallback = specialOrigin === "base" ? baseLocation : resolvePreviousDestinationForDate(date);
     return fallback || t("tripModal.originPlaceholder");
-  }, [specialOrigin, baseLocation, previousDestinationEffective, t]);
+  }, [specialOrigin, baseLocation, resolvePreviousDestinationForDate, date, t]);
 
   const destinationPlaceholder = useMemo(() => {
     return baseLocation || t("tripModal.destinationPlaceholder");
@@ -643,16 +695,28 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
 
   const getEffectiveRouteValues = useCallback(() => {
     const trimmedStops = stops.map((stop) => (stopDraftsRef.current[stop.id] ?? stop.value).trim());
-    const originFallback = specialOrigin === "base" ? baseLocation : previousDestinationEffective;
+    const originFallback = specialOrigin === "base" ? baseLocation : resolvePreviousDestinationForDate(date);
 
-    const origin = trimmedStops[0] || originFallback;
+    // When using special origin (continuation/return), the origin is always derived from the previous trip destination.
+    const origin = specialOrigin === "base" ? trimmedStops[0] || originFallback : originFallback;
     const destination =
       specialOrigin === "return" ? baseLocation : trimmedStops[trimmedStops.length - 1] || baseLocation;
 
     const waypoints = trimmedStops.slice(1, -1).filter(Boolean);
     const routeValues = [origin, ...waypoints, destination].filter(Boolean);
     return { origin, destination, waypoints, routeValues };
-  }, [stops, specialOrigin, baseLocation, previousDestinationEffective]);
+  }, [stops, specialOrigin, baseLocation, resolvePreviousDestinationForDate, date]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (specialOrigin === "base") return;
+
+    const nextOrigin = resolvePreviousDestinationForDate(date);
+    if (!nextOrigin) return;
+
+    stopDraftsRef.current.origin = nextOrigin;
+    setStops((prev) => prev.map((stop) => (stop.id === "origin" ? { ...stop, value: nextOrigin } : stop)));
+  }, [date, isOpen, resolvePreviousDestinationForDate, specialOrigin]);
 
   const calculateDistance = useCallback(async () => {
     if (!isOpen) return;
