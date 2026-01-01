@@ -531,6 +531,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
 
   const [stops, setStops] = useState<Stop[]>(() => getInitialStops());
   const stopDraftsRef = useRef<Record<string, string>>({});
+  const destinationBeforeReturnRef = useRef<string | null>(null);
   const [date, setDate] = useState("");
   const [distance, setDistance] = useState("");
   const [passengers, setPassengers] = useState("");
@@ -576,6 +577,16 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
 
   const handleSpecialOriginChange = (next: SpecialOrigin) => {
     const prevSpecialOrigin = specialOrigin;
+    const nextOriginValue = next === "base" ? baseLocation : previousDestinationEffective;
+    const shouldAutoUpdateOrigin = !originTouched;
+    const shouldRestoreDestination = prevSpecialOrigin === "return" && next !== "return" && !destinationTouched;
+
+    if (next === "return" && !destinationTouched) {
+      const currentDestination =
+        (stopDraftsRef.current.destination ?? stops.find((s) => s.id === "destination")?.value ?? "").trim();
+      destinationBeforeReturnRef.current = currentDestination || null;
+    }
+
     setSpecialOrigin(next);
 
     if (next === "return") {
@@ -584,19 +595,22 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
 
     setStops((prev) =>
       prev.map((stop) => {
-        if (stop.id === "origin" && isEditing && !originTouched) {
-          const originValue = next === "base" ? baseLocation : previousDestinationEffective;
-          return { ...stop, value: originValue };
+        if (stop.id === "origin" && shouldAutoUpdateOrigin) {
+          stopDraftsRef.current.origin = nextOriginValue;
+          return { ...stop, value: nextOriginValue };
         }
         if (stop.id === "destination") {
-          if (next === "return") return { ...stop, value: baseLocation };
-
-          if (!isEditing) {
-            if (prevSpecialOrigin === "return" && !destinationTouched) return { ...stop, value: "" };
-            return stop;
+          if (next === "return") {
+            stopDraftsRef.current.destination = baseLocation;
+            return { ...stop, value: baseLocation };
           }
 
-          if (!destinationTouched) return { ...stop, value: stop.value || baseLocation };
+          if (shouldRestoreDestination) {
+            const restored = destinationBeforeReturnRef.current ?? "";
+            if (restored) stopDraftsRef.current.destination = restored;
+            else delete stopDraftsRef.current.destination;
+            return { ...stop, value: restored };
+          }
         }
         return stop;
       })
@@ -610,6 +624,7 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
 
     setStops(getInitialStops());
     stopDraftsRef.current = {};
+    destinationBeforeReturnRef.current = null;
     setDate(trip?.date || "");
     setDistance(trip?.distance?.toString() || "");
     setPassengers(trip?.passengers?.toString() || "");

@@ -7,8 +7,7 @@ import { useTrips } from "@/contexts/TripsContext";
 interface Trip {
   id: string;
   date: string;
-  from: string;
-  to: string;
+  routeText: string;
   distance: number;
   project: string;
   passengers?: number;
@@ -16,14 +15,13 @@ interface Trip {
 
 function toRecentTrip(trip: { id: string; date: string; route: string[]; distance: number; project: string; passengers: number; }): Trip {
   const route = Array.isArray(trip.route) ? trip.route : [];
-  const from = route[0] || "-";
-  const to = route.length > 1 ? route[route.length - 1] : "-";
+  const routeParts = route.filter((part) => typeof part === "string" && part.trim().length > 0);
+  const routeText = routeParts.length > 0 ? routeParts.join(" → ") : "-";
 
   return {
     id: trip.id,
     date: trip.date,
-    from,
-    to,
+    routeText,
     distance: Number.isFinite(Number(trip.distance)) ? Number(trip.distance) : 0,
     project: trip.project || "-",
     passengers: Number.isFinite(Number(trip.passengers)) ? Number(trip.passengers) : undefined,
@@ -66,11 +64,11 @@ export function RecentTrips() {
                     {trip.project}
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-sm">
+                <div className="flex items-start gap-2 text-sm">
                   <MapPin className="w-4 h-4 text-primary shrink-0" />
-                  <span className="truncate">{trip.from}</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                  <span className="truncate">{trip.to}</span>
+                  <span className="leading-snug break-words" title={trip.routeText}>
+                    {trip.routeText}
+                  </span>
                 </div>
               </div>
               <div className="text-right shrink-0">
