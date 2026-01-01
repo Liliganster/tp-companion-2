@@ -28,6 +28,7 @@ interface ProjectDocument {
   type: "call-sheet" | "invoice" | "document" | "other";
   status?: string;
   storage_path?: string;
+  created_at?: string;
   project_id?: string | null;
   needs_review_reason?: string;
   invoice_job_id?: string;
@@ -342,6 +343,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                         name: name,
                         type: "call-sheet",
                         status: job.status,
+                        created_at: job.created_at,
                         storage_path: job.storage_path
                     });
                 }
@@ -361,17 +363,79 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                         name: name,
                         type: "call-sheet",
                         status: job.status,
+                        created_at: job.created_at,
                         storage_path: job.storage_path
                     });
                 }
             });
         }
         
-        setRealCallSheets(allDocs);
+        // Deduplicate by file name to avoid double-counting when users re-upload the same document.
+        const statusScore = (s: string) => {
+          switch (String(s ?? "")) {
+            case "processing":
+              return 6;
+            case "queued":
+              return 5;
+            case "created":
+              return 4;
+            case "done":
+              return 3;
+            case "needs_review":
+              return 2;
+            case "out_of_quota":
+              return 1;
+            case "failed":
+              return 0;
+            default:
+              return -1;
+          }
+        };
+
+        const tripJobIds = new Set<string>(
+          (trips ?? []).map((tr) => String((tr as any)?.callsheet_job_id ?? "").trim()).filter(Boolean),
+        );
+
+        const byName = new Map<string, ProjectDocument>();
+        for (const doc of allDocs) {
+          const key = String(doc.name ?? "")
+            .trim()
+            .toLowerCase();
+          if (!key) continue;
+
+          const cur = byName.get(key);
+          if (!cur) {
+            byName.set(key, doc);
+            continue;
+          }
+
+          const docHasTrip = tripJobIds.has(String(doc.id ?? ""));
+          const curHasTrip = tripJobIds.has(String(cur.id ?? ""));
+          if (docHasTrip && !curHasTrip) {
+            byName.set(key, doc);
+            continue;
+          }
+          if (!docHasTrip && curHasTrip) continue;
+
+          const ds = statusScore(String(doc.status ?? "")) - statusScore(String(cur.status ?? ""));
+          if (ds > 0) {
+            byName.set(key, doc);
+            continue;
+          }
+          if (ds < 0) continue;
+
+          const tCur = Date.parse(String(cur.created_at ?? ""));
+          const tDoc = Date.parse(String(doc.created_at ?? ""));
+          if (Number.isFinite(tDoc) && Number.isFinite(tCur) && tDoc > tCur) {
+            byName.set(key, doc);
+          }
+        }
+
+        setRealCallSheets(Array.from(byName.values()));
 
         // Materialize trips from jobs that are already done (but only once per modal open)
         // This runs after initial fetch to create trips for jobs that completed before modal opened
-        const doneJobs = allDocs.filter(doc => doc.status === 'done');
+        const doneJobs = Array.from(byName.values()).filter(doc => doc.status === 'done');
         if (doneJobs.length > 0) {
           // Use setTimeout to avoid blocking the UI and to run after state is set
           setTimeout(async () => {

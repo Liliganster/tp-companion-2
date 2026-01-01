@@ -44,6 +44,41 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
       for (const file of files) {
         let createdJobId: string | null = null;
         try {
+          // Avoid duplicates if the user re-uploads the same file name (common when a previous processing is still running).
+          const existingPattern = `%/${file.name}`;
+          let existingQuery = supabase
+            .from("callsheet_jobs")
+            .select("id, storage_path, status, created_at")
+            .eq("user_id", user.id)
+            .ilike("storage_path", existingPattern)
+            .order("created_at", { ascending: false })
+            .limit(1);
+
+          if (projectId) existingQuery = existingQuery.eq("project_id", projectId);
+
+          const { data: existing, error: existingError } = await existingQuery.maybeSingle();
+          const existingId = String((existing as any)?.id ?? "").trim();
+          const existingStoragePath = String((existing as any)?.storage_path ?? "").trim();
+          const existingStatus = String((existing as any)?.status ?? "").trim();
+
+          if (!existingError && existingId && existingStoragePath && existingStoragePath !== "pending") {
+            // If it's stuck in "created"/"failed", re-queue it so it can process.
+            if (existingStatus === "created" || existingStatus === "failed") {
+              try {
+                await supabase
+                  .from("callsheet_jobs")
+                  .update({ status: "queued", needs_review_reason: null })
+                  .eq("id", existingId);
+              } catch {
+                // ignore
+              }
+            }
+
+            successCount += 1;
+            onJobCreated?.(existingId);
+            continue;
+          }
+
           const { data: job, error: jobError } = await supabase
             .from("callsheet_jobs")
             .insert({

@@ -512,10 +512,86 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       const metaById: Record<string, { fileName: string; mimeType: string; storagePath: string }> = {};
       let successCount = 0;
       let failCount = 0;
+      let reusedCount = 0;
 
       for (const file of selectedFiles) {
         let createdJobId: string | null = null;
         try {
+          // Avoid duplicates: if the same file was already uploaded previously (user closed modal / re-tried),
+          // reuse the existing job instead of creating a new one.
+          const existingPattern = `%/${file.name}`;
+          const existingQuery = supabase
+            .from("callsheet_jobs")
+            .select("id, storage_path, status, created_at")
+            .eq("user_id", user.id)
+            .ilike("storage_path", existingPattern)
+            .order("created_at", { ascending: false })
+            .limit(5);
+
+          const { data: existingRows, error: existingError } = await existingQuery;
+          if (!existingError && Array.isArray(existingRows) && existingRows.length > 0) {
+            const candidates = existingRows
+              .map((r: any) => ({
+                id: String(r?.id ?? ""),
+                storagePath: String(r?.storage_path ?? "").trim(),
+                status: String(r?.status ?? "").trim(),
+                createdAt: String(r?.created_at ?? "").trim(),
+              }))
+              .filter((r) => r.id && r.storagePath && r.storagePath !== "pending");
+
+            if (candidates.length > 0) {
+              const statusScore = (s: string) => {
+                switch (s) {
+                  case "processing":
+                    return 6;
+                  case "queued":
+                    return 5;
+                  case "created":
+                    return 4;
+                  case "done":
+                    return 3;
+                  case "needs_review":
+                    return 2;
+                  case "out_of_quota":
+                    return 1;
+                  case "failed":
+                    return 0;
+                  default:
+                    return -1;
+                }
+              };
+
+              candidates.sort((a, b) => {
+                const ds = statusScore(b.status) - statusScore(a.status);
+                if (ds !== 0) return ds;
+                const ta = Date.parse(a.createdAt);
+                const tb = Date.parse(b.createdAt);
+                if (Number.isFinite(tb) && Number.isFinite(ta) && tb !== ta) return tb - ta;
+                return b.id.localeCompare(a.id);
+              });
+
+              const best = candidates[0];
+              if (!createdJobIds.includes(best.id)) createdJobIds.push(best.id);
+              metaById[best.id] = { fileName: file.name, mimeType: file.type, storagePath: best.storagePath };
+              reusedCount += 1;
+              successCount += 1;
+
+              // If it was left in "created"/"failed", re-queue it so processing continues (no new AI cost multiplier).
+              if (best.status === "created" || best.status === "failed") {
+                try {
+                  await supabase
+                    .from("callsheet_jobs")
+                    .update({ status: "queued", needs_review_reason: null })
+                    .eq("id", best.id);
+                } catch {
+                  // ignore
+                }
+              }
+
+              continue;
+            }
+          }
+
           // 1. Create Job
           const { data: job, error: jobError } = await supabase
             .from("callsheet_jobs")
@@ -565,6 +641,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       }
 
       if (successCount > 0) toast.success(tf("bulk.toastUploadedDocs", { count: successCount }));
+      if (reusedCount > 0) toast.info(`Se reutilizaron ${reusedCount} documento(s) ya subido(s)`);
       if (failCount > 0) toast.error(tf("bulk.toastFailedDocs", { count: failCount }));
 
       setJobIds(createdJobIds);

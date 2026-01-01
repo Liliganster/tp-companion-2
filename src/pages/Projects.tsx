@@ -134,7 +134,7 @@ export default function Projects() {
         jobs?.forEach((job: any) => {
           const pid = job.project_id;
           const path = (job.storage_path ?? "").toString().trim();
-          if (!pid || !path) return;
+          if (!pid || !path || path === "pending") return;
           if (!callsheetPathsByProjectId[pid]) callsheetPathsByProjectId[pid] = new Set();
           callsheetPathsByProjectId[pid].add(path);
         });
@@ -178,7 +178,7 @@ export default function Projects() {
              results?.forEach((res: any) => {
                const job = res.callsheet_jobs;
                const path = (job?.storage_path ?? "").toString().trim();
-               if (!path) return;
+               if (!path || path === "pending") return;
                if (!job?.project_id) {
                  const key = getProjectKey(res.project_value);
                  if (!callsheetPathsByKey[key]) callsheetPathsByKey[key] = new Set();
@@ -276,13 +276,15 @@ export default function Projects() {
       };
 
       // Project callsheets: count unique paths from callsheet_jobs
-      const uniquePaths = new Set<string>();
+      const uniqueDocuments = new Set<string>();
       for (const p of projectCallsheetPathsByKey[key] ?? []) {
         const trimmed = (p ?? "").toString().trim();
-        if (trimmed) uniquePaths.add(trimmed);
+        if (!trimmed || trimmed === "pending") continue;
+        const fileName = trimmed.split("/").pop() || trimmed;
+        uniqueDocuments.add(fileName.toLowerCase());
       }
 
-      current.documents = uniquePaths.size;
+      current.documents = uniqueDocuments.size;
       current.invoices += projectInvoiceCountsByKey[key] ?? 0;
 
       map.set(key, current);
