@@ -66,6 +66,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const [triggeringWorker, setTriggeringWorker] = useState(false);
   const [pendingTrips, setPendingTrips] = useState<Trip[]>([]);
   const [showPendingTrips, setShowPendingTrips] = useState(false);
+  const [savingPendingTrips, setSavingPendingTrips] = useState(false);
   const realCallSheetsRef = useRef<ProjectDocument[]>([]);
   const projectDocsRef = useRef<ProjectDocument[]>([]);
   const quotaNotifiedRef = useRef<Set<string>>(new Set());
@@ -994,6 +995,21 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       if (error) throw error;
 
       cancelCallsheetJobIdsRef.current.add(doc.id);
+
+      // Best-effort: kick the worker so the user doesn't have to wait for cron or press "Procesar ahora".
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const accessToken = session?.access_token;
+        await fetch("/api/callsheets/trigger-worker", {
+          method: "POST",
+          headers: {
+            Authorization: accessToken ? `Bearer ${accessToken}` : "",
+            "Content-Type": "application/json",
+          },
+        });
+      } catch {
+        // ignore
+      }
         
       toast.success(doc.status === "done" ? t("projectDetail.toastReprocessingStarted") : t("projectDetail.toastExtractionStarted"));
       setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'queued' } : p));
@@ -1009,6 +1025,19 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       if (!session) {
         toast.error(t("projectDetail.toastInvalidSession"));
         return;
+      }
+
+      // Ensure newly uploaded jobs (status=created) are queued so the worker can process them.
+      // We skip rows with storage_path="pending" to avoid queuing half-uploaded jobs.
+      try {
+        await supabase
+          .from("callsheet_jobs")
+          .update({ status: "queued", needs_review_reason: null })
+          .eq("project_id", project?.id ?? null)
+          .eq("status", "created")
+          .neq("storage_path", "pending");
+      } catch {
+        // ignore
       }
 
       const res = await fetch('/api/callsheets/trigger-worker', { 
@@ -1167,31 +1196,54 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
   const handleSaveAllPendingTrips = async () => {
     if (pendingTrips.length === 0) return;
-    
-    const existingJobIds = new Set<string>(
-      (trips ?? []).map((t) => String((t as any)?.callsheet_job_id ?? "").trim()).filter(Boolean),
-    );
+    if (savingPendingTrips) return;
 
-    const uniquePending = pendingTrips.filter((trip) => {
-      const key = String((trip as any)?.callsheet_job_id ?? "").trim();
-      if (!key) return true;
-      return !existingJobIds.has(key);
-    });
-
-    const results = await Promise.allSettled(uniquePending.map((trip) => addTrip(trip)));
-    const succeeded = results.filter(r => r.status === 'fulfilled').length;
-    const failed = results.length - succeeded;
+    setSavingPendingTrips(true);
     
-    if (failed === 0) {
-      toast.success(tf("projectDetail.toastTripsCreatedFromAi", { count: succeeded }));
-    } else if (succeeded === 0) {
-      toast.error(tf("projectDetail.toastTripsCreatedFromAiFailed", { count: failed }));
-    } else {
-      toast.warning(`${succeeded} viajes guardados, ${failed} fallaron`);
+    try {
+      const existingJobIds = new Set<string>(
+        (trips ?? []).map((t) => String((t as any)?.callsheet_job_id ?? "").trim()).filter(Boolean),
+      );
+
+      const uniquePending = pendingTrips.filter((trip) => {
+        const key = String((trip as any)?.callsheet_job_id ?? "").trim();
+        if (!key) return true;
+        return !existingJobIds.has(key);
+      });
+
+      const results = await Promise.allSettled(uniquePending.map((trip) => addTrip(trip)));
+      let saved = 0;
+      const failedTrips: Trip[] = [];
+
+      results.forEach((result, index) => {
+        const trip = uniquePending[index];
+        const ok = result.status === "fulfilled" && result.value === true;
+        if (ok) {
+          saved += 1;
+        } else if (trip) {
+          failedTrips.push(trip);
+        }
+      });
+
+      const failed = failedTrips.length;
+
+      if (failed === 0) {
+        toast.success(tf("projectDetail.toastTripsCreatedFromAi", { count: saved }));
+      } else if (saved === 0) {
+        toast.error(tf("projectDetail.toastTripsCreatedFromAiFailed", { count: failed }));
+      } else {
+        toast.warning(tf("projectDetail.toastTripsCreatedFromAiPartial", { saved, failed }));
+      }
+
+      if (saved > 0) refreshProjects();
+
+      setPendingTrips(failedTrips);
+      setShowPendingTrips(failedTrips.length > 0);
+    } catch (e: any) {
+      toast.error(tf("projectDetail.toastExtractionStartError", { message: e?.message ?? String(e) }));
+    } finally {
+      setSavingPendingTrips(false);
     }
-    
-    setPendingTrips([]);
-    setShowPendingTrips(false);
   };
 
   const handleDiscardPendingTrips = () => {
@@ -1261,8 +1313,15 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             <Button variant="outline" onClick={handleDiscardPendingTrips}>
               Descartar todos
             </Button>
-            <Button onClick={handleSaveAllPendingTrips} disabled={pendingTrips.length === 0}>
-              Guardar {pendingTrips.length} viajes
+            <Button onClick={handleSaveAllPendingTrips} disabled={pendingTrips.length === 0 || savingPendingTrips}>
+              {savingPendingTrips ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                <>Guardar {pendingTrips.length} viajes</>
+              )}
             </Button>
           </div>
         </DialogContent>

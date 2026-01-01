@@ -37,6 +37,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
     setUploading(true);
     let successCount = 0;
     let failCount = 0;
+    const queuedJobIds: string[] = [];
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError || !user) throw new Error("No estás autenticado");
@@ -69,6 +70,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
                   .from("callsheet_jobs")
                   .update({ status: "queued", needs_review_reason: null })
                   .eq("id", existingId);
+                queuedJobIds.push(existingId);
               } catch {
                 // ignore
               }
@@ -99,7 +101,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
 
           const { error: updateError } = await supabase
             .from("callsheet_jobs")
-            .update({ storage_path: filePath })
+            .update({ storage_path: filePath, status: "queued", needs_review_reason: null })
             .eq("id", job.id);
           
           if (updateError) {
@@ -112,6 +114,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
             }
           } else {
             successCount += 1;
+            queuedJobIds.push(job.id);
             onJobCreated?.(job.id);
           }
         } catch (err: any) {
@@ -129,6 +132,26 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
 
       if (successCount > 0) toast.success(`Se subieron ${successCount} documentos`);
       if (failCount > 0) toast.error(`Fallaron ${failCount} documentos`);
+
+      // Best-effort: kick the worker once so users don't have to wait for cron/manual trigger.
+      if (queuedJobIds.length > 0) {
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          const accessToken = session?.access_token;
+
+          await fetch("/api/callsheets/trigger-worker", {
+            method: "POST",
+            headers: {
+              Authorization: accessToken ? `Bearer ${accessToken}` : "",
+              "Content-Type": "application/json",
+            },
+          });
+        } catch {
+          // ignore: cron/manual trigger can still process later
+        }
+      }
 
     } catch (err: any) {
       console.error(err);
