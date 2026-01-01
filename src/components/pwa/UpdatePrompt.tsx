@@ -61,12 +61,43 @@ export function UpdatePrompt() {
       description: "Haz clic en actualizar para cargar la nueva versión.",
       action: {
         label: "Actualizar",
-        onClick: () => updateServiceWorker(true),
+        onClick: async () => {
+          const waiting = registration?.waiting;
+          const activated = waiting
+            ? new Promise<void>((resolve) => {
+                const done = () => resolve();
+                const onStateChange = () => {
+                  if (waiting.state === "activated") {
+                    waiting.removeEventListener("statechange", onStateChange);
+                    done();
+                  }
+                };
+
+                waiting.addEventListener("statechange", onStateChange);
+                if (waiting.state === "activated") {
+                  waiting.removeEventListener("statechange", onStateChange);
+                  done();
+                  return;
+                }
+
+                window.setTimeout(() => {
+                  waiting.removeEventListener("statechange", onStateChange);
+                  done();
+                }, 5_000);
+              })
+            : Promise.resolve();
+
+          try {
+            await updateServiceWorker(false);
+            await activated;
+          } finally {
+            window.location.reload();
+          }
+        },
       },
       duration: Infinity,
     });
-  }, [needRefresh, updateServiceWorker]);
+  }, [needRefresh, updateServiceWorker, registration]);
 
   return null;
 }
-

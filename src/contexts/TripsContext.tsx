@@ -361,6 +361,9 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     try {
       await cascadeDeleteTripById(supabase, id);
       queryClient.invalidateQueries({ queryKey }).catch(() => null);
+      // Cascade delete can remove orphan projects and update reports, so keep those in sync.
+      queryClient.invalidateQueries({ queryKey: ["projects", user.id] }).catch(() => null);
+      queryClient.invalidateQueries({ queryKey: ["reports", user.id] }).catch(() => null);
     } catch (err) {
       console.error("[TripsContext] Cascade delete failed:", err);
       toast.error(formatSupabaseError(err, "No se pudo borrar el viaje y sus datos asociados"));

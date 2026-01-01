@@ -182,7 +182,7 @@ export default defineConfig(({ mode }) => {
            enabled: true
         },
         workbox: {
-          clientsClaim: true,
+          clientsClaim: false,
           cleanupOutdatedCaches: true,
         }
       }),

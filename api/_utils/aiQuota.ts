@@ -57,7 +57,10 @@ async function countExtractionsThisMonth(
   const countTable = async (table: "invoice_jobs" | "callsheet_jobs", status: "done" | "processing") => {
     let q = supabaseAdmin
       .from(table)
-      .select("id", { count: "exact", head: true })
+      // Avoid HEAD requests: some networks/proxies can fail them and return a wrong count.
+      .select("id", { count: "exact" })
+      // Use GET + small range to still get `count` without HEAD.
+      .range(0, 0)
       .eq("user_id", userId)
       .eq("status", status);
 
@@ -83,7 +86,6 @@ async function countExtractionsThisMonth(
 }
 
 export async function checkAiMonthlyQuota(userId: string): Promise<QuotaDecision> {
-  // For testing/dev: bypass hard quota limits (anti-abuse rate limiting still applies).
   if (envTruthy("BYPASS_AI_LIMITS")) {
     const tier = await readUserTier(userId);
     const limit = limitForTier(tier);
@@ -99,13 +101,14 @@ export async function checkAiMonthlyQuota(userId: string): Promise<QuotaDecision
 
   // Only "done" is billed/visible as usage, but we also reserve slots while jobs are processing
   // to avoid spawning more Gemini calls than the plan allows.
-  if (reserved >= limit) {
+  if (counts.done >= limit || reserved > limit) {
     return {
       allowed: false,
       tier,
       limit,
-      used: reserved,
-      reason: `monthly_quota_exceeded:${tier}:${reserved}/${limit}:done=${counts.done}:processing=${counts.processing}`,
+      // If we are denying, consider the user at their limit (even if some slots are reserved by in-flight jobs).
+      used: limit,
+      reason: `monthly_quota_exceeded:${tier}:${limit}/${limit}:reserved=${reserved}:done=${counts.done}:processing=${counts.processing}`,
     };
   }
 

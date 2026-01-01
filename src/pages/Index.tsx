@@ -91,7 +91,8 @@ export default function Index() {
         const { count } = await supabase
           .from(table)
           .select("id", { count: "exact" })
-          .limit(0)
+          // Use GET + small range to still get `count` without HEAD.
+          .range(0, 0)
           .eq("user_id", user.id)
           .eq("status", "done")
           .gte("processed_at", sinceIso);
