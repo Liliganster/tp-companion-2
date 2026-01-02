@@ -415,6 +415,9 @@ const es = {
   "reportView.totalShort": "Total",
 
   "advancedRoutes.createTemplateTitle": "Crear nueva plantilla",
+  "advancedRoutes.saveAsTemplate": "Guardar como plantilla",
+  "advancedRoutes.createTemplateDesc": "Guarda esta ruta para usarla en futuros viajes.",
+  "advancedRoutes.save": "Guardar",
   "advancedRoutes.editTemplateTitle": "Editar plantilla",
   "advancedRoutes.basicInfo": "Información básica",
   "advancedRoutes.templateName": "Nombre de plantilla",
@@ -1035,6 +1038,9 @@ const en: Record<I18nKey, string> = {
   "reportView.totalShort": "Total",
 
   "advancedRoutes.createTemplateTitle": "Create new template",
+  "advancedRoutes.saveAsTemplate": "Save as template",
+  "advancedRoutes.createTemplateDesc": "Save this route for future trips.",
+  "advancedRoutes.save": "Save",
   "advancedRoutes.editTemplateTitle": "Edit template",
   "advancedRoutes.basicInfo": "Basic information",
   "advancedRoutes.templateName": "Template name",

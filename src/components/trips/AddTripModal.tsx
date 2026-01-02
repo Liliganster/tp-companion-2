@@ -4,13 +4,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, GripVertical, X, MapPin, Calendar, Home, Route, Loader2, Check, ChevronsUpDown } from "lucide-react";
+import { Plus, GripVertical, X, MapPin, Calendar, Home, Route, Loader2, Check, ChevronsUpDown, FileUp } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn, uuidv4 } from "@/lib/utils";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { useTrips } from "@/contexts/TripsContext";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabaseClient";
 import {
   DndContext,
   closestCenter,
@@ -393,6 +394,9 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
   const [tripRate, setTripRate] = useState("");
   const [distanceLoading, setDistanceLoading] = useState(false);
   const [locationBias, setLocationBias] = useState<{ lat: number; lng: number } | undefined>(undefined);
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [templateLoading, setTemplateLoading] = useState(false);
 
   // Fetch coordinates for Base City to use as Autocomplete Bias
   useEffect(() => {
@@ -479,6 +483,8 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
     setSpecialOrigin(defaultSpecialOrigin || "base");
     const rateOverride = seedTrip?.ratePerKmOverride;
     setTripRate(rateOverride != null ? formatLocaleNumber(rateOverride) : "");
+    setSaveTemplateOpen(false);
+    setTemplateName("");
   }, [isOpen, trip, prefill, baseLocation, resolvePreviousDestinationForDate]);
 
   const handleStopDraftChange = useCallback((id: string, value: string) => {
@@ -834,10 +840,94 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
             />
           </div>
 
-          <DialogClose asChild>
-            <Button
-              variant="save"
-              className="w-full mt-2"
+          </div>
+
+          <div className="flex items-center gap-2 mt-2">
+            <Popover open={saveTemplateOpen} onOpenChange={setSaveTemplateOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="gap-2" type="button">
+                  <FileUp className="w-4 h-4" />
+                  {t("advancedRoutes.saveAsTemplate") || "Convertir en plantilla"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-4" align="start">
+                <div className="grid gap-4">
+                  <div className="space-y-2">
+                    <h4 className="font-medium leading-none">{t("advancedRoutes.createTemplateTitle") || "Crear plantilla"}</h4>
+                    <p className="text-sm text-muted-foreground">
+                      {t("advancedRoutes.createTemplateDesc") || "Guarda esta ruta para usarla en futuros viajes."}
+                    </p>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="templateName">{t("advancedRoutes.templateName") || "Nombre de la plantilla"}</Label>
+                    <Input
+                      id="templateName"
+                      value={templateName}
+                      onChange={(e) => setTemplateName(e.target.value)}
+                      placeholder="Ej. Visita cliente X"
+                      className="bg-secondary/50"
+                    />
+                  </div>
+                  <Button 
+                    variant="add" 
+                    size="sm" 
+                    disabled={templateLoading || !templateName.trim()}
+                    onClick={async () => {
+                      if (!supabase || !profile) return;
+                      const { routeValues, waypoints, origin, destination } = getEffectiveRouteValues();
+                      
+                      if (!origin || !destination) {
+                        toast.error("La ruta debe tener origen y destino");
+                        return;
+                      }
+
+                      setTemplateLoading(true);
+                      try {
+                        const { data: userData } = await supabase.auth.getUser();
+                        const userId = userData?.user?.id;
+
+                        if (!userId) throw new Error("No autenticado");
+
+                        const distanceVal = parseLocaleNumber(distance) ?? 0;
+                        // Calculate estimated time roughly (e.g. 60km/h avg speed) if not available, or just leave 0
+                        // Since we don't have duration here easily without calling API, we default to 0.
+
+                        const { error } = await supabase.from("route_templates").insert({
+                          user_id: userId,
+                          name: templateName.trim(),
+                          category: "business", // Default
+                          start_location: origin,
+                          end_location: destination, 
+                          waypoints: waypoints,
+                          distance_km: distanceVal,
+                          estimated_time_min: 0,
+                          description: project || purpose || null,
+                          uses: 0
+                        });
+
+                        if (error) throw error;
+
+                        toast.success(t("advancedRoutes.toastCreated") || "Plantilla guardada");
+                        setSaveTemplateOpen(false);
+                      } catch (e) {
+                         console.error(e);
+                         toast.error("Error al guardar plantilla");
+                      } finally {
+                        setTemplateLoading(false);
+                      }
+                    }}
+                  >
+                    {templateLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                     {t("advancedRoutes.save") || "Guardar"}
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            <DialogClose asChild>
+              <Button
+                variant="save"
+                className="flex-1"
               onClick={async (event) => {
                 const distanceValue = parseLocaleNumber(distance) ?? 0;
                 const passengersValue = parseLocaleNumber(passengers) ?? 0;
