@@ -199,9 +199,9 @@ export default function Index() {
   /* New Card Design Helpers */
   const StatusRow = ({ label, value, status = "neutral", icon: Icon }: { label: string, value: string, status?: "success" | "warning" | "destructive" | "neutral", icon?: any }) => (
     <div className={`flex items-center justify-between text-xs px-2 py-1.5 rounded border border-transparent ${
-      status === "success" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
-      status === "warning" ? "bg-amber-500/10 text-amber-500 border-amber-500/20" :
-      status === "destructive" ? "bg-red-500/10 text-red-500 border-red-500/20" :
+      status === "success" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+      status === "warning" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
+      status === "destructive" ? "bg-red-500/10 text-red-400 border-red-500/20" :
       "bg-white/5 text-zinc-300 border-white/10"
     }`}>
       <span className="font-medium">{label}</span>
@@ -263,6 +263,7 @@ export default function Index() {
             iconWrapperClassName={kpiTitleWrapperClassName}
             hideTitle
             variant="primary"
+            valueGradient={false}
             action={<Link to="/trips" className="text-xs text-primary hover:underline mt-2 inline-block">{t("dashboard.viewTrips")}</Link>}
           />
           
