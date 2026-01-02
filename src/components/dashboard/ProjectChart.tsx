@@ -38,14 +38,14 @@ export function ProjectChart() {
     <div className="glass-card p-5 animate-fade-in animation-delay-300">
       <h2 className="font-semibold text-lg mb-4 text-foreground">{t("chart.kmByProject")}</h2>
       
-      <div className="h-64">
+      <div className="h-48">
         {data.length === 0 ? (
           <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
             No hay datos para mostrar.
           </div>
         ) : (
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+          <BarChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
             <XAxis 
               dataKey="name" 
               stroke="hsl(var(--foreground))" 

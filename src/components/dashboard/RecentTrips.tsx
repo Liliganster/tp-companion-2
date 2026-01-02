@@ -31,7 +31,7 @@ function toRecentTrip(trip: { id: string; date: string; route: string[]; distanc
 export function RecentTrips() {
   const { t, locale } = useI18n();
   const { trips, loading } = useTrips();
-  const recentTrips = trips.slice(0, 4).map((trip) => toRecentTrip(trip));
+  const recentTrips = trips.slice(0, 3).map((trip) => toRecentTrip(trip));
   return (
     <div className="glass-card p-5 animate-fade-in animation-delay-200">
       <div className="flex items-center justify-between mb-4">
@@ -44,7 +44,7 @@ export function RecentTrips() {
         </Button>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         {!loading && recentTrips.length === 0 ? (
           <div className="text-sm text-muted-foreground">No hay viajes recientes.</div>
         ) : null}
@@ -52,7 +52,7 @@ export function RecentTrips() {
         {recentTrips.map((trip, index) => (
           <div
             key={trip.id}
-            className="p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors cursor-pointer group animate-slide-up"
+            className="p-2.5 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors cursor-pointer group animate-slide-up"
             style={{ animationDelay: `${index * 100}ms` }}
           >
             <div className="flex items-start justify-between gap-3">
