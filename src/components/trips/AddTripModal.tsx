@@ -673,24 +673,25 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
 	                      onValueChange={setProject}
 	                    />
 	                    <CommandList>
-	                      <CommandEmpty>
-	                          <div className="p-2">
-	                             <p className="text-sm text-muted-foreground mb-2">{t("tripModal.projectNotFound")}</p>
-	                             <Button 
-	                               variant="secondary" 
-	                               size="sm" 
-	                               className="w-full" 
+                      <CommandEmpty>
+                          <div className="p-2">
+                             <p className="text-sm text-muted-foreground mb-2">{t("tripModal.projectNotFound")}</p>
+                             <Button 
+                               variant="secondary" 
+                               size="sm" 
+                               className="w-full" 
                                disabled={!project.trim()}
                                onClick={() => {
-                                 createProjectIfNeeded(project);
+                                 // Just use the string as project/client name
                                  setProject(project.trim());
-	                                 setProjectOpen(false);
-	                               }}
-	                             >
-	                              {tf("tripModal.createProjectNamed", { name: project })}
-	                             </Button>
-	                          </div>
-	                      </CommandEmpty>
+                                 setProjectOpen(false);
+                               }}
+                             >
+                              {/* Using the name as Client/Producer without creating a project */}
+                              {tf("tripModal.useAsClient", { name: project }) || `Usar "${project}"`}
+                             </Button>
+                          </div>
+                      </CommandEmpty>
                       <CommandGroup>
                         {projectOptions.map((name) => (
                           <CommandItem
@@ -958,27 +959,9 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                   const existing = projects.find(p => p.name.trim().toLowerCase() === trimmedProject.toLowerCase());
                   if (existing) {
                     projectId = existing.id;
-                  } else {
-                    // Create new project synchronously
-                    projectId = uuidv4();
-                    await addProject({
-                        id: projectId,
-                        name: trimmedProject,
-                        producer: "",
-                        description: "Created via Trip",
-                        ratePerKm: 0.3,
-                        starred: false,
-                        trips: 0,
-                        totalKm: 0,
-                        documents: 0,
-                        invoices: 0,
-                        estimatedCost: 0,
-                        shootingDays: 0,
-                        kmPerDay: 0,
-                        co2Emissions: 0,
-                    });
-                    toast.success(`Proyecto "${trimmedProject}" creado`);
-                  }
+                  } 
+                  // If not found, projectId remains undefined, but `trimmedProject` string is passed.
+                  // TripsContext will handle this as client metadata.
                 }
 
                 // 3. Save Trip

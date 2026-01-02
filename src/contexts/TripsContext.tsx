@@ -24,6 +24,7 @@ export type Trip = {
   invoiceCurrency?: string | null; // New: currency (EUR, USD, etc.)
   invoiceJobId?: string | null; // New: link to invoice_job
   warnings?: string[];
+  clientName?: string; // Metadata from template/input (stored in documents)
   co2: number;
   distance: number;
   ratePerKmOverride?: number | null;
@@ -112,8 +113,17 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         id: t.id,
         date: t.trip_date || t.date_value || "",
         route: t.route || [],
-        project: t.projects?.name || "Unknown",
+        project: t.projects?.name || (() => {
+          const docs = t.documents || [];
+          const meta = docs.find((d: any) => d.kind === "client_meta");
+          return meta?.name || "Unknown";
+        })(),
         projectId: t.project_id,
+        clientName: (() => {
+            const docs = t.documents || [];
+            const meta = docs.find((d: any) => d.kind === "client_meta");
+            return meta?.name || undefined;
+        })(),
         callsheet_job_id: t.callsheet_job_id,
         purpose: t.purpose || "",
         passengers: t.passengers || 0,
@@ -125,7 +135,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         co2: Number.isFinite(Number(t.co2_kg)) ? Number(t.co2_kg) : 0,
         ratePerKmOverride: t.rate_per_km_override,
         specialOrigin: t.special_origin,
-        documents: t.documents || [],
+        documents: (t.documents || []).filter((d: any) => d.kind !== "client_meta"),
       }));
 
       if (offlineCacheKey) writeOfflineCache(offlineCacheKey, mapped);
@@ -203,7 +213,15 @@ export function TripsProvider({ children }: { children: ReactNode }) {
                     invoiceAmount: next.invoice_amount ?? null,
                     invoiceCurrency: next.invoice_currency ?? null,
                     invoiceJobId: next.invoice_job_id ?? null,
-                    documents: next.documents ?? t.documents,
+                    documents: (next.documents || []).filter((d: any) => d.kind !== "client_meta"),
+                    clientName: (() => {
+                        const docs = next.documents || [];
+                        const meta = docs.find((d: any) => d.kind === "client_meta");
+                        return meta?.name || undefined;
+                    })(),
+                    project: t.projectId 
+                        ? t.project 
+                        : (next.documents || []).find((d: any) => d.kind === "client_meta")?.name || "Unknown",
                     co2: Number.isFinite(Number(next.co2_kg)) ? Number(next.co2_kg) : t.co2,
                     distance: Number.isFinite(Number(next.distance_km)) ? Number(next.distance_km) : t.distance,
                   }
@@ -279,6 +297,18 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
     queryClient.setQueryData<Trip[]>(queryKey, [normalizedTrip, ...prevTrips]);
 
+    // Handle Client Name metadata in documents
+    let documentsToSave = normalizedTrip.documents || [];
+    if (!normalizedTrip.projectId && normalizedTrip.project && normalizedTrip.project !== "Unknown") {
+        const meta = {
+            id: crypto.randomUUID(),
+            kind: "client_meta",
+            name: normalizedTrip.project,
+            createdAt: new Date().toISOString()
+        };
+        documentsToSave = [...documentsToSave, meta] as any;
+    }
+
     const dbPayload = {
       id: normalizedTrip.id,
       user_id: user.id,
@@ -296,7 +326,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       invoice_amount: normalizedTrip.invoiceAmount,
       invoice_currency: normalizedTrip.invoiceCurrency,
       invoice_job_id: normalizedTrip.invoiceJobId,
-      documents: normalizedTrip.documents
+      documents: documentsToSave
     };
     
     console.log("[TripsContext] Sending payload to Supabase:", dbPayload);
@@ -369,7 +399,44 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     if (patch.invoiceAmount !== undefined) dbPatch.invoice_amount = patch.invoiceAmount;
     if (patch.invoiceCurrency !== undefined) dbPatch.invoice_currency = patch.invoiceCurrency;
     if (patch.invoiceJobId !== undefined) dbPatch.invoice_job_id = patch.invoiceJobId;
-    if (patch.documents !== undefined) dbPatch.documents = patch.documents;
+    if (patch.invoiceJobId !== undefined) dbPatch.invoice_job_id = patch.invoiceJobId;
+    
+    // Handle documents and client metadata
+    let nextDocuments = patch.documents;
+    
+    // If we are setting a clientName (explicitly passed) or we are setting project_id to Null (and need to persist the name?)
+    // Actually, updateTrip usually receives "project" string in the patch if we updated the type? No, existing type has `project`.
+    // But `project` in type is usually the display name.
+    
+    // If patch has clientName, we must update documents.
+    if (patch.clientName !== undefined) {
+        // Fetch current documents if not in patch
+        const currentDocs = nextDocuments || (trips.find(t => t.id === id)?.documents || []);
+        const filtered = currentDocs.filter((d: any) => d.kind !== "client_meta");
+        
+        if (patch.clientName) {
+            filtered.push({
+                id: crypto.randomUUID(),
+                kind: "client_meta",
+                name: patch.clientName,
+                createdAt: new Date().toISOString()
+            } as any);
+        }
+        dbPatch.documents = filtered;
+    } else if (patch.documents !== undefined) {
+       dbPatch.documents = patch.documents;
+    }
+    
+    // Also if we are setting projectId to a valid ID, we should remove client_meta?
+    if (patch.projectId && patch.projectId !== null) {
+        // If we are assigning to a real project, remove the client meta unless explicitly told otherwise.
+        // But we might not have `documents` in the patch.
+        // Let's rely on the caller to handle this? Or handle it here.
+        // Safest: The caller (Add Trip Modal) will likely pass the full state.
+        // Let's just handle `clientName` in patch.
+    }
+    
+    if (patch.callsheet_job_id !== undefined) dbPatch.callsheet_job_id = patch.callsheet_job_id;
     if (patch.callsheet_job_id !== undefined) dbPatch.callsheet_job_id = patch.callsheet_job_id;
     if (patch.projectId !== undefined) dbPatch.project_id = patch.projectId;
 

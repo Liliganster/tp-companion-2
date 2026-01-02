@@ -126,6 +126,7 @@ const es = {
   "tripModal.projectSearchPlaceholder": "Buscar o crear proyecto...",
   "tripModal.projectNotFound": "No encontrado.",
   "tripModal.createProjectNamed": "Crear \"{name}\"",
+  "tripModal.useAsClient": "Usar \"{name}\" como cliente",
 
   // Calendar page
   "calendar.title": "Calendario",
@@ -759,6 +760,7 @@ const en: Record<I18nKey, string> = {
   "tripModal.projectSearchPlaceholder": "Search or create project...",
   "tripModal.projectNotFound": "Not found.",
   "tripModal.createProjectNamed": "Create \"{name}\"",
+  "tripModal.useAsClient": "Use \"{name}\" as client",
   "calendar.title": "Calendar",
   "calendar.subtitle": "Sync events from Google Calendar",
   "calendar.refresh": "Refresh",
@@ -1380,6 +1382,7 @@ const de: Record<I18nKey, string> = {
   "tripModal.projectSearchPlaceholder": "Projekt suchen oder erstellen...",
   "tripModal.projectNotFound": "Nicht gefunden.",
   "tripModal.createProjectNamed": "Projekt \"{name}\" erstellen",
+  "tripModal.useAsClient": "\"{name}\" als Kunden verwenden",
   "calendar.title": "Kalender",
   "calendar.subtitle": "Ereignisse aus Google Calendar synchronisieren",
   "calendar.refresh": "Aktualisieren",

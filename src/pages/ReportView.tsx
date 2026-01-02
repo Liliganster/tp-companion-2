@@ -193,7 +193,7 @@ export default function ReportView() {
 
     const passengers = Number.isFinite(trip.passengers) ? trip.passengers : 0;
     const distance = Number.isFinite(trip.distance) ? trip.distance : 0;
-    const producer = getProducerForProject(trip.project);
+    const producer = trip.clientName || getProducerForProject(trip.project);
 
     return {
       date: dateLabel,
