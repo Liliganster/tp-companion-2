@@ -156,6 +156,7 @@ export default defineConfig(({ mode }) => {
       mode === "development" && componentTagger(),
       VitePWA({
         registerType: 'prompt',
+        injectRegister: null,
         // Keep assets list in sync with files present in /public (Vercel serves them at /).
         includeAssets: ['favicon.ico', 'logo.svg'],
         manifest: {

@@ -1,23 +1,48 @@
 import { useEffect, useRef, useState } from "react";
-import { useRegisterSW } from "virtual:pwa-register/react";
 import { toast } from "sonner";
+
+type WorkboxInstance = import("workbox-window").Workbox;
 
 export function UpdatePrompt() {
   const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null);
+  const [needRefresh, setNeedRefresh] = useState(false);
+  const wbRef = useRef<WorkboxInstance | null>(null);
+  const registeredRef = useRef(false);
   const promptShownRef = useRef(false);
 
-  const {
-    needRefresh: [needRefresh],
-    updateServiceWorker,
-  } = useRegisterSW({
-    onRegistered(r) {
-      if (!r) return;
-      setRegistration(r);
-    },
-    onRegisterError(error) {
-      console.log("SW registration error", error);
-    },
-  });
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    if (registeredRef.current) return;
+    registeredRef.current = true;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { Workbox } = await import("workbox-window");
+        const baseUrl = import.meta.env.BASE_URL || "/";
+        const swUrl = `${baseUrl}sw.js`;
+        const wb = new Workbox(swUrl, { scope: baseUrl });
+
+        wbRef.current = wb;
+
+        wb.addEventListener("waiting", () => {
+          if (cancelled) return;
+          setNeedRefresh(true);
+        });
+
+        const swRegistration = await wb.register();
+        if (cancelled) return;
+        if (swRegistration) setRegistration(swRegistration);
+      } catch (error) {
+        console.log("SW registration error", error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!registration) return;
@@ -88,7 +113,7 @@ export function UpdatePrompt() {
             : Promise.resolve();
 
           try {
-            await updateServiceWorker(false);
+            wbRef.current?.messageSkipWaiting();
             await activated;
           } finally {
             window.location.reload();
@@ -97,7 +122,7 @@ export function UpdatePrompt() {
       },
       duration: Infinity,
     });
-  }, [needRefresh, updateServiceWorker, registration]);
+  }, [needRefresh, registration]);
 
   return null;
 }
