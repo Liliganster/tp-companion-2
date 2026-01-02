@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, Route } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
   Dialog,
@@ -24,7 +24,10 @@ import { cn } from "@/lib/utils";
 import { useI18n } from "@/hooks/use-i18n";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUserProfile } from "@/contexts/UserProfileContext";
 import { toast } from "sonner";
+import { AddressAutocompleteInput } from "@/components/google/AddressAutocompleteInput";
+import { getCountryCode } from "@/lib/country-mapping";
 
 interface RouteTemplate {
   id: string;
@@ -55,12 +58,16 @@ type DbRouteTemplate = {
 export default function AdvancedRoutes() {
   const navigate = useNavigate();
   const { t } = useI18n();
-  const { user } = useAuth();
+  const { user, getAccessToken } = useAuth();
+  const { profile } = useUserProfile();
+  const googleRegion = useMemo(() => getCountryCode(profile.country), [profile.country]);
   const [templates, setTemplates] = useState<RouteTemplate[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [routeCalcLoading, setRouteCalcLoading] = useState(false);
+  const routeCalcAbortRef = useRef<AbortController | null>(null);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -72,6 +79,83 @@ export default function AdvancedRoutes() {
     estimatedTime: 0,
     description: "",
   });
+
+  const calculateRoute = useCallback(async () => {
+    const origin = formData.startLocation.trim();
+    const destination = formData.endLocation.trim();
+    if (!origin || !destination) return;
+
+    const token = await getAccessToken();
+    if (!token) return;
+
+    routeCalcAbortRef.current?.abort();
+    const controller = new AbortController();
+    routeCalcAbortRef.current = controller;
+
+    setRouteCalcLoading(true);
+    try {
+      const response = await fetch("/api/google/directions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          origin,
+          destination,
+          region: googleRegion,
+        }),
+        signal: controller.signal,
+      });
+
+      const data = (await response.json().catch(() => null)) as {
+        totalDistanceMeters?: number;
+        legs?: Array<{ durationSeconds?: number | null } | null>;
+      } | null;
+
+      if (!response.ok || !data) return;
+
+      const meters = typeof data.totalDistanceMeters === "number" ? data.totalDistanceMeters : null;
+      const seconds = Array.isArray(data.legs)
+        ? data.legs.reduce((acc, leg) => acc + (typeof leg?.durationSeconds === "number" ? leg.durationSeconds : 0), 0)
+        : 0;
+
+      if (meters != null) {
+        const km = Math.round((meters / 1000) * 10) / 10;
+        const minutes = seconds > 0 ? Math.round(seconds / 60) : 0;
+        setFormData((prev) => ({
+          ...prev,
+          distance: km,
+          estimatedTime: minutes || prev.estimatedTime,
+        }));
+      }
+    } catch (err: any) {
+      if (err?.name === "AbortError") return;
+    } finally {
+      if (routeCalcAbortRef.current === controller) {
+        setRouteCalcLoading(false);
+      }
+    }
+  }, [formData.endLocation, formData.startLocation, getAccessToken, googleRegion]);
+
+  useEffect(() => {
+    if (!createModalOpen) return;
+    const origin = formData.startLocation.trim();
+    const destination = formData.endLocation.trim();
+    if (!origin || !destination) return;
+
+    const timeout = window.setTimeout(() => {
+      void calculateRoute();
+    }, 650);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [calculateRoute, createModalOpen, formData.endLocation, formData.startLocation]);
+
+  useEffect(() => {
+    if (createModalOpen) return;
+    routeCalcAbortRef.current?.abort();
+    routeCalcAbortRef.current = null;
+    setRouteCalcLoading(false);
+  }, [createModalOpen]);
 
   const filteredTemplates = useMemo(
     () => (selectedCategory === "all" ? templates : templates.filter((t) => t.category === selectedCategory)),
@@ -444,34 +528,49 @@ export default function AdvancedRoutes() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="startLocation">{t("advancedRoutes.startLocation")}</Label>
-                  <Input
-                    id="startLocation"
+                  <AddressAutocompleteInput
                     value={formData.startLocation}
-                    onChange={(e) => setFormData({ ...formData, startLocation: e.target.value })}
-                    className="bg-secondary/50"
+                    onCommit={(value) => setFormData((prev) => ({ ...prev, startLocation: value }))}
+                    placeholder={t("tripModal.originPlaceholder")}
                     disabled={loading}
+                    className="bg-secondary/50"
+                    country={profile.country}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="endLocation">{t("advancedRoutes.endLocation")}</Label>
-                  <Input
-                    id="endLocation"
+                  <AddressAutocompleteInput
                     value={formData.endLocation}
-                    onChange={(e) => setFormData({ ...formData, endLocation: e.target.value })}
-                    className="bg-secondary/50"
+                    onCommit={(value) => setFormData((prev) => ({ ...prev, endLocation: value }))}
+                    placeholder={t("tripModal.destinationPlaceholder")}
                     disabled={loading}
+                    className="bg-secondary/50"
+                    country={profile.country}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="distance">{t("advancedRoutes.distanceKm")}</Label>
-                  <Input
-                    id="distance"
-                    type="number"
-                    value={formData.distance}
-                    onChange={(e) => setFormData({ ...formData, distance: Number(e.target.value) })}
-                    className="bg-secondary/50"
-                    disabled={loading}
-                  />
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="distance"
+                      type="number"
+                      value={formData.distance}
+                      onChange={(e) => setFormData({ ...formData, distance: Number(e.target.value) })}
+                      className="bg-secondary/50"
+                      disabled={loading}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-10 w-10 shrink-0"
+                      onClick={() => void calculateRoute()}
+                      disabled={loading || routeCalcLoading}
+                      title="Recalcular distancia"
+                    >
+                      {routeCalcLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Route className="w-5 h-5" />}
+                    </Button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="estimatedTime">{t("advancedRoutes.estimatedTimeMin")}</Label>
