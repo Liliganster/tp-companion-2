@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Loader2, Plus, Route } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, Route, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
   Dialog,
@@ -34,6 +34,7 @@ interface RouteTemplate {
   name: string;
   category: string;
   startLocation: string;
+  waypoints: string[];
   endLocation: string;
   distance: number;
   estimatedTime: number;
@@ -48,6 +49,7 @@ type DbRouteTemplate = {
   category: string;
   start_location: string | null;
   end_location: string | null;
+  waypoints: string[] | null;
   distance_km: number | null;
   estimated_time_min: number | null;
   description: string | null;
@@ -61,6 +63,10 @@ export default function AdvancedRoutes() {
   const { user, getAccessToken } = useAuth();
   const { profile } = useUserProfile();
   const googleRegion = useMemo(() => getCountryCode(profile.country), [profile.country]);
+  const baseLocation = useMemo(() => {
+    const parts = [profile.baseAddress, profile.city, profile.country].map((p) => String(p ?? "").trim()).filter(Boolean);
+    return parts.join(", ");
+  }, [profile.baseAddress, profile.city, profile.country]);
   const [templates, setTemplates] = useState<RouteTemplate[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -74,6 +80,7 @@ export default function AdvancedRoutes() {
     name: "",
     category: "business",
     startLocation: "",
+    waypoints: [] as string[],
     endLocation: "",
     distance: 0,
     estimatedTime: 0,
@@ -84,6 +91,9 @@ export default function AdvancedRoutes() {
     const origin = formData.startLocation.trim();
     const destination = formData.endLocation.trim();
     if (!origin || !destination) return;
+
+    const waypoints = (Array.isArray(formData.waypoints) ? formData.waypoints : []).map((w) => w.trim()).filter(Boolean);
+    if (waypoints.length > 8) return;
 
     const token = await getAccessToken();
     if (!token) return;
@@ -100,6 +110,7 @@ export default function AdvancedRoutes() {
         body: JSON.stringify({
           origin,
           destination,
+          waypoints,
           region: googleRegion,
         }),
         signal: controller.signal,
@@ -112,34 +123,37 @@ export default function AdvancedRoutes() {
 
       if (!response.ok || !data) return;
 
-      const meters = typeof data.totalDistanceMeters === "number" ? data.totalDistanceMeters : null;
-      const seconds = Array.isArray(data.legs)
-        ? data.legs.reduce((acc, leg) => acc + (typeof leg?.durationSeconds === "number" ? leg.durationSeconds : 0), 0)
-        : 0;
+        const meters = typeof data.totalDistanceMeters === "number" ? data.totalDistanceMeters : null;
+        const seconds = Array.isArray(data.legs)
+          ? data.legs.reduce((acc, leg) => acc + (typeof leg?.durationSeconds === "number" ? leg.durationSeconds : 0), 0)
+          : 0;
 
-      if (meters != null) {
-        const km = Math.round((meters / 1000) * 10) / 10;
-        const minutes = seconds > 0 ? Math.round(seconds / 60) : 0;
-        setFormData((prev) => ({
-          ...prev,
-          distance: km,
-          estimatedTime: minutes || prev.estimatedTime,
-        }));
-      }
-    } catch (err: any) {
-      if (err?.name === "AbortError") return;
-    } finally {
+        if (meters != null) {
+          const km = Math.round((meters / 1000) * 10) / 10;
+          const minutes = seconds > 0 ? Math.round(seconds / 60) : 0;
+          setFormData((prev) => ({
+            ...prev,
+            distance: km,
+            estimatedTime: minutes > 0 ? minutes : prev.estimatedTime,
+          }));
+        }
+      } catch (err: any) {
+        if (err?.name === "AbortError") return;
+      } finally {
       if (routeCalcAbortRef.current === controller) {
         setRouteCalcLoading(false);
       }
     }
-  }, [formData.endLocation, formData.startLocation, getAccessToken, googleRegion]);
+  }, [formData.endLocation, formData.startLocation, formData.waypoints, getAccessToken, googleRegion]);
 
   useEffect(() => {
     if (!createModalOpen) return;
     const origin = formData.startLocation.trim();
     const destination = formData.endLocation.trim();
     if (!origin || !destination) return;
+
+     const waypoints = (Array.isArray(formData.waypoints) ? formData.waypoints : []).map((w) => w.trim()).filter(Boolean);
+     if (origin === destination && waypoints.length === 0) return;
 
     const timeout = window.setTimeout(() => {
       void calculateRoute();
@@ -148,7 +162,7 @@ export default function AdvancedRoutes() {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [calculateRoute, createModalOpen, formData.endLocation, formData.startLocation]);
+  }, [calculateRoute, createModalOpen, formData.endLocation, formData.startLocation, formData.waypoints]);
 
   useEffect(() => {
     if (createModalOpen) return;
@@ -180,12 +194,16 @@ export default function AdvancedRoutes() {
     name: row.name,
     category: row.category,
     startLocation: row.start_location ?? "",
+    waypoints: Array.isArray(row.waypoints) ? row.waypoints.filter((w) => typeof w === "string") : [],
     endLocation: row.end_location ?? "",
     distance: Number(row.distance_km ?? 0),
     estimatedTime: Number(row.estimated_time_min ?? 0),
     description: row.description ?? "",
     uses: Number(row.uses ?? 0),
   });
+
+  const ROUTE_TEMPLATE_SELECT =
+    "id, user_id, name, category, start_location, waypoints, end_location, distance_km, estimated_time_min, description, uses, created_at";
 
   useEffect(() => {
     let mounted = true;
@@ -196,11 +214,11 @@ export default function AdvancedRoutes() {
         return;
       }
 
-      setLoading(true);
+        setLoading(true);
       try {
         const { data, error } = await supabase
           .from("route_templates")
-          .select("id, user_id, name, category, start_location, end_location, distance_km, estimated_time_min, description, uses, created_at")
+          .select(ROUTE_TEMPLATE_SELECT)
           .order("created_at", { ascending: false });
 
         if (error) throw error;
@@ -234,6 +252,7 @@ export default function AdvancedRoutes() {
       name: "",
       category: "business",
       startLocation: "",
+      waypoints: [],
       endLocation: "",
       distance: 0,
       estimatedTime: 0,
@@ -249,7 +268,16 @@ export default function AdvancedRoutes() {
 
   const openCreateModal = () => {
     setEditingTemplateId(null);
-    resetForm();
+    setFormData({
+      name: "",
+      category: "business",
+      startLocation: baseLocation,
+      waypoints: [],
+      endLocation: baseLocation,
+      distance: 0,
+      estimatedTime: 0,
+      description: "",
+    });
     setCreateModalOpen(true);
   };
 
@@ -259,6 +287,7 @@ export default function AdvancedRoutes() {
       name: template.name,
       category: template.category,
       startLocation: template.startLocation,
+      waypoints: Array.isArray(template.waypoints) ? template.waypoints : [],
       endLocation: template.endLocation,
       distance: template.distance,
       estimatedTime: template.estimatedTime,
@@ -279,14 +308,23 @@ export default function AdvancedRoutes() {
       return;
     }
 
+    const startLocation = formData.startLocation.trim();
+    const endLocation = formData.endLocation.trim();
+    const waypoints = (Array.isArray(formData.waypoints) ? formData.waypoints : []).map((w) => w.trim()).filter(Boolean);
+    if (waypoints.length > 8) {
+      toast.error("Máximo 8 paradas intermedias");
+      return;
+    }
+
     setLoading(true);
     try {
       if (editingTemplateId) {
         const payload = {
           name,
           category: formData.category,
-          start_location: formData.startLocation || null,
-          end_location: formData.endLocation || null,
+          start_location: startLocation || null,
+          waypoints,
+          end_location: endLocation || null,
           distance_km: Number.isFinite(Number(formData.distance)) ? Number(formData.distance) : 0,
           estimated_time_min: Number.isFinite(Number(formData.estimatedTime)) ? Number(formData.estimatedTime) : 0,
           description: formData.description || null,
@@ -297,7 +335,7 @@ export default function AdvancedRoutes() {
           .from("route_templates")
           .update(payload)
           .eq("id", editingTemplateId)
-          .select("id, user_id, name, category, start_location, end_location, distance_km, estimated_time_min, description, uses, created_at")
+          .select(ROUTE_TEMPLATE_SELECT)
           .maybeSingle();
 
         if (error) throw error;
@@ -312,8 +350,9 @@ export default function AdvancedRoutes() {
           user_id: user.id,
           name,
           category: formData.category,
-          start_location: formData.startLocation || null,
-          end_location: formData.endLocation || null,
+          start_location: startLocation || null,
+          waypoints,
+          end_location: endLocation || null,
           distance_km: Number.isFinite(Number(formData.distance)) ? Number(formData.distance) : 0,
           estimated_time_min: Number.isFinite(Number(formData.estimatedTime)) ? Number(formData.estimatedTime) : 0,
           description: formData.description || null,
@@ -323,7 +362,7 @@ export default function AdvancedRoutes() {
         const { data, error } = await supabase
           .from("route_templates")
           .insert(payload)
-          .select("id, user_id, name, category, start_location, end_location, distance_km, estimated_time_min, description, uses, created_at")
+          .select(ROUTE_TEMPLATE_SELECT)
           .maybeSingle();
 
         if (error) throw error;
@@ -359,6 +398,7 @@ export default function AdvancedRoutes() {
   const handleUseTemplate = (template: RouteTemplate) => {
     const origin = (template.startLocation ?? "").trim();
     const destination = (template.endLocation ?? "").trim();
+    const waypoints = (Array.isArray(template.waypoints) ? template.waypoints : []).map((w) => (w ?? "").trim()).filter(Boolean);
 
     if (!origin || !destination) {
       toast.error("La plantilla necesita origen y destino");
@@ -370,7 +410,7 @@ export default function AdvancedRoutes() {
     navigate("/trips", {
       state: {
         tripPrefill: {
-          route: [origin, destination],
+          route: [origin, ...waypoints, destination],
           distance: Number(template.distance) || 0,
           purpose: template.description || "",
         },
@@ -394,7 +434,7 @@ export default function AdvancedRoutes() {
               </p>
             </div>
           </div>
-          <Button variant="add" onClick={() => setCreateModalOpen(true)} className="shrink-0">
+          <Button variant="add" onClick={openCreateModal} className="shrink-0">
             <Plus className="w-4 h-4 mr-2" />
             {t("advancedRoutes.createTemplate")}
           </Button>
@@ -525,29 +565,94 @@ export default function AdvancedRoutes() {
             {/* Detalles de ruta */}
             <div className="space-y-4">
               <h3 className="text-sm font-medium">{t("advancedRoutes.routeDetails")}</h3>
+
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between">
+                  <Label>{t("tripModal.route")}</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      if ((formData.waypoints?.length ?? 0) >= 8) {
+                        toast.error("Máximo 8 paradas intermedias");
+                        return;
+                      }
+                      setFormData((prev) => ({ ...prev, waypoints: [...(prev.waypoints ?? []), ""] }));
+                    }}
+                    className="h-7 text-xs"
+                    disabled={loading}
+                  >
+                    <Plus className="w-3 h-3 mr-1" />
+                    {t("tripModal.addStop")}
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">{t("tripModal.origin")}</Label>
+                    <AddressAutocompleteInput
+                      value={formData.startLocation}
+                      onCommit={(value) => setFormData((prev) => ({ ...prev, startLocation: value }))}
+                      placeholder={baseLocation || t("tripModal.originPlaceholder")}
+                      disabled={loading}
+                      className="bg-secondary/50"
+                      country={profile.country}
+                    />
+                  </div>
+
+                  {(formData.waypoints ?? []).map((waypoint, index) => (
+                    <div key={`waypoint-${index}`} className="flex items-start gap-2">
+                      <div className="flex-1 space-y-2">
+                        <Label className="text-xs text-muted-foreground">{`${t("tripModal.stop")} ${index + 1}`}</Label>
+                        <AddressAutocompleteInput
+                          value={waypoint}
+                          onCommit={(value) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              waypoints: (prev.waypoints ?? []).map((w, i) => (i === index ? value : w)),
+                            }))
+                          }
+                          placeholder={t("tripModal.stopPlaceholder")}
+                          disabled={loading}
+                          className="bg-secondary/50"
+                          country={profile.country}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="mt-6 h-9 w-9 shrink-0 text-destructive hover:bg-destructive/10"
+                        onClick={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            waypoints: (prev.waypoints ?? []).filter((_, i) => i !== index),
+                          }))
+                        }
+                        disabled={loading}
+                        title="Eliminar parada"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">{t("tripModal.destination")}</Label>
+                    <AddressAutocompleteInput
+                      value={formData.endLocation}
+                      onCommit={(value) => setFormData((prev) => ({ ...prev, endLocation: value }))}
+                      placeholder={baseLocation || t("tripModal.destinationPlaceholder")}
+                      disabled={loading}
+                      className="bg-secondary/50"
+                      country={profile.country}
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="startLocation">{t("advancedRoutes.startLocation")}</Label>
-                  <AddressAutocompleteInput
-                    value={formData.startLocation}
-                    onCommit={(value) => setFormData((prev) => ({ ...prev, startLocation: value }))}
-                    placeholder={t("tripModal.originPlaceholder")}
-                    disabled={loading}
-                    className="bg-secondary/50"
-                    country={profile.country}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="endLocation">{t("advancedRoutes.endLocation")}</Label>
-                  <AddressAutocompleteInput
-                    value={formData.endLocation}
-                    onCommit={(value) => setFormData((prev) => ({ ...prev, endLocation: value }))}
-                    placeholder={t("tripModal.destinationPlaceholder")}
-                    disabled={loading}
-                    className="bg-secondary/50"
-                    country={profile.country}
-                  />
-                </div>
                 <div className="space-y-2">
                   <Label htmlFor="distance">{t("advancedRoutes.distanceKm")}</Label>
                   <div className="flex items-center gap-2">
