@@ -110,6 +110,7 @@ export default async function handler(req: any, res: any) {
     key,
     mode: "driving",
     units: "metric",
+    departure_time: "now",
   });
   const derivedLanguage = languageForRegion(region);
   if (derivedLanguage) params.set("language", derivedLanguage);
@@ -141,6 +142,7 @@ export default async function handler(req: any, res: any) {
         endLocation: leg?.end_location,
         distanceMeters: typeof leg?.distance?.value === "number" ? leg.distance.value : null,
         durationSeconds: typeof leg?.duration?.value === "number" ? leg.duration.value : null,
+        durationInTrafficSeconds: typeof leg?.duration_in_traffic?.value === "number" ? leg.duration_in_traffic.value : null,
       }))
     : [];
 

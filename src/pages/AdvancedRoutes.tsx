@@ -118,14 +118,18 @@ export default function AdvancedRoutes() {
 
       const data = (await response.json().catch(() => null)) as {
         totalDistanceMeters?: number;
-        legs?: Array<{ durationSeconds?: number | null } | null>;
+        legs?: Array<{ durationSeconds?: number | null; durationInTrafficSeconds?: number | null } | null>;
       } | null;
 
       if (!response.ok || !data) return;
 
         const meters = typeof data.totalDistanceMeters === "number" ? data.totalDistanceMeters : null;
         const seconds = Array.isArray(data.legs)
-          ? data.legs.reduce((acc, leg) => acc + (typeof leg?.durationSeconds === "number" ? leg.durationSeconds : 0), 0)
+          ? data.legs.reduce((acc, leg) => {
+              if (typeof leg?.durationInTrafficSeconds === "number") return acc + leg.durationInTrafficSeconds;
+              if (typeof leg?.durationSeconds === "number") return acc + leg.durationSeconds;
+              return acc;
+            }, 0)
           : 0;
 
         if (meters != null) {
