@@ -417,6 +417,7 @@ export default function AdvancedRoutes() {
           route: [origin, ...waypoints, destination],
           distance: Number(template.distance) || 0,
           purpose: template.description || "",
+          project: template.name,
         },
       },
     });
