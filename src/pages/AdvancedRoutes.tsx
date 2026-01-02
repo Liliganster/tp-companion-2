@@ -272,6 +272,28 @@ export default function AdvancedRoutes() {
     }
   };
 
+  const handleUseTemplate = (template: RouteTemplate) => {
+    const origin = (template.startLocation ?? "").trim();
+    const destination = (template.endLocation ?? "").trim();
+
+    if (!origin || !destination) {
+      toast.error("La plantilla necesita origen y destino");
+      return;
+    }
+
+    void bumpUses(template);
+
+    navigate("/trips", {
+      state: {
+        tripPrefill: {
+          route: [origin, destination],
+          distance: Number(template.distance) || 0,
+          purpose: template.description || "",
+        },
+      },
+    });
+  };
+
   return (
     <MainLayout>
       <div className="max-w-7xl mx-auto space-y-6">
@@ -346,7 +368,7 @@ export default function AdvancedRoutes() {
                   <Button variant="outline" size="sm" onClick={() => openEditModal(template)} disabled={loading}>
                     Editar
                   </Button>
-                  <Button size="sm" onClick={() => bumpUses(template)} disabled={loading}>
+                  <Button size="sm" onClick={() => handleUseTemplate(template)} disabled={loading}>
                     Usar
                   </Button>
                 </div>

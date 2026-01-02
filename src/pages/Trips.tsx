@@ -21,6 +21,7 @@ import { useI18n } from "@/hooks/use-i18n";
 import { useAuth } from "@/contexts/AuthContext";
 import { calculateTripEmissions } from "@/lib/emissions";
 import { supabase } from "@/lib/supabaseClient";
+import { useLocation, useNavigate } from "react-router-dom";
 
 // CO2 is calculated from user profile vehicle settings when saving a trip.
 const mockTripsData: Trip[] = [{
@@ -74,6 +75,8 @@ export default function Trips() {
   const { profile } = useUserProfile();
   const { t, tf, locale } = useI18n();
   const { getAccessToken } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const emissionsInput = useMemo(() => {
     return {
@@ -106,6 +109,13 @@ export default function Trips() {
   const [selectedYear, setSelectedYear] = useState(
     () => loadTripsFilters()?.selectedYear ?? new Date().getFullYear().toString()
   );
+  const [tripPrefill, setTripPrefill] = useState<{
+    route?: string[];
+    distance?: number;
+    purpose?: string;
+    project?: string;
+  } | null>(null);
+  const [prefillModalOpen, setPrefillModalOpen] = useState(false);
   // ... imports
   const { trips, addTrip, updateTrip, deleteTrip } = useTrips();
   // removed setProjects
@@ -122,6 +132,18 @@ export default function Trips() {
   const [invoiceJobsById, setInvoiceJobsById] = useState<Record<string, { status?: string; needs_review_reason?: string }>>(
     {},
   );
+
+  useEffect(() => {
+    const state = location.state as any;
+    const next = state?.tripPrefill;
+    if (!next || typeof next !== "object") return;
+
+    setTripPrefill(next);
+    setPrefillModalOpen(true);
+
+    // Clear navigation state so it doesn't reopen on refresh/back.
+    navigate(location.pathname + location.search, { replace: true, state: null });
+  }, [location.pathname, location.search, location.state, navigate]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -850,6 +872,17 @@ export default function Trips() {
           </span>
         </div>
       </div>
+
+      <AddTripModal
+        open={prefillModalOpen}
+        onOpenChange={(open) => {
+          setPrefillModalOpen(open);
+          if (!open) setTripPrefill(null);
+        }}
+        prefill={tripPrefill}
+        onSave={handleSaveTrip}
+        previousDestination={addPreviousDestination}
+      />
 
       {/* Trip Detail Modal */}
       <TripDetailModal trip={selectedTrip} open={detailModalOpen} onOpenChange={setDetailModalOpen} />

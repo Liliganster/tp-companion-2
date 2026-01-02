@@ -365,19 +365,21 @@ interface TripData {
 interface AddTripModalProps {
   trigger?: React.ReactNode;
   trip?: TripData | null;
+  prefill?: Partial<TripData> | null;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   previousDestination?: string;
   onSave?: (trip: Required<Pick<TripData, "id" | "date" | "route" | "project" | "purpose" | "passengers" | "distance">> & Pick<TripData, "ratePerKmOverride" | "specialOrigin" | "projectId">) => void;
 }
 
-export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestination, onSave }: AddTripModalProps) {
+export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previousDestination, onSave }: AddTripModalProps) {
   const { profile } = useUserProfile();
   const { getAccessToken } = useAuth();
   const { projects, addProject } = useProjects();
   const { trips } = useTrips();
   const { t, tf, locale } = useI18n();
   const isEditing = Boolean(trip);
+  const seedTrip = trip ?? prefill ?? null;
   const [projectOpen, setProjectOpen] = useState(false);
   const settingsRateLabel = useMemo(() => profile.ratePerKm, [profile.ratePerKm]);
 
@@ -534,23 +536,23 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
   );
 
   const getInitialStops = (): Stop[] => {
-    const defaultSpecialOrigin: TripData["specialOrigin"] = trip?.specialOrigin ?? "base";
+    const defaultSpecialOrigin: TripData["specialOrigin"] = seedTrip?.specialOrigin ?? "base";
 
-    const originDefault = defaultSpecialOrigin === "base" ? baseLocation : resolvePreviousDestinationForDate(trip?.date || "");
+    const originDefault = defaultSpecialOrigin === "base" ? baseLocation : resolvePreviousDestinationForDate(seedTrip?.date || "");
     const destinationDefault = baseLocation;
 
-    if (!trip) {
+    if (!seedTrip) {
       return [
         { id: "origin", value: "", type: "origin" },
         { id: "destination", value: "", type: "destination" },
       ];
     }
 
-    if (trip?.route && trip.route.length >= 2) {
-      return trip.route.map((rawValue, index) => {
+    if (seedTrip?.route && seedTrip.route.length >= 2) {
+      return seedTrip.route.map((rawValue, index) => {
         const trimmed = rawValue?.trim?.() ?? "";
         const isFirst = index === 0;
-        const isLast = index === trip.route!.length - 1;
+        const isLast = index === seedTrip.route!.length - 1;
 
         const value = isFirst
           ? defaultSpecialOrigin === "base"
@@ -666,19 +668,20 @@ export function AddTripModal({ trigger, trip, open, onOpenChange, previousDestin
   useEffect(() => {
     if (!isOpen) return;
 
-    const defaultSpecialOrigin: TripData["specialOrigin"] = trip?.specialOrigin ?? "base";
+    const defaultSpecialOrigin: TripData["specialOrigin"] = seedTrip?.specialOrigin ?? "base";
 
     setStops(getInitialStops());
     stopDraftsRef.current = {};
     destinationBeforeReturnRef.current = null;
-    setDate(trip?.date || "");
-    setDistance(trip?.distance?.toString() || "");
-    setPassengers(trip?.passengers?.toString() || "");
-    setProject(trip?.project || "");
-    setPurpose(trip?.purpose || "");
+    setDate(seedTrip?.date || "");
+    setDistance(seedTrip?.distance?.toString() || "");
+    setPassengers(seedTrip?.passengers?.toString() || "");
+    setProject(seedTrip?.project || "");
+    setPurpose(seedTrip?.purpose || "");
     setSpecialOrigin(defaultSpecialOrigin || "base");
-    setTripRate(trip?.ratePerKmOverride != null ? formatLocaleNumber(trip.ratePerKmOverride) : "");
-  }, [isOpen, trip, baseLocation, resolvePreviousDestinationForDate]);
+    const rateOverride = seedTrip?.ratePerKmOverride;
+    setTripRate(rateOverride != null ? formatLocaleNumber(rateOverride) : "");
+  }, [isOpen, trip, prefill, baseLocation, resolvePreviousDestinationForDate]);
 
   const handleStopDraftChange = useCallback((id: string, value: string) => {
     stopDraftsRef.current[id] = value;
