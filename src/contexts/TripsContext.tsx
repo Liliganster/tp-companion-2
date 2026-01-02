@@ -252,7 +252,31 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         : calculateTripEmissions({ distanceKm: trip.distance, ...emissionsInput }).co2Kg,
     };
 
+    const callsheetJobId = String(normalizedTrip.callsheet_job_id ?? "").trim();
     const prevTrips = (queryClient.getQueryData<Trip[]>(queryKey) ?? []) as Trip[];
+
+    if (callsheetJobId) {
+      const cached = prevTrips.find((t) => String(t.callsheet_job_id ?? "").trim() === callsheetJobId);
+      if (cached) return true;
+
+      try {
+        const { data, error } = await supabase
+          .from("trips")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("callsheet_job_id", callsheetJobId)
+          .limit(1)
+          .maybeSingle();
+
+        if (!error && data?.id) {
+          queryClient.invalidateQueries({ queryKey }).catch(() => null);
+          return true;
+        }
+      } catch {
+        // ignore and continue with insert
+      }
+    }
+
     queryClient.setQueryData<Trip[]>(queryKey, [normalizedTrip, ...prevTrips]);
 
     const dbPayload = {
@@ -286,6 +310,16 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       return false;
     } else {
         console.log("[TripsContext] Trip saved successfully");
+        if (callsheetJobId && normalizedTrip.projectId) {
+          try {
+            await supabase
+              .from("callsheet_jobs")
+              .update({ project_id: normalizedTrip.projectId })
+              .eq("id", callsheetJobId);
+          } catch {
+            // ignore
+          }
+        }
         queryClient.invalidateQueries({ queryKey }).catch(() => null);
         return true;
     }
@@ -346,6 +380,23 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         toast.error(formatSupabaseError(error, "Error actualizando viaje"));
         queryClient.invalidateQueries({ queryKey }).catch(() => null);
         return false;
+      }
+    }
+
+    if (patch.projectId !== undefined) {
+      const nextProjectId = patch.projectId;
+      const currentTrips = (queryClient.getQueryData<Trip[]>(queryKey) ?? []) as Trip[];
+      const existingTrip = currentTrips.find((t) => t.id === id) ?? null;
+      const jobId = String(patch.callsheet_job_id ?? existingTrip?.callsheet_job_id ?? "").trim();
+      if (jobId) {
+        try {
+          await supabase
+            .from("callsheet_jobs")
+            .update({ project_id: nextProjectId ?? null })
+            .eq("id", jobId);
+        } catch {
+          // ignore
+        }
       }
     }
     return true;

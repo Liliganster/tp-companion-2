@@ -132,6 +132,7 @@ export async function cascadeDeleteTripById(supabase: SupabaseClient, tripId: st
   }
 
   const projectId = tripRow?.project_id || null;
+  const callsheetJobId = typeof tripRow?.callsheet_job_id === "string" ? String(tripRow.callsheet_job_id).trim() : "";
   const docs: AnyRow[] = Array.isArray(tripRow?.documents) ? (tripRow as AnyRow).documents : [];
 
   const callsheetPaths = uniqStrings(
@@ -143,6 +144,54 @@ export async function cascadeDeleteTripById(supabase: SupabaseClient, tripId: st
         return "";
       }),
   );
+
+  // If multiple trips reference the same callsheet job (e.g., due to a previous duplicate bug),
+  // don't delete the underlying job/file until the last referencing trip is removed.
+  let callsheetPathsToDelete = callsheetPaths;
+  if (callsheetJobId) {
+    let callsheetJobPath = "";
+    try {
+      const { data, error: jobFetchError } = await supabase
+        .from("callsheet_jobs")
+        .select("storage_path")
+        .eq("id", callsheetJobId)
+        .maybeSingle();
+
+      if (!jobFetchError) {
+        callsheetJobPath = String((data as AnyRow | null)?.storage_path ?? "").trim();
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const { count, error: countError } = await supabase
+        .from("trips")
+        .select("id", { count: "exact", head: true })
+        .eq("callsheet_job_id", callsheetJobId)
+        .neq("id", tripId);
+
+      if (!countError && typeof count === "number") {
+        if (count > 0) {
+          if (callsheetJobPath) {
+            callsheetPathsToDelete = callsheetPathsToDelete.filter((p) => p !== callsheetJobPath);
+          }
+        } else if (count === 0) {
+          try {
+            await cascadeDeleteCallsheetJobById(supabase, callsheetJobId);
+          } catch {
+            // ignore and continue with path-based cleanup below
+          }
+
+          if (callsheetJobPath) {
+            callsheetPathsToDelete = callsheetPathsToDelete.filter((p) => p !== callsheetJobPath);
+          }
+        }
+      }
+    } catch {
+      // ignore and keep existing deletion behaviour
+    }
+  }
 
   const projectDocumentPaths = uniqStrings(
     docs
@@ -177,13 +226,13 @@ export async function cascadeDeleteTripById(supabase: SupabaseClient, tripId: st
   }
 
   // 4) Delete associated callsheet files/jobs (if any)
-  if (callsheetPaths.length > 0) {
-    await bestEffortRemoveFromBucket(supabase, "callsheets", callsheetPaths);
+  if (callsheetPathsToDelete.length > 0) {
+    await bestEffortRemoveFromBucket(supabase, "callsheets", callsheetPathsToDelete);
 
     const { error: jobsDeleteError } = await supabase
       .from("callsheet_jobs")
       .delete()
-      .in("storage_path", callsheetPaths);
+      .in("storage_path", callsheetPathsToDelete);
 
     if (jobsDeleteError) throw jobsDeleteError;
   }

@@ -319,11 +319,32 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   useEffect(() => {
     if (open && project?.name) {
       const fetchCallSheets = async () => {
+        const tripJobIdsForProject = Array.from(
+          new Set(
+            (trips ?? [])
+              .filter((tr) => String((tr as any)?.projectId ?? "") === project.id)
+              .map((tr) => String((tr as any)?.callsheet_job_id ?? "").trim())
+              .filter(Boolean),
+          ),
+        );
+
         // 1. Fetch by Project ID (Manual uploads linked to project)
         const { data: jobs, error: jobsError } = await supabase
             .from("callsheet_jobs")
             .select("id, storage_path, created_at, status, needs_review_reason")
             .eq("project_id", project.id);
+
+        // 1b) Fetch by trips (callsheets uploaded/created from Trips view)
+        // Jobs created from the Trips flow may not have project_id set, so we include them explicitly.
+        let tripJobs: any[] | null = null;
+        if (tripJobIdsForProject.length > 0) {
+          const { data, error } = await supabase
+            .from("callsheet_jobs")
+            .select("id, storage_path, created_at, status, needs_review_reason")
+            .in("id", tripJobIdsForProject);
+          if (error) console.warn("Error fetching callsheet jobs referenced by trips:", error);
+          tripJobs = (data ?? []) as any[];
+        }
             
         // 2. Fetch by Project Name (Legacy/Extracted results)
         let results: any[] | null = null;
@@ -371,6 +392,27 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                     });
                 }
             });
+        }
+
+        // Process jobs referenced by saved trips (Trips view)
+        if (tripJobs) {
+          tripJobs.forEach((job: any) => {
+            if (!job?.id) return;
+            if (seenIds.has(job.id)) return;
+            seenIds.add(job.id);
+
+            const path = job.storage_path || "Unknown";
+            const name = path.split("/").pop() || path;
+            allDocs.push({
+              id: job.id,
+              name: name,
+              type: "call-sheet",
+              status: job.status,
+              created_at: job.created_at,
+              storage_path: job.storage_path,
+              needs_review_reason: job.needs_review_reason,
+            });
+          });
         }
 
         // Process results (extracted)
@@ -575,7 +617,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         setRealCallSheets([]);
         setProjectDocs([]);
     }
-  }, [open, project?.name, project?.id, refreshTrigger]);
+  }, [open, project?.name, project?.id, refreshTrigger, trips]);
 
   // Keep project invoices/documents list fresh when uploads/deletes happen elsewhere (trip modal, cost analysis, etc).
   useEffect(() => {

@@ -37,6 +37,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
     setUploading(true);
     let successCount = 0;
     let failCount = 0;
+    let reusedCount = 0;
     const queuedJobIds: string[] = [];
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -76,6 +77,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
               }
             }
 
+            reusedCount += 1;
             successCount += 1;
             onJobCreated?.(existingId);
             continue;
@@ -131,6 +133,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
       }
 
       if (successCount > 0) toast.success(`Se subieron ${successCount} documentos`);
+      if (reusedCount > 0) toast.info(`Se reutilizaron ${reusedCount} documento(s) ya subido(s)`);
       if (failCount > 0) toast.error(`Fallaron ${failCount} documentos`);
 
       // Best-effort: kick the worker once so users don't have to wait for cron/manual trigger.

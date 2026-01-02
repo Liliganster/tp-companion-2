@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useProjects } from "@/contexts/ProjectsContext";
+import { useTrips } from "@/contexts/TripsContext";
 import { uuidv4 } from "@/lib/utils";
 import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
 import { useAuth } from "@/contexts/AuthContext";
@@ -91,6 +92,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const { getAccessToken } = useAuth();
   const { profile } = useUserProfile();
   const { projects, addProject } = useProjects();
+  const { trips } = useTrips();
 
   // Reset state when modal closes or tab changes
   useEffect(() => {
@@ -669,6 +671,22 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       if (successCount > 0) toast.success(tf("bulk.toastUploadedDocs", { count: successCount }));
       if (reusedCount > 0) toast.info(`Se reutilizaron ${reusedCount} documento(s) ya subido(s)`);
       if (failCount > 0) toast.error(tf("bulk.toastFailedDocs", { count: failCount }));
+
+      const existingTripJobIds = new Set<string>(
+        (trips ?? []).map((tr) => String((tr as any)?.callsheet_job_id ?? "").trim()).filter(Boolean),
+      );
+      const alreadySaved: Record<string, boolean> = {};
+      let alreadySavedCount = 0;
+      for (const id of createdJobIds) {
+        if (existingTripJobIds.has(id)) {
+          alreadySaved[id] = true;
+          alreadySavedCount += 1;
+        }
+      }
+      if (alreadySavedCount > 0) {
+        setSavedByJobId(alreadySaved);
+        toast.info(`Ya hay ${alreadySavedCount} documento(s) guardado(s). No se duplicarán.`);
+      }
 
       setJobIds(createdJobIds);
       setJobMetaById(metaById);

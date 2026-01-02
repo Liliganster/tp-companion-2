@@ -138,6 +138,37 @@ export default function Projects() {
           if (!callsheetPathsByProjectId[pid]) callsheetPathsByProjectId[pid] = new Set();
           callsheetPathsByProjectId[pid].add(path);
         });
+
+        // 1b) Callsheets referenced by trips (uploads done from the Trips flow)
+        // Those jobs can have project_id = null, so we include them based on trips.projectId + callsheet_job_id.
+        const tripJobToProjectId = new Map<string, string>();
+        for (const trip of trips ?? []) {
+          const pid = String((trip as any)?.projectId ?? "").trim();
+          const jobId = String((trip as any)?.callsheet_job_id ?? "").trim();
+          if (!pid || !jobId) continue;
+          if (!tripJobToProjectId.has(jobId)) tripJobToProjectId.set(jobId, pid);
+        }
+
+        const tripJobIds = Array.from(tripJobToProjectId.keys());
+        if (tripJobIds.length > 0) {
+          const { data: tripJobs, error: tripJobsError } = await supabase
+            .from("callsheet_jobs")
+            .select("id, project_id, storage_path")
+            .in("id", tripJobIds);
+
+          if (tripJobsError) {
+            console.warn("Error fetching callsheets referenced by trips:", tripJobsError);
+          }
+
+          (tripJobs ?? []).forEach((job: any) => {
+            const jobId = String(job?.id ?? "").trim();
+            const path = (job?.storage_path ?? "").toString().trim();
+            const pid = String(job?.project_id ?? tripJobToProjectId.get(jobId) ?? "").trim();
+            if (!jobId || !pid || !path || path === "pending") return;
+            if (!callsheetPathsByProjectId[pid]) callsheetPathsByProjectId[pid] = new Set();
+            callsheetPathsByProjectId[pid].add(path);
+          });
+        }
         
         // 2) Project invoices by project_id
         const { data: invoices } = await supabase.from("project_documents").select("project_id");
@@ -192,9 +223,9 @@ export default function Projects() {
              setProjectInvoiceCountsByKey(invoiceCountsByKey);
         }
     };
-    
+     
     fetchCounts();
-  }, [projects]);
+  }, [projects, trips]);
 
 
   const statsByProjectKey = useMemo(() => {
