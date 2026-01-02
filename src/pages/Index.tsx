@@ -202,12 +202,12 @@ export default function Index() {
       status === "success" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
       status === "warning" ? "bg-amber-500/10 text-amber-500 border-amber-500/20" :
       status === "destructive" ? "bg-red-500/10 text-red-500 border-red-500/20" :
-      "bg-secondary/50 text-muted-foreground"
+      "bg-white/5 text-zinc-300 border-white/10"
     }`}>
       <span className="font-medium">{label}</span>
       <div className="flex items-center gap-1.5">
         {Icon && <Icon className="w-3 h-3" />}
-        <span className="font-bold tabular-nums">{value}</span>
+        <span className="font-bold tabular-nums text-white">{value}</span>
       </div>
     </div>
   );
@@ -273,6 +273,7 @@ export default function Index() {
             iconWrapperClassName={kpiTitleWrapperClassName}
             hideTitle
             variant="accent"
+            valueClassName="text-white"
             action={<Link to="/projects" className="text-xs text-primary hover:underline">{t("dashboard.viewProjects")}</Link>}
           />
 
