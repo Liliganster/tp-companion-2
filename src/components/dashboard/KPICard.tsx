@@ -4,7 +4,7 @@ import { ArrowUp, ArrowDown } from "lucide-react";
 
 interface KPICardProps {
   title: string;
-  value: string | number;
+  value: ReactNode;
   subtitle?: string;
   icon: ReactNode;
   iconWrapperClassName?: string;

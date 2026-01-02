@@ -5,7 +5,7 @@ import { NotificationDropdown } from "@/components/dashboard/NotificationDropdow
 import { RecentTrips } from "@/components/dashboard/RecentTrips";
 import { ProjectChart } from "@/components/dashboard/ProjectChart";
 import { Button } from "@/components/ui/button";
-import { ArrowDown, ArrowUp, Plus, Settings, Sparkles } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Settings, Sparkles, Check, AlertCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useProjects } from "@/contexts/ProjectsContext";
@@ -189,53 +189,28 @@ export default function Index() {
     const co2TrendPositive = co2TrendValue >= 0;
     const Co2TrendIcon = co2TrendPositive ? ArrowUp : ArrowDown;
     const co2TrendColor = co2TrendPositive ? "text-success" : "text-destructive";
-  const co2RatingColor =
-    co2Rating === "A"
-      ? "text-success"
-      : co2Rating === "B"
-        ? "text-emerald-500"
-        : co2Rating === "C"
-          ? "text-amber-500"
-          : "text-destructive";
-  const bubbleBaseClassName =
-    "relative h-20 w-20 rounded-full glass overflow-hidden flex items-center justify-center backdrop-blur-xl backdrop-saturate-150 ring-1 ring-white/10";
-  const bubbleValueClassName =
-    "relative text-[44px] font-extrabold leading-none tracking-tight whitespace-nowrap";
-  const bubbleValueClassNameSmall =
-    "relative text-[38px] font-extrabold leading-none tracking-tight whitespace-nowrap";
-
-  const getTintedBubbleStyle = (tint: string) =>
-    ({
-      background: `radial-gradient(circle at 30% 25%, rgba(${tint},0.45), rgba(${tint},0.12) 45%, rgba(0,0,0,0) 72%),
-        radial-gradient(circle at 70% 75%, rgba(255,255,255,0.22), rgba(255,255,255,0) 62%),
-        rgba(255,255,255,0.04)`,
-      border: "1px solid rgba(255,255,255,0.18)",
-      boxShadow: `0 14px 34px rgba(0,0,0,0.28),
-        inset 0 0 26px rgba(${tint},0.22),
-        0 0 18px rgba(${tint},0.18)`,
-    }) as const;
-
-  const distanceBubbleTint = "34,197,94";
-  const distanceBubbleStyle = getTintedBubbleStyle(distanceBubbleTint);
 
   const distanceTrendValue = percentageChange(kmThisMonth, kmPrevMonth);
-  const distanceTrendLabel = t("dashboard.thisMonthVsPrevious");
   const distanceTrendPositive = distanceTrendValue >= 0;
-  const distanceTrendTextColor = distanceTrendPositive ? "text-success" : "text-destructive";
 
-  const co2BubbleTint =
-    co2Rating === "A"
-      ? "34,197,94"
-      : co2Rating === "B"
-        ? "16,185,129"
-        : co2Rating === "C"
-          ? "245,158,11"
-          : "239,68,68";
-
-  const co2BubbleStyle = getTintedBubbleStyle(co2BubbleTint);
   const aiQuotaText = aiQuotaLoading ? "…" : aiUsedThisMonth == null ? `—/${aiLimit}` : `${aiUsedThisMonth}/${aiLimit}`;
   const aiQuotaTextColor =
     aiUsedThisMonth != null && aiUsedThisMonth >= aiLimit ? "text-amber-200" : "text-zinc-50";
+  /* New Card Design Helpers */
+  const StatusRow = ({ label, value, status = "neutral", icon: Icon }: { label: string, value: string, status?: "success" | "warning" | "destructive" | "neutral", icon?: any }) => (
+    <div className={`flex items-center justify-between text-xs px-2 py-1.5 rounded border border-transparent ${
+      status === "success" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
+      status === "warning" ? "bg-amber-500/10 text-amber-500 border-amber-500/20" :
+      status === "destructive" ? "bg-red-500/10 text-red-500 border-red-500/20" :
+      "bg-secondary/50 text-muted-foreground"
+    }`}>
+      <span className="font-medium">{label}</span>
+      <div className="flex items-center gap-1.5">
+        {Icon && <Icon className="w-3 h-3" />}
+        <span className="font-bold tabular-nums">{value}</span>
+      </div>
+    </div>
+  );
 
   return <MainLayout>
       <div className="max-w-7xl mx-auto space-y-6">
@@ -260,8 +235,6 @@ export default function Index() {
               </div>
               {/* Warnings Bell */}
               <NotificationDropdown />
-              {/* Action buttons */}
-              
             </div>
           </div>
         </div>
@@ -270,56 +243,77 @@ export default function Index() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <KPICard
             title="DISTANCIA TOTAL"
-            value={`${totalKm.toLocaleString(locale)} km`}
-            subtitle={undefined}
+            value={<div className="mt-1">
+              <div className="text-3xl font-bold text-white mb-3">{totalKm.toLocaleString(locale)} <span className="text-lg text-muted-foreground font-medium">km</span></div>
+              <div className="grid gap-2">
+                <StatusRow 
+                  label={t("dashboard.thisMonth")} 
+                  value={`${kmThisMonth.toLocaleString(locale)} km`} 
+                  status="neutral"
+                />
+                <StatusRow 
+                  label={t("dashboard.trend")} 
+                  value={`${Math.abs(distanceTrendValue)}%`} 
+                  status={distanceTrendPositive ? "success" : "destructive"}
+                  icon={distanceTrendPositive ? ArrowUp : ArrowDown}
+                />
+              </div>
+            </div>}
             icon={<div className={kpiTitleClassName}>{t("dashboard.totalDistance")}</div>}
             iconWrapperClassName={kpiTitleWrapperClassName}
             hideTitle
-            headerRight={<div className="absolute top-4 right-4 flex flex-col items-center text-center">
-              <div style={distanceBubbleStyle} className={bubbleBaseClassName}>
-                <div className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-br from-white/15 via-white/5 to-transparent" />
-                <div className="pointer-events-none absolute -top-3 -left-3 h-10 w-10 rounded-full bg-white/25 blur-xl" />
-                <div className={`${bubbleValueClassNameSmall} ${distanceTrendTextColor}`}>{Math.abs(distanceTrendValue)}%</div>
-              </div>
-              <div className="mt-2 text-[10px] leading-tight text-muted-foreground">{distanceTrendLabel}</div>
-            </div>}
             variant="primary"
-            valueGradient={false}
-            valueClassName="text-white"
-            action={<Link to="/trips" className="text-xs text-primary hover:underline">{t("dashboard.viewTrips")}</Link>}
+            action={<Link to="/trips" className="text-xs text-primary hover:underline mt-2 inline-block">{t("dashboard.viewTrips")}</Link>}
           />
+          
           <KPICard
             title="PROYECTOS ACTIVOS"
             value={dashboardProjects.length}
-            subtitle={undefined}
             icon={<div className={kpiTitleClassName}>{t("dashboard.activeProjects")}</div>}
             iconWrapperClassName={kpiTitleWrapperClassName}
             hideTitle
             variant="accent"
             action={<Link to="/projects" className="text-xs text-primary hover:underline">{t("dashboard.viewProjects")}</Link>}
           />
+
           <KPICard
             title={"EMISIONES CO\u2082"}
-            value={`${co2Kg.toLocaleString(locale)} kg`}
-            subtitle={undefined}
-             icon={<div className={kpiTitleClassName}>{t("dashboard.co2Emissions")}</div>}
-             hideTitle
-             iconWrapperClassName={kpiTitleWrapperClassName}
-             headerRight={<div className="absolute top-4 right-4 flex flex-col items-center text-center">
-               <div style={co2BubbleStyle} className={bubbleBaseClassName}>
-                 <div className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-br from-white/15 via-white/5 to-transparent" />
-                 <div className="pointer-events-none absolute -top-3 -left-3 h-10 w-10 rounded-full bg-white/25 blur-xl" />
-                 <div className={`${bubbleValueClassName} ${co2RatingColor}`}>{co2Rating}</div>
-               </div>
-               <div className={`mt-2 flex items-center gap-1 text-xs font-medium ${co2TrendColor}`}>
-                 <Co2TrendIcon className="h-3 w-3" />
-                 <span>{Math.abs(co2TrendValue)}%</span>
-               </div>
-               <div className="text-[10px] leading-tight text-muted-foreground mt-0.5">{t("dashboard.vsLastMonth")}</div>
-             </div>}
-             action={<Link to="/advanced/emissions" className="text-xs text-primary hover:underline">{t("dashboard.viewCo2")}</Link>}
-           />
-         </div>
+            icon={<div className={kpiTitleClassName}>{t("dashboard.co2Emissions")}</div>}
+            iconWrapperClassName={kpiTitleWrapperClassName}
+            hideTitle
+            headerRight={
+              <div className={`text-6xl font-black tracking-tighter ml-4 ${
+                co2Rating === "A" ? "text-emerald-500" :
+                co2Rating === "B" ? "text-emerald-400" :
+                co2Rating === "C" ? "text-amber-500" : "text-red-500"
+              }`}>
+                {co2Rating}
+              </div>
+            }
+            value={<div className="mt-1">
+              <div className="flex flex-col gap-2">
+                <StatusRow 
+                  label="Este Mes" 
+                  value={`${co2ThisMonth.toFixed(0)} kg`}
+                  status={co2Rating === "A" ? "success" : co2Rating === "B" || co2Rating === "C" ? "warning" : "destructive"}
+                />
+                 <StatusRow 
+                  label="Tendencia"
+                  value={`${Math.abs(co2TrendValue)}%`}
+                  status={co2TrendPositive ? "success" : "neutral"} 
+                  icon={co2TrendPositive ? ArrowUp : ArrowDown}
+                />
+                <StatusRow 
+                  label="Estado"
+                  value={co2Rating === "A" ? "Excelente" : co2Rating === "B" ? "Bueno" : "Mejorable"}
+                  status={co2Rating === "A" ? "success" : "neutral"}
+                  icon={co2Rating === "A" ? Check : AlertCircle}
+                />
+              </div>
+            </div>}
+            action={<Link to="/advanced/emissions" className="text-xs text-primary hover:underline mt-2 inline-block">{t("dashboard.viewCo2")}</Link>}
+          />
+        </div>
 
         {/* Main content grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
