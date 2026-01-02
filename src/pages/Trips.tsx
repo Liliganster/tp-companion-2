@@ -117,7 +117,16 @@ export default function Trips() {
   } | null>(null);
   const [prefillModalOpen, setPrefillModalOpen] = useState(false);
   // ... imports
+  const { projects } = useProjects();
   const { trips, addTrip, updateTrip, deleteTrip } = useTrips();
+
+  const uniqueProjects = useMemo(() => {
+    const fromTrips = new Set(trips.map((t) => t.project).filter(Boolean));
+    const fromProjects = new Set(projects.map((p) => p.name));
+    // Combine both sources
+    const all = new Set([...fromTrips, ...fromProjects]);
+    return Array.from(all).sort((a, b) => a.localeCompare(b));
+  }, [trips, projects]);
   // removed setProjects
   const [dateSort, setDateSort] = useState<"desc" | "asc">("desc");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -543,9 +552,11 @@ export default function Trips() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("trips.allProjects")}</SelectItem>
-              <SelectItem value="Film Production XY">Film Production XY</SelectItem>
-              <SelectItem value="Client ABC">Client ABC</SelectItem>
-              <SelectItem value="Internal">Internal</SelectItem>
+              {uniqueProjects.map((p) => (
+                <SelectItem key={p} value={p}>
+                  {p}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={selectedYear} onValueChange={setSelectedYear}>
