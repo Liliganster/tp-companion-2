@@ -328,6 +328,14 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           ),
         );
 
+        const tripJobToProjectId = new Map<string, string>();
+        for (const trip of trips ?? []) {
+          const pid = String((trip as any)?.projectId ?? "").trim();
+          const jobId = String((trip as any)?.callsheet_job_id ?? "").trim();
+          if (!pid || !jobId) continue;
+          if (!tripJobToProjectId.has(jobId)) tripJobToProjectId.set(jobId, pid);
+        }
+
         // 1. Fetch by Project ID (Manual uploads linked to project)
         const { data: jobs, error: jobsError } = await supabase
             .from("callsheet_jobs")
@@ -378,6 +386,9 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         // Process jobs (manual uploads)
         if (jobs) {
             jobs.forEach((job: any) => {
+                const jobId = String(job?.id ?? "").trim();
+                const tripProjectId = jobId ? tripJobToProjectId.get(jobId) : null;
+                if (tripProjectId && tripProjectId !== project.id) return;
                 if (!seenIds.has(job.id)) {
                     seenIds.add(job.id);
                     const path = job.storage_path || "Unknown";
@@ -419,6 +430,10 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         if (results) {
             results.forEach((item: any) => {
                 const job = item.callsheet_jobs;
+                const jobId = String(job?.id ?? "").trim();
+                const tripProjectId = jobId ? tripJobToProjectId.get(jobId) : null;
+                if (tripProjectId && tripProjectId !== project.id) return;
+
                 const jobProjectId =
                   resultsIncludeJobProjectId && job && typeof job.project_id === "string"
                     ? String(job.project_id)

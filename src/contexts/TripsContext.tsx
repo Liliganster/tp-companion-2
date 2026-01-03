@@ -363,6 +363,14 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       nextPatch.co2 = calculateTripEmissions({ distanceKm: patch.distance, ...emissionsInput }).co2Kg;
     }
 
+    // If the caller only passes projectId (common in some flows), keep the display name in sync too.
+    if (patch.projectId && patch.project === undefined) {
+      const cachedProjects = (queryClient.getQueryData(["projects", user.id]) ?? []) as Array<any>;
+      const match = cachedProjects.find((p) => String(p?.id ?? "").trim() === String(patch.projectId).trim());
+      const name = typeof match?.name === "string" ? match.name.trim() : "";
+      if (name) nextPatch.project = name;
+    }
+
     if (nextPatch.date !== undefined || nextPatch.distance !== undefined || nextPatch.passengers !== undefined || nextPatch.projectId !== undefined) {
       const candidate = {
         id,
@@ -463,6 +471,46 @@ export function TripsProvider({ children }: { children: ReactNode }) {
             .eq("id", jobId);
         } catch {
           // ignore
+        }
+      }
+
+      // Keep invoice jobs/documents consistent with the trip's project when the user moves a trip.
+      try {
+        await supabase.from("invoice_jobs").update({ project_id: nextProjectId ?? null }).eq("trip_id", id);
+      } catch {
+        // ignore
+      }
+
+      const nextProjectIdStr = typeof nextProjectId === "string" ? nextProjectId.trim() : "";
+      if (nextProjectIdStr) {
+        const invoiceJobIds = new Set<string>();
+        const primaryInvoiceJobId = String(existingTrip?.invoiceJobId ?? "").trim();
+        if (primaryInvoiceJobId) invoiceJobIds.add(primaryInvoiceJobId);
+        for (const doc of existingTrip?.documents ?? []) {
+          const jid = String((doc as any)?.invoiceJobId ?? "").trim();
+          if (jid) invoiceJobIds.add(jid);
+        }
+
+        const invoiceJobIdList = Array.from(invoiceJobIds);
+        if (invoiceJobIdList.length > 0) {
+          try {
+            await supabase.from("project_documents").update({ project_id: nextProjectIdStr }).in("invoice_job_id", invoiceJobIdList);
+          } catch {
+            // ignore
+          }
+        }
+
+        const projectDocumentPaths = (existingTrip?.documents ?? [])
+          .filter((d) => d?.bucketId === "project_documents")
+          .map((d) => String(d?.storagePath ?? "").trim())
+          .filter(Boolean);
+
+        if (projectDocumentPaths.length > 0) {
+          try {
+            await supabase.from("project_documents").update({ project_id: nextProjectIdStr }).in("storage_path", projectDocumentPaths);
+          } catch {
+            // ignore
+          }
         }
       }
     }

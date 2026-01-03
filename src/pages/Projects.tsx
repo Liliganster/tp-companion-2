@@ -199,7 +199,8 @@ export default function Projects() {
           (tripJobs ?? []).forEach((job: any) => {
             const jobId = String(job?.id ?? "").trim();
             const path = (job?.storage_path ?? "").toString().trim();
-            const pid = String(job?.project_id ?? tripJobToProjectId.get(jobId) ?? "").trim();
+            // When a trip is moved to another project, the trip's current project is the source of truth.
+            const pid = String(tripJobToProjectId.get(jobId) ?? job?.project_id ?? "").trim();
             if (!jobId || !pid || !path || path === "pending") return;
             if (!callsheetPathsByProjectId[pid]) callsheetPathsByProjectId[pid] = new Set();
             callsheetPathsByProjectId[pid].add(path);
