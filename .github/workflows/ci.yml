@@ -51,7 +51,7 @@ jobs:
     name: Deploy (staging)
     needs: [checks, e2e]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/staging' && secrets.VERCEL_TOKEN != '' && secrets.VERCEL_PROJECT_ID != '' && secrets.VERCEL_ORG_ID != ''
+    if: github.ref == 'refs/heads/staging'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,10 +61,27 @@ jobs:
         with:
           node-version: 20
 
+      - name: Check Vercel secrets
+        id: vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Vercel secrets not set; skipping deploy."
+            exit 0
+          fi
+
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+
       - name: Install Vercel CLI
+        if: ${{ steps.vercel.outputs.configured == 'true' }}
         run: npm i -g vercel@latest
 
       - name: Deploy to Vercel (preview/staging)
+        if: ${{ steps.vercel.outputs.configured == 'true' }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
