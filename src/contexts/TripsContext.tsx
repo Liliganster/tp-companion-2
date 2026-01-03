@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { formatSupabaseError } from "@/lib/supabaseErrors";
 import { useAuth } from "./AuthContext";
 import { toast } from "sonner";
-import { cascadeDeleteTripById } from "@/lib/cascadeDelete";
+import { cascadeDeleteProjectById, cascadeDeleteTripById } from "@/lib/cascadeDelete";
 import { calculateTripEmissions } from "@/lib/emissions";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { parseLocaleNumber } from "@/lib/number";
@@ -358,17 +358,24 @@ export function TripsProvider({ children }: { children: ReactNode }) {
   const updateTrip = useCallback(async (id: string, patch: Partial<Trip>): Promise<boolean> => {
     if (!supabase || !user) return false;
 
+    const prevTrips = (queryClient.getQueryData<Trip[]>(queryKey) ?? []) as Trip[];
+    const prevTrip = prevTrips.find((t) => t.id === id) ?? null;
+    const previousProjectId = typeof prevTrip?.projectId === "string" ? prevTrip.projectId.trim() : "";
+
     const nextPatch: Partial<Trip> = { ...patch };
     if (patch.distance !== undefined && patch.co2 === undefined) {
       nextPatch.co2 = calculateTripEmissions({ distanceKm: patch.distance, ...emissionsInput }).co2Kg;
     }
 
-    // If the caller only passes projectId (common in some flows), keep the display name in sync too.
-    if (patch.projectId && patch.project === undefined) {
-      const cachedProjects = (queryClient.getQueryData(["projects", user.id]) ?? []) as Array<any>;
-      const match = cachedProjects.find((p) => String(p?.id ?? "").trim() === String(patch.projectId).trim());
-      const name = typeof match?.name === "string" ? match.name.trim() : "";
-      if (name) nextPatch.project = name;
+    // If the caller passes a projectId (common in some flows), keep the display name in sync too.
+    if (patch.projectId !== undefined) {
+      const pid = typeof patch.projectId === "string" ? patch.projectId.trim() : "";
+      if (pid) {
+        const cachedProjects = (queryClient.getQueryData(["projects", user.id]) ?? []) as Array<any>;
+        const match = cachedProjects.find((p) => String(p?.id ?? "").trim() === pid);
+        const name = typeof match?.name === "string" ? match.name.trim() : "";
+        if (name) nextPatch.project = name;
+      }
     }
 
     if (nextPatch.date !== undefined || nextPatch.distance !== undefined || nextPatch.passengers !== undefined || nextPatch.projectId !== undefined) {
@@ -513,6 +520,41 @@ export function TripsProvider({ children }: { children: ReactNode }) {
           }
         }
       }
+
+      // If the trip was moved away from a project and that project now has 0 trips, delete it.
+      // This keeps the project list clean and avoids "empty" projects lingering after reassignments.
+      if (previousProjectId && previousProjectId !== nextProjectIdStr) {
+        try {
+          const { count, error: countError } = await supabase
+            .from("trips")
+            .select("id", { count: "exact", head: true })
+            .eq("project_id", previousProjectId);
+
+          if (!countError && count === 0) {
+            const projectsQueryKey = ["projects", user.id] as const;
+            const prevProjects = (queryClient.getQueryData(projectsQueryKey) ?? []) as Array<any>;
+            queryClient.setQueryData(
+              projectsQueryKey,
+              prevProjects.filter((p) => String((p as any)?.id ?? "").trim() !== previousProjectId),
+            );
+
+            try {
+              await cascadeDeleteProjectById(supabase, previousProjectId);
+            } catch (deleteErr) {
+              console.warn("[TripsContext] No se pudo borrar el proyecto vacío tras mover el viaje:", deleteErr);
+              queryClient.setQueryData(projectsQueryKey, prevProjects);
+            }
+
+            queryClient.invalidateQueries({ queryKey: projectsQueryKey }).catch(() => null);
+            queryClient.invalidateQueries({ queryKey: ["reports", user.id] }).catch(() => null);
+          }
+        } catch (e) {
+          console.warn("[TripsContext] No se pudo comprobar/borrar proyecto vacío tras mover el viaje:", e);
+        }
+      }
+
+      // Ensure project totals/list update without requiring a full refresh.
+      queryClient.invalidateQueries({ queryKey: ["projects", user.id] }).catch(() => null);
     }
     return true;
   }, [emissionsInput, queryClient, queryKey, user]);
