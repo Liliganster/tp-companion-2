@@ -140,7 +140,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
         toast.success(
           autoQueue
             ? `Se subieron ${successCount} documentos`
-            : `Se subieron ${successCount} documentos. Pulsa \"Procesar ahora\" para empezar.`,
+            : `Se subieron ${successCount} documentos. Pulsa "Procesar ahora" para empezar.`,
         );
       }
       if (reusedCount > 0) toast.info(`Se reutilizaron ${reusedCount} documento(s) ya subido(s)`);

@@ -92,7 +92,7 @@ export function ProjectInvoiceUploader({ onUploadComplete, projectId }: ProjectI
         }
       }
 
-      if (successCount > 0) toast.success(`Se subieron ${successCount} facturas. Pulsa \"Extraer\" para procesarlas.`);
+      if (successCount > 0) toast.success(`Se subieron ${successCount} facturas. Pulsa "Extraer" para procesarlas.`);
       if (failCount > 0) toast.error(`Fallaron ${failCount} documentos`);
       onUploadComplete?.(createdJobIds);
       refreshProjects();

@@ -402,7 +402,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     if (patch.invoiceJobId !== undefined) dbPatch.invoice_job_id = patch.invoiceJobId;
     
     // Handle documents and client metadata
-    let nextDocuments = patch.documents;
+    const nextDocuments = patch.documents;
     
     // If we are setting a clientName (explicitly passed) or we are setting project_id to Null (and need to persist the name?)
     // Actually, updateTrip usually receives "project" string in the patch if we updated the type? No, existing type has `project`.
