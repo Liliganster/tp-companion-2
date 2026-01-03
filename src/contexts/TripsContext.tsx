@@ -362,16 +362,35 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     const prevTrip = prevTrips.find((t) => t.id === id) ?? null;
     const previousProjectId = typeof prevTrip?.projectId === "string" ? prevTrip.projectId.trim() : "";
 
-    const nextPatch: Partial<Trip> = { ...patch };
-    if (patch.distance !== undefined && patch.co2 === undefined) {
-      nextPatch.co2 = calculateTripEmissions({ distanceKm: patch.distance, ...emissionsInput }).co2Kg;
+    // Treat `undefined` as "not provided" so we don't accidentally wipe optional fields
+    // when callers pass a full trip object with omitted/undefined properties.
+    const safePatch = Object.fromEntries(
+      Object.entries(patch as Record<string, unknown>).filter(([, value]) => value !== undefined),
+    ) as Partial<Trip>;
+
+    const nextPatch: Partial<Trip> = { ...safePatch };
+    if (safePatch.distance !== undefined && safePatch.co2 === undefined) {
+      nextPatch.co2 = calculateTripEmissions({ distanceKm: safePatch.distance, ...emissionsInput }).co2Kg;
     }
 
-    // If the caller passes a projectId (common in some flows), keep the display name in sync too.
-    if (patch.projectId !== undefined) {
-      const pid = typeof patch.projectId === "string" ? patch.projectId.trim() : "";
+    const cachedProjects = (queryClient.getQueryData(["projects", user.id]) ?? []) as Array<any>;
+    const normalizeKey = (value: string) => value.replace(/\s+/g, " ").trim().toLowerCase();
+
+    // If the caller passes only a project name (common when saving from generic forms),
+    // try to resolve the relational projectId to keep DB + documents consistent.
+    if (nextPatch.projectId === undefined && typeof safePatch.project === "string") {
+      const key = normalizeKey(safePatch.project);
+      if (key) {
+        const match = cachedProjects.find((p) => normalizeKey(String(p?.name ?? "")) === key);
+        const pid = typeof match?.id === "string" ? match.id.trim() : "";
+        if (pid) nextPatch.projectId = pid;
+      }
+    }
+
+    // If the caller passes a projectId, keep the display name in sync too.
+    if (nextPatch.projectId !== undefined) {
+      const pid = typeof nextPatch.projectId === "string" ? nextPatch.projectId.trim() : "";
       if (pid) {
-        const cachedProjects = (queryClient.getQueryData(["projects", user.id]) ?? []) as Array<any>;
         const match = cachedProjects.find((p) => String(p?.id ?? "").trim() === pid);
         const name = typeof match?.name === "string" ? match.name.trim() : "";
         if (name) nextPatch.project = name;
@@ -400,50 +419,49 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     );
 
     const dbPatch: any = {};
-    if (patch.date !== undefined) {
-      dbPatch.trip_date = patch.date;
+    if (safePatch.date !== undefined) {
+      dbPatch.trip_date = safePatch.date;
     }
-    if (patch.purpose !== undefined) dbPatch.purpose = patch.purpose;
-    if (patch.passengers !== undefined) dbPatch.passengers = patch.passengers;
+    if (safePatch.purpose !== undefined) dbPatch.purpose = safePatch.purpose;
+    if (safePatch.passengers !== undefined) dbPatch.passengers = safePatch.passengers;
     if (nextPatch.distance !== undefined) dbPatch.distance_km = nextPatch.distance;
     if (nextPatch.co2 !== undefined) dbPatch.co2_kg = nextPatch.co2;
-    if (patch.route !== undefined) dbPatch.route = patch.route;
-    if (patch.ratePerKmOverride !== undefined) dbPatch.rate_per_km_override = patch.ratePerKmOverride;
-    if (patch.specialOrigin !== undefined) dbPatch.special_origin = patch.specialOrigin;
-    if (patch.invoice !== undefined) dbPatch.invoice_number = patch.invoice;
-    if (patch.invoiceAmount !== undefined) dbPatch.invoice_amount = patch.invoiceAmount;
-    if (patch.invoiceCurrency !== undefined) dbPatch.invoice_currency = patch.invoiceCurrency;
-    if (patch.invoiceJobId !== undefined) dbPatch.invoice_job_id = patch.invoiceJobId;
-    if (patch.invoiceJobId !== undefined) dbPatch.invoice_job_id = patch.invoiceJobId;
+    if (safePatch.route !== undefined) dbPatch.route = safePatch.route;
+    if (safePatch.ratePerKmOverride !== undefined) dbPatch.rate_per_km_override = safePatch.ratePerKmOverride;
+    if (safePatch.specialOrigin !== undefined) dbPatch.special_origin = safePatch.specialOrigin;
+    if (safePatch.invoice !== undefined) dbPatch.invoice_number = safePatch.invoice;
+    if (safePatch.invoiceAmount !== undefined) dbPatch.invoice_amount = safePatch.invoiceAmount;
+    if (safePatch.invoiceCurrency !== undefined) dbPatch.invoice_currency = safePatch.invoiceCurrency;
+    if (safePatch.invoiceJobId !== undefined) dbPatch.invoice_job_id = safePatch.invoiceJobId;
     
     // Handle documents and client metadata
-    const nextDocuments = patch.documents;
+    const nextDocuments = safePatch.documents;
     
     // If we are setting a clientName (explicitly passed) or we are setting project_id to Null (and need to persist the name?)
     // Actually, updateTrip usually receives "project" string in the patch if we updated the type? No, existing type has `project`.
     // But `project` in type is usually the display name.
     
     // If patch has clientName, we must update documents.
-    if (patch.clientName !== undefined) {
+    if (safePatch.clientName !== undefined) {
         // Fetch current documents if not in patch
-        const currentDocs = nextDocuments || (trips.find(t => t.id === id)?.documents || []);
-        const filtered = currentDocs.filter((d: any) => d.kind !== "client_meta");
+      const currentDocs = nextDocuments || (trips.find(t => t.id === id)?.documents || []);
+      const filtered = currentDocs.filter((d: any) => d.kind !== "client_meta");
         
-        if (patch.clientName) {
+        if (safePatch.clientName) {
             filtered.push({
                 id: crypto.randomUUID(),
                 kind: "client_meta",
-                name: patch.clientName,
+                name: safePatch.clientName,
                 createdAt: new Date().toISOString()
             } as any);
         }
         dbPatch.documents = filtered;
-    } else if (patch.documents !== undefined) {
-       dbPatch.documents = patch.documents;
+    } else if (safePatch.documents !== undefined) {
+      dbPatch.documents = safePatch.documents;
     }
     
     // Also if we are setting projectId to a valid ID, we should remove client_meta?
-    if (patch.projectId && patch.projectId !== null) {
+    if (safePatch.projectId && safePatch.projectId !== null) {
         // If we are assigning to a real project, remove the client meta unless explicitly told otherwise.
         // But we might not have `documents` in the patch.
         // Let's rely on the caller to handle this? Or handle it here.
@@ -451,9 +469,8 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         // Let's just handle `clientName` in patch.
     }
     
-    if (patch.callsheet_job_id !== undefined) dbPatch.callsheet_job_id = patch.callsheet_job_id;
-    if (patch.callsheet_job_id !== undefined) dbPatch.callsheet_job_id = patch.callsheet_job_id;
-    if (patch.projectId !== undefined) dbPatch.project_id = patch.projectId;
+    if (safePatch.callsheet_job_id !== undefined) dbPatch.callsheet_job_id = safePatch.callsheet_job_id;
+    if (nextPatch.projectId !== undefined) dbPatch.project_id = nextPatch.projectId;
 
     if (Object.keys(dbPatch).length > 0) {
       const { error } = await supabase.from("trips").update(dbPatch).eq("id", id);
@@ -465,17 +482,30 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    if (patch.projectId !== undefined) {
-      const nextProjectId = patch.projectId;
+    if (nextPatch.projectId !== undefined) {
+      const nextProjectId = nextPatch.projectId;
       const currentTrips = (queryClient.getQueryData<Trip[]>(queryKey) ?? []) as Trip[];
       const existingTrip = currentTrips.find((t) => t.id === id) ?? null;
-      const jobId = String(patch.callsheet_job_id ?? existingTrip?.callsheet_job_id ?? "").trim();
+      const jobId = String(safePatch.callsheet_job_id ?? prevTrip?.callsheet_job_id ?? existingTrip?.callsheet_job_id ?? "").trim();
       if (jobId) {
         try {
           await supabase
             .from("callsheet_jobs")
             .update({ project_id: nextProjectId ?? null })
             .eq("id", jobId);
+        } catch {
+          // ignore
+        }
+      }
+
+      const callsheetPaths = (prevTrip?.documents ?? existingTrip?.documents ?? [])
+        .filter((d: any) => String(d?.bucketId ?? "").trim() !== "project_documents")
+        .map((d: any) => String(d?.storagePath ?? d?.path ?? "").trim())
+        .filter(Boolean);
+
+      if (callsheetPaths.length > 0) {
+        try {
+          await supabase.from("callsheet_jobs").update({ project_id: nextProjectId ?? null }).in("storage_path", callsheetPaths);
         } catch {
           // ignore
         }
@@ -491,9 +521,9 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       const nextProjectIdStr = typeof nextProjectId === "string" ? nextProjectId.trim() : "";
       if (nextProjectIdStr) {
         const invoiceJobIds = new Set<string>();
-        const primaryInvoiceJobId = String(existingTrip?.invoiceJobId ?? "").trim();
+        const primaryInvoiceJobId = String(prevTrip?.invoiceJobId ?? existingTrip?.invoiceJobId ?? "").trim();
         if (primaryInvoiceJobId) invoiceJobIds.add(primaryInvoiceJobId);
-        for (const doc of existingTrip?.documents ?? []) {
+        for (const doc of prevTrip?.documents ?? existingTrip?.documents ?? []) {
           const jid = String((doc as any)?.invoiceJobId ?? "").trim();
           if (jid) invoiceJobIds.add(jid);
         }
@@ -507,7 +537,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        const projectDocumentPaths = (existingTrip?.documents ?? [])
+        const projectDocumentPaths = (prevTrip?.documents ?? existingTrip?.documents ?? [])
           .filter((d) => d?.bucketId === "project_documents")
           .map((d) => String(d?.storagePath ?? "").trim())
           .filter(Boolean);
