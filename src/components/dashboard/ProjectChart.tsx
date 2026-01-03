@@ -35,10 +35,10 @@ export function ProjectChart() {
   const { t } = useI18n();
 
   return (
-    <div className="glass-card p-5 animate-fade-in animation-delay-300">
+    <div className="glass-card p-5 animate-fade-in animation-delay-300 flex flex-col h-full">
       <h2 className="font-semibold text-lg mb-4 text-foreground">{t("chart.kmByProject")}</h2>
       
-      <div className="h-48">
+      <div className="flex-1 min-h-48">
         {data.length === 0 ? (
           <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
             No hay datos para mostrar.
