@@ -707,7 +707,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       }
 
       if (successCount > 0) toast.success(tf("bulk.toastUploadedDocs", { count: successCount }));
-      if (reusedCount > 0) toast.info(`Se reutilizaron ${reusedCount} documento(s) ya subido(s)`);
+      if (reusedCount > 0) toast.info(tf("bulk.toastReusedDocs", { count: reusedCount }));
       if (failCount > 0) toast.error(tf("bulk.toastFailedDocs", { count: failCount }));
 
       const existingTripJobIds = new Set<string>(
@@ -723,7 +723,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       }
       if (alreadySavedCount > 0) {
         setSavedByJobId(alreadySaved);
-        toast.info(`Ya hay ${alreadySavedCount} documento(s) guardado(s). No se duplicarán.`);
+        toast.info(tf("bulk.toastAlreadySavedDocs", { count: alreadySavedCount }));
       }
 
       setJobIds(createdJobIds);
@@ -898,7 +898,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                 ? t("aiQuota.monthlyLimitReachedBodyGeneric")
                 : String(j.needs_review_reason ?? "").trim() || undefined;
 
-          toast.error("No se pudo procesar un documento", { description });
+          toast.error(t("bulk.errorProcessOneDoc"), { description });
         }
 
         const pendingLoads = doneIds.filter((id) => !reviewByJobIdRef.current[id] && !savedByJobIdRef.current[id]);
@@ -977,7 +977,8 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     setSavingByJobId((prev) => ({ ...prev, [jobId]: true }));
     try {
       const trimmedProjectName = review.project.trim();
-      const projectIdToUse = await resolveProjectId(trimmedProjectName, review.producer, meta.fileName);
+      const producer = (review.producer ?? "").trim();
+      const projectIdToUse = await resolveProjectId(trimmedProjectName, producer, meta.fileName);
 
       const baseAddress = (profile.baseAddress ?? "").trim();
       const stops = review.locations.map((l) => (l ?? "").trim()).filter(Boolean);
@@ -988,7 +989,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         date: review.date,
         project: trimmedProjectName,
         projectId: projectIdToUse,
-        purpose: review.producer ? `Rodaje: ${review.producer}` : "Rodaje",
+        purpose: producer ? tf("bulk.purposeWithProducer", { producer }) : t("bulk.purposeDefault"),
         route,
         passengers: 0,
         distance: Number.parseFloat(String(review.distance).replace(",", ".")) || 0,
@@ -997,7 +998,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
           ? [
               {
                 id: crypto.randomUUID(),
-                name: meta.fileName || "Documento original",
+                name: meta.fileName || t("bulk.originalDocumentName"),
                 mimeType: meta.mimeType || "application/pdf",
                 storagePath: meta.storagePath,
                 bucketId: "callsheets",
@@ -1015,7 +1016,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       return ok;
     } catch (e) {
       console.error(e);
-      toast.error("No se pudo guardar el viaje");
+      toast.error(t("bulk.errorSaveTrip"));
       return false;
     } finally {
       setSavingByJobId((prev) => ({ ...prev, [jobId]: false }));
@@ -1039,8 +1040,8 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       else failCount += 1;
     }
 
-    if (okCount > 0) toast.success(`Guardados ${okCount} viajes`);
-    if (failCount > 0) toast.error(`Fallaron ${failCount} viajes`);
+    if (okCount > 0) toast.success(tf("bulk.toastSavedTrips", { count: okCount }));
+    if (failCount > 0) toast.error(tf("bulk.toastFailedTrips", { count: failCount }));
   };
 
   const jobsForUi = useMemo(() => {
@@ -1076,7 +1077,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     if (saved) {
       return (
         <Badge variant="outline" className="border-green-500/40 text-green-500">
-          Guardado
+          {t("bulk.statusSaved")}
         </Badge>
       );
     }
@@ -1085,26 +1086,26 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       case "done":
         return (
           <Badge variant="outline" className="border-green-500/40 text-green-500">
-            Listo
+            {t("bulk.statusReady")}
           </Badge>
         );
       case "processing":
-        return <Badge variant="secondary">Procesando</Badge>;
+        return <Badge variant="secondary">{t("bulk.statusProcessing")}</Badge>;
       case "queued":
       case "created":
-        return <Badge variant="secondary">En cola</Badge>;
+        return <Badge variant="secondary">{t("bulk.statusQueued")}</Badge>;
       case "failed":
-        return <Badge variant="destructive">Fallido</Badge>;
+        return <Badge variant="destructive">{t("bulk.statusFailed")}</Badge>;
       case "needs_review":
         return (
           <Badge variant="outline" className="border-orange-500/40 text-orange-500">
-            Revision
+            {t("bulk.statusNeedsReview")}
           </Badge>
         );
       case "out_of_quota":
         return (
           <Badge variant="outline" className="border-violet-400/40 text-violet-200">
-            Limite
+            {t("aiQuota.outOfQuotaBadge")}
           </Badge>
         );
       default:
@@ -1343,16 +1344,16 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                       {selectedFiles.length > 0
                         ? selectedFiles.length === 1
                           ? selectedFiles[0].name
-                          : `${selectedFiles.length} archivos seleccionados`
+                          : tf("bulk.aiFilesSelected", { count: selectedFiles.length })
                         : t("bulk.aiDropTitle")}
                     </p>
                     <p className="text-sm text-muted-foreground mt-2">
-                      {selectedFiles.length > 0 ? "Click para cambiar archivos" : t("bulk.aiDropSubtitle")}
+                      {selectedFiles.length > 0 ? t("bulk.aiChangeFilesHint") : t("bulk.aiDropSubtitle")}
                     </p>
                     </div>
 
                     <p className="text-sm text-muted-foreground text-center">
-                        Suba sus hojas de rodaje (Call Sheets) en PDF. Nuestra IA extraerá automáticamente fechas, lugares, producción y proyectos.
+                      {t("bulk.aiDescription")}
                     </p>
 
                     <div className="flex justify-end gap-2 pt-2">
@@ -1377,11 +1378,16 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                 <div className="text-center py-10 space-y-3">
                   <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto" />
                   <div>
-                    <h3 className="text-lg font-medium">Analizando documentos...</h3>
+                    <h3 className="text-lg font-medium">{t("bulk.aiProcessingTitle")}</h3>
                     <p className="text-muted-foreground">
                       {jobStats.total > 0
-                        ? `Completados ${jobStats.done}/${jobStats.total} | Pendientes ${jobStats.pending} | Fallidos ${jobStats.failed}`
-                        : "Esto puede tardar unos segundos."}
+                        ? tf("bulk.aiProcessingProgress", {
+                            done: jobStats.done,
+                            total: jobStats.total,
+                            pending: jobStats.pending,
+                            failed: jobStats.failed,
+                          })
+                        : t("bulk.aiProcessingHint")}
                     </p>
                   </div>
                 </div>
@@ -1509,17 +1515,21 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                     <div className="flex items-center gap-2 text-green-500">
                       <CheckCircle className="w-5 h-5" />
                       <div>
-                        <p className="font-medium">Revision en paralelo</p>
+                        <p className="font-medium">{t("bulk.aiParallelReviewTitle")}</p>
                         <p className="text-sm text-muted-foreground">
-                          Listos {jobStats.ready} | Guardados {jobStats.saved} | Pendientes {jobStats.pending} | Fallidos{" "}
-                          {jobStats.failed}
+                          {tf("bulk.aiParallelReviewStats", {
+                            ready: jobStats.ready,
+                            saved: jobStats.saved,
+                            pending: jobStats.pending,
+                            failed: jobStats.failed,
+                          })}
                         </p>
                       </div>
                     </div>
 
                     <div className="flex gap-2 shrink-0">
                       <Button variant="outline" type="button" onClick={resetAiState}>
-                        Volver
+                        {t("bulk.back")}
                       </Button>
                       <Button
                         type="button"
@@ -1528,7 +1538,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                         disabled={!onSave || jobStats.ready === 0}
                       >
                         <Save className="w-4 h-4" />
-                        Guardar todos
+                        {t("bulk.saveAll")}
                       </Button>
                     </div>
                   </div>
@@ -1560,7 +1570,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                               <>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                   <div className="space-y-2">
-                                    <Label>Proyecto</Label>
+                                    <Label>{t("tripModal.project")}</Label>
                                     <Input
                                       value={review.project}
                                       onChange={(e) => updateReview(job.id, { project: e.target.value })}
@@ -1568,7 +1578,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                                     />
                                   </div>
                                   <div className="space-y-2">
-                                    <Label>Fecha</Label>
+                                    <Label>{t("tripModal.date")}</Label>
                                     <div className="relative">
                                       <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                                       <Input
@@ -1579,7 +1589,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                                     </div>
                                   </div>
                                   <div className="space-y-2 sm:col-span-2">
-                                    <Label>Productora</Label>
+                                    <Label>{t("bulk.producerLabel")}</Label>
                                     <div className="relative">
                                       <Building2 className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                                       <Input
@@ -1590,7 +1600,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                                     </div>
                                   </div>
                                   <div className="space-y-2 sm:col-span-2">
-                                    <Label>Distancia (km)</Label>
+                                    <Label>{t("tripModal.distance")}</Label>
                                     <Input
                                       type="number"
                                       value={review.distance}
@@ -1600,17 +1610,18 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                                       className="bg-secondary/30"
                                     />
                                     {review.optimizing && (
-                                      <p className="text-xs text-muted-foreground">Optimizando ruta y direcciones...</p>
+                                      <p className="text-xs text-muted-foreground">{t("bulk.optimizingHint")}</p>
                                     )}
                                   </div>
                                 </div>
 
                                 <div className="space-y-2">
-                                  <Label>Ubicaciones / Ruta ({review.locations.length})</Label>
+                                  <Label>{tf("bulk.locationsRouteLabel", { count: review.locations.length })}</Label>
 
                                   <div className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1.5">
                                     <MapPin className="w-3 h-3 text-green-500" />
-                                    <span className="font-semibold">Origen:</span> {profile.baseAddress || "No definido"}
+                                    <span className="font-semibold">{t("bulk.originLabel")}:</span>{" "}
+                                    {profile.baseAddress || t("bulk.notSet")}
                                   </div>
 
                                   <Card className="bg-secondary/20">
@@ -1632,7 +1643,8 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
                                   <div className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5">
                                     <MapPin className="w-3 h-3 text-red-500" />
-                                    <span className="font-semibold">Destino:</span> {profile.baseAddress || "No definido"}
+                                    <span className="font-semibold">{t("bulk.destinationLabel")}:</span>{" "}
+                                    {profile.baseAddress || t("bulk.notSet")}
                                   </div>
                                 </div>
 
@@ -1648,7 +1660,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                                     ) : (
                                       <Save className="w-4 h-4" />
                                     )}
-                                    {job.saved ? "Guardado" : t("bulk.saveTrip")}
+                                    {job.saved ? t("bulk.statusSaved") : t("bulk.saveTrip")}
                                   </Button>
                                 </div>
                               </>
@@ -1657,20 +1669,24 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                             {showProcessing && (
                               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <Loader2 className="w-4 h-4 animate-spin" />
-                                <span>{job.status === "processing" ? "Procesando..." : "En cola..."}</span>
+                                <span>
+                                  {job.status === "processing"
+                                    ? t("bulk.statusProcessingEllipsis")
+                                    : t("bulk.statusQueuedEllipsis")}
+                                </span>
                               </div>
                             )}
 
                             {showDoneNoReview && (
                               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <Loader2 className="w-4 h-4 animate-spin" />
-                                <span>Cargando resultados...</span>
+                                <span>{t("bulk.loadingResults")}</span>
                               </div>
                             )}
 
                             {showFailed && (
                               <div className="text-sm text-muted-foreground">
-                                {job.reason || "No se pudo procesar este documento."}
+                                {job.reason || t("bulk.docProcessFailed")}
                               </div>
                             )}
                           </CardContent>
