@@ -26,6 +26,11 @@ export function UpdatePrompt() {
 
         wbRef.current = wb;
 
+        wb.addEventListener("installed", (event: any) => {
+          if (cancelled) return;
+          if (event?.isUpdate) setNeedRefresh(true);
+        });
+
         wb.addEventListener("waiting", () => {
           if (cancelled) return;
           setNeedRefresh(true);
@@ -34,6 +39,9 @@ export function UpdatePrompt() {
         const swRegistration = await wb.register();
         if (cancelled) return;
         if (swRegistration) setRegistration(swRegistration);
+
+        // If an update was downloaded while the app was in the background, `waiting` may already be set.
+        if (swRegistration?.waiting) setNeedRefresh(true);
       } catch (error) {
         console.log("SW registration error", error);
       }
@@ -47,32 +55,37 @@ export function UpdatePrompt() {
   useEffect(() => {
     if (!registration) return;
 
-    // Best-effort: check for updates shortly after load, then periodically.
-    const initial = window.setTimeout(() => {
+    const updateNow = () => {
+      if (document.visibilityState !== "visible") return;
+      if (!navigator.onLine) return;
       registration.update().catch(() => {});
-    }, 5_000);
+    };
 
-    const interval = window.setInterval(() => {
-      registration.update().catch(() => {});
-    }, 2 * 60 * 1000);
+    // Check for updates shortly after load, and then frequently while the tab is visible.
+    const initial = window.setTimeout(updateNow, 1_000);
+    const interval = window.setInterval(updateNow, 30_000);
 
     const onFocus = () => {
-      registration.update().catch(() => {});
+      updateNow();
     };
 
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        registration.update().catch(() => {});
+        updateNow();
       }
     };
 
+    const onOnline = () => updateNow();
+
     window.addEventListener("focus", onFocus);
+    window.addEventListener("online", onOnline);
     document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
       window.clearTimeout(initial);
       window.clearInterval(interval);
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("online", onOnline);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [registration]);
