@@ -19,15 +19,21 @@ describe("analytics consent gating", () => {
   });
 
   it("loads GA4 after consent is granted", async () => {
-    vi.resetModules();
-    const { initAnalytics, setAnalyticsConsent } = await import("./analytics");
+    const previousMeasurementId = process.env.VITE_GA_MEASUREMENT_ID;
+    process.env.VITE_GA_MEASUREMENT_ID = "G-TEST-MEASUREMENT-ID";
 
-    initAnalytics(); // should no-op until consent
-    setAnalyticsConsent(true); // should force init + load script
+    try {
+      vi.resetModules();
+      const { initAnalytics, setAnalyticsConsent } = await import("./analytics");
 
-    const script = document.querySelector('script[src*="gtag/js"]') as HTMLScriptElement | null;
-    expect(script).not.toBeNull();
-    expect(script!.async).toBe(true);
+      initAnalytics(); // should no-op until consent
+      setAnalyticsConsent(true); // should force init + load script
+
+      const script = document.querySelector('script[src*="gtag/js"]') as HTMLScriptElement | null;
+      expect(script).not.toBeNull();
+      expect(script!.async).toBe(true);
+    } finally {
+      process.env.VITE_GA_MEASUREMENT_ID = previousMeasurementId;
+    }
   });
 });
-

@@ -9,6 +9,15 @@ import { readAnalyticsConsent, writeAnalyticsConsent } from "@/lib/analyticsCons
 
 let initialized = false;
 
+function getMeasurementId(): string | undefined {
+  const measurementId = import.meta.env.VITE_GA_MEASUREMENT_ID as string | undefined;
+  if (measurementId) return measurementId;
+
+  const maybeProcess = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process;
+  return maybeProcess?.env?.VITE_GA_MEASUREMENT_ID;
+
+}
+
 function isConsentGranted(): boolean {
   return readAnalyticsConsent() === "granted";
 }
@@ -32,15 +41,15 @@ export function setAnalyticsConsent(granted: boolean) {
 
 export function initAnalytics(opts?: { force?: boolean }) {
   if (initialized) return;
-  initialized = true;
 
-  const measurementId = import.meta.env.VITE_GA_MEASUREMENT_ID as string | undefined;
+  const measurementId = getMeasurementId();
   if (!measurementId) return;
 
   if (!opts?.force && !isConsentGranted()) {
-    initialized = false;
     return;
   }
+
+  initialized = true;
 
   // Load GA4 script
   const script = document.createElement("script");
@@ -72,7 +81,7 @@ export function initAnalytics(opts?: { force?: boolean }) {
 }
 
 export function trackPageView(path: string) {
-  const measurementId = import.meta.env.VITE_GA_MEASUREMENT_ID as string | undefined;
+  const measurementId = getMeasurementId();
   if (!measurementId) return;
   if (!isConsentGranted()) return;
   if (!initialized) initAnalytics();
@@ -86,7 +95,7 @@ export function trackPageView(path: string) {
 }
 
 export function trackEvent(name: string, params?: Record<string, unknown>) {
-  const measurementId = import.meta.env.VITE_GA_MEASUREMENT_ID as string | undefined;
+  const measurementId = getMeasurementId();
   if (!measurementId) return;
   if (!isConsentGranted()) return;
   if (!initialized) initAnalytics();
