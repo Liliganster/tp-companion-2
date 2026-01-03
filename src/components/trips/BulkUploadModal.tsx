@@ -50,6 +50,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   // AI Tab State
   const [aiStep, setAiStep] = useState<"upload" | "processing" | "review">("upload");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [isDragActive, setIsDragActive] = useState(false);
   const [jobIds, setJobIds] = useState<string[]>([]);
   const [jobMetaById, setJobMetaById] = useState<
     Record<string, { fileName: string; mimeType: string; storagePath: string }>
@@ -86,6 +87,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const activeJobIdsRef = useRef<string[]>([]);
   const cancelRequestedRef = useRef(false);
   const triggerWorkerAbortRef = useRef<AbortController | null>(null);
+  const dragDepthRef = useRef(0);
   
   const { t, tf, locale } = useI18n();
   const exampleText = t("bulk.examplePlaceholder");
@@ -483,23 +485,59 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
-    if (files.length === 0) return;
+    selectAiFiles(files);
+  };
 
-    if (files.length > 20) {
+  const selectAiFiles = (files: File[]) => {
+    const nextFiles = Array.from(files ?? []).filter(Boolean);
+    if (nextFiles.length === 0) return;
+
+    if (nextFiles.length > 20) {
       toast.error(t("bulk.errorMaxDocuments"));
-      e.target.value = "";
+      if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
 
-    for (const file of files) {
+    for (const file of nextFiles) {
       if (file.type !== "application/pdf") {
         toast.error(t("bulk.errorOnlyPdf"));
-        e.target.value = "";
+        if (fileInputRef.current) fileInputRef.current.value = "";
         return;
       }
     }
 
-    setSelectedFiles(files);
+    setSelectedFiles(nextFiles);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const onDropFiles = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepthRef.current = 0;
+    setIsDragActive(false);
+
+    const droppedFiles = Array.from(e.dataTransfer?.files ?? []);
+    selectAiFiles(droppedFiles);
+  };
+
+  const onDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepthRef.current += 1;
+    setIsDragActive(true);
+  };
+
+  const onDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setIsDragActive(false);
+  };
+
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
   };
 
   const startAiProcess = async () => {
@@ -1290,7 +1328,15 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                 <>
                     <div 
                         onClick={() => fileInputRef.current?.click()}
-                        className="border-2 border-dashed border-border/50 rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
+                        onDrop={onDropFiles}
+                        onDragEnter={onDragEnter}
+                        onDragLeave={onDragLeave}
+                        onDragOver={onDragOver}
+                        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${
+                          isDragActive
+                            ? "border-primary/70 bg-primary/5"
+                            : "border-border/50 hover:border-primary/50"
+                        }`}
                     >
                     <Sparkles className="w-12 h-12 text-primary mx-auto mb-4" />
                     <p className="font-medium text-lg">
