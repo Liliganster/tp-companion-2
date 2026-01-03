@@ -303,6 +303,22 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
         console.warn("Failed to queue invoice job:", queueErr);
       }
 
+      // Best-effort: kick the invoice worker so the user doesn't have to wait for cron.
+      if (queued) {
+        try {
+          const token = await getAccessToken();
+          void fetch(`/api/invoices/trigger-worker?jobId=${encodeURIComponent(jobData.id)}`, {
+            method: "POST",
+            headers: {
+              Authorization: token ? `Bearer ${token}` : "",
+              "Content-Type": "application/json",
+            },
+          });
+        } catch {
+          // ignore: cron will still process
+        }
+      }
+
       // Fallback: queue directly via RLS if API isn't reachable.
       if (!queued) {
         const { error: queueDbError } = await supabase.from("invoice_jobs").update({ status: "queued" }).eq("id", jobData.id);

@@ -16,6 +16,8 @@ export default withApiObservability(async function handler(req: any, res: any, {
   const isVercelCron = Boolean(req.headers?.["x-vercel-cron"]);
   const manual = String(req.query?.manual ?? "").trim() === "1";
   const maxJobs = manual ? 1 : 8;
+  const manualJobId = manual && typeof req.query?.jobId === "string" ? String(req.query.jobId).trim() : null;
+  const manualUserId = manual && typeof req.query?.userId === "string" ? String(req.query.userId).trim() : null;
 
   const queryKey = typeof req.query?.key === "string" ? req.query.key : null;
 
@@ -125,25 +127,51 @@ export default withApiObservability(async function handler(req: any, res: any, {
 
     // 2. Fetch jobs ready for processing
     const now = new Date().toISOString();
-    const { data: queuedJobs, error: queuedError } = await supabaseAdmin
-      .from("invoice_jobs")
-      .select("*")
-      .eq("status", "queued")
-      .limit(maxJobs);
 
-    const { data: retryJobs, error: retryError } = await supabaseAdmin
-      .from("invoice_jobs")
-      .select("*")
-      .eq("status", "failed")
-      .not("next_retry_at", "is", null)
-      .lte("next_retry_at", now)
-      .lt("retry_count", DEFAULT_RETRY_STRATEGY.maxRetries)
-      .limit(maxJobs);
+    let jobs: any[] = [];
 
-    if (queuedError) throw queuedError;
-    if (retryError) log.warn({ retryError }, "invoice_retry_fetch_error");
+    if (manual && manualJobId) {
+      const q = supabaseAdmin.from("invoice_jobs").select("*").eq("id", manualJobId);
+      if (manualUserId) q.eq("user_id", manualUserId);
+      const { data: job, error: jobError } = await q.maybeSingle();
 
-    const jobs = [...(queuedJobs || []), ...(retryJobs || [])].slice(0, maxJobs);
+      if (jobError) throw jobError;
+
+      if (!job) {
+        res.status(200).json({ message: "Job not found", processed: 0, details: [] });
+        return;
+      }
+
+      const status = String((job as any)?.status ?? "");
+      if (status !== "queued" && status !== "failed") {
+        res.status(200).json({ message: `Job not claimable (status=${status})`, processed: 0, details: [] });
+        return;
+      }
+
+      jobs = [job];
+    } else {
+      let queuedQuery = supabaseAdmin.from("invoice_jobs").select("*").eq("status", "queued");
+      if (manual && manualUserId) queuedQuery = queuedQuery.eq("user_id", manualUserId);
+      queuedQuery = queuedQuery.order("created_at", { ascending: !manual });
+
+      let retryQuery = supabaseAdmin
+        .from("invoice_jobs")
+        .select("*")
+        .eq("status", "failed")
+        .not("next_retry_at", "is", null)
+        .lte("next_retry_at", now)
+        .lt("retry_count", DEFAULT_RETRY_STRATEGY.maxRetries);
+      if (manual && manualUserId) retryQuery = retryQuery.eq("user_id", manualUserId);
+      retryQuery = retryQuery.order("next_retry_at", { ascending: true });
+
+      const { data: queuedJobs, error: queuedError } = await queuedQuery.limit(maxJobs);
+      const { data: retryJobs, error: retryError } = await retryQuery.limit(maxJobs);
+
+      if (queuedError) throw queuedError;
+      if (retryError) log.warn({ retryError }, "invoice_retry_fetch_error");
+
+      jobs = [...(queuedJobs || []), ...(retryJobs || [])].slice(0, maxJobs);
+    }
 
     if (jobs.length === 0) {
       res.status(200).json({ message: "No invoice jobs queued or ready for retry" });

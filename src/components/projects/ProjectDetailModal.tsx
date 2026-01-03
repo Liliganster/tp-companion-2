@@ -1187,6 +1187,19 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       setProjectDocs(prev => prev.map(p => 
         p.id === doc.id ? { ...p, status: 'queued' } : p
       ));
+
+      // Best-effort: kick the worker so the user doesn't have to wait for cron.
+      try {
+        void fetch(`/api/invoices/trigger-worker?jobId=${encodeURIComponent(doc.invoice_job_id)}`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+        });
+      } catch {
+        // ignore: cron/manual trigger can still process later
+      }
     } catch (e: any) {
       toast.error(tf("projectDetail.toastExtractionStartError", { message: e.message }));
     }
