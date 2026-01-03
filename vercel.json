@@ -36,5 +36,14 @@
       "src": "/.*",
       "dest": "/index.html"
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "main": true
+    }
+  },
+  "github": {
+    "silent": false,
+    "autoAlias": true
+  }
 }
