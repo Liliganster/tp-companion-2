@@ -1548,7 +1548,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                       const review = job.review;
                       const showProcessing = job.status === "processing" || job.status === "queued" || job.status === "created";
                       const showFailed = job.status === "failed" || job.status === "needs_review" || job.status === "out_of_quota";
-                      const showDoneNoReview = job.status === "done" && !review;
+                      const showDoneNoReview = job.status === "done" && !review && !job.saved;
 
                       return (
                         <Card key={job.id} className="bg-secondary/10">
