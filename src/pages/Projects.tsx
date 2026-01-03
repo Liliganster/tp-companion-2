@@ -161,22 +161,8 @@ export default function Projects() {
         const callsheetPathsByProjectId: Record<string, Set<string>> = {};
         const invoiceCountsByProjectId: Record<string, number> = {};
         
-        // 1) Callsheets by explicit project_id (manual uploads linked to project)
-        const { data: jobs } = await supabase
-          .from("callsheet_jobs")
-          .select("project_id, storage_path")
-          .not("project_id", "is", null);
-
-        jobs?.forEach((job: any) => {
-          const pid = job.project_id;
-          const path = (job.storage_path ?? "").toString().trim();
-          if (!pid || !path || path === "pending") return;
-          if (!callsheetPathsByProjectId[pid]) callsheetPathsByProjectId[pid] = new Set();
-          callsheetPathsByProjectId[pid].add(path);
-        });
-
-        // 1b) Callsheets referenced by trips (uploads done from the Trips flow)
-        // Those jobs can have project_id = null, so we include them based on trips.projectId + callsheet_job_id.
+        // 1) Callsheets (manual uploads + trips-linked). When a callsheet job is referenced by a trip,
+        // the trip's current project is the source of truth (so moves don't leave stale counts behind).
         const tripJobToProjectId = new Map<string, string>();
         for (const trip of trips ?? []) {
           const pid = String((trip as any)?.projectId ?? "").trim();
@@ -185,27 +171,19 @@ export default function Projects() {
           if (!tripJobToProjectId.has(jobId)) tripJobToProjectId.set(jobId, pid);
         }
 
-        const tripJobIds = Array.from(tripJobToProjectId.keys());
-        if (tripJobIds.length > 0) {
-          const { data: tripJobs, error: tripJobsError } = await supabase
-            .from("callsheet_jobs")
-            .select("id, project_id, storage_path")
-            .in("id", tripJobIds);
+        // Fetch all callsheet jobs; RLS limits to the current user.
+        const { data: jobs } = await supabase
+          .from("callsheet_jobs")
+          .select("id, project_id, storage_path");
 
-          if (tripJobsError) {
-            console.warn("Error fetching callsheets referenced by trips:", tripJobsError);
-          }
-
-          (tripJobs ?? []).forEach((job: any) => {
-            const jobId = String(job?.id ?? "").trim();
-            const path = (job?.storage_path ?? "").toString().trim();
-            // When a trip is moved to another project, the trip's current project is the source of truth.
-            const pid = String(tripJobToProjectId.get(jobId) ?? job?.project_id ?? "").trim();
-            if (!jobId || !pid || !path || path === "pending") return;
-            if (!callsheetPathsByProjectId[pid]) callsheetPathsByProjectId[pid] = new Set();
-            callsheetPathsByProjectId[pid].add(path);
-          });
-        }
+        jobs?.forEach((job: any) => {
+          const jobId = String(job?.id ?? "").trim();
+          const path = (job.storage_path ?? "").toString().trim();
+          const pid = String(tripJobToProjectId.get(jobId) ?? job.project_id ?? "").trim();
+          if (!jobId || !pid || !path || path === "pending") return;
+          if (!callsheetPathsByProjectId[pid]) callsheetPathsByProjectId[pid] = new Set();
+          callsheetPathsByProjectId[pid].add(path);
+        });
         
         // 2) Project invoices by project_id
         const { data: invoices } = await supabase.from("project_documents").select("project_id");
@@ -243,12 +221,16 @@ export default function Projects() {
                .from("callsheet_results")
                .select("project_value, job_id, callsheet_jobs!inner(project_id, storage_path)");
 
-             results?.forEach((res: any) => {
-               const job = res.callsheet_jobs;
-               const path = (job?.storage_path ?? "").toString().trim();
-               if (!path || path === "pending") return;
-               if (!job?.project_id) {
-                 const key = getProjectKey(res.project_value);
+              results?.forEach((res: any) => {
+                const jobId = String(res?.job_id ?? "").trim();
+                // If a job is referenced by a trip, we already counted it using the trip's current project.
+                // This prevents legacy `project_value` from leaving stale document counts behind after moves.
+                if (jobId && tripJobToProjectId.has(jobId)) return;
+                const job = res.callsheet_jobs;
+                const path = (job?.storage_path ?? "").toString().trim();
+                if (!path || path === "pending") return;
+                if (!job?.project_id) {
+                  const key = getProjectKey(res.project_value);
                  if (!callsheetPathsByKey[key]) callsheetPathsByKey[key] = new Set();
                  callsheetPathsByKey[key].add(path);
                }

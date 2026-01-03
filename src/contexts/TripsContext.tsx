@@ -387,6 +387,29 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    // Fallback: if projects cache isn't ready, resolve by querying Supabase (best-effort).
+    if (nextPatch.projectId === undefined && typeof safePatch.project === "string") {
+      const rawName = safePatch.project.replace(/\s+/g, " ").trim();
+      if (rawName) {
+        try {
+          const { data, error } = await supabase
+            .from("projects")
+            .select("id, name")
+            .eq("user_id", user.id)
+            .ilike("name", rawName)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (!error && data?.id) {
+            nextPatch.projectId = String((data as any).id).trim();
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+
     // If the caller passes a projectId, keep the display name in sync too.
     if (nextPatch.projectId !== undefined) {
       const pid = typeof nextPatch.projectId === "string" ? nextPatch.projectId.trim() : "";
@@ -488,13 +511,12 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       const existingTrip = currentTrips.find((t) => t.id === id) ?? null;
       const jobId = String(safePatch.callsheet_job_id ?? prevTrip?.callsheet_job_id ?? existingTrip?.callsheet_job_id ?? "").trim();
       if (jobId) {
-        try {
-          await supabase
-            .from("callsheet_jobs")
-            .update({ project_id: nextProjectId ?? null })
-            .eq("id", jobId);
-        } catch {
-          // ignore
+        const { error: callsheetJobMoveError } = await supabase
+          .from("callsheet_jobs")
+          .update({ project_id: nextProjectId ?? null })
+          .eq("id", jobId);
+        if (callsheetJobMoveError) {
+          console.warn("[TripsContext] No se pudo mover el callsheet al nuevo proyecto:", callsheetJobMoveError);
         }
       }
 
@@ -504,22 +526,27 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         .filter(Boolean);
 
       if (callsheetPaths.length > 0) {
-        try {
-          await supabase.from("callsheet_jobs").update({ project_id: nextProjectId ?? null }).in("storage_path", callsheetPaths);
-        } catch {
-          // ignore
+        const { error: callsheetPathsMoveError } = await supabase
+          .from("callsheet_jobs")
+          .update({ project_id: nextProjectId ?? null })
+          .in("storage_path", callsheetPaths);
+        if (callsheetPathsMoveError) {
+          console.warn("[TripsContext] No se pudo mover el callsheet por storage_path:", callsheetPathsMoveError);
         }
       }
 
       // Keep invoice jobs/documents consistent with the trip's project when the user moves a trip.
-      try {
-        await supabase.from("invoice_jobs").update({ project_id: nextProjectId ?? null }).eq("trip_id", id);
-      } catch {
-        // ignore
+      const { error: invoiceJobsMoveError } = await supabase
+        .from("invoice_jobs")
+        .update({ project_id: nextProjectId ?? null })
+        .eq("trip_id", id);
+      if (invoiceJobsMoveError) {
+        console.warn("[TripsContext] No se pudo actualizar invoice_jobs.project_id al mover el viaje:", invoiceJobsMoveError);
       }
 
       const nextProjectIdStr = typeof nextProjectId === "string" ? nextProjectId.trim() : "";
       if (nextProjectIdStr) {
+        let projectDocsMoveError: any = null;
         const invoiceJobIds = new Set<string>();
         const primaryInvoiceJobId = String(prevTrip?.invoiceJobId ?? existingTrip?.invoiceJobId ?? "").trim();
         if (primaryInvoiceJobId) invoiceJobIds.add(primaryInvoiceJobId);
@@ -530,10 +557,22 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
         const invoiceJobIdList = Array.from(invoiceJobIds);
         if (invoiceJobIdList.length > 0) {
-          try {
-            await supabase.from("project_documents").update({ project_id: nextProjectIdStr }).in("invoice_job_id", invoiceJobIdList);
-          } catch {
-            // ignore
+          // Some older rows may have NULL trip_id, so update by job id as well (best-effort).
+          const { error: invoiceJobsByIdError } = await supabase
+            .from("invoice_jobs")
+            .update({ project_id: nextProjectId ?? null })
+            .in("id", invoiceJobIdList);
+          if (invoiceJobsByIdError) {
+            console.warn("[TripsContext] No se pudo actualizar invoice_jobs por id al mover el viaje:", invoiceJobsByIdError);
+          }
+
+          const { error: docsByJobError } = await supabase
+            .from("project_documents")
+            .update({ project_id: nextProjectIdStr })
+            .in("invoice_job_id", invoiceJobIdList);
+          if (docsByJobError) {
+            projectDocsMoveError = projectDocsMoveError ?? docsByJobError;
+            console.warn("[TripsContext] No se pudo mover project_documents por invoice_job_id:", docsByJobError);
           }
         }
 
@@ -543,11 +582,23 @@ export function TripsProvider({ children }: { children: ReactNode }) {
           .filter(Boolean);
 
         if (projectDocumentPaths.length > 0) {
-          try {
-            await supabase.from("project_documents").update({ project_id: nextProjectIdStr }).in("storage_path", projectDocumentPaths);
-          } catch {
-            // ignore
+          const { error: docsByPathError } = await supabase
+            .from("project_documents")
+            .update({ project_id: nextProjectIdStr })
+            .in("storage_path", projectDocumentPaths);
+          if (docsByPathError) {
+            projectDocsMoveError = projectDocsMoveError ?? docsByPathError;
+            console.warn("[TripsContext] No se pudo mover project_documents por storage_path:", docsByPathError);
           }
+        }
+
+        if (projectDocsMoveError) {
+          toast.error(
+            formatSupabaseError(
+              projectDocsMoveError,
+              "No se pudieron mover algunas facturas/documentos al nuevo proyecto",
+            ),
+          );
         }
       }
 
