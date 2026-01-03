@@ -9,9 +9,10 @@ interface CallsheetUploaderProps {
   onJobCreated?: (jobId: string) => void;
   tripId?: string; // Optional context
   projectId?: string; // Optional context
+  autoQueue?: boolean;
 }
 
-export function CallsheetUploader({ onJobCreated, tripId, projectId }: CallsheetUploaderProps) {
+export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue = true }: CallsheetUploaderProps) {
   const [uploading, setUploading] = useState(false);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -65,7 +66,10 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
 
           if (!existingError && existingId && existingStoragePath && existingStoragePath !== "pending") {
             // If it's stuck in "created"/"failed"/"cancelled", re-queue it so it can process.
-            if (existingStatus === "created" || existingStatus === "failed" || existingStatus === "cancelled") {
+            if (
+              autoQueue &&
+              (existingStatus === "created" || existingStatus === "failed" || existingStatus === "cancelled")
+            ) {
               try {
                 await supabase
                   .from("callsheet_jobs")
@@ -103,7 +107,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
 
           const { error: updateError } = await supabase
             .from("callsheet_jobs")
-            .update({ storage_path: filePath, status: "queued", needs_review_reason: null })
+            .update({ storage_path: filePath, status: autoQueue ? "queued" : "created", needs_review_reason: null })
             .eq("id", job.id);
           
           if (updateError) {
@@ -116,7 +120,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
             }
           } else {
             successCount += 1;
-            queuedJobIds.push(job.id);
+            if (autoQueue) queuedJobIds.push(job.id);
             onJobCreated?.(job.id);
           }
         } catch (err: any) {
@@ -132,13 +136,19 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
         }
       }
 
-      if (successCount > 0) toast.success(`Se subieron ${successCount} documentos`);
+      if (successCount > 0) {
+        toast.success(
+          autoQueue
+            ? `Se subieron ${successCount} documentos`
+            : `Se subieron ${successCount} documentos. Pulsa \"Procesar ahora\" para empezar.`,
+        );
+      }
       if (reusedCount > 0) toast.info(`Se reutilizaron ${reusedCount} documento(s) ya subido(s)`);
       if (failCount > 0) toast.error(`Fallaron ${failCount} documentos`);
 
        // Best-effort: kick the worker once so users don't have to wait for cron/manual trigger.
        // Do not await: the worker call can take long and we don't want to block the UI.
-       if (queuedJobIds.length > 0) {
+       if (autoQueue && queuedJobIds.length > 0) {
          try {
            const {
              data: { session },

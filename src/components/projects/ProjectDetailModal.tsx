@@ -1530,7 +1530,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                       </>
                     )}
                   </Button>
-                  <CallsheetUploader projectId={project.id} onJobCreated={handleJobCreated} />
+                  <CallsheetUploader projectId={project.id} onJobCreated={handleJobCreated} autoQueue={false} />
                 </div>
               </div>
 

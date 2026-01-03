@@ -65,21 +65,6 @@ export function ProjectInvoiceUploader({ onUploadComplete, projectId }: ProjectI
           if (jobError) throw jobError;
           createdJobIds.push(jobData.id);
 
-          // Auto-queue the job for processing
-          try {
-            await fetch('/api/invoices/queue', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({ jobId: jobData.id })
-            });
-          } catch (queueErr) {
-            console.warn("Failed to auto-queue invoice job:", queueErr);
-            // Non-fatal, user can manually trigger later
-          }
-
           // Create project_documents entry linked to the job
           const { error: dbError } = await supabase.from("project_documents").insert({
             project_id: projectId,
@@ -107,7 +92,7 @@ export function ProjectInvoiceUploader({ onUploadComplete, projectId }: ProjectI
         }
       }
 
-      if (successCount > 0) toast.success(`Se subieron ${successCount} facturas. La extracción comenzará automáticamente.`);
+      if (successCount > 0) toast.success(`Se subieron ${successCount} facturas. Pulsa \"Extraer\" para procesarlas.`);
       if (failCount > 0) toast.error(`Fallaron ${failCount} documentos`);
       onUploadComplete?.(createdJobIds);
       refreshProjects();
