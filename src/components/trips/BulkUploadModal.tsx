@@ -699,14 +699,15 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         triggerWorkerAbortRef.current?.abort();
         const controller = new AbortController();
         triggerWorkerAbortRef.current = controller;
-        await fetch("/api/callsheets/trigger-worker", {
+        // Do not await: the worker call can take long and we don't want to block the modal UX.
+        void fetch("/api/callsheets/trigger-worker", {
           method: "POST",
           headers: {
             Authorization: token ? `Bearer ${token}` : "",
             "Content-Type": "application/json",
           },
           signal: controller.signal,
-        });
+        }).catch(() => null);
       } catch {
         // ignore: polling will still update if cron runs
       }

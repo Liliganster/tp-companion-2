@@ -1038,29 +1038,38 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
       cancelCallsheetJobIdsRef.current.add(doc.id);
 
-      // Best-effort: kick the worker so the user doesn't have to wait for cron or press "Procesar ahora".
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const accessToken = session?.access_token;
-        await fetch("/api/callsheets/trigger-worker", {
-          method: "POST",
-          headers: {
-            Authorization: accessToken ? `Bearer ${accessToken}` : "",
-            "Content-Type": "application/json",
-          },
-        });
-      } catch {
-        // ignore
-      }
-        
       toast.success(doc.status === "done" ? t("projectDetail.toastReprocessingStarted") : t("projectDetail.toastExtractionStarted"));
       setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'queued' } : p));
+
+      // Best-effort: kick the worker so the user doesn't have to wait for cron or press "Procesar ahora".
+      // Do not await: the worker call can take long and we don't want to block the UI.
+      void (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const accessToken = session?.access_token;
+          const res = await fetch(`/api/callsheets/trigger-worker?jobId=${encodeURIComponent(doc.id)}`, {
+            method: "POST",
+            headers: {
+              Authorization: accessToken ? `Bearer ${accessToken}` : "",
+              "Content-Type": "application/json",
+            },
+          });
+
+          if (!res.ok) {
+            const msg = await res.text().catch(() => "");
+            console.warn("[ProjectDetailModal] trigger-worker failed", { status: res.status, msg });
+          }
+        } catch (err) {
+          console.warn("[ProjectDetailModal] trigger-worker error", err);
+        }
+      })();
     } catch (e: any) {
       toast.error(tf("projectDetail.toastExtractionStartError", { message: e.message }));
     }
   };
 
   const handleTriggerWorker = async () => {
+    if (triggeringWorker) return;
     setTriggeringWorker(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -1082,22 +1091,27 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         // ignore
       }
 
-      const res = await fetch('/api/callsheets/trigger-worker', { 
-        method: 'POST',
+      toast.success("Procesamiento iniciado. Se actualizará automáticamente.");
+
+      // Fire-and-forget so the UI doesn't look blocked while the worker runs.
+      void fetch("/api/callsheets/trigger-worker", {
+        method: "POST",
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json'
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+      }).then(async (res) => {
+        const data = await res.json().catch(() => ({} as any));
+        if (!res.ok) {
+          const message = (data as any)?.message || "Error al procesar";
+          toast.error(tf("projectDetail.toastWorkerError", { message }));
+          return;
         }
+        toast.success(tf("projectDetail.toastWorkerExecuted", { count: (data as any)?.processed || 0 }));
+        setRefreshTrigger((p) => p + 1);
+      }).catch((err) => {
+        toast.error(tf("projectDetail.toastWorkerError", { message: err?.message ?? String(err) }));
       });
-      
-      const data = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(data.message || 'Error al procesar');
-      }
-      
-      toast.success(tf("projectDetail.toastWorkerExecuted", { count: data.processed || 0 }));
-      setRefreshTrigger(p => p + 1);
     } catch (e: any) {
       toast.error(tf("projectDetail.toastWorkerError", { message: e.message }));
     } finally {
@@ -1302,7 +1316,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     <>
       {/* Pending Trips Review Dialog */}
       <Dialog open={showPendingTrips} onOpenChange={setShowPendingTrips}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh] p-0 gap-0 overflow-hidden">
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] p-0 gap-0 overflow-hidden z-[70]">
           <DialogHeader className="p-6 pb-4">
             <DialogTitle className="text-xl font-semibold">
               Viajes procesados ({pendingTrips.length})

@@ -47,6 +47,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ProjectDetailModal } from "@/components/projects/ProjectDetailModal";
 import { Project, useProjects } from "@/contexts/ProjectsContext";
 import { useTrips } from "@/contexts/TripsContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/hooks/use-i18n";
 import { uuidv4 } from "@/lib/utils";
 
@@ -71,6 +72,7 @@ export default function Projects() {
 
   const [searchQuery, setSearchQuery] = useState(() => loadProjectsFilters()?.searchQuery ?? "");
   const [selectedYear, setSelectedYear] = useState(() => loadProjectsFilters()?.selectedYear ?? "2024");
+  const { user } = useAuth();
   const { projects, addProject, updateProject, deleteProject, toggleStar } = useProjects();
   const { trips } = useTrips();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -111,6 +113,40 @@ export default function Projects() {
   // Fetch document counts for projects
   const [projectCallsheetPathsByKey, setProjectCallsheetPathsByKey] = useState<Record<string, string[]>>({});
   const [projectInvoiceCountsByKey, setProjectInvoiceCountsByKey] = useState<Record<string, number>>({});
+  const [countsRefreshToken, setCountsRefreshToken] = useState(0);
+
+  // Keep counts fresh when jobs/documents change (avoid requiring a full page refresh).
+  useEffect(() => {
+    if (!supabase || !user?.id) return;
+
+    let timer: any = null;
+    const schedule = () => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        setCountsRefreshToken((p) => p + 1);
+      }, 400);
+    };
+
+    const channel = supabase
+      .channel(`projects-counts-${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "callsheet_jobs", filter: `user_id=eq.${user.id}` },
+        () => schedule(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "project_documents", filter: `user_id=eq.${user.id}` },
+        () => schedule(),
+      )
+      .subscribe();
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     try {
@@ -225,7 +261,7 @@ export default function Projects() {
     };
      
     fetchCounts();
-  }, [projects, trips]);
+  }, [projects, trips, countsRefreshToken]);
 
 
   const statsByProjectKey = useMemo(() => {

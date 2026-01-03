@@ -136,25 +136,30 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId }: Callsheet
       if (reusedCount > 0) toast.info(`Se reutilizaron ${reusedCount} documento(s) ya subido(s)`);
       if (failCount > 0) toast.error(`Fallaron ${failCount} documentos`);
 
-      // Best-effort: kick the worker once so users don't have to wait for cron/manual trigger.
-      if (queuedJobIds.length > 0) {
-        try {
-          const {
-            data: { session },
-          } = await supabase.auth.getSession();
-          const accessToken = session?.access_token;
-
-          await fetch("/api/callsheets/trigger-worker", {
-            method: "POST",
-            headers: {
-              Authorization: accessToken ? `Bearer ${accessToken}` : "",
-              "Content-Type": "application/json",
-            },
-          });
-        } catch {
-          // ignore: cron/manual trigger can still process later
-        }
-      }
+       // Best-effort: kick the worker once so users don't have to wait for cron/manual trigger.
+       // Do not await: the worker call can take long and we don't want to block the UI.
+       if (queuedJobIds.length > 0) {
+         try {
+           const {
+             data: { session },
+           } = await supabase.auth.getSession();
+           const accessToken = session?.access_token;
+ 
+           void fetch("/api/callsheets/trigger-worker", {
+             method: "POST",
+             headers: {
+               Authorization: accessToken ? `Bearer ${accessToken}` : "",
+               "Content-Type": "application/json",
+             },
+           }).then(async (res) => {
+             if (res.ok) return;
+             const errorText = await res.text().catch(() => "");
+             console.warn("[CallsheetUploader] trigger-worker failed", { status: res.status, errorText });
+           });
+         } catch {
+           // ignore: cron/manual trigger can still process later
+         }
+       }
 
     } catch (err: any) {
       console.error(err);

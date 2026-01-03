@@ -26,32 +26,55 @@ export default withApiObservability(async function handler(req: any, res: any, {
   if (!allowed) return;
 
   try {
-    // Instead of calling the worker via HTTP, process jobs directly here
-    // This avoids authentication issues
-    
-    const { data: jobs, error } = await supabaseAdmin
-      .from("callsheet_jobs")
-      .select("*")
-      .eq("status", "queued")
-      .limit(8);
+    const jobId =
+      (typeof req.query?.jobId === "string" ? req.query.jobId : null) ??
+      (typeof req.body?.jobId === "string" ? req.body.jobId : null);
 
-    if (error) {
-      log.error({ error }, "[trigger-worker] Error fetching jobs");
-      return sendJson(res, 500, { error: "fetch_failed", message: error.message });
-    }
+    const normalizedJobId = String(jobId ?? "").trim();
+    const hasJobId = Boolean(normalizedJobId);
 
-    if (!jobs || jobs.length === 0) {
-      return sendJson(res, 200, { ok: true, processed: 0, message: "No jobs queued" });
+    if (hasJobId) {
+      const { data: job, error } = await supabaseAdmin
+        .from("callsheet_jobs")
+        .select("id, user_id, status")
+        .eq("id", normalizedJobId)
+        .maybeSingle();
+
+      if (error) {
+        log.error({ error, jobId: normalizedJobId }, "[trigger-worker] Error fetching job");
+        return sendJson(res, 500, { error: "fetch_failed", message: error.message });
+      }
+
+      if (!job || String((job as any).user_id ?? "") !== user.id) {
+        return sendJson(res, 404, { ok: false, error: "not_found", message: "Job not found" });
+      }
+    } else {
+      const { count, error } = await supabaseAdmin
+        .from("callsheet_jobs")
+        .select("id", { head: true, count: "exact" })
+        .eq("status", "queued")
+        .eq("user_id", user.id);
+
+      if (error) {
+        log.error({ error }, "[trigger-worker] Error fetching jobs");
+        return sendJson(res, 500, { error: "fetch_failed", message: error.message });
+      }
+
+      if (!count) {
+        return sendJson(res, 200, { ok: true, processed: 0, message: "No jobs queued" });
+      }
     }
 
     // Trigger the worker endpoint with CRON_SECRET
     const protocol = req.headers.host?.includes('localhost') ? 'http' : 'https';
     // Manual trigger: keep the request short to avoid function timeouts in UI.
     // Cron will still process the rest in background.
-    const workerUrl = `${protocol}://${req.headers.host}/api/worker?manual=1&skipGeocode=1`;
+    const params = new URLSearchParams({ manual: "1", skipGeocode: "1", userId: user.id });
+    if (hasJobId) params.set("jobId", normalizedJobId);
+    const workerUrl = `${protocol}://${req.headers.host}/api/worker?${params.toString()}`;
     const cronSecret = process.env.CRON_SECRET;
 
-    log.info({ queuedJobs: jobs.length }, "[trigger-worker] Calling worker");
+    log.info({ jobId: hasJobId ? normalizedJobId : null }, "[trigger-worker] Calling worker");
 
     const workerRes = await fetch(workerUrl, {
       method: "POST",

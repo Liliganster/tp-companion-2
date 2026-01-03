@@ -10,8 +10,34 @@ export async function optimizeCallsheetLocationsAndDistance(args: {
   profile: UserProfileLike;
   rawLocations: string[];
   accessToken?: string | null;
+  signal?: AbortSignal;
+  geocodeTimeoutMs?: number;
+  directionsTimeoutMs?: number;
 }): Promise<{ locations: string[]; distanceKm: number | null }> {
-  const { profile, rawLocations, accessToken } = args;
+  const { profile, rawLocations, accessToken, signal } = args;
+  const geocodeTimeoutMs = typeof args.geocodeTimeoutMs === "number" && args.geocodeTimeoutMs > 0 ? args.geocodeTimeoutMs : 10_000;
+  const directionsTimeoutMs =
+    typeof args.directionsTimeoutMs === "number" && args.directionsTimeoutMs > 0 ? args.directionsTimeoutMs : 15_000;
+
+  async function fetchJsonWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs: number) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const onAbort = () => controller.abort();
+
+    if (signal) {
+      if (signal.aborted) controller.abort();
+      else signal.addEventListener("abort", onAbort, { once: true });
+    }
+
+    try {
+      const res = await fetch(input, { ...init, signal: controller.signal });
+      const data = await res.json().catch(() => null);
+      return { res, data };
+    } finally {
+      clearTimeout(timeout);
+      if (signal) signal.removeEventListener("abort", onAbort);
+    }
+  }
 
   const baseAddress = (profile.baseAddress ?? "").trim();
   const city = (profile.city ?? "").trim();
@@ -26,6 +52,7 @@ export async function optimizeCallsheetLocationsAndDistance(args: {
 
   const normalizedLocs: string[] = [];
   for (const locStr of currentLocs) {
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     let query = locStr;
 
     const lower = locStr.toLowerCase();
@@ -38,20 +65,23 @@ export async function optimizeCallsheetLocationsAndDistance(args: {
     }
 
     try {
-      const res = await fetch("/api/google/geocode", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ address: query, region }),
-      });
+      const { res, data } = await fetchJsonWithTimeout(
+        "/api/google/geocode",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ address: query, region }),
+        },
+        geocodeTimeoutMs,
+      );
 
-      const data = (await res.json().catch(() => null)) as { formattedAddress?: string } | null;
-
-      if (res.ok && data?.formattedAddress) {
+      if (res.ok && (data as any)?.formattedAddress) {
         normalizedLocs.push(data.formattedAddress);
       } else {
         normalizedLocs.push(locStr);
       }
     } catch {
+      if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
       normalizedLocs.push(locStr);
     }
   }
@@ -60,22 +90,26 @@ export async function optimizeCallsheetLocationsAndDistance(args: {
 
   if (baseAddress) {
     try {
-      const res = await fetch("/api/google/directions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({
-          origin: baseAddress,
-          destination: baseAddress,
-          waypoints: normalizedLocs,
-          region,
-        }),
-      });
+      const { res, data } = await fetchJsonWithTimeout(
+        "/api/google/directions",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({
+            origin: baseAddress,
+            destination: baseAddress,
+            waypoints: normalizedLocs,
+            region,
+          }),
+        },
+        directionsTimeoutMs,
+      );
 
-      const data = (await res.json().catch(() => null)) as { totalDistanceMeters?: number } | null;
-      if (res.ok && typeof data?.totalDistanceMeters === "number") {
-        distanceKm = Math.round((data.totalDistanceMeters / 1000) * 10) / 10;
+      if (res.ok && typeof (data as any)?.totalDistanceMeters === "number") {
+        distanceKm = Math.round((((data as any).totalDistanceMeters as number) / 1000) * 10) / 10;
       }
     } catch {
+      if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
       distanceKm = null;
     }
   }
