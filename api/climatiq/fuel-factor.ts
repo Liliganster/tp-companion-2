@@ -28,8 +28,8 @@ function getActivityId(fuelType: FuelType): string {
   const cached = ACTIVITY_ID_CACHE.get(fuelType);
   if (cached) return cached;
 
-  // European defaults that support AT region
-  return fuelType === "gasoline" ? "passenger_vehicle-vehicle_type_car-fuel_source_petrol-distance_na_other-engine_size_na_other" : "passenger_vehicle-vehicle_type_car-fuel_source_diesel-distance_na_other-engine_size_na_other";
+  // Activity IDs that support AT region
+  return fuelType === "gasoline" ? "passenger_vehicle-vehicle_type_car-fuel_source_gasoline-engine_size_na-vehicle_age_na" : "passenger_vehicle-vehicle_type_car-fuel_source_diesel-engine_size_na-vehicle_age_na";
 }
 
 function getCached(key: string): unknown | null {
@@ -69,15 +69,13 @@ async function searchFuelActivityId(params: {
   dataVersion: string;
   fuelType: FuelType;
 }): Promise<string | null> {
-  // Search for volume-based fuel combustion factors with AT region
-  const query = params.fuelType === "gasoline" ? "motor gasoline fuel combustion" : "diesel fuel combustion";
+  // Search for fuel combustion factors specifically for AT region
+  const query = params.fuelType === "gasoline" ? "gasoline combustion stationary" : "diesel combustion stationary";
 
   const url = new URL(`${BASE_URL}/search`);
   url.searchParams.set("query", query);
   url.searchParams.set("data_version", params.dataVersion);
   url.searchParams.set("results_per_page", "50");
-  url.searchParams.set("unit_type", "Volume");
-  url.searchParams.set("source_lca_activity", "fuel_combustion");
   url.searchParams.set("region", "AT");
 
   const upstream = await fetch(url.toString(), {
@@ -92,7 +90,7 @@ async function searchFuelActivityId(params: {
 
   const results = Array.isArray(data?.results) ? data.results : [];
   
-  // First try: Find exact AT region match with volume unit
+  // Find AT region match with volume unit (liter)
   for (const r of results) {
     const activityId = typeof r?.activity_id === "string" ? r.activity_id.trim() : "";
     const region = typeof r?.region === "string" ? r.region.trim().toUpperCase() : "";
@@ -104,20 +102,18 @@ async function searchFuelActivityId(params: {
     }
   }
   
-  // Second try: Any volume-based result
+  // Fallback: any AT region result
   for (const r of results) {
     const activityId = typeof r?.activity_id === "string" ? r.activity_id.trim() : "";
-    const unitType = typeof r?.unit_type === "string" ? r.unit_type.trim().toLowerCase() : "";
-    const unit = typeof r?.unit === "string" ? r.unit.trim().toLowerCase() : "";
+    const region = typeof r?.region === "string" ? r.region.trim().toUpperCase() : "";
     if (!activityId) continue;
-    if (unitType && unitType !== "volume") continue;
-    if (unit && unit !== "l") continue;
-    return activityId;
+    if (region === "AT") {
+      return activityId;
+    }
   }
 
-  const first = results[0];
-  const fallback = typeof first?.activity_id === "string" ? first.activity_id.trim() : "";
-  return fallback || null;
+  return null;
+}
 }
 
 export default async function handler(req: any, res: any) {
