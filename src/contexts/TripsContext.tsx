@@ -277,9 +277,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
     const normalizedTrip: Trip = {
       ...trip,
-      co2: Number.isFinite(Number(trip.co2)) && Number(trip.co2) > 0
-        ? Number(trip.co2)
-        : calculateTripEmissions({ distanceKm: trip.distance, ...emissionsInput }).co2Kg,
+      co2: calculateTripEmissions({ distanceKm: trip.distance, ...emissionsInput }).co2Kg,
     };
 
     const callsheetJobId = String(normalizedTrip.callsheet_job_id ?? "").trim();
