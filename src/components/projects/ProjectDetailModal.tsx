@@ -1417,16 +1417,16 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
           <div className="p-6 pt-4 border-t flex items-center justify-between gap-4">
             <Button variant="outline" onClick={handleDiscardPendingTrips}>
-              Descartar todos
+              {t("projectDetail.discardAll")}
             </Button>
             <Button onClick={handleSaveAllPendingTrips} disabled={pendingTrips.length === 0 || savingPendingTrips}>
               {savingPendingTrips ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Guardando...
+                  {t("projectDetail.saving")}
                 </>
               ) : (
-                <>Guardar {pendingTrips.length} viajes</>
+                <>{t("projectDetail.saveTrips", { count: pendingTrips.length })}</>
               )}
             </Button>
           </div>
@@ -1517,7 +1517,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                         ) : null}
                         {doc.status === 'needs_review' ? (
                           <span title={doc.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-full cursor-help bg-orange-500/20 text-orange-500">
-                            Revisar
+                            {t("projectDetail.review")}
                           </span>
                         ) : null}
                         {doc.status === 'out_of_quota' ? (
@@ -1539,7 +1539,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                             size="icon" 
                             className="h-8 w-8 text-yellow-500 hover:text-yellow-400" 
                             onClick={() => handleExtractInvoice(doc)} 
-                            title={doc.status === 'done' ? "Volver a procesar" : "Extraer datos con IA"}
+                            title={doc.status === 'done' ? t("projectDetail.reprocess") : t("projectDetail.extractDataWithAi")}
                           >
                             <Sparkles className="w-4 h-4" />
                           </Button>
@@ -1575,12 +1575,12 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                     {triggeringWorker ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Procesando...
+                        {t("projectDetail.processing")}
                       </>
                     ) : (
                       <>
                         <Sparkles className="h-4 w-4 mr-2" />
-                        Procesar ahora
+                        {t("projectDetail.processNow")}
                       </>
                     )}
                   </Button>
@@ -1604,7 +1604,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                         ) : null}
                         {sheet.status === 'needs_review' ? (
                           <span title={sheet.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-full cursor-help bg-orange-500/20 text-orange-500">
-                            Revisar
+                            {t("projectDetail.review")}
                           </span>
                         ) : null}
                         {sheet.status === 'out_of_quota' ? (
@@ -1626,7 +1626,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                             size="icon" 
                             className="h-8 w-8 text-yellow-500 hover:text-yellow-400" 
                             onClick={() => handleExtract(sheet)} 
-                            title={sheet.status === 'done' ? "Volver a procesar con IA" : "Extraer datos con IA"}
+                            title={sheet.status === 'done' ? t("projectDetail.reprocessWithAi") : t("projectDetail.extractDataWithAi")}
                           >
                             <Sparkles className="w-4 h-4" />
                           </Button>
