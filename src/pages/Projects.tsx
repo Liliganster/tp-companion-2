@@ -34,6 +34,7 @@ import {
   FolderKanban,
   Calendar,
   Receipt,
+  Leaf,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -727,6 +728,7 @@ export default function Projects() {
                   <TableHead className="text-foreground font-semibold whitespace-nowrap hidden sm:table-cell">{t("projects.tableCompany")}</TableHead>
                   <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("projects.tableTrips")}</TableHead>
                   <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden md:table-cell">{t("projects.tableTotalKm")}</TableHead>
+                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden md:table-cell">{t("projects.tableCo2")}</TableHead>
                   <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("projects.tableDocuments")}</TableHead>
                   <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("projects.tableInvoices")}</TableHead>
                   <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("projects.tableCost")}</TableHead>
@@ -796,6 +798,12 @@ export default function Projects() {
                     </TableCell>
                     <TableCell className="text-right font-medium hidden md:table-cell">
                       {totalKm.toLocaleString(locale)} km
+                    </TableCell>
+                    <TableCell className="text-right hidden md:table-cell">
+                      <div className="flex items-center justify-end gap-1.5 text-success">
+                        <Leaf className="w-4 h-4" />
+                        <span>{(stats?.co2Emissions ?? 0).toFixed(2)}</span>
+                      </div>
                     </TableCell>
 	                    <TableCell className="text-right hidden lg:table-cell">
 	                      <div className="flex items-center justify-end gap-1.5">
