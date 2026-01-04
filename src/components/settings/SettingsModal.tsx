@@ -500,9 +500,9 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       <div className="flex items-start gap-2 mb-3">
                         <Info className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
                         <div className="flex-1">
-                          <h4 className="text-sm font-medium mb-1">Fuente de Datos de Emisiones</h4>
+                          <h4 className="text-sm font-medium mb-1">{t("settings.emissionsDataSourceTitle")}</h4>
                           <p className="text-xs text-muted-foreground mb-3">
-                            Los cálculos de CO₂ usan datos en tiempo real de APIs especializadas:
+                            {t("settings.emissionsDataSourceBody")}
                           </p>
                         </div>
                       </div>
@@ -522,19 +522,19 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                               </a>
                             </div>
                             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
-                              <div><span className="font-medium">Factor:</span> {fuelFactor.kgCo2ePerLiter.toFixed(3)} kg CO₂e/L</div>
-                              {fuelFactor.source && <div><span className="font-medium">Fuente:</span> {fuelFactor.source}</div>}
-                              {fuelFactor.year && <div><span className="font-medium">Año:</span> {fuelFactor.year}</div>}
-                              {fuelFactor.region && <div><span className="font-medium">Región:</span> {fuelFactor.region}</div>}
+                              <div><span className="font-medium">{t("settings.emissionsFactor")}:</span> {fuelFactor.kgCo2ePerLiter.toFixed(3)} kg CO₂e/L</div>
+                              {fuelFactor.source && <div><span className="font-medium">{t("settings.emissionsSource")}:</span> {fuelFactor.source}</div>}
+                              {fuelFactor.year && <div><span className="font-medium">{t("settings.emissionsYear")}:</span> {fuelFactor.year}</div>}
+                              {fuelFactor.region && <div><span className="font-medium">{t("settings.emissionsRegion")}:</span> {fuelFactor.region}</div>}
                               {fuelFactor.activityId && (
                                 <div className="col-span-2">
-                                  <span className="font-medium">Activity ID:</span> 
+                                  <span className="font-medium">{t("settings.emissionsActivityId")}:</span> 
                                   <span className="ml-1 text-[10px] font-mono bg-secondary px-1 py-0.5 rounded">{fuelFactor.activityId}</span>
                                 </div>
                               )}
                             </div>
                             <p className="text-[10px] text-muted-foreground mt-2 italic">
-                              * Incluye emisiones Well-to-Wheel (extracción, refinado, transporte y combustión)
+                              {t("settings.emissionsWellToWheel")}
                             </p>
                           </div>
                         )}
@@ -553,11 +553,11 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                               </a>
                             </div>
                             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
-                              <div><span className="font-medium">Intensidad:</span> {atGrid.gCo2PerKwh.toFixed(0)} g CO₂/kWh</div>
-                              {atGrid.zone && <div><span className="font-medium">Zona:</span> {atGrid.zone}</div>}
+                              <div><span className="font-medium">{t("settings.emissionsIntensity")}:</span> {atGrid.gCo2PerKwh.toFixed(0)} g CO₂/kWh</div>
+                              {atGrid.zone && <div><span className="font-medium">{t("settings.emissionsZone")}:</span> {atGrid.zone}</div>}
                               {atGrid.datetime && (
                                 <div className="col-span-2">
-                                  <span className="font-medium">Actualizado:</span> {new Date(atGrid.datetime).toLocaleString(locale)}
+                                  <span className="font-medium">{t("settings.emissionsUpdated")}:</span> {new Date(atGrid.datetime).toLocaleString(locale)}
                                 </div>
                               )}
                             </div>
