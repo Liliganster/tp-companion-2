@@ -35,13 +35,17 @@ export default async function handler(req: any, res: any) {
 
   const fileId = typeof req.query?.fileId === "string" ? req.query.fileId : "";
   const name = typeof req.query?.name === "string" ? req.query.name : "document";
+  const exportMimeType = typeof req.query?.exportMimeType === "string" ? req.query.exportMimeType : "";
   if (!fileId) return sendJson(res, 400, { error: "fileId required" });
 
   try {
     const { accessToken } = await getGoogleAccessTokenForUser(user.id);
-    const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    const isExport = Boolean(exportMimeType);
+    const url = isExport
+      ? `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=${encodeURIComponent(exportMimeType)}`
+      : `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`;
+
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
 
     if (!response.ok) {
       const text = await response.text().catch(() => "");
@@ -49,8 +53,10 @@ export default async function handler(req: any, res: any) {
     }
 
     res.statusCode = 200;
-    res.setHeader("Content-Disposition", `attachment; filename="${safeFilename(name)}"`);
-    res.setHeader("Content-Type", response.headers.get("content-type") || "application/octet-stream");
+    const outName =
+      exportMimeType === "text/csv" && !String(name).toLowerCase().endsWith(".csv") ? `${name}.csv` : name;
+    res.setHeader("Content-Disposition", `attachment; filename="${safeFilename(outName)}"`);
+    res.setHeader("Content-Type", exportMimeType || response.headers.get("content-type") || "application/octet-stream");
 
     const buf = Buffer.from(await response.arrayBuffer());
     res.end(buf);

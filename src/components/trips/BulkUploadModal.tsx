@@ -42,6 +42,89 @@ interface BulkUploadModalProps {
   onSave?: (data: SavedTrip) => Promise<boolean> | boolean | void;
 }
 
+let googleApiJsPromise: Promise<void> | null = null;
+let googlePickerApiPromise: Promise<void> | null = null;
+
+async function loadGoogleApiJs() {
+  if (typeof window === "undefined") throw new Error("Google API no disponible");
+  const w = window as any;
+  if (w.gapi?.load) return;
+
+  if (!googleApiJsPromise) {
+    googleApiJsPromise = new Promise<void>((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://apis.google.com/js/api.js";
+      script.async = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("No se pudo cargar Google API"));
+      document.head.appendChild(script);
+    });
+  }
+
+  await googleApiJsPromise;
+}
+
+async function loadGooglePickerApi() {
+  if (!googlePickerApiPromise) {
+    googlePickerApiPromise = (async () => {
+      await loadGoogleApiJs();
+      const w = window as any;
+      await new Promise<void>((resolve, reject) => {
+        if (!w.gapi?.load) return reject(new Error("Google API no disponible"));
+        w.gapi.load("picker", { callback: () => resolve() });
+      });
+    })();
+  }
+
+  await googlePickerApiPromise;
+}
+
+async function openGoogleDrivePicker(params: {
+  apiKey: string;
+  oauthToken: string;
+  title: string;
+  mimeTypes?: string[];
+}): Promise<{ fileId: string; name: string; mimeType: string } | null> {
+  await loadGooglePickerApi();
+
+  const w = window as any;
+  const google = w.google;
+  if (!google?.picker) throw new Error("Google Drive Picker no disponible");
+
+  const mimeTypes = Array.isArray(params.mimeTypes) && params.mimeTypes.length > 0
+    ? params.mimeTypes
+    : ["text/csv", "application/vnd.google-apps.spreadsheet", "application/vnd.ms-excel"];
+
+  const view = new google.picker.DocsView(google.picker.ViewId.DOCS);
+  view.setIncludeFolders(false);
+  view.setSelectFolderEnabled(false);
+  view.setMimeTypes(mimeTypes.join(","));
+
+  return await new Promise((resolve) => {
+    const picker = new google.picker.PickerBuilder()
+      .setDeveloperKey(params.apiKey)
+      .setOAuthToken(params.oauthToken)
+      .setOrigin(window.location.origin)
+      .setTitle(params.title)
+      .addView(view)
+      .setCallback((data: any) => {
+        const action = data?.action;
+        if (action === google.picker.Action.CANCEL) return resolve(null);
+        if (action !== google.picker.Action.PICKED) return;
+        const doc = Array.isArray(data?.docs) ? data.docs[0] : null;
+        if (!doc?.id) return resolve(null);
+        resolve({
+          fileId: String(doc.id),
+          name: typeof doc.name === "string" ? doc.name : "import.csv",
+          mimeType: typeof doc.mimeType === "string" ? doc.mimeType : "",
+        });
+      })
+      .build();
+
+    picker.setVisible(true);
+  });
+}
+
 export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const [open, setOpen] = useState(false);
   const [csvText, setCsvText] = useState("");
@@ -461,6 +544,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
     // Ensure Google is connected before asking for a Drive link/fileId.
     // Otherwise users only see the prompt but the download will always fail.
+    setCsvBusy(true);
     try {
       const statusRes = await fetch("/api/google/oauth/status", {
         headers: { Authorization: `Bearer ${token}` },
@@ -486,32 +570,49 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         window.location.href = startData.authUrl;
         return;
       }
-    } catch (err: any) {
-      toast.error("Google", { description: err?.message ?? t("settings.googleConnectFailed") });
-      return;
-    }
 
-    const input = window.prompt(t("bulk.promptDriveLink"));
-    const fileId = parseDriveFileId(input ?? "");
-    if (!fileId) {
-      toast.error(t("bulk.errorDetectFileId"));
-      return;
-    }
+      const pickerApiKey = import.meta.env.VITE_GOOGLE_PICKER_API_KEY as string | undefined;
+      if (!pickerApiKey) {
+        toast.error(t("bulk.errorDrivePickerNotConfigured"));
+        return;
+      }
 
-    try {
-      const response = await fetch(`/api/google/drive/download?fileId=${encodeURIComponent(fileId)}&name=${encodeURIComponent("import.csv")}`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      const tokenRes = await fetch("/api/google/oauth/access-token", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const tokenData: any = await tokenRes.json().catch(() => null);
+      if (!tokenRes.ok || !tokenData?.accessToken) {
+        throw new Error(tokenData?.message ?? tokenData?.error ?? "Google token failed");
+      }
+
+      const picked = await openGoogleDrivePicker({
+        apiKey: pickerApiKey,
+        oauthToken: tokenData.accessToken,
+        title: t("bulk.drivePickerTitle"),
+      });
+      if (!picked) return;
+
+      const exportMimeType =
+        picked.mimeType === "application/vnd.google-apps.spreadsheet" ? "text/csv" : "";
+
+      const url =
+        `/api/google/drive/download?fileId=${encodeURIComponent(picked.fileId)}` +
+        `&name=${encodeURIComponent(picked.name || "import.csv")}` +
+        (exportMimeType ? `&exportMimeType=${encodeURIComponent(exportMimeType)}` : "");
+
+      const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (!response.ok) {
         const text = await response.text().catch(() => "");
         throw new Error(text || t("bulk.errorDriveDownload"));
       }
+
       const text = await response.text();
       setCsvText(text.replace(/^\uFEFF/, ""));
       toast.success(t("bulk.toastCsvImportedDrive"));
-    } catch (e: any) {
-      console.error(e);
-      toast.error(e?.message ?? t("bulk.errorDriveDownload"));
+    } catch (err: any) {
+      toast.error("Google", { description: err?.message ?? t("settings.googleConnectFailed") });
+    } finally {
+      setCsvBusy(false);
     }
   };
 
