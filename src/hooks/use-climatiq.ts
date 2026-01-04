@@ -8,6 +8,8 @@ export type ClimatiqFuelFactor = {
   region: string | null;
   source?: string;
   year?: number | null;
+  activityId?: string;
+  dataVersion?: string;
 };
 
 export function useClimatiqFuelFactor(fuelType: ClimatiqFuelFactor["fuelType"] | null, opts?: { enabled?: boolean }) {
@@ -47,6 +49,8 @@ export function useClimatiqFuelFactor(fuelType: ClimatiqFuelFactor["fuelType"] |
         region: typeof data?.region === "string" ? data.region : null,
         source: typeof data?.source === "string" ? data.source : undefined,
         year: typeof data?.year === "number" ? data.year : null,
+        activityId: typeof data?.activityId === "string" ? data.activityId : undefined,
+        dataVersion: typeof data?.dataVersion === "string" ? data.dataVersion : undefined,
       };
 
       writeOfflineCache(offlineCacheKey, payload);
