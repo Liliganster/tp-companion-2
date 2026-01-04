@@ -126,13 +126,15 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     };
   }, [project?.id, open]);
 
-  const { data: atGrid } = useElectricityMapsCarbonIntensity("AT", {
+  const { data: atGrid, isLoading: isLoadingGrid } = useElectricityMapsCarbonIntensity("AT", {
     enabled: profile.fuelType === "ev",
   });
-  const { data: fuelFactor } = useClimatiqFuelFactor(
+  const { data: fuelFactor, isLoading: isLoadingFuel } = useClimatiqFuelFactor(
     profile.fuelType === "gasoline" || profile.fuelType === "diesel" ? profile.fuelType : null,
     { enabled: profile.fuelType === "gasoline" || profile.fuelType === "diesel" },
   );
+
+  const isLoadingEmissionsData = isLoadingGrid || isLoadingFuel;
 
   const emissionsInput = useMemo(() => {
     return {
@@ -1468,7 +1470,11 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                 <p className="text-sm text-muted-foreground mb-1">{t("projectDetail.co2Estimated")}</p>
                 <div className="flex items-center gap-2">
                   <Leaf className="w-5 h-5 text-warning" />
-                  <span className="text-xl font-bold">{realProjectCo2.toFixed(1)} kg</span>
+                  {isLoadingEmissionsData ? (
+                    <Loader2 className="w-5 h-5 animate-spin text-warning" />
+                  ) : (
+                    <span className="text-xl font-bold">{realProjectCo2.toFixed(1)} kg</span>
+                  )}
                 </div>
               </div>
             </div>

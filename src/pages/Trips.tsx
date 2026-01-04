@@ -3,7 +3,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Filter, Upload, Calendar, MoreVertical, Pencil, Trash2, Map as MapIcon, CalendarPlus, ChevronUp, ChevronDown, AlertTriangle } from "lucide-react";
+import { Plus, Filter, Upload, Calendar, MoreVertical, Pencil, Trash2, Map as MapIcon, CalendarPlus, ChevronUp, ChevronDown, AlertTriangle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -80,13 +80,15 @@ export default function Trips() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const { data: atGrid } = useElectricityMapsCarbonIntensity("AT", {
+  const { data: atGrid, isLoading: isLoadingGrid } = useElectricityMapsCarbonIntensity("AT", {
     enabled: profile.fuelType === "ev",
   });
-  const { data: fuelFactor } = useClimatiqFuelFactor(
+  const { data: fuelFactor, isLoading: isLoadingFuel } = useClimatiqFuelFactor(
     profile.fuelType === "gasoline" || profile.fuelType === "diesel" ? profile.fuelType : null,
     { enabled: profile.fuelType === "gasoline" || profile.fuelType === "diesel" },
   );
+
+  const isLoadingEmissionsData = isLoadingGrid || isLoadingFuel;
 
   const emissionsInput = useMemo(() => {
     return {
@@ -649,7 +651,9 @@ export default function Trips() {
                   </div>
                   <div className="flex justify-between md:flex-col md:gap-0.5">
                     <span className="text-muted-foreground text-center">CO₂:</span>
-                    <span className="text-emerald-500 font-medium text-center">{calculateCO2(trip.distance)} kg</span>
+                    <span className="text-emerald-500 font-medium text-center">
+                      {isLoadingEmissionsData ? <Loader2 className="w-3 h-3 animate-spin inline" /> : `${calculateCO2(trip.distance)} kg`}
+                    </span>
                   </div>
                   <div className="flex justify-between md:flex-col md:gap-0.5">
                     <span className="text-muted-foreground text-center">Reembolso:</span>
@@ -813,7 +817,9 @@ export default function Trips() {
                     {trip.project}
                   </span>
                 </TableCell>
-                <TableCell className="text-right text-emerald-500 whitespace-nowrap">{calculateCO2(trip.distance)} kg</TableCell>
+                <TableCell className="text-right text-emerald-500 whitespace-nowrap">
+                  {isLoadingEmissionsData ? <Loader2 className="w-3 h-3 animate-spin inline" /> : `${calculateCO2(trip.distance)} kg`}
+                </TableCell>
                 <TableCell className="text-right whitespace-nowrap">{formatTripInvoiceCell(trip)}</TableCell>
                 <TableCell className="text-right text-muted-foreground hidden lg:table-cell">{trip.passengers || "-"}</TableCell>
                 <TableCell className="text-right text-primary font-medium whitespace-nowrap">{calculateTripReimbursement(trip).toFixed(2)} €</TableCell>

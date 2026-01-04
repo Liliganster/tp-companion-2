@@ -5,7 +5,7 @@ import { NotificationDropdown } from "@/components/dashboard/NotificationDropdow
 import { RecentTrips } from "@/components/dashboard/RecentTrips";
 import { ProjectChart } from "@/components/dashboard/ProjectChart";
 import { Button } from "@/components/ui/button";
-import { ArrowDown, ArrowUp, Plus, Settings, Sparkles, Check, AlertCircle } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Settings, Sparkles, Check, AlertCircle, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useProjects } from "@/contexts/ProjectsContext";
@@ -157,13 +157,15 @@ export default function Index() {
   const kpiTitleClassName = "text-base font-semibold leading-tight text-foreground uppercase tracking-wide";
   const kpiTitleWrapperClassName = "p-0 rounded-none bg-transparent";
 
-  const { data: atGrid } = useElectricityMapsCarbonIntensity("AT", {
+  const { data: atGrid, isLoading: isLoadingGrid } = useElectricityMapsCarbonIntensity("AT", {
     enabled: profile.fuelType === "ev",
   });
-  const { data: fuelFactor } = useClimatiqFuelFactor(
+  const { data: fuelFactor, isLoading: isLoadingFuel } = useClimatiqFuelFactor(
     profile.fuelType === "gasoline" || profile.fuelType === "diesel" ? profile.fuelType : null,
     { enabled: profile.fuelType === "gasoline" || profile.fuelType === "diesel" },
   );
+
+  const isLoadingEmissionsData = isLoadingGrid || isLoadingFuel;
 
   const emissionsInput = useMemo(() => {
     return {
@@ -309,7 +311,12 @@ export default function Index() {
                 {co2Rating}
               </div>
             }
-            value={<div className="mt-1">
+            value={isLoadingEmissionsData ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="mt-1">
               <div className="flex flex-col gap-2">
                 <StatusRow 
                   label="Este Mes" 
@@ -334,7 +341,8 @@ export default function Index() {
                   status="neutral"
                 />
               </div>
-            </div>}
+            </div>
+            )}
             action={<Link to="/advanced/emissions" className="text-xs text-primary hover:underline mt-2 inline-block">{t("dashboard.viewCo2")}</Link>}
           />
         </div>

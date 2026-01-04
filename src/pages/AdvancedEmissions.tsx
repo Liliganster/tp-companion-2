@@ -28,6 +28,7 @@ import {
   Info,
   Save,
   Flame,
+  Loader2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -182,14 +183,16 @@ export default function AdvancedEmissions() {
   const { projects } = useProjects();
   const { profile } = useUserProfile();
 
-  const { data: atGrid } = useElectricityMapsCarbonIntensity("AT", {
+  const { data: atGrid, isLoading: isLoadingGrid } = useElectricityMapsCarbonIntensity("AT", {
     enabled: profile.fuelType === "ev",
   });
   const gridKgCo2PerKwh = atGrid?.kgCo2PerKwh ?? null;
-  const { data: fuelFactor } = useClimatiqFuelFactor(
+  const { data: fuelFactor, isLoading: isLoadingFuel } = useClimatiqFuelFactor(
     profile.fuelType === "gasoline" || profile.fuelType === "diesel" ? profile.fuelType : null,
     { enabled: profile.fuelType === "gasoline" || profile.fuelType === "diesel" },
   );
+
+  const isLoadingEmissionsData = isLoadingGrid || isLoadingFuel;
 
   const ratingLabel = useMemo(
     () => (rating: EmissionsResult["rating"]) => {
@@ -480,6 +483,11 @@ export default function AdvancedEmissions() {
               <Settings2 className="w-4 h-4" />
               {t("advancedEmissions.configureButton")}
             </Button>
+          </div>
+        ) : isLoadingEmissionsData ? (
+          <div className="flex flex-col items-center justify-center py-24 animate-fade-in">
+            <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground">Cargando datos de emisiones...</p>
           </div>
         ) : (
           /* Results State */
