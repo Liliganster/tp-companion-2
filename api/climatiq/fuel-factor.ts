@@ -78,7 +78,6 @@ async function searchFuelActivityId(params: {
   url.searchParams.set("results_per_page", "20");
   url.searchParams.set("unit_type", "Volume");
   url.searchParams.set("source_lca_activity", "fuel_combustion");
-  url.searchParams.set("region", "AT");
 
   const upstream = await fetch(url.toString(), {
     headers: {
@@ -95,22 +94,13 @@ async function searchFuelActivityId(params: {
     const activityId = typeof r?.activity_id === "string" ? r.activity_id.trim() : "";
     const unitType = typeof r?.unit_type === "string" ? r.unit_type.trim().toLowerCase() : "";
     const unit = typeof r?.unit === "string" ? r.unit.trim().toLowerCase() : "";
-    const region = typeof r?.region === "string" ? r.region.trim().toUpperCase() : "";
-    
     if (!activityId) continue;
     if (unitType && unitType !== "volume") continue;
     if (unit && unit !== "l") continue;
-    // Only accept AT region or global factors
-    if (region && region !== "AT" && region !== "GLOBAL") continue;
-    
     return activityId;
   }
 
-  // If no AT-specific result found, look for first AT or GLOBAL result
-  const first = results.find((r: any) => {
-    const region = typeof r?.region === "string" ? r.region.trim().toUpperCase() : "";
-    return region === "AT" || region === "GLOBAL" || !region;
-  });
+  const first = results[0];
   const fallback = typeof first?.activity_id === "string" ? first.activity_id.trim() : "";
   return fallback || null;
 }
@@ -139,9 +129,7 @@ export default async function handler(req: any, res: any) {
   const fuelType = normalizeFuelType(req.query?.fuelType ?? req.query?.fuel);
   if (!fuelType) return sendJson(res, 400, { error: "invalid_fuel_type" });
 
-  // Force cache refresh by checking with AT suffix
-  const cacheKey = `${fuelType}-AT`;
-  const cached = getCached(cacheKey);
+  const cached = getCached(fuelType);
   if (cached) return sendJson(res, 200, cached);
 
   const apiKey = process.env.CLIMATIQ_API_KEY;
@@ -222,6 +210,6 @@ export default async function handler(req: any, res: any) {
     cachedTtlSeconds: Math.round(CACHE_TTL_MS / 1000),
   };
 
-  setCached(cacheKey, payload);
+  setCached(fuelType, payload);
   return sendJson(res, 200, payload);
 }
