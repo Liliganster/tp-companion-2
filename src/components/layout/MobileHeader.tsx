@@ -47,7 +47,7 @@ export function MobileHeader({
   return <header className="lg:hidden fixed top-0 left-0 right-0 z-50 h-16 glass border-b border-border/50">
       <div className="flex items-center justify-between h-full px-4">
         <Link to="/" className="flex items-center gap-2">
-          <img src="/logo.svg" alt="Fahrtenbuch Pro" className="w-8 h-8 rounded-md" />
+          <img src="/favicon-32x32.png" alt="Fahrtenbuch Pro" className="w-8 h-8" />
           <span className="font-semibold text-lg text-foreground">Fahrtenbuch Pro</span>
         </Link>
 

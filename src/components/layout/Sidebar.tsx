@@ -47,10 +47,10 @@ export function Sidebar({
       {/* Logo */}
       <div className="flex items-center justify-between h-16 px-4 border-b border-border/50">
         {!collapsed && <Link to="/" className="flex items-center gap-2">
-            <img src="/logo.svg" alt="Fahrtenbuch Pro" className="w-8 h-8 rounded-md" />
+            <img src="/favicon-32x32.png" alt="Fahrtenbuch Pro" className="w-8 h-8" />
             <span className="font-semibold text-lg text-foreground">Fahrtenbuch Pro</span>
           </Link>}
-        {collapsed && <img src="/logo.svg" alt="Fahrtenbuch Pro" className="w-8 h-8 rounded-md mx-auto" />}
+        {collapsed && <img src="/favicon-32x32.png" alt="Fahrtenbuch Pro" className="w-8 h-8 mx-auto" />}
         <Button variant="ghost" size="icon" onClick={() => setCollapsed(!collapsed)} className={cn("h-8 w-8", collapsed && "absolute right-2 top-4")}>
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </Button>
