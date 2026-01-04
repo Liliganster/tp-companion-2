@@ -319,24 +319,24 @@ export default function Index() {
               <div className="mt-1">
               <div className="flex flex-col gap-2">
                 <StatusRow 
-                  label="Este Mes" 
+                  label={t("dashboard.thisMonth")} 
                   value={`${co2ThisMonth.toFixed(0)} kg`}
                   status={co2Rating === "A" ? "success" : co2Rating === "B" || co2Rating === "C" ? "warning" : "destructive"}
                 />
                  <StatusRow 
-                  label="Tendencia"
+                  label={t("dashboard.trend")}
                   value={`${Math.abs(co2TrendValue)}%`}
                   status={co2TrendPositive ? "success" : "neutral"} 
                   icon={co2TrendPositive ? ArrowUp : ArrowDown}
                 />
                 <StatusRow 
-                  label="Estado"
-                  value={co2Rating === "A" ? "Excelente" : co2Rating === "B" ? "Bueno" : "Mejorable"}
+                  label={t("dashboard.status")}
+                  value={co2Rating === "A" ? t("dashboard.excellent") : co2Rating === "B" ? t("dashboard.good") : t("dashboard.improvable")}
                   status={co2Rating === "A" ? "success" : "neutral"}
                   icon={co2Rating === "A" ? Check : AlertCircle}
                 />
                 <StatusRow
-                  label="Árboles equivalentes"
+                  label={t("dashboard.equivalentTrees")}
                   value={`${treesThisMonth}`}
                   status="neutral"
                 />
