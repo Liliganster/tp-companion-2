@@ -110,6 +110,8 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
         if (error) {
           console.error("Error fetching profile:", error);
           if (!isOffline()) toast.error("Error loading profile: " + error.message);
+          // Keep the current (possibly cached) profile instead of resetting to defaults.
+          return;
         }
 
         if (mounted) {
@@ -216,11 +218,32 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
     const toastId = options?.toastId ?? "profile-save";
     toast.loading(options?.loadingText ?? "Guardando…", { id: toastId });
 
-    const { error } = await supabase.from("user_profiles").upsert(dbPayload);
-    if (error) {
-      console.error("Error saving profile:", error);
-      toast.error("No se pudo guardar: " + error.message, { id: toastId });
+    // Avoid UPSERT here: in Supabase/Postgres, INSERT ... ON CONFLICT DO UPDATE still evaluates INSERT RLS.
+    // If INSERT policies were tightened/removed, updates would incorrectly fail. We update first and only insert if needed.
+    const { id: _id, ...updatePayload } = dbPayload;
+    const { data: updated, error: updateError } = await supabase
+      .from("user_profiles")
+      .update(updatePayload)
+      .eq("id", user.id)
+      .select("id");
+
+    if (updateError) {
+      console.error("Error saving profile (update):", updateError);
+      toast.error("No se pudo guardar: " + updateError.message, { id: toastId });
       return false;
+    }
+
+    if (!updated || updated.length === 0) {
+      const { error: insertError } = await supabase
+        .from("user_profiles")
+        .insert(dbPayload)
+        .select("id");
+
+      if (insertError) {
+        console.error("Error saving profile (insert):", insertError);
+        toast.error("No se pudo guardar: " + insertError.message, { id: toastId });
+        return false;
+      }
     }
 
     toast.success(options?.successText ?? "Perfil guardado", { id: toastId });
