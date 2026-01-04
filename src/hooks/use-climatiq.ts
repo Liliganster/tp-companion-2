@@ -16,7 +16,7 @@ export function useClimatiqFuelFactor(fuelType: ClimatiqFuelFactor["fuelType"] |
   const { user, getAccessToken } = useAuth();
   const enabled = Boolean(user) && Boolean(fuelType) && (opts?.enabled ?? true);
 
-  const offlineCacheKey = `cache:climatiq:fuelFactor:v1:${fuelType ?? "none"}`;
+  const offlineCacheKey = `cache:climatiq:fuelFactor:v2:${fuelType ?? "none"}`;
   const offlineCacheTtlMs = 30 * 24 * 60 * 60 * 1000; // 30 days
 
   return useQuery({
