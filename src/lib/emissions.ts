@@ -18,7 +18,7 @@ export type TripEmissionsInput = {
   distanceKm: number;
   fuelType?: FuelType;
   fuelLPer100Km?: number | null;
-  fuelKgCo2ePerKm?: number | null;
+  fuelKgCo2ePerLiter?: number | null;
   evKwhPer100Km?: number | null;
   gridKgCo2PerKwh?: number | null;
 };
@@ -43,16 +43,18 @@ export function calculateTripEmissions(input: TripEmissionsInput): TripEmissions
   const fuelType: FuelType = (input.fuelType ?? "unknown") as FuelType;
 
   if (fuelType === "gasoline" || fuelType === "diesel") {
-    const perKm = input.fuelKgCo2ePerKm == null ? null : Number(input.fuelKgCo2ePerKm);
-    if (Number.isFinite(perKm) && perKm > 0) {
-      const co2Kg = distanceKm * perKm;
-      return { co2Kg: Math.round(co2Kg * 10) / 10, method: "fuel" };
-    }
-
     const fuelLPer100Km = input.fuelLPer100Km == null ? null : Number(input.fuelLPer100Km);
     if (Number.isFinite(fuelLPer100Km) && fuelLPer100Km > 0) {
       const liters = (distanceKm * fuelLPer100Km) / 100;
-      const factor = fuelType === "gasoline" ? GASOLINE_KG_CO2_PER_LITER : DIESEL_KG_CO2_PER_LITER;
+
+      const perLiter = input.fuelKgCo2ePerLiter == null ? null : Number(input.fuelKgCo2ePerLiter);
+      const factor =
+        Number.isFinite(perLiter) && perLiter > 0
+          ? perLiter
+          : fuelType === "gasoline"
+            ? GASOLINE_KG_CO2_PER_LITER
+            : DIESEL_KG_CO2_PER_LITER;
+
       const co2Kg = liters * factor;
       return { co2Kg: Math.round(co2Kg * 10) / 10, method: "fuel", liters: Math.round(liters * 10) / 10 };
     }

@@ -12,13 +12,12 @@ import { useProjects } from "@/contexts/ProjectsContext";
 import { getProjectsForDashboard } from "@/lib/projects";
 import { useI18n } from "@/hooks/use-i18n";
 import { useTrips } from "@/contexts/TripsContext";
-import { calculateTripEmissions } from "@/lib/emissions";
+import { calculateTreesNeeded, calculateTripEmissions } from "@/lib/emissions";
 import { parseLocaleNumber } from "@/lib/number";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
 import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
-import { useClimatiqVehicleIntensity } from "@/hooks/use-climatiq";
-import { getCountryCode } from "@/lib/country-mapping";
+import { useClimatiqFuelFactor } from "@/hooks/use-climatiq";
 
 function parseTripDate(value: string): Date | null {
   if (!value) return null;
@@ -53,7 +52,7 @@ function sumCo2(
   emissionsInput: {
     fuelType: any;
     fuelLPer100Km?: number | null;
-    fuelKgCo2ePerKm?: number | null;
+    fuelKgCo2ePerLiter?: number | null;
     evKwhPer100Km?: number | null;
     gridKgCo2PerKwh?: number | null;
   },
@@ -159,24 +158,23 @@ export default function Index() {
   const kpiTitleClassName = "text-base font-semibold leading-tight text-foreground uppercase tracking-wide";
   const kpiTitleWrapperClassName = "p-0 rounded-none bg-transparent";
 
-  const region = useMemo(() => getCountryCode(profile.country)?.toUpperCase() ?? "AT", [profile.country]);
   const { data: atGrid } = useElectricityMapsCarbonIntensity("AT", {
     enabled: profile.fuelType === "ev",
   });
-  const { data: fuelIntensity } = useClimatiqVehicleIntensity(
+  const { data: fuelFactor } = useClimatiqFuelFactor(
     profile.fuelType === "gasoline" || profile.fuelType === "diesel" ? profile.fuelType : null,
-    { enabled: profile.fuelType === "gasoline" || profile.fuelType === "diesel", region },
+    { enabled: profile.fuelType === "gasoline" || profile.fuelType === "diesel" },
   );
 
   const emissionsInput = useMemo(() => {
     return {
       fuelType: profile.fuelType,
       fuelLPer100Km: parseLocaleNumber(profile.fuelLPer100Km),
-      fuelKgCo2ePerKm: fuelIntensity?.kgCo2ePerKm ?? null,
+      fuelKgCo2ePerLiter: fuelFactor?.kgCo2ePerLiter ?? null,
       evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
       gridKgCo2PerKwh: atGrid?.kgCo2PerKwh ?? null,
     };
-  }, [atGrid?.kgCo2PerKwh, fuelIntensity?.kgCo2ePerKm, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType]);
+  }, [atGrid?.kgCo2PerKwh, fuelFactor?.kgCo2ePerLiter, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType]);
 
   const totalKm = sumKm(trips);
   const co2Kg = sumCo2(trips, emissionsInput);
@@ -202,6 +200,7 @@ export default function Index() {
   const kmPrevMonth = sumKm(tripsPrevMonth);
   const co2ThisMonth = sumCo2(tripsThisMonth, emissionsInput);
   const co2PrevMonth = sumCo2(tripsPrevMonth, emissionsInput);
+  const treesThisMonth = calculateTreesNeeded(co2ThisMonth, 20);
   // Rating matches the month-over-month bubble context (monthly emissions).
   const co2Rating = co2ThisMonth <= 500 ? "A" : co2ThisMonth <= 1000 ? "B" : co2ThisMonth <= 1500 ? "C" : "D";
     const co2TrendValue = percentageChange(co2ThisMonth, co2PrevMonth);
@@ -329,6 +328,11 @@ export default function Index() {
                   value={co2Rating === "A" ? "Excelente" : co2Rating === "B" ? "Bueno" : "Mejorable"}
                   status={co2Rating === "A" ? "success" : "neutral"}
                   icon={co2Rating === "A" ? Check : AlertCircle}
+                />
+                <StatusRow
+                  label="Árboles equivalentes"
+                  value={`${treesThisMonth}`}
+                  status="neutral"
                 />
               </div>
             </div>}

@@ -89,7 +89,7 @@ GOOGLE_OAUTH_STATE_SECRET=... # random secret for signing state
 ELECTRICITY_MAPS_API_KEY=...
 ELECTRICITY_MAPS_DEFAULT_ZONE=AT
 
-# Climatiq (vehicle emissions for gasoline/diesel)
+# Climatiq (gasoline/diesel emissions factor, kg CO₂e/L)
 CLIMATIQ_API_KEY=...
 
 # Supabase server (for /api/google/* Calendar/Drive)

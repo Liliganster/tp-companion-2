@@ -2,54 +2,49 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { isOffline, readOfflineCache, writeOfflineCache } from "@/lib/offlineCache";
 
-export type ClimatiqVehicleIntensity = {
+export type ClimatiqFuelFactor = {
   fuelType: "gasoline" | "diesel";
+  kgCo2ePerLiter: number;
   region: string | null;
-  kgCo2ePerKm: number;
   source?: string;
   year?: number | null;
 };
 
-export function useClimatiqVehicleIntensity(
-  fuelType: ClimatiqVehicleIntensity["fuelType"] | null,
-  opts?: { enabled?: boolean; region?: string }
-) {
+export function useClimatiqFuelFactor(fuelType: ClimatiqFuelFactor["fuelType"] | null, opts?: { enabled?: boolean }) {
   const { user, getAccessToken } = useAuth();
-  const region = (opts?.region ?? "").trim().toUpperCase() || null;
   const enabled = Boolean(user) && Boolean(fuelType) && (opts?.enabled ?? true);
 
-  const offlineCacheKey = `cache:climatiq:vehicleIntensity:v1:${fuelType ?? "none"}:${region ?? "default"}`;
+  const offlineCacheKey = `cache:climatiq:fuelFactor:v1:${fuelType ?? "none"}`;
   const offlineCacheTtlMs = 30 * 24 * 60 * 60 * 1000; // 30 days
 
   return useQuery({
-    queryKey: ["climatiq", "vehicleIntensity", fuelType, region] as const,
+    queryKey: ["climatiq", "fuelFactor", fuelType] as const,
     enabled,
     staleTime: 24 * 60 * 60_000,
     retry: 1,
     refetchOnWindowFocus: false,
-    queryFn: async (): Promise<ClimatiqVehicleIntensity | null> => {
-      const cached = readOfflineCache<ClimatiqVehicleIntensity>(offlineCacheKey, offlineCacheTtlMs);
+    queryFn: async (): Promise<ClimatiqFuelFactor | null> => {
+      const cached = readOfflineCache<ClimatiqFuelFactor>(offlineCacheKey, offlineCacheTtlMs);
       if (isOffline()) return cached ?? null;
 
       const token = await getAccessToken();
       if (!token || !fuelType) return cached ?? null;
 
       const params = new URLSearchParams({ fuelType });
-      if (region) params.set("region", region);
 
-      const res = await fetch(`/api/climatiq/vehicle-intensity?${params.toString()}`, {
+      const res = await fetch(`/api/climatiq/fuel-factor?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data: any = await res.json().catch(() => null);
       if (!res.ok || !data) return cached ?? null;
 
-      const kg = Number(data?.kgCo2ePerKm);
+      const kg = Number(data?.kgCo2ePerLiter);
       if (!Number.isFinite(kg) || kg <= 0) return cached ?? null;
 
-      const payload: ClimatiqVehicleIntensity = {
+      const payload: ClimatiqFuelFactor = {
         fuelType,
-        region: typeof data?.region === "string" ? data.region : region,
-        kgCo2ePerKm: kg,
+        kgCo2ePerLiter: kg,
+        region: typeof data?.region === "string" ? data.region : null,
         source: typeof data?.source === "string" ? data.source : undefined,
         year: typeof data?.year === "number" ? data.year : null,
       };

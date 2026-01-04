@@ -38,8 +38,7 @@ import { calculateTreesNeeded, calculateTripEmissions } from "@/lib/emissions";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { parseLocaleNumber } from "@/lib/number";
 import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
-import { useClimatiqVehicleIntensity } from "@/hooks/use-climatiq";
-import { getCountryCode } from "@/lib/country-mapping";
+import { useClimatiqFuelFactor } from "@/hooks/use-climatiq";
 
 type EmissionsResult = {
   id: string;
@@ -183,14 +182,13 @@ export default function AdvancedEmissions() {
   const { projects } = useProjects();
   const { profile } = useUserProfile();
 
-  const region = useMemo(() => getCountryCode(profile.country)?.toUpperCase() ?? "AT", [profile.country]);
   const { data: atGrid } = useElectricityMapsCarbonIntensity("AT", {
     enabled: profile.fuelType === "ev",
   });
   const gridKgCo2PerKwh = atGrid?.kgCo2PerKwh ?? null;
-  const { data: fuelIntensity } = useClimatiqVehicleIntensity(
+  const { data: fuelFactor } = useClimatiqFuelFactor(
     profile.fuelType === "gasoline" || profile.fuelType === "diesel" ? profile.fuelType : null,
-    { enabled: profile.fuelType === "gasoline" || profile.fuelType === "diesel", region },
+    { enabled: profile.fuelType === "gasoline" || profile.fuelType === "diesel" },
   );
 
   const ratingLabel = useMemo(
@@ -264,7 +262,7 @@ export default function AdvancedEmissions() {
         distanceKm,
         fuelType: profile.fuelType,
         fuelLPer100Km: parseLocaleNumber(profile.fuelLPer100Km),
-        fuelKgCo2ePerKm: fuelIntensity?.kgCo2ePerKm ?? null,
+        fuelKgCo2ePerLiter: fuelFactor?.kgCo2ePerLiter ?? null,
         evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
         gridKgCo2PerKwh,
       });
@@ -371,7 +369,7 @@ export default function AdvancedEmissions() {
       fuelLiters: clampRound(liters, 1),
       treesNeeded,
     };
-  }, [fallbackProjectName, fallbackTripName, fuelEfficiency, fuelIntensity?.kgCo2ePerKm, gridKgCo2PerKwh, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType, projects, sortBy, timeRange, trips, viewMode]);
+  }, [fallbackProjectName, fallbackTripName, fuelEfficiency, fuelFactor?.kgCo2ePerLiter, gridKgCo2PerKwh, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType, projects, sortBy, timeRange, trips, viewMode]);
 
   const handleSaveConfig = () => {
     setIsConfigured(true);
