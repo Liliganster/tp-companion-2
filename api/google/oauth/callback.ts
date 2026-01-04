@@ -56,7 +56,19 @@ export default async function handler(req: any, res: any) {
   });
 
   const rawReturnTo = typeof state.returnTo === "string" ? state.returnTo : "/";
-  const returnTo = rawReturnTo.startsWith("/") ? rawReturnTo : "/";
+  let returnTo = "/";
+  if (rawReturnTo.startsWith("/")) {
+    returnTo = rawReturnTo;
+  } else {
+    try {
+      const url = new URL(rawReturnTo);
+      if (url.protocol === "https:" || url.protocol === "http:") {
+        returnTo = url.toString();
+      }
+    } catch {
+      // ignore
+    }
+  }
   res.statusCode = 302;
   res.setHeader("Location", returnTo);
   res.end();

@@ -1,6 +1,22 @@
 import { requireSupabaseUser, sendJson } from "../../_utils/supabase.js";
 import { buildGoogleAuthUrl, buildSignedState } from "../../_utils/googleOAuth.js";
 
+function requestBaseUrl(req: any) {
+  const protoRaw = req?.headers?.["x-forwarded-proto"] ?? req?.headers?.["x-forwarded-protocol"];
+  const hostRaw = req?.headers?.["x-forwarded-host"] ?? req?.headers?.host;
+  const proto = String(Array.isArray(protoRaw) ? protoRaw[0] : protoRaw || "https")
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+  const host = String(Array.isArray(hostRaw) ? hostRaw[0] : hostRaw || "")
+    .split(",")[0]
+    .trim();
+
+  if (!host) return "";
+  const scheme = proto === "http" || proto === "https" ? proto : "https";
+  return `${scheme}://${host}`;
+}
+
 function readBody(req: any) {
   if (req?.body == null) return null;
   if (typeof req.body === "string") {
@@ -25,7 +41,10 @@ export default async function handler(req: any, res: any) {
   if (!user) return;
 
   const body = readBody(req);
-  const returnTo = typeof body?.returnTo === "string" ? body.returnTo : "/";
+  const rawReturnTo = typeof body?.returnTo === "string" ? body.returnTo : "/";
+  const returnToPath = rawReturnTo.startsWith("/") ? rawReturnTo : "/";
+  const baseUrl = requestBaseUrl(req);
+  const returnTo = baseUrl ? `${baseUrl}${returnToPath}` : returnToPath;
   const scopes = Array.isArray(body?.scopes) ? body.scopes : [];
 
   const requested = new Set<string>();
@@ -55,4 +74,3 @@ export default async function handler(req: any, res: any) {
   const authUrl = buildGoogleAuthUrl({ scopes: googleScopes, state });
   sendJson(res, 200, { authUrl });
 }
-
