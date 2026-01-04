@@ -28,8 +28,8 @@ function getActivityId(fuelType: FuelType): string {
   const cached = ACTIVITY_ID_CACHE.get(fuelType);
   if (cached) return cached;
 
-  // Defaults based on Climatiq fuel activity_id conventions (see "How To Use Fuel activity_id").
-  return fuelType === "gasoline" ? "fuel-type_motor_gasoline-fuel_use_na" : "fuel-type_diesel-fuel_use_na";
+  // Defaults for Europe region - these should support AT
+  return fuelType === "gasoline" ? "fuel_type_motor_gasoline-fuel_use_eu" : "fuel_type_diesel-fuel_use_eu";
 }
 
 function getCached(key: string): unknown | null {
@@ -78,6 +78,7 @@ async function searchFuelActivityId(params: {
   url.searchParams.set("results_per_page", "20");
   url.searchParams.set("unit_type", "Volume");
   url.searchParams.set("source_lca_activity", "fuel_combustion");
+  url.searchParams.set("region", "AT");
 
   const upstream = await fetch(url.toString(), {
     headers: {
@@ -94,13 +95,22 @@ async function searchFuelActivityId(params: {
     const activityId = typeof r?.activity_id === "string" ? r.activity_id.trim() : "";
     const unitType = typeof r?.unit_type === "string" ? r.unit_type.trim().toLowerCase() : "";
     const unit = typeof r?.unit === "string" ? r.unit.trim().toLowerCase() : "";
+    const region = typeof r?.region === "string" ? r.region.trim().toUpperCase() : "";
+    
     if (!activityId) continue;
     if (unitType && unitType !== "volume") continue;
     if (unit && unit !== "l") continue;
+    // Only accept AT region or global factors
+    if (region && region !== "AT" && region !== "GLOBAL") continue;
+    
     return activityId;
   }
 
-  const first = results[0];
+  // If no AT-specific result found, look for first AT or GLOBAL result
+  const first = results.find((r: any) => {
+    const region = typeof r?.region === "string" ? r.region.trim().toUpperCase() : "";
+    return region === "AT" || region === "GLOBAL" || !region;
+  });
   const fallback = typeof first?.activity_id === "string" ? first.activity_id.trim() : "";
   return fallback || null;
 }
@@ -154,6 +164,7 @@ export default async function handler(req: any, res: any) {
         parameters: {
           volume: VOLUME_L,
           volume_unit: "l",
+          region: "AT",
         },
       }),
     });
