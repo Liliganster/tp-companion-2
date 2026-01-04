@@ -1,4 +1,4 @@
-﻿import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabaseClient";
 import { Trip } from "@/contexts/TripsContext";
 import { Project } from "@/contexts/ProjectsContext";
 import { SavedReport } from "@/contexts/ReportsContext";
@@ -70,7 +70,8 @@ export async function checkAndMigrateData(userId: string): Promise<MigrationResu
     // 1. Migrate Profile
     if (rawProfile) {
       const profile = JSON.parse(rawProfile) as UserProfile;
-      const { error: profileError } = await supabase.from("user_profiles").upsert({
+
+      const dbPayload = {
         id: userId,
         full_name: profile.fullName,
         vat_id: profile.vatId,
@@ -78,21 +79,52 @@ export async function checkAndMigrateData(userId: string): Promise<MigrationResu
         base_address: profile.baseAddress,
         city: profile.city,
         country: profile.country,
-        // image_url: profile.imageUrl, // Not in UserProfile type
         rate_per_km: parseLocaleFloat(profile.ratePerKm),
         passenger_surcharge: parseLocaleFloat(profile.passengerSurcharge),
         fuel_type: profile.fuelType,
         fuel_l_per_100km: parseLocaleFloat(profile.fuelLPer100Km),
         ev_kwh_per_100km: parseLocaleFloat(profile.evKwhPer100Km),
         grid_kgco2_per_kwh: parseLocaleFloat(profile.gridKgCo2PerKwh),
-        currency: "EUR", // Default
         language: profile.language,
-        // theme: profile.theme, // Not in UserProfile type
-        // calendar_enabled: profile.calendarEnabled, // Not in UserProfile type
-        // email_notifications: profile.emailNotifications, // Not in UserProfile type
-        // marketing_emails: profile.marketingEmails // Not in UserProfile type
-      }, { onConflict: "id" });
-      if (profileError) throw new Error(`Profile migration failed: ${profileError.message}`);
+        updated_at: new Date().toISOString(),
+      };
+
+      const saveViaApi = async (): Promise<boolean> => {
+        try {
+          const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+          if (sessionError) return false;
+          const token = sessionData.session?.access_token;
+          if (!token) return false;
+
+          const response = await fetch("/api/user/profile", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(dbPayload),
+          });
+
+          return response.ok;
+        } catch {
+          return false;
+        }
+      };
+
+      // Avoid UPSERT here: INSERT ... ON CONFLICT DO UPDATE still evaluates INSERT RLS.
+      const { id: _id, ...updatePayload } = dbPayload;
+      const { data: updated, error: updateError } = await supabase.from("user_profiles").update(updatePayload).eq("id", userId).select("id");
+      if (updateError) {
+        const ok = await saveViaApi();
+        if (!ok) throw new Error(`Profile migration failed: ${updateError.message}`);
+      } else if (!updated || updated.length === 0) {
+        const { error: insertError } = await supabase.from("user_profiles").insert(dbPayload).select("id");
+        if (insertError) {
+          const ok = await saveViaApi();
+          if (!ok) throw new Error(`Profile migration failed: ${insertError.message}`);
+        }
+      }
+
       migratedProfile = true;
     }
 

@@ -1,4 +1,4 @@
-﻿import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "./AuthContext";
 import { toast } from "sonner";
@@ -90,9 +90,10 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
     async function fetchProfile() {
       if (!supabase) return;
 
+      let cachedProfile: UserProfile | null = null;
       if (offlineCacheKey) {
-        const cached = readOfflineCache<UserProfile>(offlineCacheKey, 90 * 24 * 60 * 60 * 1000);
-        if (cached && mounted) setProfile(cached);
+        cachedProfile = readOfflineCache<UserProfile>(offlineCacheKey, 90 * 24 * 60 * 60 * 1000);
+        if (cachedProfile && mounted) setProfile(cachedProfile);
       }
 
       if (isOffline()) {
@@ -161,7 +162,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
                 otherEurPerKm: (data as any).other_eur_per_km == null ? "" : String((data as any).other_eur_per_km).replace(".", ","),
               });
             }
-          } else {
+          } else if (!cachedProfile) {
              // New user? We could auto-create a profile here or wait for them to save.
              // For now, keep defaults but respect browser language.
              setProfile({ ...DEFAULT_PROFILE, language: detectBrowserLanguage() });
@@ -216,7 +217,39 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
     setProfile(nextProfile); // Optimistic update
 
     const toastId = options?.toastId ?? "profile-save";
-    toast.loading(options?.loadingText ?? "Guardando…", { id: toastId });
+    const saveViaApi = async (): Promise<boolean> => {
+      try {
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) {
+          console.error("Error getting session for profile save:", sessionError);
+          return false;
+        }
+
+        const token = sessionData.session?.access_token;
+        if (!token) return false;
+
+        const response = await fetch("/api/user/profile", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(dbPayload),
+        });
+
+        if (!response.ok) {
+          const text = await response.text().catch(() => "");
+          console.error("Profile save API failed:", response.status, text);
+          return false;
+        }
+
+        return true;
+      } catch (err) {
+        console.error("Profile save API failed:", err);
+        return false;
+      }
+    };
+    toast.loading(options?.loadingText ?? "Guardando...", { id: toastId });
 
     // Avoid UPSERT here: in Supabase/Postgres, INSERT ... ON CONFLICT DO UPDATE still evaluates INSERT RLS.
     // If INSERT policies were tightened/removed, updates would incorrectly fail. We update first and only insert if needed.
@@ -229,11 +262,23 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
 
     if (updateError) {
       console.error("Error saving profile (update):", updateError);
+      const ok = await saveViaApi();
+      if (ok) {
+        toast.success(options?.successText ?? "Perfil guardado", { id: toastId });
+        return true;
+      }
+
       toast.error("No se pudo guardar: " + updateError.message, { id: toastId });
       return false;
     }
 
     if (!updated || updated.length === 0) {
+      const ok = await saveViaApi();
+      if (ok) {
+        toast.success(options?.successText ?? "Perfil guardado", { id: toastId });
+        return true;
+      }
+
       const { error: insertError } = await supabase
         .from("user_profiles")
         .insert(dbPayload)
@@ -241,6 +286,12 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
 
       if (insertError) {
         console.error("Error saving profile (insert):", insertError);
+        const ok2 = await saveViaApi();
+        if (ok2) {
+          toast.success(options?.successText ?? "Perfil guardado", { id: toastId });
+          return true;
+        }
+
         toast.error("No se pudo guardar: " + insertError.message, { id: toastId });
         return false;
       }
@@ -248,7 +299,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
 
     toast.success(options?.successText ?? "Perfil guardado", { id: toastId });
     return true;
-  }, [user]);
+  }, [offlineCacheKey, user]);
 
   const updateProfile = useCallback(async (patch: Partial<UserProfile>) => {
     setProfile(prev => {
