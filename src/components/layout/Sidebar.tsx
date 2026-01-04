@@ -50,11 +50,20 @@ export function Sidebar({
             <img src="/favicon-32x32.png" alt="Fahrtenbuch Pro" className="w-8 h-8" />
             <span className="font-semibold text-lg text-foreground">Fahrtenbuch Pro</span>
           </Link>}
-        {collapsed && <img src="/favicon-32x32.png" alt="Fahrtenbuch Pro" className="w-8 h-8 mx-auto" />}
-        <Button variant="ghost" size="icon" onClick={() => setCollapsed(!collapsed)} className={cn("h-8 w-8", collapsed && "absolute right-2 top-4")}>
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </Button>
+        {collapsed && <Link to="/" className="flex items-center justify-center w-full">
+            <img src="/favicon-32x32.png" alt="Fahrtenbuch Pro" className="w-8 h-8" />
+          </Link>}
+        {!collapsed && <Button variant="ghost" size="icon" onClick={() => setCollapsed(!collapsed)} className="h-8 w-8">
+          <ChevronLeft className="h-4 w-4" />
+        </Button>}
       </div>
+
+      {/* Collapse/Expand Button */}
+      {collapsed && <div className="px-2 py-2 border-b border-border/50">
+        <Button variant="ghost" size="icon" onClick={() => setCollapsed(!collapsed)} className="h-8 w-8 mx-auto">
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>}
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
