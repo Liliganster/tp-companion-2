@@ -6,6 +6,7 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTrips } from "@/contexts/TripsContext";
 import { computeTripWarnings } from "@/lib/trip-warnings";
+import { useI18n } from "@/hooks/use-i18n";
 interface Notification {
   id: string;
   type: "warning";
@@ -14,6 +15,7 @@ interface Notification {
   tripId: string;
 }
 export function NotificationDropdown() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const { trips } = useTrips();
 
@@ -37,11 +39,11 @@ export function NotificationDropdown() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80 p-0 bg-card border-border">
         <div className="p-3 border-b border-border">
-          <h3 className="font-semibold text-sm">Advertencias</h3>
+          <h3 className="font-semibold text-sm">{t("dashboard.warnings")}</h3>
         </div>
         <div className="max-h-80 overflow-y-auto">
           {notifications.length === 0 ? <div className="p-4 text-center text-muted-foreground text-sm">
-              No hay advertencias
+              {t("dashboard.noWarnings")}
             </div> : notifications.map(notification => {
           return <div key={notification.id} className={cn("p-3 border-b border-border last:border-b-0 bg-warning/5")}>
                   <div className="flex items-start gap-3">
@@ -59,7 +61,7 @@ export function NotificationDropdown() {
                         className="px-0 h-auto text-xs mt-1"
                         onClick={() => navigate("/trips")}
                       >
-                        Ver viajes
+                        {t("dashboard.viewTrips")}
                       </Button>
                     </div>
                   </div>

@@ -35,6 +35,8 @@ const es = {
   "dashboard.excellent": "Excelente",
   "dashboard.good": "Bueno",
   "dashboard.improvable": "Mejorable",
+  "dashboard.warnings": "Advertencias",
+  "dashboard.noWarnings": "No hay advertencias",
 
   // Trips
   "trips.title": "Viajes",
@@ -727,6 +729,8 @@ const en: Record<I18nKey, string> = {
   "dashboard.excellent": "Excellent",
   "dashboard.good": "Good",
   "dashboard.improvable": "Needs improvement",
+  "dashboard.warnings": "Warnings",
+  "dashboard.noWarnings": "No warnings",
   "trips.title": "Trips",
   "trips.subtitle": "Manage and track all your business trips",
   "trips.delete": "Delete",
