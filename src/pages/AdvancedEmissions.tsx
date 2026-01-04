@@ -37,6 +37,7 @@ import { useProjects } from "@/contexts/ProjectsContext";
 import { calculateTreesNeeded, calculateTripEmissions } from "@/lib/emissions";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { parseLocaleNumber } from "@/lib/number";
+import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
 
 type EmissionsResult = {
   id: string;
@@ -180,6 +181,11 @@ export default function AdvancedEmissions() {
   const { projects } = useProjects();
   const { profile } = useUserProfile();
 
+  const { data: atGrid } = useElectricityMapsCarbonIntensity("AT", {
+    enabled: profile.fuelType === "ev",
+  });
+  const gridKgCo2PerKwh = atGrid?.kgCo2PerKwh ?? null;
+
   const ratingLabel = useMemo(
     () => (rating: EmissionsResult["rating"]) => {
       switch (rating) {
@@ -252,7 +258,7 @@ export default function AdvancedEmissions() {
         fuelType: profile.fuelType,
         fuelLPer100Km: parseLocaleNumber(profile.fuelLPer100Km),
         evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
-        gridKgCo2PerKwh: parseLocaleNumber(profile.gridKgCo2PerKwh),
+        gridKgCo2PerKwh,
       });
       return res.co2Kg;
     };
@@ -357,7 +363,7 @@ export default function AdvancedEmissions() {
       fuelLiters: clampRound(liters, 1),
       treesNeeded,
     };
-  }, [fallbackProjectName, fallbackTripName, fuelEfficiency, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType, profile.gridKgCo2PerKwh, projects, sortBy, timeRange, trips, viewMode]);
+  }, [fallbackProjectName, fallbackTripName, fuelEfficiency, gridKgCo2PerKwh, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType, projects, sortBy, timeRange, trips, viewMode]);
 
   const handleSaveConfig = () => {
     setIsConfigured(true);

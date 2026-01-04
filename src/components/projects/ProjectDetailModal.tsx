@@ -16,6 +16,7 @@ import { calculateTripEmissions } from "@/lib/emissions";
 import { parseLocaleNumber } from "@/lib/number";
 import { useTrips, type Trip } from "@/contexts/TripsContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
 import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
 import { uuidv4 } from "@/lib/utils";
 import { parseMonthlyQuotaExceededReason } from "@/lib/aiQuotaReason";
@@ -124,14 +125,18 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     };
   }, [project?.id, open]);
 
+  const { data: atGrid } = useElectricityMapsCarbonIntensity("AT", {
+    enabled: profile.fuelType === "ev",
+  });
+
   const emissionsInput = useMemo(() => {
     return {
       fuelType: profile.fuelType,
       fuelLPer100Km: parseLocaleNumber(profile.fuelLPer100Km),
       evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
-      gridKgCo2PerKwh: parseLocaleNumber(profile.gridKgCo2PerKwh),
+      gridKgCo2PerKwh: atGrid?.kgCo2PerKwh ?? null,
     };
-  }, [profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType, profile.gridKgCo2PerKwh]);
+  }, [atGrid?.kgCo2PerKwh, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType]);
 
   const calculateCO2 = useCallback((distance: number) => {
     return calculateTripEmissions({ distanceKm: distance, ...emissionsInput }).co2Kg;

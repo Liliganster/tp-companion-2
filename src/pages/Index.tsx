@@ -16,6 +16,7 @@ import { calculateTripEmissions } from "@/lib/emissions";
 import { parseLocaleNumber } from "@/lib/number";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
+import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
 
 function parseTripDate(value: string): Date | null {
   if (!value) return null;
@@ -150,14 +151,18 @@ export default function Index() {
   const kpiTitleClassName = "text-base font-semibold leading-tight text-foreground uppercase tracking-wide";
   const kpiTitleWrapperClassName = "p-0 rounded-none bg-transparent";
 
+  const { data: atGrid } = useElectricityMapsCarbonIntensity("AT", {
+    enabled: profile.fuelType === "ev",
+  });
+
   const emissionsInput = useMemo(() => {
     return {
       fuelType: profile.fuelType,
       fuelLPer100Km: parseLocaleNumber(profile.fuelLPer100Km),
       evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
-      gridKgCo2PerKwh: parseLocaleNumber(profile.gridKgCo2PerKwh),
+      gridKgCo2PerKwh: atGrid?.kgCo2PerKwh ?? null,
     };
-  }, [profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType, profile.gridKgCo2PerKwh]);
+  }, [atGrid?.kgCo2PerKwh, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType]);
 
   const totalKm = sumKm(trips);
   const co2Kg = sumCo2(trips, emissionsInput);

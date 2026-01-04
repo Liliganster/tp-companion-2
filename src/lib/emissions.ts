@@ -29,7 +29,9 @@ export type TripEmissionsResult = {
   kwh?: number;
 };
 
-export const DEFAULT_GRID_KG_CO2_PER_KWH_2025 = 0.05;
+// Fallback (kg CO₂ per kWh) used when a real-time grid factor isn't available (offline / missing key / upstream error).
+// Austria ('AT') real-time values are fetched via Electricity Maps (see `/api/electricity-maps/carbon-intensity`).
+export const DEFAULT_GRID_KG_CO2_PER_KWH_FALLBACK = 0.05;
 export const GASOLINE_KG_CO2_PER_LITER = 2.31;
 export const DIESEL_KG_CO2_PER_LITER = 2.68;
 
@@ -51,7 +53,7 @@ export function calculateTripEmissions(input: TripEmissionsInput): TripEmissions
 
   if (fuelType === "ev") {
     const evKwhPer100Km = input.evKwhPer100Km == null ? null : Number(input.evKwhPer100Km);
-    const gridKg = input.gridKgCo2PerKwh == null ? DEFAULT_GRID_KG_CO2_PER_KWH_2025 : Number(input.gridKgCo2PerKwh);
+    const gridKg = input.gridKgCo2PerKwh == null ? DEFAULT_GRID_KG_CO2_PER_KWH_FALLBACK : Number(input.gridKgCo2PerKwh);
     if (Number.isFinite(evKwhPer100Km) && evKwhPer100Km > 0 && Number.isFinite(gridKg) && gridKg > 0) {
       const kwh = (distanceKm * evKwhPer100Km) / 100;
       const co2Kg = kwh * gridKg;

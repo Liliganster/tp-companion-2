@@ -30,10 +30,13 @@ import {
 import { cn } from "@/lib/utils";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useI18n } from "@/hooks/use-i18n";
+import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
 import { useAppearance } from "@/contexts/AppearanceContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { formatLocaleNumber } from "@/lib/number";
+import { DEFAULT_GRID_KG_CO2_PER_KWH_FALLBACK } from "@/lib/emissions";
 
 interface SettingsModalProps {
   open: boolean;
@@ -42,7 +45,7 @@ interface SettingsModalProps {
 
 export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState("profile");
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -78,6 +81,9 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
   // Draft form state for profile
   const [profileData, setProfileData] = useState(profile);
+  const { data: atGrid, isFetching: atGridFetching } = useElectricityMapsCarbonIntensity("AT", {
+    enabled: open && profileData.fuelType === "ev",
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -466,11 +472,15 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                           <Input
                             id="gridKgCo2PerKwh"
                             inputMode="decimal"
-                            value={profileData.gridKgCo2PerKwh}
-                            onChange={(e) => setProfileData({ ...profileData, gridKgCo2PerKwh: e.target.value })}
+                            value={formatLocaleNumber(atGrid?.kgCo2PerKwh ?? DEFAULT_GRID_KG_CO2_PER_KWH_FALLBACK)}
+                            disabled
                             className="bg-secondary/50"
                           />
-                          <p className="text-xs text-muted-foreground">{t("settings.gridFactorHelp")}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {t("settings.gridFactorHelp")}
+                            {atGrid?.datetime ? ` (${new Date(atGrid.datetime).toLocaleString(locale)})` : ""}
+                            {atGridFetching ? " …" : ""}
+                          </p>
                         </div>
                       </>
                     )}

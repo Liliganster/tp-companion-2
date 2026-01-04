@@ -22,6 +22,8 @@ const envSchema = z.object({
   SUPABASE_URL: optionalString(z.string().url()),
   CRON_SECRET: optionalString(z.string().min(16)),
   GOOGLE_MAPS_SERVER_KEY: optionalString(z.string().min(20)),
+  ELECTRICITY_MAPS_API_KEY: optionalString(z.string().min(10)),
+  ELECTRICITY_MAPS_DEFAULT_ZONE: optionalString(z.string().min(2)),
   UPSTASH_REDIS_REST_URL: optionalString(z.string().url()),
   UPSTASH_REDIS_REST_TOKEN: optionalString(z.string().min(10)),
   SENTRY_DSN: optionalString(z.string().url()),
