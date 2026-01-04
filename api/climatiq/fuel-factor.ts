@@ -69,15 +69,16 @@ async function searchFuelActivityId(params: {
   dataVersion: string;
   fuelType: FuelType;
 }): Promise<string | null> {
-  // Narrow down to volume-based fuel combustion factors.
-  const query = params.fuelType === "gasoline" ? "fuel-type_motor_gasoline fuel_use" : "fuel-type_diesel fuel_use";
+  // Search for volume-based fuel combustion factors with AT region
+  const query = params.fuelType === "gasoline" ? "motor gasoline fuel combustion" : "diesel fuel combustion";
 
   const url = new URL(`${BASE_URL}/search`);
   url.searchParams.set("query", query);
   url.searchParams.set("data_version", params.dataVersion);
-  url.searchParams.set("results_per_page", "20");
+  url.searchParams.set("results_per_page", "50");
   url.searchParams.set("unit_type", "Volume");
   url.searchParams.set("source_lca_activity", "fuel_combustion");
+  url.searchParams.set("region", "AT");
 
   const upstream = await fetch(url.toString(), {
     headers: {
@@ -90,6 +91,20 @@ async function searchFuelActivityId(params: {
   if (!upstream.ok || !data) return null;
 
   const results = Array.isArray(data?.results) ? data.results : [];
+  
+  // First try: Find exact AT region match with volume unit
+  for (const r of results) {
+    const activityId = typeof r?.activity_id === "string" ? r.activity_id.trim() : "";
+    const region = typeof r?.region === "string" ? r.region.trim().toUpperCase() : "";
+    const unit = typeof r?.unit === "string" ? r.unit.trim().toLowerCase() : "";
+    
+    if (!activityId) continue;
+    if (region === "AT" && unit === "l") {
+      return activityId;
+    }
+  }
+  
+  // Second try: Any volume-based result
   for (const r of results) {
     const activityId = typeof r?.activity_id === "string" ? r.activity_id.trim() : "";
     const unitType = typeof r?.unit_type === "string" ? r.unit_type.trim().toLowerCase() : "";
