@@ -166,7 +166,6 @@ export default async function handler(req: any, res: any) {
         parameters: {
           volume: VOLUME_L,
           volume_unit: "l",
-          region: "AT",
         },
       }),
     });
