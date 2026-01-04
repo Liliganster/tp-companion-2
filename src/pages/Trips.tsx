@@ -578,7 +578,7 @@ export default function Trips() {
               <SelectValue placeholder={t("trips.year")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todo</SelectItem>
+              <SelectItem value="all">{t("trips.all")}</SelectItem>
               <SelectItem value="2025">2025</SelectItem>
               <SelectItem value="2024">2024</SelectItem>
               <SelectItem value="2023">2023</SelectItem>
@@ -617,12 +617,12 @@ export default function Trips() {
                   )}
                   {trip.specialOrigin === "continue" && (
                     <Badge variant="secondary" className="w-fit text-[10px] sm:text-xs">
-                      Continuación
+                      {t("trips.continuation")}
                     </Badge>
                   )}
                   {trip.specialOrigin === "return" && (
                     <Badge variant="secondary" className="w-fit text-[10px] sm:text-xs">
-                      Fin continuación
+                      {t("trips.returnTrip")}
                     </Badge>
                   )}
                   <span className="text-[10px] sm:text-xs text-primary truncate max-w-[150px] sm:max-w-none">
@@ -798,8 +798,8 @@ export default function Trips() {
                         <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
                       </span>
                     )}
-                    {trip.specialOrigin === "continue" && <Badge variant="secondary">Continuación</Badge>}
-                    {trip.specialOrigin === "return" && <Badge variant="secondary">Fin continuación</Badge>}
+                    {trip.specialOrigin === "continue" && <Badge variant="secondary">{t("trips.continuation")}</Badge>}
+                    {trip.specialOrigin === "return" && <Badge variant="secondary">{t("trips.returnTrip")}</Badge>}
                   </div>
                 </TableCell>
                 <TableCell>
