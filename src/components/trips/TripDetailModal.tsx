@@ -558,7 +558,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
           </div>
 
           <div className="flex-1 flex flex-col">
-            <Tabs defaultValue="map" className="flex-1 flex flex-col">
+            <Tabs defaultValue="document" className="flex-1 flex flex-col">
               <div className="flex-1 relative">
                 <TabsContent value="map" className="absolute inset-0 m-0">
                   <TripGoogleMap route={liveTrip.route} open={open} />
