@@ -149,6 +149,7 @@ export default async function handler(req: any, res: any) {
         emission_factor: {
           activity_id: activityId,
           data_version: dataVersion,
+          region: "AT",
         },
         parameters: {
           volume: VOLUME_L,
