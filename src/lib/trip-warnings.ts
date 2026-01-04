@@ -41,7 +41,7 @@ function formatRoute(route: string[]) {
     .join(" -> ");
 }
 
-export function computeTripWarnings(trips: TripWarningInput[]) {
+export function computeTripWarnings(trips: TripWarningInput[], t: (key: string) => string) {
   const byId: Record<string, TripWarning[]> = {};
   const duplicateKeyToIds = new Map<string, string[]>();
 
@@ -61,29 +61,29 @@ export function computeTripWarnings(trips: TripWarningInput[]) {
     if (!hasValidDate) {
       pushWarning(byId, trip.id, {
         type: "invalid_date",
-        title: "Fecha inválida",
-        details: trip.date ? String(trip.date) : "Sin fecha",
+        title: t("tripWarning.invalidDate"),
+        details: trip.date ? String(trip.date) : t("tripWarning.noDate"),
       });
     }
 
     if (routeClean.length < 2) {
       pushWarning(byId, trip.id, {
         type: "missing_route",
-        title: "Ruta incompleta",
-        details: "Faltan origen/destino",
+        title: t("tripWarning.incompleteRoute"),
+        details: t("tripWarning.missingOriginDestination"),
       });
     }
 
     if (!Number.isFinite(distance) || distance <= 0) {
       pushWarning(byId, trip.id, {
         type: "zero_distance",
-        title: "Distancia 0 km",
-        details: Number.isFinite(distance) ? `${distance} km` : "Sin distancia",
+        title: t("tripWarning.zeroDistance"),
+        details: Number.isFinite(distance) ? `${distance} km` : t("tripWarning.noDistance"),
       });
     } else if (distance > IMPROBABLE_DISTANCE_KM) {
       pushWarning(byId, trip.id, {
         type: "improbable_distance",
-        title: "Distancia improbable",
+        title: t("tripWarning.improbableDistance"),
         details: `${distance} km`,
       });
     }
@@ -91,8 +91,8 @@ export function computeTripWarnings(trips: TripWarningInput[]) {
     if (trip.projectId == null) {
       pushWarning(byId, trip.id, {
         type: "missing_project",
-        title: "Sin proyecto",
-        details: "Asigna un proyecto para agrupar y reportar",
+        title: t("tripWarning.noProject"),
+        details: t("tripWarning.assignProject"),
       });
     }
   }
@@ -105,8 +105,8 @@ export function computeTripWarnings(trips: TripWarningInput[]) {
     for (const id of ids) {
       pushWarning(byId, id, {
         type: "duplicate",
-        title: "Viaje duplicado",
-        details: routeLabel ? `Misma fecha y ruta (${routeLabel})` : "Misma fecha y ruta",
+        title: t("tripWarning.duplicateTrip"),
+        details: routeLabel ? `${t("tripWarning.sameDateAndRoute")} (${routeLabel})` : t("tripWarning.sameDateAndRoute"),
       });
     }
   }

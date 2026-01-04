@@ -20,14 +20,14 @@ export function NotificationDropdown() {
   const { trips } = useTrips();
 
   const notifications = useMemo<Notification[]>(() => {
-    return computeTripWarnings(trips).toNotifications().map((n) => ({
+    return computeTripWarnings(trips, t).toNotifications().map((n) => ({
       id: n.id,
       type: n.type,
       title: n.title,
       message: n.message,
       tripId: n.tripId,
     }));
-  }, [trips]);
+  }, [trips, t]);
   return <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button className="relative p-2 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors">

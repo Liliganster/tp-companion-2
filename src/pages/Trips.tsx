@@ -478,7 +478,7 @@ export default function Trips() {
     return matchesProject && matchesYear;
   });
 
-  const tripWarnings = computeTripWarnings(trips);
+  const tripWarnings = computeTripWarnings(trips, t);
 
   const visibleTrips = [...filteredTrips].sort((a, b) => {
     const diff = getTripTime(a) - getTripTime(b);
