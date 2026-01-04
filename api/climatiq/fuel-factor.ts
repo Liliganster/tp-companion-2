@@ -150,21 +150,6 @@ export default async function handler(req: any, res: any) {
   const dataVersion = (process.env.CLIMATIQ_DATA_VERSION || DEFAULT_DATA_VERSION).trim() || DEFAULT_DATA_VERSION;
 
   async function estimateOnce(activityId: string) {
-    const payload = {
-      emission_factor: {
-        activity_id: activityId,
-        data_version: dataVersion,
-        region: "AT",
-      },
-      parameters: {
-        volume: VOLUME_L,
-        volume_unit: "l",
-        region: "AT",
-      },
-    };
-    
-    console.log('[Climatiq] Requesting estimate with payload:', JSON.stringify(payload, null, 2));
-    
     const upstream = await fetch(`${BASE_URL}/estimate`, {
       method: "POST",
       headers: {
@@ -172,12 +157,21 @@ export default async function handler(req: any, res: any) {
         "Content-Type": "application/json",
         accept: "application/json",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        emission_factor: {
+          activity_id: activityId,
+          data_version: dataVersion,
+          region: "AT",
+        },
+        parameters: {
+          volume: VOLUME_L,
+          volume_unit: "l",
+          region: "AT",
+        },
+      }),
     });
 
     const { data, rawText } = await readJsonResponse(upstream);
-    console.log('[Climatiq] Response region:', data?.emission_factor?.region);
-    console.log('[Climatiq] Response activity_id:', data?.emission_factor?.activity_id);
     return { upstream, data, rawText, activityId };
   }
 
@@ -229,7 +223,6 @@ export default async function handler(req: any, res: any) {
     cachedTtlSeconds: Math.round(CACHE_TTL_MS / 1000),
   };
 
-  console.log('[Climatiq] Final payload region:', payload.region, 'activity_id:', payload.activityId);
   setCached(cacheKey, payload);
   return sendJson(res, 200, payload);
 }
