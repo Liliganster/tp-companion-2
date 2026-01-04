@@ -459,6 +459,38 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       return;
     }
 
+    // Ensure Google is connected before asking for a Drive link/fileId.
+    // Otherwise users only see the prompt but the download will always fail.
+    try {
+      const statusRes = await fetch("/api/google/oauth/status", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const statusData: any = await statusRes.json().catch(() => null);
+      const scopes = typeof statusData?.scopes === "string" ? statusData.scopes : "";
+      const hasDriveScope = scopes
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .includes("drive");
+      const connected = Boolean(statusData?.connected) && hasDriveScope;
+
+      if (!statusRes.ok || !connected) {
+        const returnTo = `${window.location.pathname}${window.location.search}`;
+        const startRes = await fetch("/api/google/oauth/start", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ scopes: ["drive"], returnTo }),
+        });
+        const startData: any = await startRes.json().catch(() => null);
+        if (!startRes.ok || !startData?.authUrl) throw new Error(startData?.error || "OAuth start failed");
+        window.location.href = startData.authUrl;
+        return;
+      }
+    } catch (err: any) {
+      toast.error("Google", { description: err?.message ?? t("settings.googleConnectFailed") });
+      return;
+    }
+
     const input = window.prompt(t("bulk.promptDriveLink"));
     const fileId = parseDriveFileId(input ?? "");
     if (!fileId) {

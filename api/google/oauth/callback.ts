@@ -27,12 +27,24 @@ export default async function handler(req: any, res: any) {
   const providerAccountEmail = await getGoogleAccountEmail(tokens.access_token);
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
+  const existing = await supabaseGetGoogleConnection(state.userId).catch(() => null);
+
   // Preserve refresh_token if Google doesn't send it again.
   let refreshToken = tokens.refresh_token;
   if (!refreshToken) {
-    const existing = await supabaseGetGoogleConnection(state.userId).catch(() => null);
     refreshToken = existing?.refresh_token ?? undefined;
   }
+
+  const existingScopes = typeof existing?.scopes === "string" ? existing.scopes : "";
+  const nextScopes = Array.isArray(state.scopes) ? state.scopes : [];
+  const mergedScopes = Array.from(
+    new Set(
+      [
+        ...existingScopes.split(",").map((s) => s.trim()),
+        ...nextScopes.map((s: any) => String(s).trim()),
+      ].filter(Boolean),
+    ),
+  ).join(",");
 
   await supabaseUpsertGoogleConnection({
     userId: state.userId,
@@ -40,7 +52,7 @@ export default async function handler(req: any, res: any) {
     refreshToken,
     accessToken: tokens.access_token,
     expiresAt,
-    scopes: Array.isArray(state.scopes) ? state.scopes.join(",") : "",
+    scopes: mergedScopes,
   });
 
   const rawReturnTo = typeof state.returnTo === "string" ? state.returnTo : "/";
