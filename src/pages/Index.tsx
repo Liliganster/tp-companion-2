@@ -17,6 +17,8 @@ import { parseLocaleNumber } from "@/lib/number";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
 import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
+import { useClimatiqVehicleIntensity } from "@/hooks/use-climatiq";
+import { getCountryCode } from "@/lib/country-mapping";
 
 function parseTripDate(value: string): Date | null {
   if (!value) return null;
@@ -48,7 +50,13 @@ function sumKm(trips: Array<{ distance: number }>): number {
 
 function sumCo2(
   trips: Array<{ co2?: number; distance: number }>,
-  emissionsInput: { fuelType: any; fuelLPer100Km?: number | null; evKwhPer100Km?: number | null; gridKgCo2PerKwh?: number | null },
+  emissionsInput: {
+    fuelType: any;
+    fuelLPer100Km?: number | null;
+    fuelKgCo2ePerKm?: number | null;
+    evKwhPer100Km?: number | null;
+    gridKgCo2PerKwh?: number | null;
+  },
 ): number {
   return trips.reduce((acc, t) => {
     const co2 = Number(t.co2);
@@ -151,18 +159,24 @@ export default function Index() {
   const kpiTitleClassName = "text-base font-semibold leading-tight text-foreground uppercase tracking-wide";
   const kpiTitleWrapperClassName = "p-0 rounded-none bg-transparent";
 
+  const region = useMemo(() => getCountryCode(profile.country)?.toUpperCase() ?? "AT", [profile.country]);
   const { data: atGrid } = useElectricityMapsCarbonIntensity("AT", {
     enabled: profile.fuelType === "ev",
   });
+  const { data: fuelIntensity } = useClimatiqVehicleIntensity(
+    profile.fuelType === "gasoline" || profile.fuelType === "diesel" ? profile.fuelType : null,
+    { enabled: profile.fuelType === "gasoline" || profile.fuelType === "diesel", region },
+  );
 
   const emissionsInput = useMemo(() => {
     return {
       fuelType: profile.fuelType,
       fuelLPer100Km: parseLocaleNumber(profile.fuelLPer100Km),
+      fuelKgCo2ePerKm: fuelIntensity?.kgCo2ePerKm ?? null,
       evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
       gridKgCo2PerKwh: atGrid?.kgCo2PerKwh ?? null,
     };
-  }, [atGrid?.kgCo2PerKwh, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType]);
+  }, [atGrid?.kgCo2PerKwh, fuelIntensity?.kgCo2ePerKm, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType]);
 
   const totalKm = sumKm(trips);
   const co2Kg = sumCo2(trips, emissionsInput);

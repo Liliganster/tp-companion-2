@@ -8,9 +8,11 @@ import { calculateTripEmissions } from "@/lib/emissions";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { parseLocaleNumber } from "@/lib/number";
 import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
+import { useClimatiqVehicleIntensity } from "@/hooks/use-climatiq";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { TripInputSchema } from "@/lib/schemas";
 import { isOffline, readOfflineCache, writeOfflineCache } from "@/lib/offlineCache";
+import { getCountryCode } from "@/lib/country-mapping";
 
 export type Trip = {
   id: string;
@@ -63,30 +65,38 @@ export function TripsProvider({ children }: { children: ReactNode }) {
   const queryKey = useMemo(() => ["trips", user?.id ?? "anon"] as const, [user?.id]);
   const offlineCacheKey = useMemo(() => (user?.id ? `cache:trips:v1:${user.id}` : null), [user?.id]);
 
+  const region = useMemo(() => getCountryCode(profile.country)?.toUpperCase() ?? "AT", [profile.country]);
+
   const { data: atGrid } = useElectricityMapsCarbonIntensity("AT", {
     enabled: profile.fuelType === "ev",
   });
+
+  const { data: fuelIntensity } = useClimatiqVehicleIntensity(
+    profile.fuelType === "gasoline" || profile.fuelType === "diesel" ? profile.fuelType : null,
+    { enabled: profile.fuelType === "gasoline" || profile.fuelType === "diesel", region },
+  );
 
   const emissionsInput = useMemo(() => {
     return {
       fuelType: profile.fuelType,
       fuelLPer100Km: parseLocaleNumber(profile.fuelLPer100Km),
+      fuelKgCo2ePerKm: fuelIntensity?.kgCo2ePerKm ?? null,
       evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
       gridKgCo2PerKwh: atGrid?.kgCo2PerKwh ?? null,
     };
-  }, [atGrid?.kgCo2PerKwh, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType]);
+  }, [atGrid?.kgCo2PerKwh, fuelIntensity?.kgCo2ePerKm, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType]);
 
   const shouldUseFuelBasedEmissions = useMemo(() => {
-    const fuelL = Number(emissionsInput.fuelLPer100Km);
+    const fuelKgPerKm = Number(emissionsInput.fuelKgCo2ePerKm);
     const evKwh = Number(emissionsInput.evKwhPer100Km);
     if (emissionsInput.fuelType === "gasoline" || emissionsInput.fuelType === "diesel") {
-      return Number.isFinite(fuelL) && fuelL > 0;
+      return Number.isFinite(fuelKgPerKm) && fuelKgPerKm > 0;
     }
     if (emissionsInput.fuelType === "ev") {
       return Number.isFinite(evKwh) && evKwh > 0;
     }
     return false;
-  }, [emissionsInput.evKwhPer100Km, emissionsInput.fuelLPer100Km, emissionsInput.fuelType]);
+  }, [emissionsInput.evKwhPer100Km, emissionsInput.fuelKgCo2ePerKm, emissionsInput.fuelType]);
 
   const tripsQuery = useQuery({
     queryKey,

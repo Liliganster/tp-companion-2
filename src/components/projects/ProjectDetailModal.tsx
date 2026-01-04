@@ -17,6 +17,8 @@ import { parseLocaleNumber } from "@/lib/number";
 import { useTrips, type Trip } from "@/contexts/TripsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
+import { useClimatiqVehicleIntensity } from "@/hooks/use-climatiq";
+import { getCountryCode } from "@/lib/country-mapping";
 import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
 import { uuidv4 } from "@/lib/utils";
 import { parseMonthlyQuotaExceededReason } from "@/lib/aiQuotaReason";
@@ -125,18 +127,24 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     };
   }, [project?.id, open]);
 
+  const region = useMemo(() => getCountryCode(profile.country)?.toUpperCase() ?? "AT", [profile.country]);
   const { data: atGrid } = useElectricityMapsCarbonIntensity("AT", {
     enabled: profile.fuelType === "ev",
   });
+  const { data: fuelIntensity } = useClimatiqVehicleIntensity(
+    profile.fuelType === "gasoline" || profile.fuelType === "diesel" ? profile.fuelType : null,
+    { enabled: profile.fuelType === "gasoline" || profile.fuelType === "diesel", region },
+  );
 
   const emissionsInput = useMemo(() => {
     return {
       fuelType: profile.fuelType,
       fuelLPer100Km: parseLocaleNumber(profile.fuelLPer100Km),
+      fuelKgCo2ePerKm: fuelIntensity?.kgCo2ePerKm ?? null,
       evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
       gridKgCo2PerKwh: atGrid?.kgCo2PerKwh ?? null,
     };
-  }, [atGrid?.kgCo2PerKwh, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType]);
+  }, [atGrid?.kgCo2PerKwh, fuelIntensity?.kgCo2ePerKm, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType]);
 
   const calculateCO2 = useCallback((distance: number) => {
     return calculateTripEmissions({ distanceKm: distance, ...emissionsInput }).co2Kg;

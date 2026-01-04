@@ -23,6 +23,8 @@ import { calculateTripEmissions } from "@/lib/emissions";
 import { supabase } from "@/lib/supabaseClient";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
+import { useClimatiqVehicleIntensity } from "@/hooks/use-climatiq";
+import { getCountryCode } from "@/lib/country-mapping";
 
 // CO2 is calculated from user profile vehicle settings when saving a trip.
 const mockTripsData: Trip[] = [{
@@ -79,18 +81,24 @@ export default function Trips() {
   const location = useLocation();
   const navigate = useNavigate();
 
+  const region = useMemo(() => getCountryCode(profile.country)?.toUpperCase() ?? "AT", [profile.country]);
   const { data: atGrid } = useElectricityMapsCarbonIntensity("AT", {
     enabled: profile.fuelType === "ev",
   });
+  const { data: fuelIntensity } = useClimatiqVehicleIntensity(
+    profile.fuelType === "gasoline" || profile.fuelType === "diesel" ? profile.fuelType : null,
+    { enabled: profile.fuelType === "gasoline" || profile.fuelType === "diesel", region },
+  );
 
   const emissionsInput = useMemo(() => {
     return {
       fuelType: profile.fuelType,
       fuelLPer100Km: parseLocaleNumber(profile.fuelLPer100Km),
+      fuelKgCo2ePerKm: fuelIntensity?.kgCo2ePerKm ?? null,
       evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
       gridKgCo2PerKwh: atGrid?.kgCo2PerKwh ?? null,
     };
-  }, [atGrid?.kgCo2PerKwh, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType]);
+  }, [atGrid?.kgCo2PerKwh, fuelIntensity?.kgCo2ePerKm, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType]);
 
   const calculateCO2 = (distance: number) => calculateTripEmissions({ distanceKm: distance, ...emissionsInput }).co2Kg;
 
