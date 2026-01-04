@@ -494,7 +494,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   </div>
 
                   {/* Emissions Data Source Info */}
-                  {(fuelFactor || atGrid) && (
+                  {((fuelFactor && (profileData.fuelType === "gasoline" || profileData.fuelType === "diesel")) || 
+                    (atGrid && profileData.fuelType === "ev")) && (
                     <div className="mt-4 p-4 rounded-lg bg-secondary/30 border border-border/50">
                       <div className="flex items-start gap-2 mb-3">
                         <Info className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
@@ -507,7 +508,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       </div>
 
                       <div className="space-y-3">
-                        {fuelFactor && (
+                        {fuelFactor && (profileData.fuelType === "gasoline" || profileData.fuelType === "diesel") && (
                           <div className="text-xs space-y-1">
                             <div className="flex items-center gap-2">
                               <span className="font-semibold text-primary">Climatiq</span>
@@ -538,7 +539,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                           </div>
                         )}
 
-                        {atGrid && (
+                        {atGrid && profileData.fuelType === "ev" && (
                           <div className="text-xs space-y-1">
                             <div className="flex items-center gap-2">
                               <span className="font-semibold text-primary">Electricity Maps</span>
