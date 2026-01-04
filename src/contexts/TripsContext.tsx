@@ -144,7 +144,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         invoiceCurrency: t.invoice_currency ?? null,
         invoiceJobId: t.invoice_job_id ?? null,
         distance: t.distance_km || 0,
-        co2: Number.isFinite(Number(t.co2_kg)) ? Number(t.co2_kg) : 0,
+        co2: 0, // Will be recalculated using API data in the trips memo
         ratePerKmOverride: t.rate_per_km_override,
         specialOrigin: t.special_origin,
         documents: (t.documents || []).filter((d: any) => d.kind !== "client_meta"),
@@ -157,24 +157,23 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
   const trips: Trip[] = useMemo(() => {
     const base = (tripsQuery.data ?? []) as Trip[];
+    // Always recalculate CO2 using current API data (Climatiq/Electricity Maps)
+    // Never trust stored values - APIs dictate the calculation
     return base.map((t) => {
-      const stored = Number(t.co2);
-      const storedValid = Number.isFinite(stored) && stored > 0;
       const computed = calculateTripEmissions({ distanceKm: t.distance, ...emissionsInput }).co2Kg;
       return {
         ...t,
-        co2: shouldUseFuelBasedEmissions ? computed : storedValid ? stored : computed,
+        co2: computed,
       };
     });
-  }, [emissionsInput, shouldUseFuelBasedEmissions, tripsQuery.data]);
+  }, [emissionsInput, tripsQuery.data]);
 
   const loading = tripsQuery.isLoading;
 
-  // Best-effort: if the user configured vehicle emissions, keep DB values in sync so views (e.g. project_totals) match.
+  // Best-effort: keep DB values in sync with API-calculated emissions
   const lastEmissionsSyncKeyRef = useRef<string | null>(null);
   useEffect(() => {
     if (!user || !supabase) return;
-    if (!shouldUseFuelBasedEmissions) return;
     const key = JSON.stringify(emissionsInput);
     if (lastEmissionsSyncKeyRef.current === key) return;
     lastEmissionsSyncKeyRef.current = key;
@@ -203,7 +202,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
     // Fire-and-forget DB updates.
     void Promise.allSettled(updates.map((u) => supabase.from("trips").update({ co2_kg: u.co2 }).eq("id", u.id)));
-  }, [emissionsInput, queryClient, queryKey, shouldUseFuelBasedEmissions, tripsQuery.data, user]);
+  }, [emissionsInput, queryClient, queryKey, tripsQuery.data, user]);
 
   // Keep invoice fields in sync when AI extraction updates trips in DB.
   useEffect(() => {
@@ -234,7 +233,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
                     project: t.projectId 
                         ? t.project 
                         : (next.documents || []).find((d: any) => d.kind === "client_meta")?.name || "Unknown",
-                    co2: Number.isFinite(Number(next.co2_kg)) ? Number(next.co2_kg) : t.co2,
+                    // Don't update co2 from DB - always recalculate using API data
                     distance: Number.isFinite(Number(next.distance_km)) ? Number(next.distance_km) : t.distance,
                   }
                 : t,
@@ -379,7 +378,8 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     ) as Partial<Trip>;
 
     const nextPatch: Partial<Trip> = { ...safePatch };
-    if (safePatch.distance !== undefined && safePatch.co2 === undefined) {
+    // Always recalculate CO2 if distance changes, using current API data
+    if (safePatch.distance !== undefined) {
       nextPatch.co2 = calculateTripEmissions({ distanceKm: safePatch.distance, ...emissionsInput }).co2Kg;
     }
 
