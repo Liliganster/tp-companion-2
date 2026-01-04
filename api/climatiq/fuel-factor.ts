@@ -28,8 +28,8 @@ function getActivityId(fuelType: FuelType): string {
   const cached = ACTIVITY_ID_CACHE.get(fuelType);
   if (cached) return cached;
 
-  // Defaults - will be replaced if search finds better matches
-  return fuelType === "gasoline" ? "fuel_type_motor_gasoline-fuel_use_na" : "fuel_type_diesel-fuel_use_na";
+  // European defaults that support AT region
+  return fuelType === "gasoline" ? "passenger_vehicle-vehicle_type_car-fuel_source_petrol-distance_na_other-engine_size_na_other" : "passenger_vehicle-vehicle_type_car-fuel_source_diesel-distance_na_other-engine_size_na_other";
 }
 
 function getCached(key: string): unknown | null {
