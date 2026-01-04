@@ -4,7 +4,7 @@ export const DEFAULT_LANGUAGE: AppLanguage = "es";
 
 const es = {
   // Nav / layout
-  "nav.dashboard": "Dashboard",
+  "nav.dashboard": "Panel de control",
   "nav.trips": "Viajes",
   "nav.projects": "Proyectos",
   "nav.reports": "Informes",
