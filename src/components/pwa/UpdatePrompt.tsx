@@ -9,6 +9,7 @@ export function UpdatePrompt() {
   const wbRef = useRef<WorkboxInstance | null>(null);
   const registeredRef = useRef(false);
   const promptShownRef = useRef(false);
+  const isInitialLoadRef = useRef(true);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
@@ -28,12 +29,19 @@ export function UpdatePrompt() {
 
         wb.addEventListener("installed", (event: any) => {
           if (cancelled) return;
-          if (event?.isUpdate) setNeedRefresh(true);
+          // Only show update prompt if this is not the initial load
+          // On initial load, the app already has the latest version
+          if (event?.isUpdate && !isInitialLoadRef.current) {
+            setNeedRefresh(true);
+          }
         });
 
         wb.addEventListener("waiting", () => {
           if (cancelled) return;
-          setNeedRefresh(true);
+          // Only show update prompt if this is not the initial load
+          if (!isInitialLoadRef.current) {
+            setNeedRefresh(true);
+          }
         });
 
         const swRegistration = await wb.register();
@@ -41,7 +49,16 @@ export function UpdatePrompt() {
         if (swRegistration) setRegistration(swRegistration);
 
         // If an update was downloaded while the app was in the background, `waiting` may already be set.
-        if (swRegistration?.waiting) setNeedRefresh(true);
+        // But only show prompt if this is not the initial load
+        if (swRegistration?.waiting && !isInitialLoadRef.current) {
+          setNeedRefresh(true);
+        }
+        
+        // Mark that initial load is complete after a short delay
+        // This allows the SW to activate on first load without showing the prompt
+        setTimeout(() => {
+          isInitialLoadRef.current = false;
+        }, 2000);
       } catch (error) {
         console.log("SW registration error", error);
       }
