@@ -201,7 +201,7 @@ export default async function handler(req: any, res: any) {
   const payload = {
     fuelType,
     kgCo2ePerLiter: Math.round((co2eKg / VOLUME_L) * 1_000_000) / 1_000_000,
-    activityId,
+    activityId: attempt.activityId,
     dataVersion,
     source: data?.emission_factor?.source ?? "climatiq",
     year: data?.emission_factor?.year ?? null,
