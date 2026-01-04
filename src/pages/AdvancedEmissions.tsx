@@ -252,16 +252,28 @@ export default function AdvancedEmissions() {
     const { start, end, prevStart, prevEnd } = getRange(now, timeRange);
     const fuelLPer100Km = Number.parseFloat(String(fuelEfficiency).replace(",", "."));
     const fuelRate = Number.isFinite(fuelLPer100Km) && fuelLPer100Km > 0 ? fuelLPer100Km : 0;
+    const profileFuelRate = parseLocaleNumber(profile.fuelLPer100Km);
+
+    // The config modal controls the "analysis assumptions" (fuel efficiency). Prefer it over profile settings.
+    const analysisFuelRate =
+      fuelRate > 0 ? fuelRate : Number.isFinite(profileFuelRate) && Number(profileFuelRate) > 0 ? Number(profileFuelRate) : 0;
+
+    const shouldUseAnalysisFuelRate =
+      (profile.fuelType === "gasoline" || profile.fuelType === "diesel") && analysisFuelRate > 0;
 
     const projectNameById = new Map(projects.map((p) => [p.id, p.name] as const));
 
     const sumTripCo2 = (distanceKm: number, co2?: number) => {
-      const c = Number(co2);
-      if (Number.isFinite(c) && c > 0) return c;
+      // When the user provided a fuel efficiency for the analysis, always recompute emissions so the totals match
+      // the configured liters and don't depend on previously stored trip.co2 values.
+      if (!shouldUseAnalysisFuelRate) {
+        const c = Number(co2);
+        if (Number.isFinite(c) && c > 0) return c;
+      }
       const res = calculateTripEmissions({
         distanceKm,
         fuelType: profile.fuelType,
-        fuelLPer100Km: parseLocaleNumber(profile.fuelLPer100Km),
+        fuelLPer100Km: shouldUseAnalysisFuelRate ? analysisFuelRate : parseLocaleNumber(profile.fuelLPer100Km),
         fuelKgCo2ePerLiter: fuelFactor?.kgCo2ePerLiter ?? null,
         evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
         gridKgCo2PerKwh,
@@ -354,10 +366,7 @@ export default function AdvancedEmissions() {
     const totalDistance = sorted.reduce((acc, r) => acc + r.distanceKm, 0);
     const avgEfficiency = totalDistance > 0 ? totalCo2 / totalDistance : 0;
 
-    const profileFuelRate = parseLocaleNumber(profile.fuelLPer100Km);
-    const liters = (Number.isFinite(profileFuelRate) && Number(profileFuelRate) > 0)
-      ? (totalDistance * Number(profileFuelRate)) / 100
-      : (fuelRate > 0 ? (totalDistance * fuelRate) / 100 : 0);
+    const liters = analysisFuelRate > 0 ? (totalDistance * analysisFuelRate) / 100 : 0;
 
     // Approximation: 1 tree absorbs ~20 kg CO2 per year (tree-year).
     const treesNeeded = calculateTreesNeeded(totalCo2, 20);
