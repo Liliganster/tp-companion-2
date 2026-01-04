@@ -148,6 +148,15 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     return calculateTripEmissions({ distanceKm: distance, ...emissionsInput }).co2Kg;
   }, [emissionsInput]);
 
+  const realProjectCo2 = useMemo(() => {
+    if (!project) return 0;
+    const projectTrips = trips.filter(t => 
+      t.projectId === project.id || 
+      (!t.projectId && t.project === project.name)
+    );
+    return projectTrips.reduce((acc, t) => acc + calculateCO2(t.distance), 0);
+  }, [project, trips, calculateCO2]);
+
   const hasTripForJob = useCallback(
     (jobId: string | undefined, storagePath: string | undefined) => {
       if (!jobId && !storagePath) return false;
@@ -1387,7 +1396,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                   <div className="text-sm space-y-1">
                     <p><span className="text-muted-foreground">Propósito:</span> {trip.purpose}</p>
                     <p><span className="text-muted-foreground">Distancia:</span> {trip.distance.toFixed(1)} km</p>
-                    <p><span className="text-muted-foreground">CO2:</span> {trip.co2.toFixed(2)} kg</p>
+                    <p><span className="text-muted-foreground">CO2:</span> {calculateCO2(trip.distance).toFixed(2)} kg</p>
                     <div>
                       <span className="text-muted-foreground">Ruta:</span>
                       <ul className="ml-4 mt-1 space-y-0.5">
@@ -1459,7 +1468,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                 <p className="text-sm text-muted-foreground mb-1">{t("projectDetail.co2Estimated")}</p>
                 <div className="flex items-center gap-2">
                   <Leaf className="w-5 h-5 text-warning" />
-                  <span className="text-xl font-bold">{project.co2Emissions.toFixed(1)} kg</span>
+                  <span className="text-xl font-bold">{realProjectCo2.toFixed(1)} kg</span>
                 </div>
               </div>
             </div>

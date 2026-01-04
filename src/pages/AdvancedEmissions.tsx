@@ -264,12 +264,9 @@ export default function AdvancedEmissions() {
     const projectNameById = new Map(projects.map((p) => [p.id, p.name] as const));
 
     const sumTripCo2 = (distanceKm: number, co2?: number) => {
-      // When the user provided a fuel efficiency for the analysis, always recompute emissions so the totals match
-      // the configured liters and don't depend on previously stored trip.co2 values.
-      if (!shouldUseAnalysisFuelRate) {
-        const c = Number(co2);
-        if (Number.isFinite(c) && c > 0) return c;
-      }
+      // Always recalculate emissions based on current profile settings
+      // to ensure the ranking reflects the latest configuration.
+      // Previously stored trip.co2 values may be outdated if the profile changed.
       const res = calculateTripEmissions({
         distanceKm,
         fuelType: profile.fuelType,

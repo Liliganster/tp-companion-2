@@ -649,7 +649,7 @@ export default function Trips() {
                   </div>
                   <div className="flex justify-between md:flex-col md:gap-0.5">
                     <span className="text-muted-foreground text-center">CO₂:</span>
-                    <span className="text-emerald-500 font-medium text-center">{trip.co2} kg</span>
+                    <span className="text-emerald-500 font-medium text-center">{calculateCO2(trip.distance)} kg</span>
                   </div>
                   <div className="flex justify-between md:flex-col md:gap-0.5">
                     <span className="text-muted-foreground text-center">Reembolso:</span>
@@ -813,7 +813,7 @@ export default function Trips() {
                     {trip.project}
                   </span>
                 </TableCell>
-                <TableCell className="text-right text-emerald-500 whitespace-nowrap">{trip.co2} kg</TableCell>
+                <TableCell className="text-right text-emerald-500 whitespace-nowrap">{calculateCO2(trip.distance)} kg</TableCell>
                 <TableCell className="text-right whitespace-nowrap">{formatTripInvoiceCell(trip)}</TableCell>
                 <TableCell className="text-right text-muted-foreground hidden lg:table-cell">{trip.passengers || "-"}</TableCell>
                 <TableCell className="text-right text-primary font-medium whitespace-nowrap">{calculateTripReimbursement(trip).toFixed(2)} €</TableCell>

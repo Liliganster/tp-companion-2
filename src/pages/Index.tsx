@@ -58,8 +58,7 @@ function sumCo2(
   },
 ): number {
   return trips.reduce((acc, t) => {
-    const co2 = Number(t.co2);
-    if (Number.isFinite(co2) && co2 > 0) return acc + co2;
+    // Always recalculate to reflect current profile settings
     return acc + calculateTripEmissions({ distanceKm: t.distance, ...emissionsInput }).co2Kg;
   }, 0);
 }
