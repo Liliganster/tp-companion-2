@@ -799,11 +799,8 @@ export default function Projects() {
                     <TableCell className="text-right font-medium hidden md:table-cell">
                       {totalKm.toLocaleString(locale)} km
                     </TableCell>
-                    <TableCell className="text-right hidden md:table-cell">
-                      <div className="flex items-center justify-end gap-1.5 text-success">
-                        <Leaf className="w-4 h-4" />
-                        <span>{(stats?.co2Emissions ?? 0).toFixed(2)}</span>
-                      </div>
+                    <TableCell className="text-right hidden md:table-cell text-success">
+                      {(stats?.co2Emissions ?? 0).toFixed(1)} kg
                     </TableCell>
 	                    <TableCell className="text-right hidden lg:table-cell">
 	                      <div className="flex items-center justify-end gap-1.5">
