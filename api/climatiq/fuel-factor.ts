@@ -28,8 +28,8 @@ function getActivityId(fuelType: FuelType): string {
   const cached = ACTIVITY_ID_CACHE.get(fuelType);
   if (cached) return cached;
 
-  // Activity IDs that support AT region
-  return fuelType === "gasoline" ? "passenger_vehicle-vehicle_type_car-fuel_source_gasoline-engine_size_na-vehicle_age_na" : "passenger_vehicle-vehicle_type_car-fuel_source_diesel-engine_size_na-vehicle_age_na";
+  // Fuel combustion IDs that accept volume in liters
+  return fuelType === "gasoline" ? "fuel_type_gasoline-fuel_use_na" : "fuel_type_diesel-fuel_use_na";
 }
 
 function getCached(key: string): unknown | null {
@@ -69,14 +69,14 @@ async function searchFuelActivityId(params: {
   dataVersion: string;
   fuelType: FuelType;
 }): Promise<string | null> {
-  // Search for fuel combustion factors specifically for AT region
-  const query = params.fuelType === "gasoline" ? "gasoline combustion stationary" : "diesel combustion stationary";
+  // Search for fuel combustion factors with volume unit
+  const query = params.fuelType === "gasoline" ? "gasoline fuel combustion" : "diesel fuel combustion";
 
   const url = new URL(`${BASE_URL}/search`);
   url.searchParams.set("query", query);
   url.searchParams.set("data_version", params.dataVersion);
-  url.searchParams.set("results_per_page", "50");
-  url.searchParams.set("region", "AT");
+  url.searchParams.set("results_per_page", "100");
+  url.searchParams.set("unit_type", "Volume");
 
   const upstream = await fetch(url.toString(), {
     headers: {
@@ -90,24 +90,34 @@ async function searchFuelActivityId(params: {
 
   const results = Array.isArray(data?.results) ? data.results : [];
   
-  // Find AT region match with volume unit (liter)
+  // Priority 1: AT region with liter unit
   for (const r of results) {
     const activityId = typeof r?.activity_id === "string" ? r.activity_id.trim() : "";
     const region = typeof r?.region === "string" ? r.region.trim().toUpperCase() : "";
     const unit = typeof r?.unit === "string" ? r.unit.trim().toLowerCase() : "";
     
-    if (!activityId) continue;
-    if (region === "AT" && unit === "l") {
+    if (activityId && region === "AT" && unit === "l") {
       return activityId;
     }
   }
   
-  // Fallback: any AT region result
+  // Priority 2: EU region with liter unit
   for (const r of results) {
     const activityId = typeof r?.activity_id === "string" ? r.activity_id.trim() : "";
     const region = typeof r?.region === "string" ? r.region.trim().toUpperCase() : "";
-    if (!activityId) continue;
-    if (region === "AT") {
+    const unit = typeof r?.unit === "string" ? r.unit.trim().toLowerCase() : "";
+    
+    if (activityId && region === "EU" && unit === "l") {
+      return activityId;
+    }
+  }
+  
+  // Priority 3: Any result with liter unit
+  for (const r of results) {
+    const activityId = typeof r?.activity_id === "string" ? r.activity_id.trim() : "";
+    const unit = typeof r?.unit === "string" ? r.unit.trim().toLowerCase() : "";
+    
+    if (activityId && unit === "l") {
       return activityId;
     }
   }
