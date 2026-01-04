@@ -1342,7 +1342,7 @@ const en: Record<I18nKey, string> = {
 };
 
 const de: Record<I18nKey, string> = {
-  "nav.dashboard": "Dashboard",
+  "nav.dashboard": "Übersicht",
   "nav.trips": "Fahrten",
   "nav.projects": "Projekte",
   "nav.reports": "Berichte",
