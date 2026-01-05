@@ -1,7 +1,7 @@
 import { requireSupabaseUser, sendJson } from "../_utils/supabase.js";
 import { enforceRateLimit } from "../_utils/rateLimit.js";
 
-const BASE_URL = "https://api.climatiq.io/data/v1";
+const ESTIMATE_URL = "https://api.climatiq.io/data/v1/estimate";
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const DEFAULT_DATA_VERSION = "^21";
 const DEFAULT_REGION = "AT";
@@ -13,9 +13,8 @@ const FALLBACK_KG_CO2E_PER_LITER: Record<FuelType, number> = {
 
 type FuelType = "gasoline" | "diesel";
 type CacheEntry = { expiresAtMs: number; payload: unknown };
-type ActivitySelection = { activityId: string; region: string | null };
+type ActivitySelection = { activityId: string; region: string };
 const CACHE = new Map<string, CacheEntry>();
-const ACTIVITY_SELECTION_CACHE = new Map<FuelType, ActivitySelection>();
 const DEFAULT_ACTIVITY_ID: Record<FuelType, string> = {
   gasoline: "fuel-type_petrol-fuel_use_na",
   diesel: "fuel-type_diesel-fuel_use_na",
@@ -35,16 +34,6 @@ function getEnvActivitySelection(fuelType: FuelType): ActivitySelection | null {
   const activityId = typeof fromEnv === "string" ? fromEnv.trim() : "";
   if (!activityId) return null;
   return { activityId, region: DEFAULT_REGION };
-}
-
-function getDefaultActivitySelection(fuelType: FuelType): ActivitySelection {
-  return { activityId: DEFAULT_ACTIVITY_ID[fuelType], region: DEFAULT_REGION };
-}
-
-function isLiterUnit(value: unknown): boolean {
-  if (typeof value !== "string") return false;
-  const unit = value.trim().toLowerCase();
-  return unit === "l" || unit === "liter" || unit === "litre" || unit === "liters" || unit === "litres";
 }
 
 function normalizeFactorRegion(value: unknown): string | null {
@@ -88,82 +77,13 @@ async function readJsonResponse(upstream: Response): Promise<{ data: any | null;
   }
 }
 
-async function searchFuelActivitySelection(params: {
-  apiKey: string;
-  dataVersion: string;
-  fuelType: FuelType;
-}): Promise<ActivitySelection | null> {
-  // Search for fuel combustion factors with liters unit (used to estimate CO2e per liter).
-  const query =
-    params.fuelType === "gasoline"
-      ? "fuel-type_petrol-fuel_use_na"
-      : "fuel-type_diesel-fuel_use_na";
-
-  const url = new URL(`${BASE_URL}/search`);
-  url.searchParams.set("query", query);
-  url.searchParams.set("data_version", params.dataVersion);
-  url.searchParams.set("results_per_page", "100");
-  url.searchParams.set("unit_type", "Volume");
-
-  let upstream: Response;
-  try {
-    upstream = await fetch(url.toString(), {
-      headers: {
-        Authorization: `Bearer ${params.apiKey}`,
-        accept: "application/json",
-      },
-    });
-  } catch {
-    return null;
-  }
-
-  const { data } = await readJsonResponse(upstream);
-  if (!upstream.ok || !data) return null;
-
-  const results = Array.isArray(data?.results) ? data.results : [];
-
-  // Priority 1: AT region with liter unit
-  for (const r of results) {
-    const activityId = typeof r?.activity_id === "string" ? r.activity_id.trim() : "";
-    const region = normalizeFactorRegion(r?.region);
-    const unitOk = isLiterUnit(r?.unit);
-
-    if (activityId && region === DEFAULT_REGION && unitOk) {
-      return { activityId, region: DEFAULT_REGION };
-    }
-  }
-
-  // Priority 2: EU region with liter unit
-  for (const r of results) {
-    const activityId = typeof r?.activity_id === "string" ? r.activity_id.trim() : "";
-    const region = normalizeFactorRegion(r?.region);
-    const unitOk = isLiterUnit(r?.unit);
-
-    if (activityId && region === "EU" && unitOk) {
-      return { activityId, region: "EU" };
-    }
-  }
-
-  // Priority 3: Not-applicable/unspecified region with liter unit
-  for (const r of results) {
-    const activityId = typeof r?.activity_id === "string" ? r.activity_id.trim() : "";
-    const region = normalizeFactorRegion(r?.region);
-    const unitOk = isLiterUnit(r?.unit);
-
-    if (activityId && region == null && unitOk) {
-      return { activityId, region: null };
-    }
-  }
-
-  // Fallback: first factor with liter unit (better than giving up)
-  for (const r of results) {
-    const activityId = typeof r?.activity_id === "string" ? r.activity_id.trim() : "";
-    const region = normalizeFactorRegion(r?.region);
-    const unitOk = isLiterUnit(r?.unit);
-    if (activityId && unitOk) return { activityId, region };
-  }
-
-  return null;
+// Simplified: we use the known working activity_ids directly
+// No need to search - the activity_ids from the example are correct
+function getActivitySelection(fuelType: FuelType): ActivitySelection {
+  return {
+    activityId: DEFAULT_ACTIVITY_ID[fuelType],
+    region: DEFAULT_REGION,
+  };
 }
 
 export default async function handler(req: any, res: any) {
@@ -226,28 +146,27 @@ export default async function handler(req: any, res: any) {
     region: string | null;
   }> {
     try {
-      const emissionFactor: any = {
-        activity_id: activityId,
-        data_version: dataVersion,
+      // Build request body exactly as Climatiq expects:
+      // { "emission_factor": { "activity_id": "...", "region": "AT" }, "parameters": { "fuel": 1, "fuel_unit": "l" } }
+      const requestBody: any = {
+        emission_factor: {
+          activity_id: activityId,
+          region: region || DEFAULT_REGION,
+        },
+        parameters: {
+          fuel: VOLUME_L,
+          fuel_unit: "l",
+        },
       };
-      if (region) emissionFactor.region = region;
 
-      const upstream = await fetch(`${BASE_URL}/estimate`, {
+      const upstream = await fetch(ESTIMATE_URL, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
-          accept: "application/json",
+          Accept: "application/json",
         },
-        body: JSON.stringify({
-          emission_factor: {
-            ...emissionFactor,
-          },
-          parameters: {
-            fuel: VOLUME_L,
-            fuel_unit: "l",
-          },
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const { data, rawText } = await readJsonResponse(upstream);
@@ -258,32 +177,10 @@ export default async function handler(req: any, res: any) {
     }
   }
 
-  let selection = getEnvActivitySelection(fuelType) ?? ACTIVITY_SELECTION_CACHE.get(fuelType) ?? getDefaultActivitySelection(fuelType);
+  let selection = getEnvActivitySelection(fuelType) ?? getActivitySelection(fuelType);
 
-  // Always prefer Austria (AT). If no AT-specific factor exists, fall back to the selector region, then to no-region.
+  // Use the known working activity_id with region AT
   let attempt = await estimateOnce(selection.activityId, DEFAULT_REGION);
-  if ((!attempt.ok || !attempt.data) && selection.region && selection.region !== DEFAULT_REGION) {
-    attempt = await estimateOnce(selection.activityId, selection.region);
-  }
-  if (!attempt.ok || !attempt.data) {
-    attempt = await estimateOnce(selection.activityId, null);
-  }
-
-  if (!attempt.ok || !attempt.data) {
-    // If env/cached activity_id is stale, attempt to rediscover.
-    const discovered = await searchFuelActivitySelection({ apiKey, dataVersion, fuelType });
-    if (discovered && discovered.activityId !== selection.activityId) {
-      selection = discovered;
-      ACTIVITY_SELECTION_CACHE.set(fuelType, selection);
-      attempt = await estimateOnce(selection.activityId, DEFAULT_REGION);
-      if ((!attempt.ok || !attempt.data) && selection.region && selection.region !== DEFAULT_REGION) {
-        attempt = await estimateOnce(selection.activityId, selection.region);
-      }
-      if (!attempt.ok || !attempt.data) {
-        attempt = await estimateOnce(selection.activityId, null);
-      }
-    }
-  }
 
   const data: any = attempt.data;
   if (!attempt.ok || !data) {
@@ -309,7 +206,7 @@ export default async function handler(req: any, res: any) {
     return sendJson(res, 502, { error: "climatiq_error", message: "Invalid co2e payload" });
   }
 
-  const factorRegion = normalizeFactorRegion(data?.emission_factor?.region);
+  const factorRegion = normalizeFactorRegion(data?.emission_factor?.region) || DEFAULT_REGION;
   const payload = {
     fuelType,
     kgCo2ePerLiter: Math.round((co2eKg / VOLUME_L) * 1_000_000) / 1_000_000,
@@ -324,8 +221,7 @@ export default async function handler(req: any, res: any) {
     request: {
       emission_factor: {
         activity_id: attempt.activityId,
-        region: attempt.region,
-        data_version: dataVersion,
+        region: attempt.region || DEFAULT_REGION,
       },
       parameters: {
         fuel: VOLUME_L,
