@@ -288,6 +288,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
 
         log.info({ jobId: job.id }, "invoice_gemini_call");
         const systemInstruction = buildInvoiceExtractorPrompt("[INVOICE DOCUMENT ATTACHED]");
+        const geminiStartTime = Date.now();
         const resultText = await generateContentFromPDF(
           "gemini-2.5-flash",
           systemInstruction,
@@ -295,8 +296,9 @@ export default withApiObservability(async function handler(req: any, res: any, {
           mimeType,
           invoiceExtractionSchema
         );
+        const geminiDuration = Date.now() - geminiStartTime;
 
-        log.info({ jobId: job.id, length: resultText?.length || 0 }, "invoice_gemini_response");
+        log.info({ jobId: job.id, length: resultText?.length || 0, durationMs: geminiDuration }, "invoice_gemini_response");
 
         let extractedJson: any = null;
         try {

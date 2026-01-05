@@ -317,6 +317,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
         }
 
         log.info({ jobId: job.id }, "callsheet_gemini_call");
+        const geminiStartTime = Date.now();
         const systemInstruction = buildUniversalExtractorPrompt("[PDF CONTENT ATTACHED]");
         const resultText = await generateContentFromPDF(
           "gemini-2.5-flash",
@@ -325,8 +326,9 @@ export default withApiObservability(async function handler(req: any, res: any, {
           "application/pdf",
           extractionSchema
         );
+        const geminiDuration = Date.now() - geminiStartTime;
 
-        log.info({ jobId: job.id, length: resultText?.length || 0 }, "callsheet_gemini_response");
+        log.info({ jobId: job.id, length: resultText?.length || 0, durationMs: geminiDuration }, "callsheet_gemini_response");
 
         let extractedJson: any = null;
         try {
@@ -384,11 +386,14 @@ export default withApiObservability(async function handler(req: any, res: any, {
           const locs: any[] = [];
           
           // Parallelize geocoding to avoid sequential API calls (70% speed improvement)
+          const geoStartTime = Date.now();
           const geoResults = await Promise.all(
             extracted.locations.map((locStr) =>
               skipGeocode ? Promise.resolve(null) : geocodeAddress(locStr)
             )
           );
+          const geoDuration = Date.now() - geoStartTime;
+          log.info({ jobId: job.id, locations: extracted.locations.length, durationMs: geoDuration }, "geocoding_completed");
 
           extracted.locations.forEach((locStr, index) => {
             const geo = geoResults[index];

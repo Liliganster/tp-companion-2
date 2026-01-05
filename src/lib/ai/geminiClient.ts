@@ -33,7 +33,16 @@ export async function generateContent(modelName: string, prompt: string, schema?
     } : undefined
   });
 
-  const result = await model.generateContent(prompt);
+  // Add a timeout of 30 seconds for regular API calls
+  const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Gemini API call timeout (30s)")), 30000)
+  );
+
+  const result = await Promise.race([
+    model.generateContent(prompt),
+    timeoutPromise
+  ]) as any;
+
   return result.response.text();
 }
 
@@ -46,15 +55,23 @@ export async function generateContentFromPDF(modelName: string, prompt: string, 
         } : undefined
     });
 
-    const result = await model.generateContent([
-        {
-            inlineData: {
-                data: pdfData.toString("base64"),
-                mimeType,
+    // Add a timeout of 60 seconds for Gemini API calls
+    const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Gemini API call timeout (60s)")), 60000)
+    );
+
+    const result = await Promise.race([
+        model.generateContent([
+            {
+                inlineData: {
+                    data: pdfData.toString("base64"),
+                    mimeType,
+                },
             },
-        },
-        prompt,
-    ]);
+            prompt,
+        ]),
+        timeoutPromise
+    ]) as any;
 
     return result.response.text();
 }
