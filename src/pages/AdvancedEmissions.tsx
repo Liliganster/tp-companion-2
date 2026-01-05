@@ -632,8 +632,6 @@ export default function AdvancedEmissions() {
                             <p className="text-lg font-semibold">{result.kwhUsed} kWh</p>
                           </div>
                         )}
-                          <p className="text-lg font-semibold">{result.trips}</p>
-                        </div>
                       </div>
                     </div>
                   </div>
