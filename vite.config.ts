@@ -125,6 +125,124 @@ function googleApiProxy(serverKey: string | undefined): Plugin {
   };
 }
 
+function climatiqProxy(apiKey: string | undefined): Plugin {
+  const ESTIMATE_URL = "https://api.climatiq.io/data/v1/estimate";
+  const DEFAULT_REGION = "AT";
+  const VOLUME_L = 1;
+  const FALLBACK_KG_CO2E_PER_LITER: Record<string, number> = {
+    gasoline: 2.31,
+    diesel: 2.68,
+  };
+  const DEFAULT_ACTIVITY_ID: Record<string, string> = {
+    gasoline: "fuel-type_petrol-fuel_use_na",
+    diesel: "fuel-type_diesel-fuel_use_na",
+  };
+
+  const send = (res: any, statusCode: number, payload: unknown) => {
+    res.statusCode = statusCode;
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify(payload));
+  };
+
+  return {
+    name: "climatiq-proxy",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (!req.url?.startsWith("/api/climatiq/fuel-factor")) return next();
+        if (req.method !== "GET") {
+          res.statusCode = 405;
+          res.setHeader("Allow", "GET");
+          res.end();
+          return;
+        }
+
+        const url = new URL(req.url, "http://localhost");
+        const fuelTypeParam = url.searchParams.get("fuelType") || url.searchParams.get("fuel");
+        const fuelType = fuelTypeParam?.toLowerCase() === "diesel" ? "diesel" : 
+                        (fuelTypeParam?.toLowerCase() === "gasoline" || fuelTypeParam?.toLowerCase() === "petrol") ? "gasoline" : null;
+        
+        if (!fuelType) return send(res, 400, { error: "invalid_fuel_type" });
+
+        // If no API key, return fallback data
+        if (!apiKey) {
+          return send(res, 200, {
+            fuelType,
+            kgCo2ePerLiter: FALLBACK_KG_CO2E_PER_LITER[fuelType],
+            activityId: DEFAULT_ACTIVITY_ID[fuelType],
+            dataVersion: "^21",
+            source: "fallback",
+            year: null,
+            region: DEFAULT_REGION,
+            cachedTtlSeconds: 2592000,
+            method: "fallback",
+            fallback: true,
+          });
+        }
+
+        // Call Climatiq API
+        const requestBody = {
+          emission_factor: {
+            activity_id: DEFAULT_ACTIVITY_ID[fuelType],
+            region: DEFAULT_REGION,
+          },
+          parameters: {
+            fuel: VOLUME_L,
+            fuel_unit: "l",
+          },
+        };
+
+        try {
+          const upstream = await fetch(ESTIMATE_URL, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body: JSON.stringify(requestBody),
+          });
+
+          const data = await upstream.json().catch(() => null);
+          
+          if (!upstream.ok || !data) {
+            return send(res, 502, {
+              error: "climatiq_error",
+              message: data?.message || data?.error || "Failed to contact Climatiq",
+              upstreamStatus: upstream.status,
+            });
+          }
+
+          const co2e = Number(data?.co2e);
+          if (!Number.isFinite(co2e) || co2e <= 0) {
+            return send(res, 502, { error: "climatiq_error", message: "Invalid co2e payload" });
+          }
+
+          return send(res, 200, {
+            fuelType,
+            kgCo2ePerLiter: co2e,
+            activityId: DEFAULT_ACTIVITY_ID[fuelType],
+            dataVersion: "^21",
+            source: data?.emission_factor?.source ?? "climatiq",
+            year: data?.emission_factor?.year ?? null,
+            region: data?.emission_factor?.region || DEFAULT_REGION,
+            cachedTtlSeconds: 2592000,
+            method: "data",
+            fallback: false,
+            request: requestBody,
+            upstream: { ok: upstream.ok, status: upstream.status, data },
+          });
+        } catch (err: any) {
+          return send(res, 502, {
+            error: "climatiq_error",
+            message: err?.message || "Network error",
+          });
+        }
+      });
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -153,6 +271,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       mode === "development" && googleApiProxy(env.GOOGLE_MAPS_SERVER_KEY),
+      mode === "development" && climatiqProxy(env.CLIMATIQ_API_KEY),
       mode === "development" && componentTagger(),
       VitePWA({
         registerType: 'prompt',
