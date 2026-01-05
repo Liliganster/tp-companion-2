@@ -68,14 +68,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUpWithPassword = useCallback(async (email: string, password: string, fullName?: string) => {
-    const { error } = await requireSupabase().auth.signUp({
+    const { data, error } = await requireSupabase().auth.signUp({
       email,
       password,
       options: {
         data: fullName ? { full_name: fullName } : undefined,
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
-    if (error) throw error;
+    if (error) {
+      console.error("[AuthContext] Sign up error:", error);
+      throw error;
+    }
+    console.log("[AuthContext] Sign up successful. Data:", data);
   }, []);
 
   const signInWithGoogle = useCallback(async () => {
