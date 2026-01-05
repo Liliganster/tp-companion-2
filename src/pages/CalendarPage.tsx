@@ -28,10 +28,6 @@ import { useTrips } from "@/contexts/TripsContext";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useNavigate } from "react-router-dom";
 import { uuidv4 } from "@/lib/utils";
-import { calculateTripEmissions } from "@/lib/emissions";
-import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
-import { useClimatiqFuelFactor } from "@/hooks/use-climatiq";
-import { parseLocaleNumber } from "@/lib/number";
 
 interface CalendarEvent {
   id: string;
@@ -112,18 +108,6 @@ export default function CalendarPage() {
   // Prevent duplicate API calls
   const lastEventsRefreshRef = useRef<string>("");
   const eventsRefreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const { data: atGrid } = useElectricityMapsCarbonIntensity({ enabled: profile.fuelType === "ev" });
-  const { data: fuelFactor } = useClimatiqFuelFactor({ enabled: profile.fuelType !== "ev" });
-
-  const emissionsInput = useMemo(() => ({
-    fuelType: profile.fuelType,
-    fuelLPer100Km: parseLocaleNumber(profile.fuelLPer100Km),
-    kgCo2ePerLiter: fuelFactor?.kgCo2ePerLiter ?? null,
-    kgCo2ePerKm: fuelFactor?.kgCo2ePerKm ?? null,
-    evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
-    gridKgCo2PerKwh: atGrid?.kgCo2PerKwh ?? null,
-  }), [atGrid?.kgCo2PerKwh, fuelFactor?.kgCo2ePerLiter, fuelFactor?.kgCo2ePerKm, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType]);
 
   const daysInMonth = new Date(
     currentDate.getFullYear(),
@@ -215,25 +199,20 @@ export default function CalendarPage() {
         return;
       }
       
-      // Calcular CO2
-      const co2 = calculateTripEmissions({ distanceKm: distance, ...emissionsInput }).co2Kg;
-      
-      // Título del evento = cliente/empresa/productora
+      // Título del evento = cliente/empresa/productora (va en project como string)
       const clientName = event.title.trim();
       
-      // Crear viaje con proyecto "UNKNOWN" y clientName en documents
+      // Crear viaje con la misma estructura que AddTripModal
       const tripId = uuidv4();
       const tripData = {
         id: tripId,
         date: event.date,
         route,
-        project: "UNKNOWN", // Proyecto por defecto
-        projectId: undefined, // Sin projectId (se asigna manualmente)
-        clientName, // Cliente/Empresa del título del evento
+        project: clientName, // El nombre del cliente va aquí (sin projectId)
+        projectId: undefined, // Sin projectId, el sistema lo tratará como client metadata
         purpose: event.description?.substring(0, 500) || "",
         passengers: 0,
         distance,
-        co2,
         ratePerKmOverride: null,
         specialOrigin: "base" as const,
       };
@@ -454,14 +433,14 @@ export default function CalendarPage() {
       const nextEnabled = new Set<string>();
 
       if (setFromSaved.size === 0) {
-        for (const c of mapped) nextEnabled.add(c.id);
+        // Solo activar el primer calendario por defecto (probablemente el principal)
+        if (mapped.length > 0) {
+          nextEnabled.add(mapped[0].id);
+        }
       } else {
+        // Usar la configuración guardada
         for (const c of mapped) {
           if (setFromSaved.has(c.id)) nextEnabled.add(c.id);
-        }
-        // Default-enable any new calendars not present in saved.
-        for (const c of mapped) {
-          if (!setFromSaved.has(c.id)) nextEnabled.add(c.id);
         }
       }
 
