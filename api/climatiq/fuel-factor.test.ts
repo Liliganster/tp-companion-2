@@ -52,13 +52,13 @@ describe("/api/climatiq/fuel-factor", () => {
         const body = JSON.parse(String(init?.body ?? "{}"));
         expect(body).toMatchObject({
           emission_factor: { activity_id: "fuel-type_diesel-fuel_use_na" },
-          parameters: { fuel: 1, fuel_unit: "l" },
+          parameters: { volume: 1, volume_unit: "l" },
         });
         return new Response(
           JSON.stringify({
-            co2e: 2.68,
+            co2e: 2.66,
             co2e_unit: "kg",
-            emission_factor: { region: "AT", source: "data_source", year: 2024 },
+            emission_factor: { region: "GB", source: "BEIS", year: 2025 },
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -79,15 +79,15 @@ describe("/api/climatiq/fuel-factor", () => {
     const payload = JSON.parse(res.body);
     expect(payload).toMatchObject({
       fuelType: "diesel",
-      kgCo2ePerLiter: 2.68,
+      kgCo2ePerLiter: 2.66,
       activityId: "fuel-type_diesel-fuel_use_na",
       dataVersion: process.env.CLIMATIQ_DATA_VERSION,
-      region: "AT",
-      source: "data_source",
-      year: 2024,
+      region: "GB",
+      source: "BEIS",
+      year: 2025,
       method: "data",
     });
-    expect(payload?.upstream?.data?.co2e).toBe(2.68);
+    expect(payload?.upstream?.data?.co2e).toBe(2.66);
   });
 
   it("returns fallback factor when CLIMATIQ_API_KEY is missing", async () => {
@@ -108,7 +108,7 @@ describe("/api/climatiq/fuel-factor", () => {
     const payload = JSON.parse(res.body);
     expect(payload).toMatchObject({
       fuelType: "gasoline",
-      kgCo2ePerLiter: 2.31,
+      kgCo2ePerLiter: 2.34,
       fallback: true,
     });
   });

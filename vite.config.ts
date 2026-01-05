@@ -127,14 +127,15 @@ function googleApiProxy(serverKey: string | undefined): Plugin {
 
 function climatiqProxy(apiKey: string | undefined): Plugin {
   const ESTIMATE_URL = "https://api.climatiq.io/data/v1/estimate";
-  const DEFAULT_REGION = "AT";
+  const DEFAULT_REGION = "GB"; // Using GB as it has the most comprehensive fuel data
+  const DEFAULT_DATA_VERSION = "^21";
   const VOLUME_L = 1;
   const FALLBACK_KG_CO2E_PER_LITER: Record<string, number> = {
-    gasoline: 2.31,
-    diesel: 2.68,
+    gasoline: 2.34, // Updated based on BEIS 2025 data
+    diesel: 2.70,   // Updated based on BEIS 2025 data
   };
   const DEFAULT_ACTIVITY_ID: Record<string, string> = {
-    gasoline: "fuel-type_petrol-fuel_use_na",
+    gasoline: "fuel-type_motor_gasoline-fuel_use_na",
     diesel: "fuel-type_diesel-fuel_use_na",
   };
 
@@ -170,7 +171,7 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
             fuelType,
             kgCo2ePerLiter: FALLBACK_KG_CO2E_PER_LITER[fuelType],
             activityId: DEFAULT_ACTIVITY_ID[fuelType],
-            dataVersion: "^21",
+            dataVersion: DEFAULT_DATA_VERSION,
             source: "fallback",
             year: null,
             region: DEFAULT_REGION,
@@ -185,10 +186,11 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
           emission_factor: {
             activity_id: DEFAULT_ACTIVITY_ID[fuelType],
             region: DEFAULT_REGION,
+            data_version: DEFAULT_DATA_VERSION,
           },
           parameters: {
-            fuel: VOLUME_L,
-            fuel_unit: "l",
+            volume: VOLUME_L,
+            volume_unit: "l",
           },
         };
 

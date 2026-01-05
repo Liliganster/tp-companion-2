@@ -4,11 +4,11 @@ import { enforceRateLimit } from "../_utils/rateLimit.js";
 const ESTIMATE_URL = "https://api.climatiq.io/data/v1/estimate";
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const DEFAULT_DATA_VERSION = "^21";
-const DEFAULT_REGION = "AT";
+const DEFAULT_REGION = "GB"; // Using GB as it has the most comprehensive fuel data
 const VOLUME_L = 1;
 const FALLBACK_KG_CO2E_PER_LITER: Record<FuelType, number> = {
-  gasoline: 2.31,
-  diesel: 2.68,
+  gasoline: 2.34, // Updated based on BEIS 2025 data
+  diesel: 2.70,   // Updated based on BEIS 2025 data
 };
 
 type FuelType = "gasoline" | "diesel";
@@ -16,7 +16,7 @@ type CacheEntry = { expiresAtMs: number; payload: unknown };
 type ActivitySelection = { activityId: string; region: string };
 const CACHE = new Map<string, CacheEntry>();
 const DEFAULT_ACTIVITY_ID: Record<FuelType, string> = {
-  gasoline: "fuel-type_petrol-fuel_use_na",
+  gasoline: "fuel-type_motor_gasoline-fuel_use_na",
   diesel: "fuel-type_diesel-fuel_use_na",
 };
 
@@ -147,15 +147,16 @@ export default async function handler(req: any, res: any) {
   }> {
     try {
       // Build request body exactly as Climatiq expects:
-      // { "emission_factor": { "activity_id": "...", "region": "AT" }, "parameters": { "fuel": 1, "fuel_unit": "l" } }
+      // { "emission_factor": { "activity_id": "...", "region": "GB", "data_version": "^21" }, "parameters": { "volume": 1, "volume_unit": "l" } }
       const requestBody: any = {
         emission_factor: {
           activity_id: activityId,
           region: region || DEFAULT_REGION,
+          data_version: dataVersion,
         },
         parameters: {
-          fuel: VOLUME_L,
-          fuel_unit: "l",
+          volume: VOLUME_L,
+          volume_unit: "l",
         },
       };
 
