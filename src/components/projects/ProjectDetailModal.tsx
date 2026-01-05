@@ -1566,25 +1566,27 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                   <h3 className="font-medium">{t("projectDetail.callSheetsTitle")}</h3>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={handleTriggerWorker}
-                    disabled={triggeringWorker}
-                    className="h-9"
-                  >
-                    {triggeringWorker ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        {t("projectDetail.processing")}
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="h-4 w-4 mr-2" />
-                        {t("projectDetail.processNow")}
-                      </>
-                    )}
-                  </Button>
+                  {allCallSheets.length > 1 && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleTriggerWorker}
+                      disabled={triggeringWorker}
+                      className="h-9"
+                    >
+                      {triggeringWorker ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          {t("projectDetail.processing")}
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          Procesar Todos con IA
+                        </>
+                      )}
+                    </Button>
+                  )}
                   <CallsheetUploader projectId={project.id} onJobCreated={handleJobCreated} autoQueue={false} />
                 </div>
               </div>

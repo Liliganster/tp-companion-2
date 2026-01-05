@@ -195,7 +195,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
         <Button variant="outline" size="sm" asChild disabled={uploading} className="cursor-pointer">
           <span>
             {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-            Subir Callsheet (AI)
+            Subir Callsheet
           </span>
         </Button>
       </label>
