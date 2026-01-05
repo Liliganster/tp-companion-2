@@ -25,6 +25,7 @@ import { useI18n } from "@/hooks/use-i18n";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { useTrips } from "@/contexts/TripsContext";
+import { useProjects } from "@/contexts/ProjectsContext";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useNavigate } from "react-router-dom";
 import { uuidv4 } from "@/lib/utils";
@@ -83,6 +84,7 @@ export default function CalendarPage() {
   const { t, tf, locale } = useI18n();
   const { getAccessToken } = useAuth();
   const { addTrip } = useTrips();
+  const { projects, addProject } = useProjects();
   const { profile } = useUserProfile();
   const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(() => new Date());
@@ -142,48 +144,67 @@ export default function CalendarPage() {
   const extractLocationsFromEvent = (event: CalendarEvent): string[] => {
     const locations: string[] = [];
     
-    // 1. Si hay location definido en el evento
+    // Construir dirección base si está configurada
+    const baseFullAddress = profile.baseAddress && profile.city && profile.country
+      ? [profile.baseAddress, profile.city, profile.country].filter(Boolean).join(", ")
+      : null;
+    
+    // 1. Buscar destino en la ubicación del evento
     if (event.location?.trim()) {
-      locations.push(event.location.trim());
+      const destination = event.location.trim();
+      // Siempre usar base address como origen si está disponible
+      if (baseFullAddress) {
+        locations.push(baseFullAddress);
+        locations.push(destination);
+        return locations;
+      }
+      locations.push(destination);
     }
     
     // 2. Buscar ubicaciones en la descripción (formato: "De: X A: Y" o "From: X To: Y")
     if (event.description) {
       const desc = event.description;
       
-      // Patrones en español
-      const fromToES = /(?:de|desde|origin|origen):\s*([^\n]+)/i.exec(desc);
+      // Patrones en español e inglés para destino
       const toES = /(?:a|hasta|destino|destination):\s*([^\n]+)/i.exec(desc);
-      
-      // Patrones en inglés
-      const fromEN = /from:\s*([^\n]+)/i.exec(desc);
       const toEN = /to:\s*([^\n]+)/i.exec(desc);
+      const destination = toES?.[1] || toEN?.[1];
       
-      const from = fromToES?.[1] || fromEN?.[1];
-      const to = toES?.[1] || toEN?.[1];
-      
-      if (from) locations.push(from.trim());
-      if (to && to.trim() !== from?.trim()) locations.push(to.trim());
+      if (destination?.trim()) {
+        // Si encontramos destino en descripción, usar base address como origen
+        if (baseFullAddress) {
+          locations.push(baseFullAddress);
+          locations.push(destination.trim());
+          return locations;
+        }
+        // Si no hay base address, buscar también el origen en la descripción
+        const fromES = /(?:de|desde|origin|origen):\s*([^\n]+)/i.exec(desc);
+        const fromEN = /from:\s*([^\n]+)/i.exec(desc);
+        const origin = fromES?.[1] || fromEN?.[1];
+        
+        if (origin?.trim()) {
+          locations.push(origin.trim());
+          locations.push(destination.trim());
+          return locations;
+        }
+        locations.push(destination.trim());
+      }
     }
     
-    // 3. Si no hay ubicaciones, usar base address si está configurado
-    if (locations.length === 0 && profile.baseAddress) {
-      const baseFullAddress = [profile.baseAddress, profile.city, profile.country]
-        .filter(Boolean)
-        .join(", ");
-      locations.push(baseFullAddress);
-      locations.push(baseFullAddress); // Viaje de ida y vuelta por defecto
-    }
-    
-    // 4. Si solo hay 1 ubicación, agregar base address como origen
-    if (locations.length === 1 && profile.baseAddress) {
-      const baseFullAddress = [profile.baseAddress, profile.city, profile.country]
-        .filter(Boolean)
-        .join(", ");
+    // 3. Si tenemos al menos 1 ubicación pero falta el origen, agregar base address
+    if (locations.length === 1 && baseFullAddress) {
       locations.unshift(baseFullAddress);
+      return locations;
     }
     
-    return locations.filter(Boolean);
+    // 4. Si no hay ninguna ubicación, crear viaje de ida y vuelta desde base address
+    if (locations.length === 0 && baseFullAddress) {
+      locations.push(baseFullAddress);
+      locations.push(baseFullAddress);
+      return locations;
+    }
+    
+    return locations;
   };
 
   // Calcular distancia entre ubicaciones usando Google Directions API
@@ -237,7 +258,43 @@ export default function CalendarPage() {
       const co2 = calculateTripEmissions({ distanceKm: distance, ...emissionsInput }).co2Kg;
       
       // Usar título del evento como proyecto/cliente
-      const project = event.title.trim();
+      const projectName = event.title.trim();
+      
+      // Buscar o crear proyecto
+      let projectId: string | undefined = undefined;
+      if (projectName) {
+        const existingProject = projects.find(
+          p => p.name.trim().toLowerCase() === projectName.toLowerCase()
+        );
+        
+        if (existingProject) {
+          projectId = existingProject.id;
+        } else {
+          // Crear nuevo proyecto
+          const newProjectId = uuidv4();
+          const created = await addProject({
+            id: newProjectId,
+            name: projectName,
+            producer: "",
+            description: "",
+            ratePerKm: 0.30,
+            ratePerPassenger: 0.05,
+            starred: false,
+            archived: false,
+            trips: 0,
+            totalKm: 0,
+            documents: 0,
+            invoices: 0,
+            estimatedCost: 0,
+            shootingDays: 0,
+            kmPerDay: 0,
+            co2Emissions: 0,
+          });
+          if (created) {
+            projectId = newProjectId;
+          }
+        }
+      }
       
       // Crear viaje
       const tripId = uuidv4();
@@ -245,8 +302,9 @@ export default function CalendarPage() {
         id: tripId,
         date: event.date,
         route,
-        project,
-        purpose: event.description?.substring(0, 500) || project,
+        project: projectName,
+        projectId,
+        purpose: event.description?.substring(0, 500) || projectName,
         passengers: 0,
         distance,
         co2,
