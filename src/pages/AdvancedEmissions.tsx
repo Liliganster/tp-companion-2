@@ -51,6 +51,8 @@ type EmissionsResult = {
   efficiency: number;
   distanceKm: number;
   trips: number;
+  fuelLiters?: number;  // For gasoline/diesel
+  kwhUsed?: number;      // For EV
 };
 
 function downloadTextFile(content: string, fileName: string, mimeType: string) {
@@ -237,6 +239,7 @@ export default function AdvancedEmissions() {
   const [sortBy, setSortBy] = useState(() => loadAdvancedEmissionsConfig().sortBy);
   const [timeRange, setTimeRange] = useState(() => loadAdvancedEmissionsConfig().timeRange);
   const [fuelEfficiency, setFuelEfficiency] = useState(() => loadAdvancedEmissionsConfig().fuelEfficiency);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -340,6 +343,10 @@ export default function AdvancedEmissions() {
       const prev = prevById.get(a.id);
       const prevEff = prev && prev.distanceKm > 0 ? prev.co2Kg / prev.distanceKm : 0;
 
+      // Calculate fuel/electricity consumption
+      const fuelLiters = analysisFuelRate > 0 ? (a.distanceKm * analysisFuelRate) / 100 : 0;
+      const kwhUsed = profile.evKwhPer100Km ? (a.distanceKm * parseLocaleNumber(profile.evKwhPer100Km)) / 100 : 0;
+      
       return {
         id: a.id,
         rank: 0,
@@ -350,6 +357,8 @@ export default function AdvancedEmissions() {
         efficiency: clampRound(efficiency, 2),
         distanceKm: clampRound(a.distanceKm, 0),
         trips: a.trips,
+        fuelLiters: clampRound(fuelLiters, 1),
+        kwhUsed: clampRound(kwhUsed, 1),
       };
     });
 
@@ -362,22 +371,27 @@ export default function AdvancedEmissions() {
     sorted.forEach((r, idx) => {
       r.rank = idx + 1;
     });
+    
+    // Filter by selected project if in projects view
+    const filtered = selectedProjectId && viewMode === "projects"
+      ? sorted.filter(r => r.id === selectedProjectId)
+      : sorted;
 
-    const totalCo2 = sorted.reduce((acc, r) => acc + r.co2Kg, 0);
-    const totalDistance = sorted.reduce((acc, r) => acc + r.distanceKm, 0);
-    const avgEfficiency = totalDistance > 0 ? totalCo2 / totalDistance : 0;
-
-    const liters = analysisFuelRate > 0 ? (totalDistance * analysisFuelRate) / 100 : 0;
-
-    // Approximation: 1 tree absorbs ~20 kg CO2 per year (tree-year).
-    const treesNeeded = calculateTreesNeeded(totalCo2, 20);
-
+    // Recalculate totals based on filter
+    const displayResults = filtered;
+    const filteredTotalCo2 = displayResults.reduce((acc, r) => acc + r.co2Kg, 0);
+    const filteredTotalDistance = displayResults.reduce((acc, r) => acc + r.distanceKm, 0);
+    const filteredAvgEfficiency = filteredTotalDistance > 0 ? filteredTotalCo2 / filteredTotalDistance : 0;
+    const filteredLiters = analysisFuelRate > 0 ? (filteredTotalDistance * analysisFuelRate) / 100 : 0;
+    const filteredTreesNeeded = calculateTreesNeeded(filteredTotalCo2, 20);
+    
     return {
       results: sorted,
-      totalCo2: clampRound(totalCo2, 1),
-      avgEfficiency: clampRound(avgEfficiency, 2),
-      fuelLiters: clampRound(liters, 1),
-      treesNeeded,
+      filtered: displayResults,
+      totalCo2: clampRound(filteredTotalCo2, 1),
+      avgEfficiency: clampRound(filteredAvgEfficiency, 2),
+      fuelLiters: clampRound(filteredLiters, 1),
+      treesNeeded: filteredTreesNeeded,
     };
   }, [fallbackProjectName, fallbackTripName, fuelEfficiency, fuelFactor?.kgCo2ePerLiter, gridKgCo2PerKwh, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType, projects, sortBy, timeRange, trips, viewMode]);
 
@@ -530,11 +544,26 @@ export default function AdvancedEmissions() {
 
             {/* Results List */}
             <div className="space-y-4">
-              <h3 className="text-sm font-medium text-muted-foreground">
-                {tf("advancedEmissions.resultsTitle", { count: computed.results.length })}
-              </h3>
+              <div className="flex items-center justify-between gap-4">
+                <h3 className="text-sm font-medium text-muted-foreground">
+                  {tf("advancedEmissions.resultsTitle", { count: computed.filtered.length })}
+                </h3>
+                {viewMode === "projects" && computed.results.length > 0 && (
+                  <Select value={selectedProjectId || ""} onValueChange={(value) => setSelectedProjectId(value || null)}>
+                    <SelectTrigger className="w-48">
+                      <SelectValue placeholder="Filtrar por proyecto..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Todos los proyectos</SelectItem>
+                      {computed.results.map((r) => (
+                        <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
 
-              {computed.results.length === 0 ? (
+              {computed.filtered.length === 0 ? (
                 <div className="glass-card p-8 text-center">
                   <h4 className="font-semibold">{t("advancedEmissions.noResultsTitle")}</h4>
                   <p className="text-sm text-muted-foreground mt-2">{t("advancedEmissions.noResultsBody")}</p>
@@ -546,7 +575,7 @@ export default function AdvancedEmissions() {
                   </div>
                 </div>
               ) : (
-                computed.results.map((result) => (
+                computed.filtered.map((result) => (
                 <div key={result.id} className="glass-card p-5">
                   <div className="flex items-start gap-4">
                     {/* Rank Badge */}
@@ -589,6 +618,20 @@ export default function AdvancedEmissions() {
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.metricTrips")}</p>
+                          <p className="text-lg font-semibold">{result.trips}</p>
+                        </div>
+                        {profile.fuelType !== "ev" && result.fuelLiters !== undefined && (
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.fuelConsumption")}</p>
+                            <p className="text-lg font-semibold">{result.fuelLiters} L</p>
+                          </div>
+                        )}
+                        {profile.fuelType === "ev" && result.kwhUsed !== undefined && (
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.electricConsumption")}</p>
+                            <p className="text-lg font-semibold">{result.kwhUsed} kWh</p>
+                          </div>
+                        )}
                           <p className="text-lg font-semibold">{result.trips}</p>
                         </div>
                       </div>
