@@ -108,7 +108,7 @@ describe("/api/climatiq/fuel-factor", () => {
     const payload = JSON.parse(res.body);
     expect(payload).toMatchObject({
       fuelType: "gasoline",
-      kgCo2ePerLiter: 2.31, // Gasoline now uses volume-based calculation too
+      kgCo2ePerKm: 0.258, // Gasoline uses AT region with distance-based calculation
       fallback: true,
     });
   });

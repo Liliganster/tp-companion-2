@@ -129,20 +129,24 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
   const ESTIMATE_URL = "https://api.climatiq.io/data/v1/estimate";
   const DEFAULT_DATA_VERSION = "^21";
   
-  // Both fuel types use volume (liters) with fuel/fuel_unit parameters
+  // Diesel: EU region with volume (liters)
+  // Gasoline: AT region with distance (km)
   const FUEL_CONFIG: Record<string, {
     activityId: string;
     region: string;
+    paramType: "volume" | "distance";
     fallbackValue: number;
   }> = {
     gasoline: {
-      activityId: "fuel-type_petrol-fuel_use_na",
+      activityId: "passenger_vehicle-vehicle_type_car-fuel_source_gasoline-engine_size_na-vehicle_age_na-vehicle_weight_na",
       region: "AT",
-      fallbackValue: 2.31,
+      paramType: "distance",
+      fallbackValue: 0.258,
     },
     diesel: {
       activityId: "fuel-type_diesel-fuel_use_na",
       region: "EU",
+      paramType: "volume",
       fallbackValue: 2.68,
     },
   };
@@ -179,7 +183,10 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
         if (!apiKey) {
           return send(res, 200, {
             fuelType,
-            kgCo2ePerLiter: config.fallbackValue,
+            ...(config.paramType === "volume" 
+              ? { kgCo2ePerLiter: config.fallbackValue }
+              : { kgCo2ePerKm: config.fallbackValue }
+            ),
             activityId: config.activityId,
             dataVersion: DEFAULT_DATA_VERSION,
             source: "fallback",
@@ -191,8 +198,10 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
           });
         }
 
-        // Call Climatiq API with volume/volume_unit parameters for volume-based calculations
-        const parameters = { volume: 1, volume_unit: "l" };
+        // Call Climatiq API with fuel-type specific parameters
+        const parameters = config.paramType === "volume"
+          ? { volume: 1, volume_unit: "l" }
+          : { distance: 1, distance_unit: "km" };
         
         const requestBody = {
           emission_factor: {
@@ -231,7 +240,10 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
 
           return send(res, 200, {
             fuelType,
-            kgCo2ePerLiter: co2e,
+            ...(config.paramType === "volume" 
+              ? { kgCo2ePerLiter: co2e }
+              : { kgCo2ePerKm: co2e }
+            ),
             activityId: config.activityId,
             dataVersion: DEFAULT_DATA_VERSION,
             source: data?.emission_factor?.source ?? "climatiq",

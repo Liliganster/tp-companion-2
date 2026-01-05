@@ -4,7 +4,8 @@ import { isOffline, readOfflineCache, readOfflineCacheEntry, writeOfflineCache }
 
 export type ClimatiqFuelFactor = {
   fuelType: "gasoline" | "diesel";
-  kgCo2ePerLiter: number;  // Both fuel types now use volume-based (per liter)
+  kgCo2ePerLiter?: number;  // For diesel (volume-based)
+  kgCo2ePerKm?: number;     // For gasoline (distance-based)
   region: string | null;
   source?: string;
   year?: number | null;
@@ -47,13 +48,16 @@ export function useClimatiqFuelFactor(fuelType: ClimatiqFuelFactor["fuelType"] |
       const data: any = await res.json().catch(() => null);
       if (!res.ok || !data) return cached ?? null;
 
-      // Both fuel types now use volume-based value (kgCo2ePerLiter)
+      // Check for either volume or distance based value
       const kgLiter = Number(data?.kgCo2ePerLiter);
-      if (!Number.isFinite(kgLiter) || kgLiter <= 0) return cached ?? null;
+      const kgKm = Number(data?.kgCo2ePerKm);
+      const hasValidValue = (Number.isFinite(kgLiter) && kgLiter > 0) || (Number.isFinite(kgKm) && kgKm > 0);
+      if (!hasValidValue) return cached ?? null;
 
       const payload: ClimatiqFuelFactor = {
         fuelType,
-        kgCo2ePerLiter: kgLiter,
+        ...(Number.isFinite(kgLiter) && kgLiter > 0 ? { kgCo2ePerLiter: kgLiter } : {}),
+        ...(Number.isFinite(kgKm) && kgKm > 0 ? { kgCo2ePerKm: kgKm } : {}),
         region: typeof data?.region === "string" ? data.region : null,
         source: typeof data?.source === "string" ? data.source : undefined,
         year: typeof data?.year === "number" ? data.year : null,
