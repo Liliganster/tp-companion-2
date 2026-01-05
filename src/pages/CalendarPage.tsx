@@ -165,13 +165,22 @@ export default function CalendarPage() {
       const token = await getAccessToken();
       if (!token) return 0;
       
+      const origin = route[0];
+      const destination = route[route.length - 1];
+      const waypoints = route.slice(1, -1); // Paradas intermedias
+      
       const response = await fetch("/api/google/directions", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ route }),
+        body: JSON.stringify({ 
+          origin,
+          destination,
+          waypoints,
+          region: profile.country?.toLowerCase() || "de"
+        }),
       });
       
       const data: any = await response.json().catch(() => null);
