@@ -330,6 +330,14 @@ export default withApiObservability(async function handler(req: any, res: any, {
 
         log.info({ jobId: job.id, length: resultText?.length || 0, durationMs: geminiDuration }, "callsheet_gemini_response");
 
+        // Initialize extraction log data
+        let extractionLogData: any = {
+          user_id: String((job as any).user_id ?? ""),
+          job_id: job.id,
+          job_type: "callsheet",
+          gemini_duration_ms: geminiDuration,
+        };
+
         let extractedJson: any = null;
         try {
           extractedJson = JSON.parse(resultText);
@@ -395,6 +403,10 @@ export default withApiObservability(async function handler(req: any, res: any, {
           const geoDuration = Date.now() - geoStartTime;
           log.info({ jobId: job.id, locations: extracted.locations.length, durationMs: geoDuration }, "geocoding_completed");
 
+          // Update extraction log with geocoding data
+          extractionLogData.geocoding_duration_ms = geoDuration;
+          extractionLogData.geocoding_locations = extracted.locations.length;
+
           extracted.locations.forEach((locStr, index) => {
             const geo = geoResults[index];
             locs.push({
@@ -433,6 +445,16 @@ export default withApiObservability(async function handler(req: any, res: any, {
           log.info({ jobId }, "callsheet_job_cancelled_before_done");
           processedResults.push({ id: jobId, status: "cancelled" });
           return;
+        }
+
+        // Log extraction metrics to database
+        extractionLogData.total_duration_ms = Date.now() - (job as any).processing_started_at 
+          ? new Date((job as any).processing_started_at).getTime() 
+          : Date.now();
+        try {
+          await supabaseAdmin.from("ai_extraction_logs").insert(extractionLogData);
+        } catch (err) {
+          log.warn({ jobId, err }, "failed_to_log_extraction_metrics");
         }
 
         await recordUsage({
