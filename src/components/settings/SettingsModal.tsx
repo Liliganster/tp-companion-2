@@ -295,26 +295,24 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
         </DialogHeader>
 
         {/* Mobile Navigation - Outside flex container */}
-        <div className="sm:hidden border-b border-border shrink-0">
-          <ScrollArea className="w-full">
-            <div className="flex gap-2 px-4 py-2">
-              {navItems.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  className={cn(
-                    "flex flex-col items-center gap-1 px-3 py-2 text-xs rounded-lg whitespace-nowrap transition-colors min-w-[70px]",
-                    activeTab === item.id
-                      ? "bg-primary/20 text-primary"
-                      : "text-muted-foreground hover:bg-secondary/50"
-                  )}
-                >
-                  <item.icon className="w-5 h-5" />
-                  <span className="text-[10px] leading-tight text-center">{item.label}</span>
-                </button>
-              ))}
-            </div>
-          </ScrollArea>
+        <div className="sm:hidden border-b border-border shrink-0 overflow-x-auto">
+          <div className="flex gap-2 px-4 py-2 min-w-max">
+            {navItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={cn(
+                  "flex flex-col items-center gap-1 px-3 py-2 text-xs rounded-lg whitespace-nowrap transition-colors min-w-[70px] flex-shrink-0",
+                  activeTab === item.id
+                    ? "bg-primary/20 text-primary"
+                    : "text-muted-foreground hover:bg-secondary/50"
+                )}
+              >
+                <item.icon className="w-5 h-5" />
+                <span className="text-[10px] leading-tight text-center">{item.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex flex-1 overflow-hidden">
