@@ -14,11 +14,24 @@ import {
   Plus,
   ChevronLeft,
   ChevronRight,
+  Car,
+  MapPin,
+  Clock,
+  FileText,
+  Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/hooks/use-i18n";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { useTrips } from "@/contexts/TripsContext";
+import { useUserProfile } from "@/contexts/UserProfileContext";
+import { useNavigate } from "react-router-dom";
+import { uuidv4 } from "@/lib/utils";
+import { calculateTripEmissions } from "@/lib/emissions";
+import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
+import { useClimatiqFuelFactor } from "@/hooks/use-climatiq";
+import { parseLocaleNumber } from "@/lib/number";
 
 interface CalendarEvent {
   id: string;
@@ -26,6 +39,11 @@ interface CalendarEvent {
   date: string;
   calendar: string;
   color: string;
+  location?: string;
+  description?: string;
+  start?: { dateTime?: string; date?: string };
+  end?: { dateTime?: string; date?: string };
+  htmlLink?: string;
 }
 
 type CalendarInfo = {
@@ -64,6 +82,9 @@ function toISODateKey(value: string): string | null {
 export default function CalendarPage() {
   const { t, tf, locale } = useI18n();
   const { getAccessToken } = useAuth();
+  const { addTrip } = useTrips();
+  const { profile } = useUserProfile();
+  const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [isConnected, setIsConnected] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState(false);
@@ -82,6 +103,23 @@ export default function CalendarPage() {
     endLocal: "",
   });
   const [needsReconnect, setNeedsReconnect] = useState(false);
+  
+  // Import event as trip
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  const { data: atGrid } = useElectricityMapsCarbonIntensity({ enabled: profile.fuelType === "ev" });
+  const { data: fuelFactor } = useClimatiqFuelFactor({ enabled: profile.fuelType !== "ev" });
+
+  const emissionsInput = useMemo(() => ({
+    fuelType: profile.fuelType,
+    fuelLPer100Km: parseLocaleNumber(profile.fuelLPer100Km),
+    kgCo2ePerLiter: fuelFactor?.kgCo2ePerLiter ?? null,
+    kgCo2ePerKm: fuelFactor?.kgCo2ePerKm ?? null,
+    evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
+    gridKgCo2PerKwh: atGrid?.kgCo2PerKwh ?? null,
+  }), [atGrid?.kgCo2PerKwh, fuelFactor?.kgCo2ePerLiter, fuelFactor?.kgCo2ePerKm, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType]);
 
   const daysInMonth = new Date(
     currentDate.getFullYear(),
@@ -99,6 +137,140 @@ export default function CalendarPage() {
 
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const emptyDays = Array.from({ length: adjustedFirstDay }, (_, i) => i);
+
+  // Extraer ubicaciones del evento
+  const extractLocationsFromEvent = (event: CalendarEvent): string[] => {
+    const locations: string[] = [];
+    
+    // 1. Si hay location definido en el evento
+    if (event.location?.trim()) {
+      locations.push(event.location.trim());
+    }
+    
+    // 2. Buscar ubicaciones en la descripción (formato: "De: X A: Y" o "From: X To: Y")
+    if (event.description) {
+      const desc = event.description;
+      
+      // Patrones en español
+      const fromToES = /(?:de|desde|origin|origen):\s*([^\n]+)/i.exec(desc);
+      const toES = /(?:a|hasta|destino|destination):\s*([^\n]+)/i.exec(desc);
+      
+      // Patrones en inglés
+      const fromEN = /from:\s*([^\n]+)/i.exec(desc);
+      const toEN = /to:\s*([^\n]+)/i.exec(desc);
+      
+      const from = fromToES?.[1] || fromEN?.[1];
+      const to = toES?.[1] || toEN?.[1];
+      
+      if (from) locations.push(from.trim());
+      if (to && to.trim() !== from?.trim()) locations.push(to.trim());
+    }
+    
+    // 3. Si no hay ubicaciones, usar base address si está configurado
+    if (locations.length === 0 && profile.baseAddress) {
+      const baseFullAddress = [profile.baseAddress, profile.city, profile.country]
+        .filter(Boolean)
+        .join(", ");
+      locations.push(baseFullAddress);
+      locations.push(baseFullAddress); // Viaje de ida y vuelta por defecto
+    }
+    
+    // 4. Si solo hay 1 ubicación, agregar base address como origen
+    if (locations.length === 1 && profile.baseAddress) {
+      const baseFullAddress = [profile.baseAddress, profile.city, profile.country]
+        .filter(Boolean)
+        .join(", ");
+      locations.unshift(baseFullAddress);
+    }
+    
+    return locations.filter(Boolean);
+  };
+
+  // Calcular distancia entre ubicaciones usando Google Directions API
+  const calculateDistance = async (route: string[]): Promise<number> => {
+    if (route.length < 2) return 0;
+    
+    try {
+      const token = await getAccessToken();
+      if (!token) return 0;
+      
+      const response = await fetch("/api/google/directions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ route }),
+      });
+      
+      const data: any = await response.json().catch(() => null);
+      if (!response.ok || !data?.distance) return 0;
+      
+      return data.distance;
+    } catch (error) {
+      console.error("Error calculating distance:", error);
+      return 0;
+    }
+  };
+
+  // Importar evento como viaje
+  const handleImportEventAsTrip = async (event: CalendarEvent) => {
+    setImporting(true);
+    try {
+      // Extraer ubicaciones
+      const route = extractLocationsFromEvent(event);
+      
+      if (route.length < 2) {
+        toast.error(t("calendar.importNoLocations"));
+        return;
+      }
+      
+      // Calcular distancia
+      const distance = await calculateDistance(route);
+      
+      if (distance === 0) {
+        toast.error(t("calendar.importNoDistance"));
+        return;
+      }
+      
+      // Calcular CO2
+      const co2 = calculateTripEmissions({ distanceKm: distance, ...emissionsInput }).co2Kg;
+      
+      // Usar título del evento como proyecto/cliente
+      const project = event.title.trim();
+      
+      // Crear viaje
+      const tripId = uuidv4();
+      const tripData = {
+        id: tripId,
+        date: event.date,
+        route,
+        project,
+        purpose: event.description?.substring(0, 500) || project,
+        passengers: 0,
+        distance,
+        co2,
+        ratePerKmOverride: null,
+        specialOrigin: "base" as const,
+      };
+      
+      const success = await addTrip(tripData);
+      
+      if (success) {
+        toast.success(t("calendar.importSuccess"));
+        setImportOpen(false);
+        setSelectedEvent(null);
+        
+        // Navegar a la página de viajes
+        navigate("/trips");
+      }
+    } catch (error) {
+      console.error("Error importing event as trip:", error);
+      toast.error(t("calendar.importError"));
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const weekdayLabels = useMemo(() => t("calendar.weekdays").split(","), [t]);
   const monthLabel = useMemo(() => {
@@ -373,6 +545,11 @@ export default function CalendarPage() {
             date: dateKey,
             calendar: calendarName,
             color: calendarColor,
+            location: String(e?.location ?? ""),
+            description: String(e?.description ?? ""),
+            start: e?.start,
+            end: e?.end,
+            htmlLink: String(e?.htmlLink ?? ""),
           });
         }
       }
@@ -677,9 +854,14 @@ export default function CalendarPage() {
                           <div
                             key={event.id}
                             className={cn(
-                              "text-[10px] px-1 py-0.5 rounded truncate text-primary-foreground",
+                              "text-[10px] px-1 py-0.5 rounded truncate text-primary-foreground cursor-pointer hover:opacity-80",
                               event.color
                             )}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedEvent(event);
+                              setImportOpen(true);
+                            }}
                           >
                             {event.title}
                           </div>
@@ -697,6 +879,103 @@ export default function CalendarPage() {
             </div>
           </div>
         </div>
+
+        {/* Import Event as Trip Dialog */}
+        <Dialog open={importOpen} onOpenChange={setImportOpen}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>{t("calendar.importEventTitle")}</DialogTitle>
+              <DialogDescription>{t("calendar.importEventDescription")}</DialogDescription>
+            </DialogHeader>
+
+            {selectedEvent && (
+              <div className="space-y-4 py-4">
+                {/* Event details */}
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">{t("calendar.eventTitleLabel")}</Label>
+                    <p className="font-medium">{selectedEvent.title}</p>
+                  </div>
+
+                  {selectedEvent.location && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
+                        {t("calendar.eventLocation")}
+                      </Label>
+                      <p className="text-sm">{selectedEvent.location}</p>
+                    </div>
+                  )}
+
+                  {selectedEvent.description && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                        <FileText className="w-3 h-3" />
+                        {t("calendar.eventDescription")}
+                      </Label>
+                      <p className="text-sm line-clamp-3">{selectedEvent.description}</p>
+                    </div>
+                  )}
+
+                  <div>
+                    <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {t("tripModal.date")}
+                    </Label>
+                    <p className="text-sm">
+                      {new Date(selectedEvent.date + "T00:00:00").toLocaleDateString(locale, {
+                        weekday: "long",
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Info about how trip will be created */}
+                <div className="rounded-lg bg-secondary/50 p-3 space-y-2">
+                  <p className="text-sm font-medium">{t("calendar.importWillCreate")}</p>
+                  <ul className="text-xs text-muted-foreground space-y-1 ml-4 list-disc">
+                    <li>{t("calendar.importProjectFromTitle")}</li>
+                    <li>{t("calendar.importRouteFromLocation")}</li>
+                    <li>{t("calendar.importDistanceCalculated")}</li>
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setImportOpen(false);
+                  setSelectedEvent(null);
+                }}
+                disabled={importing}
+              >
+                {t("calendar.cancel")}
+              </Button>
+              {selectedEvent?.htmlLink && (
+                <Button
+                  variant="outline"
+                  onClick={() => window.open(selectedEvent.htmlLink, "_blank")}
+                  disabled={importing}
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  {t("calendar.viewInGoogle")}
+                </Button>
+              )}
+              <Button
+                onClick={() => selectedEvent && handleImportEventAsTrip(selectedEvent)}
+                disabled={importing}
+              >
+                <Car className="w-4 h-4" />
+                {importing ? t("calendar.importing") : t("calendar.importAsTrip")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </MainLayout>
   );
