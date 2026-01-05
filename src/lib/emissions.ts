@@ -46,33 +46,35 @@ export function calculateTripEmissions(input: TripEmissionsInput): TripEmissions
   if (fuelType === "gasoline" || fuelType === "diesel") {
     const fuelLPer100Km = input.fuelLPer100Km == null ? null : Number(input.fuelLPer100Km);
     
-    // Try distance-based factor first (for gasoline with kgCo2ePerKm)
-    const perKm = input.fuelKgCo2ePerKm == null ? null : Number(input.fuelKgCo2ePerKm);
-    if (Number.isFinite(perKm) && perKm > 0) {
-      // Direct calculation: CO2 = distance × factor
-      const co2Kg = distanceKm * perKm;
-      // Calculate liters for display (if consumption is available)
-      const liters = Number.isFinite(fuelLPer100Km) && fuelLPer100Km! > 0
-        ? (distanceKm * fuelLPer100Km!) / 100
-        : undefined;
-      return { 
-        co2Kg: Math.round(co2Kg * 10) / 10, 
-        method: "fuel", 
-        liters: liters !== undefined ? Math.round(liters * 10) / 10 : undefined 
-      };
+    // Always need consumption for fuel-based calculation
+    if (!Number.isFinite(fuelLPer100Km) || fuelLPer100Km <= 0) {
+      return { co2Kg: calculateCO2KgFromKm(distanceKm), method: "fallback_km" };
     }
     
-    // Volume-based calculation (for diesel with kgCo2ePerLiter)
-    if (Number.isFinite(fuelLPer100Km) && fuelLPer100Km > 0) {
-      const liters = (distanceKm * fuelLPer100Km) / 100;
-
+    const liters = (distanceKm * fuelLPer100Km) / 100;
+    
+    // For gasoline: convert kgCo2ePerKm to kgCo2ePerLiter using user's consumption
+    if (fuelType === "gasoline") {
+      const perKm = input.fuelKgCo2ePerKm == null ? null : Number(input.fuelKgCo2ePerKm);
+      if (Number.isFinite(perKm) && perKm > 0) {
+        // Convert: kgCo2ePerLiter = kgCo2ePerKm × 100 / consumo_L100km
+        const perLiter = perKm * 100 / fuelLPer100Km;
+        const co2Kg = liters * perLiter;
+        return { co2Kg: Math.round(co2Kg * 10) / 10, method: "fuel", liters: Math.round(liters * 10) / 10 };
+      }
+      // Fallback to default if no API factor
+      const factor = GASOLINE_KG_CO2_PER_LITER;
+      const co2Kg = liters * factor;
+      return { co2Kg: Math.round(co2Kg * 10) / 10, method: "fuel", liters: Math.round(liters * 10) / 10 };
+    }
+    
+    // For diesel: use kgCo2ePerLiter directly
+    if (fuelType === "diesel") {
       const perLiter = input.fuelKgCo2ePerLiter == null ? null : Number(input.fuelKgCo2ePerLiter);
       const factor =
         Number.isFinite(perLiter) && perLiter > 0
           ? perLiter
-          : fuelType === "gasoline"
-            ? GASOLINE_KG_CO2_PER_LITER
-            : DIESEL_KG_CO2_PER_LITER;
+          : DIESEL_KG_CO2_PER_LITER;
 
       const co2Kg = liters * factor;
       return { co2Kg: Math.round(co2Kg * 10) / 10, method: "fuel", liters: Math.round(liters * 10) / 10 };
