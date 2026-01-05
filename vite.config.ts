@@ -127,18 +127,28 @@ function googleApiProxy(serverKey: string | undefined): Plugin {
 
 function climatiqProxy(apiKey: string | undefined): Plugin {
   const ESTIMATE_URL = "https://api.climatiq.io/data/v1/estimate";
-  const DEFAULT_REGION = "EU"; // EU region for fuel emissions
   const DEFAULT_DATA_VERSION = "^21";
-  const VOLUME_LITERS = 1;
-  // Fallback values based on EU averages
-  const FALLBACK_KG_CO2E_PER_LITER: Record<string, number> = {
-    gasoline: 2.31,
-    diesel: 2.68,
-  };
-  // Activity IDs for fuel emissions - EU data
-  const DEFAULT_ACTIVITY_ID: Record<string, string> = {
-    gasoline: "fuel-type_petrol-fuel_use_na",
-    diesel: "fuel-type_diesel-fuel_use_na",
+  
+  // Diesel: EU region with volume (liters)
+  // Gasoline: AT region with distance (km)
+  const FUEL_CONFIG: Record<string, {
+    activityId: string;
+    region: string;
+    paramType: "volume" | "distance";
+    fallbackValue: number;
+  }> = {
+    gasoline: {
+      activityId: "passenger_vehicle-vehicle_type_car-fuel_source_gasoline-engine_size_na-vehicle_age_na-vehicle_weight_na",
+      region: "AT",
+      paramType: "distance",
+      fallbackValue: 0.258,
+    },
+    diesel: {
+      activityId: "fuel-type_diesel-fuel_use_na",
+      region: "EU",
+      paramType: "volume",
+      fallbackValue: 2.68,
+    },
   };
 
   const send = (res: any, statusCode: number, payload: unknown) => {
@@ -166,34 +176,40 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
                         (fuelTypeParam?.toLowerCase() === "gasoline" || fuelTypeParam?.toLowerCase() === "petrol") ? "gasoline" : null;
         
         if (!fuelType) return send(res, 400, { error: "invalid_fuel_type" });
+        
+        const config = FUEL_CONFIG[fuelType];
 
         // If no API key, return fallback data
         if (!apiKey) {
           return send(res, 200, {
             fuelType,
-            kgCo2ePerLiter: FALLBACK_KG_CO2E_PER_LITER[fuelType],
-            activityId: DEFAULT_ACTIVITY_ID[fuelType],
+            ...(config.paramType === "volume" 
+              ? { kgCo2ePerLiter: config.fallbackValue }
+              : { kgCo2ePerKm: config.fallbackValue }
+            ),
+            activityId: config.activityId,
             dataVersion: DEFAULT_DATA_VERSION,
             source: "fallback",
             year: null,
-            region: DEFAULT_REGION,
+            region: config.region,
             cachedTtlSeconds: 2592000,
             method: "fallback",
             fallback: true,
           });
         }
 
-        // Call Climatiq API with volume parameters for fuel emissions
+        // Call Climatiq API with fuel-type specific parameters
+        const parameters = config.paramType === "volume"
+          ? { volume: 1, volume_unit: "l" }
+          : { distance: 1, distance_unit: "km" };
+        
         const requestBody = {
           emission_factor: {
-            activity_id: DEFAULT_ACTIVITY_ID[fuelType],
-            region: DEFAULT_REGION,
+            activity_id: config.activityId,
+            region: config.region,
             data_version: DEFAULT_DATA_VERSION,
           },
-          parameters: {
-            volume: VOLUME_LITERS,
-            volume_unit: "l",
-          },
+          parameters,
         };
 
         try {
@@ -224,12 +240,15 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
 
           return send(res, 200, {
             fuelType,
-            kgCo2ePerLiter: co2e,
-            activityId: DEFAULT_ACTIVITY_ID[fuelType],
+            ...(config.paramType === "volume" 
+              ? { kgCo2ePerLiter: co2e }
+              : { kgCo2ePerKm: co2e }
+            ),
+            activityId: config.activityId,
             dataVersion: DEFAULT_DATA_VERSION,
             source: data?.emission_factor?.source ?? "climatiq",
             year: data?.emission_factor?.year ?? null,
-            region: data?.emission_factor?.region || DEFAULT_REGION,
+            region: data?.emission_factor?.region || config.region,
             cachedTtlSeconds: 2592000,
             method: "data",
             fallback: false,

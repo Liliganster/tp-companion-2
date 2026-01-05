@@ -4,23 +4,36 @@ import { enforceRateLimit } from "../_utils/rateLimit.js";
 const ESTIMATE_URL = "https://api.climatiq.io/data/v1/estimate";
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const DEFAULT_DATA_VERSION = "^21";
-const DEFAULT_REGION = "EU"; // EU region for fuel emissions
-const VOLUME_LITERS = 1; // We calculate emissions per liter
-// Fallback values based on EU averages
-const FALLBACK_KG_CO2E_PER_LITER: Record<FuelType, number> = {
-  gasoline: 2.31, // EU average
-  diesel: 2.68,   // EU average
+
+// Diesel: EU region with volume (liters)
+// Gasoline: AT region with distance (km)
+const FUEL_CONFIG: Record<FuelType, {
+  activityId: string;
+  region: string;
+  paramType: "volume" | "distance";
+  fallbackValue: number;
+  unit: string;
+}> = {
+  gasoline: {
+    activityId: "passenger_vehicle-vehicle_type_car-fuel_source_gasoline-engine_size_na-vehicle_age_na-vehicle_weight_na",
+    region: "AT",
+    paramType: "distance",
+    fallbackValue: 0.258, // UBA Austria 2022 kg CO2e/km
+    unit: "kgCo2ePerKm",
+  },
+  diesel: {
+    activityId: "fuel-type_diesel-fuel_use_na",
+    region: "EU",
+    paramType: "volume",
+    fallbackValue: 2.68, // EU average kg CO2e/L
+    unit: "kgCo2ePerLiter",
+  },
 };
 
 type FuelType = "gasoline" | "diesel";
 type CacheEntry = { expiresAtMs: number; payload: unknown };
 type ActivitySelection = { activityId: string; region: string };
 const CACHE = new Map<string, CacheEntry>();
-// Activity IDs for fuel emissions - diesel uses EU fuel-type, gasoline uses EU petrol
-const DEFAULT_ACTIVITY_ID: Record<FuelType, string> = {
-  gasoline: "fuel-type_petrol-fuel_use_na",
-  diesel: "fuel-type_diesel-fuel_use_na",
-};
 
 function normalizeFuelType(input: unknown): FuelType | null {
   if (typeof input !== "string") return null;
@@ -35,7 +48,7 @@ function getEnvActivitySelection(fuelType: FuelType): ActivitySelection | null {
   const fromEnv = fuelType === "gasoline" ? process.env.CLIMATIQ_ACTIVITY_ID_GASOLINE : process.env.CLIMATIQ_ACTIVITY_ID_DIESEL;
   const activityId = typeof fromEnv === "string" ? fromEnv.trim() : "";
   if (!activityId) return null;
-  return { activityId, region: DEFAULT_REGION };
+  return { activityId, region: FUEL_CONFIG[fuelType].region };
 }
 
 function normalizeFactorRegion(value: unknown): string | null {
@@ -79,12 +92,12 @@ async function readJsonResponse(upstream: Response): Promise<{ data: any | null;
   }
 }
 
-// Simplified: we use the known working activity_ids directly
-// No need to search - the activity_ids from the example are correct
+// Use the fuel-specific config
 function getActivitySelection(fuelType: FuelType): ActivitySelection {
+  const config = FUEL_CONFIG[fuelType];
   return {
-    activityId: DEFAULT_ACTIVITY_ID[fuelType],
-    region: DEFAULT_REGION,
+    activityId: config.activityId,
+    region: config.region,
   };
 }
 
@@ -119,15 +132,20 @@ export default async function handler(req: any, res: any) {
   if (cached) return sendJson(res, 200, cached);
 
   const apiKey = (process.env.CLIMATIQ_API_KEY || "").trim();
+  const config = FUEL_CONFIG[fuelType];
+  
   if (!apiKey) {
     const payload = {
       fuelType,
-      kgCo2ePerLiter: FALLBACK_KG_CO2E_PER_LITER[fuelType],
+      ...(config.paramType === "volume" 
+        ? { kgCo2ePerLiter: config.fallbackValue }
+        : { kgCo2ePerKm: config.fallbackValue }
+      ),
       activityId: null,
       dataVersion,
       source: "fallback",
       year: null,
-      region: DEFAULT_REGION,
+      region: config.region,
       cachedTtlSeconds: Math.round(CACHE_TTL_MS / 1000),
       method: "fallback",
       fallback: true,
@@ -139,6 +157,7 @@ export default async function handler(req: any, res: any) {
   async function estimateOnce(
     activityId: string,
     region: string | null,
+    paramType: "volume" | "distance",
   ): Promise<{
     ok: boolean;
     status: number | null;
@@ -148,18 +167,18 @@ export default async function handler(req: any, res: any) {
     region: string | null;
   }> {
     try {
-      // Build request body for fuel emissions per liter
-      // Uses EU data with volume parameters
+      // Build request body - parameters depend on fuel type
+      const parameters = paramType === "volume"
+        ? { volume: 1, volume_unit: "l" }
+        : { distance: 1, distance_unit: "km" };
+      
       const requestBody: any = {
         emission_factor: {
           activity_id: activityId,
-          region: region || DEFAULT_REGION,
+          region: region || config.region,
           data_version: dataVersion,
         },
-        parameters: {
-          volume: VOLUME_LITERS,
-          volume_unit: "l",
-        },
+        parameters,
       };
 
       const upstream = await fetch(ESTIMATE_URL, {
@@ -182,8 +201,8 @@ export default async function handler(req: any, res: any) {
 
   let selection = getEnvActivitySelection(fuelType) ?? getActivitySelection(fuelType);
 
-  // Use the known working activity_id with region AT
-  let attempt = await estimateOnce(selection.activityId, DEFAULT_REGION);
+  // Use the fuel-specific config
+  let attempt = await estimateOnce(selection.activityId, config.region, config.paramType);
 
   const data: any = attempt.data;
   if (!attempt.ok || !data) {
@@ -209,10 +228,20 @@ export default async function handler(req: any, res: any) {
     return sendJson(res, 502, { error: "climatiq_error", message: "Invalid co2e payload" });
   }
 
-  const factorRegion = normalizeFactorRegion(data?.emission_factor?.region) || DEFAULT_REGION;
+  const factorRegion = normalizeFactorRegion(data?.emission_factor?.region) || config.region;
+  
+  // Build response with fuel-type specific field
+  const emissionValue = Math.round(co2eKg * 1_000_000) / 1_000_000;
+  const parameters = config.paramType === "volume"
+    ? { volume: 1, volume_unit: "l" }
+    : { distance: 1, distance_unit: "km" };
+  
   const payload = {
     fuelType,
-    kgCo2ePerLiter: Math.round((co2eKg / VOLUME_LITERS) * 1_000_000) / 1_000_000,
+    ...(config.paramType === "volume" 
+      ? { kgCo2ePerLiter: emissionValue }
+      : { kgCo2ePerKm: emissionValue }
+    ),
     activityId: selection.activityId,
     dataVersion,
     source: data?.emission_factor?.source ?? "climatiq",
@@ -224,12 +253,9 @@ export default async function handler(req: any, res: any) {
     request: {
       emission_factor: {
         activity_id: attempt.activityId,
-        region: attempt.region || DEFAULT_REGION,
+        region: attempt.region || config.region,
       },
-      parameters: {
-        volume: VOLUME_LITERS,
-        volume_unit: "l",
-      },
+      parameters,
     },
     upstream: {
       ok: attempt.ok,
