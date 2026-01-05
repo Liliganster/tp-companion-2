@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -108,6 +108,10 @@ export default function CalendarPage() {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importing, setImporting] = useState(false);
+
+  // Prevent duplicate API calls
+  const lastEventsRefreshRef = useRef<string>("");
+  const eventsRefreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const { data: atGrid } = useElectricityMapsCarbonIntensity({ enabled: profile.fuelType === "ev" });
   const { data: fuelFactor } = useClimatiqFuelFactor({ enabled: profile.fuelType !== "ev" });
@@ -470,6 +474,13 @@ export default function CalendarPage() {
     const monthStart = new Date(forDate.getFullYear(), forDate.getMonth(), 1, 0, 0, 0);
     const monthEnd = new Date(forDate.getFullYear(), forDate.getMonth() + 1, 1, 0, 0, 0);
 
+    // Prevent duplicate calls for the same month
+    const refreshKey = `${forDate.getFullYear()}-${forDate.getMonth()}-${Array.from(enabledCalendarIds).sort().join(",")}`;
+    if (lastEventsRefreshRef.current === refreshKey) {
+      return;
+    }
+    lastEventsRefreshRef.current = refreshKey;
+
     setLoadingEvents(true);
     try {
       const enabledIds = Array.from(enabledCalendarIds);
@@ -550,14 +561,28 @@ export default function CalendarPage() {
     }
     refreshCalendars();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConnected, currentDate]);
+  }, [isConnected]);
 
   useEffect(() => {
     if (!isConnected) return;
     if (calendars.length === 0) return;
-    refreshEvents(currentDate);
+    
+    // Debounce events refresh to avoid rapid successive calls
+    if (eventsRefreshTimeoutRef.current) {
+      clearTimeout(eventsRefreshTimeoutRef.current);
+    }
+    
+    eventsRefreshTimeoutRef.current = setTimeout(() => {
+      refreshEvents(currentDate);
+    }, 300);
+    
+    return () => {
+      if (eventsRefreshTimeoutRef.current) {
+        clearTimeout(eventsRefreshTimeoutRef.current);
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConnected, calendars, enabledCalendarIds, currentDate]);
+  }, [enabledCalendarIds, currentDate]);
 
   useEffect(() => {
     try {
@@ -581,7 +606,16 @@ export default function CalendarPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => isConnected && refreshEvents(currentDate)} disabled={!isConnected || loadingEvents}>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                if (isConnected) {
+                  lastEventsRefreshRef.current = ""; // Clear cache to force refresh
+                  refreshEvents(currentDate);
+                }
+              }} 
+              disabled={!isConnected || loadingEvents}
+            >
               <RefreshCw className="w-4 h-4" />
               {t("calendar.refresh")}
             </Button>
