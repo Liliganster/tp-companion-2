@@ -163,8 +163,8 @@ export default async function handler(req: any, res: any) {
     region: string | null;
   }> {
     try {
-      // Build request body - use fuel/fuel_unit for volume-based calculations
-      const parameters = { fuel: 1, fuel_unit: "l" };
+      // Build request body - use volume/volume_unit for volume-based calculations
+      const parameters = { volume: 1, volume_unit: "l" };
       
       const requestBody: any = {
         emission_factor: {
@@ -226,7 +226,7 @@ export default async function handler(req: any, res: any) {
   
   // Build response - all fuel types now use volume-based calculations (kgCo2ePerLiter)
   const emissionValue = Math.round(co2eKg * 1_000_000) / 1_000_000;
-  const parameters = { fuel: 1, fuel_unit: "l" };
+  const parameters = { volume: 1, volume_unit: "l" };
   
   const payload = {
     fuelType,

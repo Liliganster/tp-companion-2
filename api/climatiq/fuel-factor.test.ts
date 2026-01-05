@@ -52,7 +52,7 @@ describe("/api/climatiq/fuel-factor", () => {
         const body = JSON.parse(String(init?.body ?? "{}"));
         expect(body).toMatchObject({
           emission_factor: { activity_id: "fuel-type_diesel-fuel_use_na" },
-          parameters: { fuel: 1, fuel_unit: "l" },
+          parameters: { volume: 1, volume_unit: "l" },
         });
         return new Response(
           JSON.stringify({

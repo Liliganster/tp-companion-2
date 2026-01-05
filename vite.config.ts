@@ -191,8 +191,8 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
           });
         }
 
-        // Call Climatiq API with fuel/fuel_unit parameters for volume-based calculations
-        const parameters = { fuel: 1, fuel_unit: "l" };
+        // Call Climatiq API with volume/volume_unit parameters for volume-based calculations
+        const parameters = { volume: 1, volume_unit: "l" };
         
         const requestBody = {
           emission_factor: {
