@@ -25,7 +25,6 @@ import { useI18n } from "@/hooks/use-i18n";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { useTrips } from "@/contexts/TripsContext";
-import { useProjects } from "@/contexts/ProjectsContext";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useNavigate } from "react-router-dom";
 import { uuidv4 } from "@/lib/utils";
@@ -84,7 +83,6 @@ export default function CalendarPage() {
   const { t, tf, locale } = useI18n();
   const { getAccessToken } = useAuth();
   const { addTrip } = useTrips();
-  const { projects, addProject } = useProjects();
   const { profile } = useUserProfile();
   const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(() => new Date());
@@ -140,71 +138,19 @@ export default function CalendarPage() {
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const emptyDays = Array.from({ length: adjustedFirstDay }, (_, i) => i);
 
-  // Extraer ubicaciones del evento
+  // Extraer ubicaciones del evento - siempre usa dirección base
   const extractLocationsFromEvent = (event: CalendarEvent): string[] => {
-    const locations: string[] = [];
-    
-    // Construir dirección base si está configurada
+    // Construir dirección base
     const baseFullAddress = profile.baseAddress && profile.city && profile.country
       ? [profile.baseAddress, profile.city, profile.country].filter(Boolean).join(", ")
       : null;
     
-    // 1. Buscar destino en la ubicación del evento
-    if (event.location?.trim()) {
-      const destination = event.location.trim();
-      // Siempre usar base address como origen si está disponible
-      if (baseFullAddress) {
-        locations.push(baseFullAddress);
-        locations.push(destination);
-        return locations;
-      }
-      locations.push(destination);
+    if (!baseFullAddress) {
+      return [];
     }
     
-    // 2. Buscar ubicaciones en la descripción (formato: "De: X A: Y" o "From: X To: Y")
-    if (event.description) {
-      const desc = event.description;
-      
-      // Patrones en español e inglés para destino
-      const toES = /(?:a|hasta|destino|destination):\s*([^\n]+)/i.exec(desc);
-      const toEN = /to:\s*([^\n]+)/i.exec(desc);
-      const destination = toES?.[1] || toEN?.[1];
-      
-      if (destination?.trim()) {
-        // Si encontramos destino en descripción, usar base address como origen
-        if (baseFullAddress) {
-          locations.push(baseFullAddress);
-          locations.push(destination.trim());
-          return locations;
-        }
-        // Si no hay base address, buscar también el origen en la descripción
-        const fromES = /(?:de|desde|origin|origen):\s*([^\n]+)/i.exec(desc);
-        const fromEN = /from:\s*([^\n]+)/i.exec(desc);
-        const origin = fromES?.[1] || fromEN?.[1];
-        
-        if (origin?.trim()) {
-          locations.push(origin.trim());
-          locations.push(destination.trim());
-          return locations;
-        }
-        locations.push(destination.trim());
-      }
-    }
-    
-    // 3. Si tenemos al menos 1 ubicación pero falta el origen, agregar base address
-    if (locations.length === 1 && baseFullAddress) {
-      locations.unshift(baseFullAddress);
-      return locations;
-    }
-    
-    // 4. Si no hay ninguna ubicación, crear viaje de ida y vuelta desde base address
-    if (locations.length === 0 && baseFullAddress) {
-      locations.push(baseFullAddress);
-      locations.push(baseFullAddress);
-      return locations;
-    }
-    
-    return locations;
+    // Siempre viaje de ida y vuelta desde dirección base
+    return [baseFullAddress, baseFullAddress];
   };
 
   // Calcular distancia entre ubicaciones usando Google Directions API
@@ -242,7 +188,8 @@ export default function CalendarPage() {
       const route = extractLocationsFromEvent(event);
       
       if (route.length < 2) {
-        toast.error(t("calendar.importNoLocations"));
+        toast.error(t("calendar.importNeedBaseAddress"));
+        setImporting(false);
         return;
       }
       
@@ -251,60 +198,26 @@ export default function CalendarPage() {
       
       if (distance === 0) {
         toast.error(t("calendar.importNoDistance"));
+        setImporting(false);
         return;
       }
       
       // Calcular CO2
       const co2 = calculateTripEmissions({ distanceKm: distance, ...emissionsInput }).co2Kg;
       
-      // Usar título del evento como proyecto/cliente
-      const projectName = event.title.trim();
+      // Título del evento = cliente/empresa/productora
+      const clientName = event.title.trim();
       
-      // Buscar o crear proyecto
-      let projectId: string | undefined = undefined;
-      if (projectName) {
-        const existingProject = projects.find(
-          p => p.name.trim().toLowerCase() === projectName.toLowerCase()
-        );
-        
-        if (existingProject) {
-          projectId = existingProject.id;
-        } else {
-          // Crear nuevo proyecto
-          const newProjectId = uuidv4();
-          const created = await addProject({
-            id: newProjectId,
-            name: projectName,
-            producer: "",
-            description: "",
-            ratePerKm: 0.30,
-            ratePerPassenger: 0.05,
-            starred: false,
-            archived: false,
-            trips: 0,
-            totalKm: 0,
-            documents: 0,
-            invoices: 0,
-            estimatedCost: 0,
-            shootingDays: 0,
-            kmPerDay: 0,
-            co2Emissions: 0,
-          });
-          if (created) {
-            projectId = newProjectId;
-          }
-        }
-      }
-      
-      // Crear viaje
+      // Crear viaje con proyecto "UNKNOWN" y clientName en documents
       const tripId = uuidv4();
       const tripData = {
         id: tripId,
         date: event.date,
         route,
-        project: projectName,
-        projectId,
-        purpose: event.description?.substring(0, 500) || projectName,
+        project: "UNKNOWN", // Proyecto por defecto
+        projectId: undefined, // Sin projectId (se asigna manualmente)
+        clientName, // Cliente/Empresa del título del evento
+        purpose: event.description?.substring(0, 500) || "",
         passengers: 0,
         distance,
         co2,
@@ -995,8 +908,9 @@ export default function CalendarPage() {
                 <div className="rounded-lg bg-secondary/50 p-3 space-y-2">
                   <p className="text-sm font-medium">{t("calendar.importWillCreate")}</p>
                   <ul className="text-xs text-muted-foreground space-y-1 ml-4 list-disc">
-                    <li>{t("calendar.importProjectFromTitle")}</li>
-                    <li>{t("calendar.importRouteFromLocation")}</li>
+                    <li>{t("calendar.importClientFromTitle")}</li>
+                    <li>{t("calendar.importRouteFromBase")}</li>
+                    <li>{t("calendar.importProjectManual")}</li>
                     <li>{t("calendar.importDistanceCalculated")}</li>
                   </ul>
                 </div>
