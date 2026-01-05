@@ -51,14 +51,14 @@ describe("/api/climatiq/fuel-factor", () => {
       if (u === "https://api.climatiq.io/data/v1/estimate") {
         const body = JSON.parse(String(init?.body ?? "{}"));
         expect(body).toMatchObject({
-          emission_factor: { activity_id: "fuel-type_diesel-fuel_use_na" },
-          parameters: { volume: 1, volume_unit: "l" },
+          emission_factor: { activity_id: "passenger_vehicle-vehicle_type_car-fuel_source_diesel-engine_size_na-vehicle_age_na-vehicle_weight_na" },
+          parameters: { distance: 1, distance_unit: "km" },
         });
         return new Response(
           JSON.stringify({
-            co2e: 2.66,
+            co2e: 0.2487,
             co2e_unit: "kg",
-            emission_factor: { region: "GB", source: "BEIS", year: 2025 },
+            emission_factor: { region: "AT", source: "UBA Austria", year: 2022 },
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -79,15 +79,15 @@ describe("/api/climatiq/fuel-factor", () => {
     const payload = JSON.parse(res.body);
     expect(payload).toMatchObject({
       fuelType: "diesel",
-      kgCo2ePerLiter: 2.66,
-      activityId: "fuel-type_diesel-fuel_use_na",
+      kgCo2ePerKm: 0.2487,
+      activityId: "passenger_vehicle-vehicle_type_car-fuel_source_diesel-engine_size_na-vehicle_age_na-vehicle_weight_na",
       dataVersion: process.env.CLIMATIQ_DATA_VERSION,
-      region: "GB",
-      source: "BEIS",
-      year: 2025,
+      region: "AT",
+      source: "UBA Austria",
+      year: 2022,
       method: "data",
     });
-    expect(payload?.upstream?.data?.co2e).toBe(2.66);
+    expect(payload?.upstream?.data?.co2e).toBe(0.2487);
   });
 
   it("returns fallback factor when CLIMATIQ_API_KEY is missing", async () => {
@@ -108,7 +108,7 @@ describe("/api/climatiq/fuel-factor", () => {
     const payload = JSON.parse(res.body);
     expect(payload).toMatchObject({
       fuelType: "gasoline",
-      kgCo2ePerLiter: 2.34,
+      kgCo2ePerKm: 0.258,
       fallback: true,
     });
   });

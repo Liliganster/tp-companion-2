@@ -127,16 +127,18 @@ function googleApiProxy(serverKey: string | undefined): Plugin {
 
 function climatiqProxy(apiKey: string | undefined): Plugin {
   const ESTIMATE_URL = "https://api.climatiq.io/data/v1/estimate";
-  const DEFAULT_REGION = "GB"; // Using GB as it has the most comprehensive fuel data
+  const DEFAULT_REGION = "AT"; // Austria - UBA Austria data
   const DEFAULT_DATA_VERSION = "^21";
-  const VOLUME_L = 1;
-  const FALLBACK_KG_CO2E_PER_LITER: Record<string, number> = {
-    gasoline: 2.34, // Updated based on BEIS 2025 data
-    diesel: 2.70,   // Updated based on BEIS 2025 data
+  const DISTANCE_KM = 1;
+  // Fallback values based on UBA Austria Emissionskennzahlen 2022
+  const FALLBACK_KG_CO2E_PER_KM: Record<string, number> = {
+    gasoline: 0.258,
+    diesel: 0.249,
   };
+  // Activity IDs for passenger vehicles from UBA Austria
   const DEFAULT_ACTIVITY_ID: Record<string, string> = {
-    gasoline: "fuel-type_motor_gasoline-fuel_use_na",
-    diesel: "fuel-type_diesel-fuel_use_na",
+    gasoline: "passenger_vehicle-vehicle_type_car-fuel_source_gasoline-engine_size_na-vehicle_age_na-vehicle_weight_na",
+    diesel: "passenger_vehicle-vehicle_type_car-fuel_source_diesel-engine_size_na-vehicle_age_na-vehicle_weight_na",
   };
 
   const send = (res: any, statusCode: number, payload: unknown) => {
@@ -169,7 +171,7 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
         if (!apiKey) {
           return send(res, 200, {
             fuelType,
-            kgCo2ePerLiter: FALLBACK_KG_CO2E_PER_LITER[fuelType],
+            kgCo2ePerKm: FALLBACK_KG_CO2E_PER_KM[fuelType],
             activityId: DEFAULT_ACTIVITY_ID[fuelType],
             dataVersion: DEFAULT_DATA_VERSION,
             source: "fallback",
@@ -181,7 +183,7 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
           });
         }
 
-        // Call Climatiq API
+        // Call Climatiq API with distance parameters for passenger vehicles
         const requestBody = {
           emission_factor: {
             activity_id: DEFAULT_ACTIVITY_ID[fuelType],
@@ -189,8 +191,8 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
             data_version: DEFAULT_DATA_VERSION,
           },
           parameters: {
-            volume: VOLUME_L,
-            volume_unit: "l",
+            distance: DISTANCE_KM,
+            distance_unit: "km",
           },
         };
 
@@ -222,9 +224,9 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
 
           return send(res, 200, {
             fuelType,
-            kgCo2ePerLiter: co2e,
+            kgCo2ePerKm: co2e,
             activityId: DEFAULT_ACTIVITY_ID[fuelType],
-            dataVersion: "^21",
+            dataVersion: DEFAULT_DATA_VERSION,
             source: data?.emission_factor?.source ?? "climatiq",
             year: data?.emission_factor?.year ?? null,
             region: data?.emission_factor?.region || DEFAULT_REGION,

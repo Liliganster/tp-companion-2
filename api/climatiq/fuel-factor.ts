@@ -4,20 +4,22 @@ import { enforceRateLimit } from "../_utils/rateLimit.js";
 const ESTIMATE_URL = "https://api.climatiq.io/data/v1/estimate";
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const DEFAULT_DATA_VERSION = "^21";
-const DEFAULT_REGION = "GB"; // Using GB as it has the most comprehensive fuel data
-const VOLUME_L = 1;
-const FALLBACK_KG_CO2E_PER_LITER: Record<FuelType, number> = {
-  gasoline: 2.34, // Updated based on BEIS 2025 data
-  diesel: 2.70,   // Updated based on BEIS 2025 data
+const DEFAULT_REGION = "AT"; // Austria - UBA Austria data
+const DISTANCE_KM = 1; // We calculate emissions per km
+// Fallback values based on UBA Austria Emissionskennzahlen 2022
+const FALLBACK_KG_CO2E_PER_KM: Record<FuelType, number> = {
+  gasoline: 0.258, // UBA Austria 2022
+  diesel: 0.249,   // UBA Austria 2022
 };
 
 type FuelType = "gasoline" | "diesel";
 type CacheEntry = { expiresAtMs: number; payload: unknown };
 type ActivitySelection = { activityId: string; region: string };
 const CACHE = new Map<string, CacheEntry>();
+// Activity IDs for passenger vehicles from UBA Austria
 const DEFAULT_ACTIVITY_ID: Record<FuelType, string> = {
-  gasoline: "fuel-type_motor_gasoline-fuel_use_na",
-  diesel: "fuel-type_diesel-fuel_use_na",
+  gasoline: "passenger_vehicle-vehicle_type_car-fuel_source_gasoline-engine_size_na-vehicle_age_na-vehicle_weight_na",
+  diesel: "passenger_vehicle-vehicle_type_car-fuel_source_diesel-engine_size_na-vehicle_age_na-vehicle_weight_na",
 };
 
 function normalizeFuelType(input: unknown): FuelType | null {
@@ -120,7 +122,7 @@ export default async function handler(req: any, res: any) {
   if (!apiKey) {
     const payload = {
       fuelType,
-      kgCo2ePerLiter: FALLBACK_KG_CO2E_PER_LITER[fuelType],
+      kgCo2ePerKm: FALLBACK_KG_CO2E_PER_KM[fuelType],
       activityId: null,
       dataVersion,
       source: "fallback",
@@ -146,8 +148,8 @@ export default async function handler(req: any, res: any) {
     region: string | null;
   }> {
     try {
-      // Build request body exactly as Climatiq expects:
-      // { "emission_factor": { "activity_id": "...", "region": "GB", "data_version": "^21" }, "parameters": { "volume": 1, "volume_unit": "l" } }
+      // Build request body for passenger vehicle emissions per km
+      // Uses UBA Austria data with distance parameters
       const requestBody: any = {
         emission_factor: {
           activity_id: activityId,
@@ -155,8 +157,8 @@ export default async function handler(req: any, res: any) {
           data_version: dataVersion,
         },
         parameters: {
-          volume: VOLUME_L,
-          volume_unit: "l",
+          distance: DISTANCE_KM,
+          distance_unit: "km",
         },
       };
 
@@ -210,7 +212,7 @@ export default async function handler(req: any, res: any) {
   const factorRegion = normalizeFactorRegion(data?.emission_factor?.region) || DEFAULT_REGION;
   const payload = {
     fuelType,
-    kgCo2ePerLiter: Math.round((co2eKg / VOLUME_L) * 1_000_000) / 1_000_000,
+    kgCo2ePerKm: Math.round((co2eKg / DISTANCE_KM) * 1_000_000) / 1_000_000,
     activityId: selection.activityId,
     dataVersion,
     source: data?.emission_factor?.source ?? "climatiq",
@@ -225,8 +227,8 @@ export default async function handler(req: any, res: any) {
         region: attempt.region || DEFAULT_REGION,
       },
       parameters: {
-        fuel: VOLUME_L,
-        fuel_unit: "l",
+        distance: DISTANCE_KM,
+        distance_unit: "km",
       },
     },
     upstream: {
