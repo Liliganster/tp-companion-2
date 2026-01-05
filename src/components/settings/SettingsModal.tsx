@@ -522,13 +522,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                               </a>
                             </div>
                             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
-                              <div><span className="font-medium">{t("settings.emissionsFactor")}:</span> {
-                                fuelFactor.kgCo2ePerLiter != null 
-                                  ? `${fuelFactor.kgCo2ePerLiter.toFixed(3)} kg CO₂e/L`
-                                  : fuelFactor.kgCo2ePerKm != null
-                                    ? `${fuelFactor.kgCo2ePerKm.toFixed(3)} kg CO₂e/km`
-                                    : "N/A"
-                              }</div>
+                              <div><span className="font-medium">{t("settings.emissionsFactor")}:</span> {fuelFactor.kgCo2ePerLiter?.toFixed(3) ?? "N/A"} kg CO₂e/L</div>
                               {fuelFactor.source && <div><span className="font-medium">{t("settings.emissionsSource")}:</span> {fuelFactor.source}</div>}
                               {fuelFactor.year && <div><span className="font-medium">{t("settings.emissionsYear")}:</span> {fuelFactor.year}</div>}
                               {fuelFactor.region && <div><span className="font-medium">{t("settings.emissionsRegion")}:</span> {fuelFactor.region}</div>}

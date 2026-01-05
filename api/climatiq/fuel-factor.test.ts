@@ -52,7 +52,7 @@ describe("/api/climatiq/fuel-factor", () => {
         const body = JSON.parse(String(init?.body ?? "{}"));
         expect(body).toMatchObject({
           emission_factor: { activity_id: "fuel-type_diesel-fuel_use_na" },
-          parameters: { volume: 1, volume_unit: "l" },
+          parameters: { fuel: 1, fuel_unit: "l" },
         });
         return new Response(
           JSON.stringify({
@@ -108,7 +108,7 @@ describe("/api/climatiq/fuel-factor", () => {
     const payload = JSON.parse(res.body);
     expect(payload).toMatchObject({
       fuelType: "gasoline",
-      kgCo2ePerKm: 0.258, // Gasoline uses AT region with distance-based calculation
+      kgCo2ePerLiter: 2.31, // Gasoline now uses volume-based calculation too
       fallback: true,
     });
   });

@@ -6,20 +6,20 @@ const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const DEFAULT_DATA_VERSION = "^21";
 
 // Diesel: EU region with volume (liters)
-// Gasoline: AT region with distance (km)
+// Gasoline: AT region with volume (liters)
 const FUEL_CONFIG: Record<FuelType, {
   activityId: string;
   region: string;
-  paramType: "volume" | "distance";
+  paramType: "volume";
   fallbackValue: number;
   unit: string;
 }> = {
   gasoline: {
-    activityId: "passenger_vehicle-vehicle_type_car-fuel_source_gasoline-engine_size_na-vehicle_age_na-vehicle_weight_na",
+    activityId: "fuel-type_petrol-fuel_use_na",
     region: "AT",
-    paramType: "distance",
-    fallbackValue: 0.258, // UBA Austria 2022 kg CO2e/km
-    unit: "kgCo2ePerKm",
+    paramType: "volume",
+    fallbackValue: 2.31, // EU average kg CO2e/L for petrol
+    unit: "kgCo2ePerLiter",
   },
   diesel: {
     activityId: "fuel-type_diesel-fuel_use_na",
@@ -137,10 +137,7 @@ export default async function handler(req: any, res: any) {
   if (!apiKey) {
     const payload = {
       fuelType,
-      ...(config.paramType === "volume" 
-        ? { kgCo2ePerLiter: config.fallbackValue }
-        : { kgCo2ePerKm: config.fallbackValue }
-      ),
+      kgCo2ePerLiter: config.fallbackValue,
       activityId: null,
       dataVersion,
       source: "fallback",
@@ -157,7 +154,6 @@ export default async function handler(req: any, res: any) {
   async function estimateOnce(
     activityId: string,
     region: string | null,
-    paramType: "volume" | "distance",
   ): Promise<{
     ok: boolean;
     status: number | null;
@@ -167,10 +163,8 @@ export default async function handler(req: any, res: any) {
     region: string | null;
   }> {
     try {
-      // Build request body - parameters depend on fuel type
-      const parameters = paramType === "volume"
-        ? { volume: 1, volume_unit: "l" }
-        : { distance: 1, distance_unit: "km" };
+      // Build request body - use fuel/fuel_unit for volume-based calculations
+      const parameters = { fuel: 1, fuel_unit: "l" };
       
       const requestBody: any = {
         emission_factor: {
@@ -202,7 +196,7 @@ export default async function handler(req: any, res: any) {
   let selection = getEnvActivitySelection(fuelType) ?? getActivitySelection(fuelType);
 
   // Use the fuel-specific config
-  let attempt = await estimateOnce(selection.activityId, config.region, config.paramType);
+  let attempt = await estimateOnce(selection.activityId, config.region);
 
   const data: any = attempt.data;
   if (!attempt.ok || !data) {
@@ -230,18 +224,13 @@ export default async function handler(req: any, res: any) {
 
   const factorRegion = normalizeFactorRegion(data?.emission_factor?.region) || config.region;
   
-  // Build response with fuel-type specific field
+  // Build response - all fuel types now use volume-based calculations (kgCo2ePerLiter)
   const emissionValue = Math.round(co2eKg * 1_000_000) / 1_000_000;
-  const parameters = config.paramType === "volume"
-    ? { volume: 1, volume_unit: "l" }
-    : { distance: 1, distance_unit: "km" };
+  const parameters = { fuel: 1, fuel_unit: "l" };
   
   const payload = {
     fuelType,
-    ...(config.paramType === "volume" 
-      ? { kgCo2ePerLiter: emissionValue }
-      : { kgCo2ePerKm: emissionValue }
-    ),
+    kgCo2ePerLiter: emissionValue,
     activityId: selection.activityId,
     dataVersion,
     source: data?.emission_factor?.source ?? "climatiq",
