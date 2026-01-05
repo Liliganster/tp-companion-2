@@ -15,7 +15,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
   const requireSecret = vercelEnv ? vercelEnv !== "development" : process.env.NODE_ENV === "production";
   const isVercelCron = Boolean(req.headers?.["x-vercel-cron"]);
   const manual = String(req.query?.manual ?? "").trim() === "1";
-  const maxJobs = manual ? 1 : 8;
+  const maxJobs = manual ? 1 : 16; // Increased from 8 for 2x throughput
   const manualJobId = manual && typeof req.query?.jobId === "string" ? String(req.query.jobId).trim() : null;
   const manualUserId = manual && typeof req.query?.userId === "string" ? String(req.query.userId).trim() : null;
 
@@ -249,6 +249,21 @@ export default withApiObservability(async function handler(req: any, res: any, {
         }
 
         log.info({ jobId: job.id, bytes: fileData.size }, "invoice_downloaded");
+
+        // Validate file size (max 15MB to prevent timeouts and reduce Gemini API latency)
+        const maxFileSizeBytes = 15 * 1024 * 1024; // 15MB
+        if (fileData.size > maxFileSizeBytes) {
+          const sizeMB = Math.round(fileData.size / 1024 / 1024);
+          const reason = `file_too_large:${sizeMB}MB_exceeds_15MB_limit`;
+          await supabaseAdmin
+            .from("invoice_jobs")
+            .update({ status: "failed", needs_review_reason: reason })
+            .eq("id", job.id)
+            .eq("status", "processing");
+          processedResults.push({ id: job.id, status: "failed", error: reason });
+          log.warn({ jobId: job.id, sizeMB }, "invoice_file_too_large");
+          return;
+        }
 
         const arrayBuffer = await fileData.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
