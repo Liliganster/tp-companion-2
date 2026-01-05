@@ -17,16 +17,19 @@ export function writeOfflineCache<T>(key: string, data: T) {
   }
 }
 
-export function readOfflineCache<T>(key: string, maxAgeMs: number): T | null {
+export function readOfflineCacheEntry<T>(key: string, maxAgeMs: number): { ts: number; data: T } | null {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CacheEnvelope<T>;
     if (!parsed || parsed.v !== 1 || typeof parsed.ts !== "number") return null;
     if (Date.now() - parsed.ts > maxAgeMs) return null;
-    return parsed.data ?? null;
+    return { ts: parsed.ts, data: parsed.data };
   } catch {
     return null;
   }
 }
 
+export function readOfflineCache<T>(key: string, maxAgeMs: number): T | null {
+  return readOfflineCacheEntry<T>(key, maxAgeMs)?.data ?? null;
+}

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
-import { isOffline, readOfflineCache, writeOfflineCache } from "@/lib/offlineCache";
+import { isOffline, readOfflineCache, readOfflineCacheEntry, writeOfflineCache } from "@/lib/offlineCache";
 
 export type ClimatiqFuelFactor = {
   fuelType: "gasoline" | "diesel";
@@ -18,13 +18,16 @@ export function useClimatiqFuelFactor(fuelType: ClimatiqFuelFactor["fuelType"] |
 
   const offlineCacheKey = `cache:climatiq:fuelFactor:v2:${fuelType ?? "none"}`;
   const offlineCacheTtlMs = 30 * 24 * 60 * 60 * 1000; // 30 days
+  const cachedEntry = readOfflineCacheEntry<ClimatiqFuelFactor>(offlineCacheKey, offlineCacheTtlMs);
 
   return useQuery({
     queryKey: ["climatiq", "fuelFactor", fuelType] as const,
     enabled,
-    staleTime: 24 * 60 * 60_000,
+    staleTime: offlineCacheTtlMs,
     retry: 1,
     refetchOnWindowFocus: false,
+    initialData: cachedEntry?.data,
+    initialDataUpdatedAt: cachedEntry?.ts,
     queryFn: async (): Promise<ClimatiqFuelFactor | null> => {
       const cached = readOfflineCache<ClimatiqFuelFactor>(offlineCacheKey, offlineCacheTtlMs);
       if (isOffline()) return cached ?? null;
@@ -58,4 +61,3 @@ export function useClimatiqFuelFactor(fuelType: ClimatiqFuelFactor["fuelType"] |
     },
   });
 }
-

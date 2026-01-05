@@ -1,94 +1,100 @@
 export function getCountryCode(countryName?: string): string | undefined {
-    if (!countryName) return undefined;
-    const normalized = countryName.trim().toLowerCase();
+  if (!countryName) return undefined;
 
-    const countryMap: Record<string, string> = {
-        // Austria
-        "austria": "at",
-        "österreich": "at",
+  const trimmed = countryName.trim();
+  if (!trimmed) return undefined;
 
-        // Germany
-        "germany": "de",
-        "deutschland": "de",
-        "alemania": "de",
+  // Accept ISO 3166-1 alpha-2 codes directly (e.g. "AT", "DE").
+  if (/^[A-Za-z]{2}$/.test(trimmed)) return trimmed.toLowerCase();
 
-        // Spain
-        "spain": "es",
-        "españa": "es",
-        "espana": "es",
+  // Normalize (lowercase + remove diacritics) so inputs like "Österreich" / "España" work.
+  const normalized = trimmed.toLowerCase();
+  const ascii = normalized.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const key = ascii.replace(/\s+/g, " ").trim();
 
-        // Italy
-        "italy": "it",
-        "italia": "it",
+  const countryMap: Record<string, string> = {
+    // Austria
+    austria: "at",
+    osterreich: "at",
+    "republic of austria": "at",
 
-        // France
-        "france": "fr",
-        "francia": "fr",
+    // Germany
+    germany: "de",
+    deutschland: "de",
+    alemania: "de",
 
-        // Switzerland
-        "switzerland": "ch",
-        "schweiz": "ch",
-        "suisse": "ch",
-        "svizzera": "ch",
-        "suiza": "ch",
+    // Spain
+    spain: "es",
+    espana: "es",
 
-        // Belgium
-        "belgium": "be",
-        "belgique": "be",
-        "belgië": "be",
-        "bélgica": "be",
-        "belgica": "be",
+    // Italy
+    italy: "it",
+    italia: "it",
 
-        // Netherlands
-        "netherlands": "nl",
-        "nederland": "nl",
-        "países bajos": "nl",
-        "paises bajos": "nl",
-        "holanda": "nl", // Common alias
+    // France
+    france: "fr",
+    francia: "fr",
 
-        // Portugal
-        "portugal": "pt",
+    // Switzerland
+    switzerland: "ch",
+    schweiz: "ch",
+    suisse: "ch",
+    svizzera: "ch",
+    suiza: "ch",
 
-        // UK
-        "uk": "gb",
-        "united kingdom": "gb",
-        "reino unido": "gb",
-        "great britain": "gb",
-        "gran bretaña": "gb",
+    // Belgium
+    belgium: "be",
+    belgique: "be",
+    belgie: "be",
+    belgica: "be",
 
-        // Poland
-        "poland": "pl",
-        "polska": "pl",
-        "polonia": "pl",
+    // Netherlands
+    netherlands: "nl",
+    nederland: "nl",
+    "paises bajos": "nl",
+    holanda: "nl",
 
-        // Czech Republic
-        "czech republic": "cz",
-        "czechia": "cz",
-        "česko": "cz",
-        "república checa": "cz",
-        "republica checa": "cz",
+    // Portugal
+    portugal: "pt",
 
-        // Hungary
-        "hungary": "hu",
-        "magyarország": "hu",
-        "hungría": "hu",
-        "hungria": "hu",
+    // United Kingdom
+    uk: "gb",
+    "united kingdom": "gb",
+    "reino unido": "gb",
+    "great britain": "gb",
+    "gran bretana": "gb",
 
-        // Slovakia
-        "slovakia": "sk",
-        "slovensko": "sk",
-        "eslovaquia": "sk",
+    // Poland
+    poland: "pl",
+    polska: "pl",
+    polonia: "pl",
 
-        // Slovenia
-        "slovenia": "si",
-        "slovenija": "si",
-        "eslovenia": "si",
+    // Czech Republic
+    "czech republic": "cz",
+    czechia: "cz",
+    cesko: "cz",
+    "republica checa": "cz",
 
-        // Croatia
-        "croatia": "hr",
-        "hrvatska": "hr",
-        "croacia": "hr",
-    };
+    // Hungary
+    hungary: "hu",
+    magyarorszag: "hu",
+    hungria: "hu",
 
-    return countryMap[normalized];
+    // Slovakia
+    slovakia: "sk",
+    slovensko: "sk",
+    eslovaquia: "sk",
+
+    // Slovenia
+    slovenia: "si",
+    slovenija: "si",
+    eslovenia: "si",
+
+    // Croatia
+    croatia: "hr",
+    hrvatska: "hr",
+    croacia: "hr",
+  };
+
+  return countryMap[key];
 }

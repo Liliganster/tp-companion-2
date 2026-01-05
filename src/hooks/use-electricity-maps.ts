@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
-import { isOffline, readOfflineCache, writeOfflineCache } from "@/lib/offlineCache";
+import { isOffline, readOfflineCache, readOfflineCacheEntry, writeOfflineCache } from "@/lib/offlineCache";
 
 export type ElectricityMapsCarbonIntensity = {
   zone: string;
@@ -14,6 +14,7 @@ export function useElectricityMapsCarbonIntensity(zone = "AT", opts?: { enabled?
   const enabled = Boolean(user) && (opts?.enabled ?? true);
   const offlineCacheKey = `cache:electricityMaps:carbonIntensity:v1:${zone}`;
   const offlineCacheTtlMs = 24 * 60 * 60 * 1000; // 24h
+  const cachedEntry = readOfflineCacheEntry<ElectricityMapsCarbonIntensity>(offlineCacheKey, offlineCacheTtlMs);
 
   return useQuery({
     queryKey: ["electricityMaps", "carbonIntensity", zone] as const,
@@ -21,6 +22,8 @@ export function useElectricityMapsCarbonIntensity(zone = "AT", opts?: { enabled?
     staleTime: 5 * 60_000,
     retry: 1,
     refetchOnWindowFocus: false,
+    initialData: cachedEntry?.data,
+    initialDataUpdatedAt: cachedEntry?.ts,
     queryFn: async (): Promise<ElectricityMapsCarbonIntensity | null> => {
       const cached = readOfflineCache<ElectricityMapsCarbonIntensity>(offlineCacheKey, offlineCacheTtlMs);
       if (isOffline()) return cached ?? null;
