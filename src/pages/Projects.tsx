@@ -97,7 +97,7 @@ export default function Projects() {
   };
 
   const [searchQuery, setSearchQuery] = useState(() => loadProjectsFilters()?.searchQuery ?? "");
-  const [selectedYear, setSelectedYear] = useState(() => loadProjectsFilters()?.selectedYear ?? "2024");
+  const [selectedYear, setSelectedYear] = useState(() => loadProjectsFilters()?.selectedYear ?? "all");
   const { user } = useAuth();
   const { projects, addProject, updateProject, deleteProject, toggleStar } = useProjects();
   const { trips } = useTrips();
@@ -280,6 +280,10 @@ export default function Projects() {
       const key = getProjectKey(trip.project ?? "");
       if (!key) continue;
 
+      // Filter by selected year
+      const matchesYear = selectedYear === "all" || trip.date.startsWith(selectedYear);
+      if (!matchesYear) continue;
+
       const distance = Number.isFinite(trip.distance) ? trip.distance : 0;
       const invoices = trip.invoice?.trim() ? 1 : 0;
       const co2 = calculateTripEmissions({ distanceKm: distance, ...emissionsInput }).co2Kg;
@@ -367,7 +371,7 @@ export default function Projects() {
     }
 
     return map;
-  }, [trips, projectCallsheetPathsByKey, projectInvoiceCountsByKey, emissionsInput]);
+  }, [trips, projectCallsheetPathsByKey, projectInvoiceCountsByKey, emissionsInput, selectedYear]);
 
 
 
@@ -705,6 +709,9 @@ export default function Projects() {
                 <SelectValue placeholder={t("projects.year")} />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="all">{t("projects.allTime")}</SelectItem>
+                <SelectItem value="2026">2026</SelectItem>
+                <SelectItem value="2025">2025</SelectItem>
                 <SelectItem value="2024">2024</SelectItem>
                 <SelectItem value="2023">2023</SelectItem>
               </SelectContent>
