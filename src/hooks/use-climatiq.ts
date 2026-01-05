@@ -4,7 +4,7 @@ import { isOffline, readOfflineCache, readOfflineCacheEntry, writeOfflineCache }
 
 export type ClimatiqFuelFactor = {
   fuelType: "gasoline" | "diesel";
-  kgCo2ePerKm: number;
+  kgCo2ePerLiter: number;
   region: string | null;
   source?: string;
   year?: number | null;
@@ -47,12 +47,12 @@ export function useClimatiqFuelFactor(fuelType: ClimatiqFuelFactor["fuelType"] |
       const data: any = await res.json().catch(() => null);
       if (!res.ok || !data) return cached ?? null;
 
-      const kg = Number(data?.kgCo2ePerKm);
+      const kg = Number(data?.kgCo2ePerLiter);
       if (!Number.isFinite(kg) || kg <= 0) return cached ?? null;
 
       const payload: ClimatiqFuelFactor = {
         fuelType,
-        kgCo2ePerKm: kg,
+        kgCo2ePerLiter: kg,
         region: typeof data?.region === "string" ? data.region : null,
         source: typeof data?.source === "string" ? data.source : undefined,
         year: typeof data?.year === "number" ? data.year : null,
