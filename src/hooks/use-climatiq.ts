@@ -10,13 +10,17 @@ export type ClimatiqFuelFactor = {
   year?: number | null;
   activityId?: string;
   dataVersion?: string;
+  cachedTtlSeconds?: number;
+  method?: string;
+  fallback?: boolean;
+  apiPayload?: unknown;
 };
 
 export function useClimatiqFuelFactor(fuelType: ClimatiqFuelFactor["fuelType"] | null, opts?: { enabled?: boolean }) {
   const { user, getAccessToken } = useAuth();
   const enabled = Boolean(user) && Boolean(fuelType) && (opts?.enabled ?? true);
 
-  const offlineCacheKey = `cache:climatiq:fuelFactor:v2:${fuelType ?? "none"}`;
+  const offlineCacheKey = `cache:climatiq:fuelFactor:v3:${fuelType ?? "none"}`;
   const offlineCacheTtlMs = 30 * 24 * 60 * 60 * 1000; // 30 days
   const cachedEntry = readOfflineCacheEntry<ClimatiqFuelFactor>(offlineCacheKey, offlineCacheTtlMs);
 
@@ -54,6 +58,10 @@ export function useClimatiqFuelFactor(fuelType: ClimatiqFuelFactor["fuelType"] |
         year: typeof data?.year === "number" ? data.year : null,
         activityId: typeof data?.activityId === "string" ? data.activityId : undefined,
         dataVersion: typeof data?.dataVersion === "string" ? data.dataVersion : undefined,
+        cachedTtlSeconds: typeof data?.cachedTtlSeconds === "number" ? data.cachedTtlSeconds : undefined,
+        method: typeof data?.method === "string" ? data.method : undefined,
+        fallback: typeof data?.fallback === "boolean" ? data.fallback : undefined,
+        apiPayload: data,
       };
 
       writeOfflineCache(offlineCacheKey, payload);

@@ -532,6 +532,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                                   <span className="ml-1 text-[10px] font-mono bg-secondary px-1 py-0.5 rounded">{fuelFactor.activityId}</span>
                                 </div>
                               )}
+                              <div className="col-span-2">
+                                <span className="font-medium">API:</span>
+                                <pre className="mt-1 text-[10px] font-mono whitespace-pre-wrap break-all rounded bg-secondary px-2 py-1">{JSON.stringify(fuelFactor.apiPayload ?? fuelFactor, null, 2)}</pre>
+                              </div>
                             </div>
                             <p className="text-[10px] text-muted-foreground mt-2 italic">
                               {t("settings.emissionsWellToWheel")}

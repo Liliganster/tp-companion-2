@@ -91,6 +91,7 @@ ELECTRICITY_MAPS_DEFAULT_ZONE=AT
 
 # Climatiq (gasoline/diesel emissions factor, kg CO₂e/L)
 CLIMATIQ_API_KEY=...
+# Used by `/api/climatiq/fuel-factor` (Data API `/data/v1/search` + `/data/v1/estimate`).
 
 # Supabase server (for /api/google/* Calendar/Drive)
 SUPABASE_URL=...

@@ -16,6 +16,10 @@ type CacheEntry = { expiresAtMs: number; payload: unknown };
 type ActivitySelection = { activityId: string; region: string | null };
 const CACHE = new Map<string, CacheEntry>();
 const ACTIVITY_SELECTION_CACHE = new Map<FuelType, ActivitySelection>();
+const DEFAULT_ACTIVITY_ID: Record<FuelType, string> = {
+  gasoline: "fuel-type_petrol-fuel_use_na",
+  diesel: "fuel-type_diesel-fuel_use_na",
+};
 
 function normalizeFuelType(input: unknown): FuelType | null {
   if (typeof input !== "string") return null;
@@ -31,6 +35,10 @@ function getEnvActivitySelection(fuelType: FuelType): ActivitySelection | null {
   const activityId = typeof fromEnv === "string" ? fromEnv.trim() : "";
   if (!activityId) return null;
   return { activityId, region: DEFAULT_REGION };
+}
+
+function getDefaultActivitySelection(fuelType: FuelType): ActivitySelection {
+  return { activityId: DEFAULT_ACTIVITY_ID[fuelType], region: DEFAULT_REGION };
 }
 
 function isLiterUnit(value: unknown): boolean {
@@ -85,8 +93,11 @@ async function searchFuelActivitySelection(params: {
   dataVersion: string;
   fuelType: FuelType;
 }): Promise<ActivitySelection | null> {
-  // Search for fuel combustion factors with volume unit
-  const query = params.fuelType === "gasoline" ? "fuel_type_gasoline fuel_use" : "fuel_type_diesel fuel_use";
+  // Search for fuel combustion factors with liters unit (used to estimate CO2e per liter).
+  const query =
+    params.fuelType === "gasoline"
+      ? "fuel-type_petrol-fuel_use_na"
+      : "fuel-type_diesel-fuel_use_na";
 
   const url = new URL(`${BASE_URL}/search`);
   url.searchParams.set("query", query);
@@ -181,7 +192,7 @@ export default async function handler(req: any, res: any) {
   if (!fuelType) return sendJson(res, 400, { error: "invalid_fuel_type" });
 
   const dataVersion = (process.env.CLIMATIQ_DATA_VERSION || DEFAULT_DATA_VERSION).trim() || DEFAULT_DATA_VERSION;
-  const cacheKey = `${fuelType}:${dataVersion}`;
+  const cacheKey = `${fuelType}:${dataVersion}:v2`;
   const cached = getCached(cacheKey);
   if (cached) return sendJson(res, 200, cached);
 
@@ -196,6 +207,7 @@ export default async function handler(req: any, res: any) {
       year: null,
       region: DEFAULT_REGION,
       cachedTtlSeconds: Math.round(CACHE_TTL_MS / 1000),
+      method: "fallback",
       fallback: true,
     };
     setCached(cacheKey, payload);
@@ -205,7 +217,14 @@ export default async function handler(req: any, res: any) {
   async function estimateOnce(
     activityId: string,
     region: string | null,
-  ): Promise<{ ok: boolean; status: number | null; data: any | null; rawText: string; activityId: string }> {
+  ): Promise<{
+    ok: boolean;
+    status: number | null;
+    data: any | null;
+    rawText: string;
+    activityId: string;
+    region: string | null;
+  }> {
     try {
       const emissionFactor: any = {
         activity_id: activityId,
@@ -225,41 +244,21 @@ export default async function handler(req: any, res: any) {
             ...emissionFactor,
           },
           parameters: {
-            volume: VOLUME_L,
-            volume_unit: "l",
+            fuel: VOLUME_L,
+            fuel_unit: "l",
           },
         }),
       });
 
       const { data, rawText } = await readJsonResponse(upstream);
-      return { ok: upstream.ok, status: upstream.status, data, rawText, activityId };
+      return { ok: upstream.ok, status: upstream.status, data, rawText, activityId, region };
     } catch (err: any) {
       const msg = typeof err?.message === "string" ? err.message : "Network error";
-      return { ok: false, status: null, data: null, rawText: msg, activityId };
+      return { ok: false, status: null, data: null, rawText: msg, activityId, region };
     }
   }
 
-  let selection = getEnvActivitySelection(fuelType) ?? ACTIVITY_SELECTION_CACHE.get(fuelType) ?? null;
-  if (!selection) {
-    selection = await searchFuelActivitySelection({ apiKey, dataVersion, fuelType });
-    if (selection) ACTIVITY_SELECTION_CACHE.set(fuelType, selection);
-  }
-
-  if (!selection) {
-    const payload = {
-      fuelType,
-      kgCo2ePerLiter: FALLBACK_KG_CO2E_PER_LITER[fuelType],
-      activityId: null,
-      dataVersion,
-      source: "fallback",
-      year: null,
-      region: DEFAULT_REGION,
-      cachedTtlSeconds: Math.round(CACHE_TTL_MS / 1000),
-      fallback: true,
-    };
-    setCached(cacheKey, payload);
-    return sendJson(res, 200, payload);
-  }
+  let selection = getEnvActivitySelection(fuelType) ?? ACTIVITY_SELECTION_CACHE.get(fuelType) ?? getDefaultActivitySelection(fuelType);
 
   // Always prefer Austria (AT). If no AT-specific factor exists, fall back to the selector region, then to no-region.
   let attempt = await estimateOnce(selection.activityId, DEFAULT_REGION);
@@ -318,8 +317,27 @@ export default async function handler(req: any, res: any) {
     dataVersion,
     source: data?.emission_factor?.source ?? "climatiq",
     year: data?.emission_factor?.year ?? null,
-    region: factorRegion ?? DEFAULT_REGION,
+    region: factorRegion,
     cachedTtlSeconds: Math.round(CACHE_TTL_MS / 1000),
+    method: "data",
+    fallback: false,
+    request: {
+      emission_factor: {
+        activity_id: attempt.activityId,
+        region: attempt.region,
+        data_version: dataVersion,
+      },
+      parameters: {
+        fuel: VOLUME_L,
+        fuel_unit: "l",
+      },
+    },
+    upstream: {
+      ok: attempt.ok,
+      status: attempt.status,
+      data,
+      rawText: attempt.rawText,
+    },
   };
 
   setCached(cacheKey, payload);
