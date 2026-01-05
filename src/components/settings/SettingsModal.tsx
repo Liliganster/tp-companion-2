@@ -288,14 +288,37 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
   return (
       <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent className="max-w-3xl w-[800px] h-[600px] p-0 gap-0 overflow-hidden flex flex-col">
-        <DialogHeader className="px-6 py-4 border-b border-border shrink-0">
-          <DialogTitle className="text-xl font-semibold">{t("settings.title")}</DialogTitle>
+      <DialogContent className="max-w-3xl w-full sm:w-[800px] h-[90vh] sm:h-[600px] p-0 gap-0 overflow-hidden flex flex-col">
+        <DialogHeader className="px-4 sm:px-6 py-3 sm:py-4 border-b border-border shrink-0">
+          <DialogTitle className="text-lg sm:text-xl font-semibold">{t("settings.title")}</DialogTitle>
           <DialogDescription className="sr-only">{t("settings.title")}</DialogDescription>
         </DialogHeader>
 
+        {/* Mobile Navigation - Outside flex container */}
+        <div className="sm:hidden border-b border-border shrink-0">
+          <ScrollArea className="w-full">
+            <div className="flex gap-2 px-4 py-2">
+              {navItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  className={cn(
+                    "flex flex-col items-center gap-1 px-3 py-2 text-xs rounded-lg whitespace-nowrap transition-colors min-w-[70px]",
+                    activeTab === item.id
+                      ? "bg-primary/20 text-primary"
+                      : "text-muted-foreground hover:bg-secondary/50"
+                  )}
+                >
+                  <item.icon className="w-5 h-5" />
+                  <span className="text-[10px] leading-tight text-center">{item.label}</span>
+                </button>
+              ))}
+            </div>
+          </ScrollArea>
+        </div>
+
         <div className="flex flex-1 overflow-hidden">
-          {/* Sidebar Navigation */}
+          {/* Sidebar Navigation - Desktop only */}
           <nav className="w-56 shrink-0 border-r border-border hidden sm:block">
             <ScrollArea className="h-full py-2">
               {navItems.map((item) => (
@@ -316,28 +339,9 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
             </ScrollArea>
           </nav>
 
-          {/* Mobile Navigation */}
-          <div className="sm:hidden border-b border-border px-4 py-2 overflow-x-auto flex gap-2">
-            {navItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={cn(
-                  "flex items-center gap-2 px-3 py-2 text-xs rounded-lg whitespace-nowrap transition-colors",
-                  activeTab === item.id
-                    ? "bg-primary/20 text-primary"
-                    : "text-muted-foreground hover:bg-secondary/50"
-                )}
-              >
-                <item.icon className="w-4 h-4" />
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </div>
-
           {/* Content */}
           <ScrollArea className="flex-1">
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               {activeTab === "profile" && (
                 <div className="space-y-6">
                   <h2 className="text-lg font-medium">{t("settings.profileSectionTitle")}</h2>
@@ -912,15 +916,15 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-border flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-border flex flex-col sm:flex-row items-center gap-3 sm:justify-between shrink-0">
+          <p className="text-xs text-muted-foreground hidden sm:block">
             {t("settings.build")} 1fded46 @ 2025-12-20T20:43:47.046Z
           </p>
-          <div className="flex items-center gap-3">
-            <Button variant="outline" onClick={handleClose}>
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <Button variant="outline" onClick={handleClose} className="flex-1 sm:flex-none">
               {t("settings.cancel")}
             </Button>
-            <Button variant="save" onClick={handleSave}>
+            <Button variant="save" onClick={handleSave} className="flex-1 sm:flex-none">
               <Save className="w-4 h-4 mr-2" />
               {t("settings.save")}
             </Button>
