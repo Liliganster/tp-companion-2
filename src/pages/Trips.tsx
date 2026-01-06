@@ -25,54 +25,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
 import { useClimatiqFuelFactor } from "@/hooks/use-climatiq";
 
-// CO2 is calculated from user profile vehicle settings when saving a trip.
-const mockTripsData: Trip[] = [{
-  id: "1",
-  date: "2024-01-15",
-  route: ["Berlin HQ", "Leipzig", "München Studio"],
-  project: "Film Production XY",
-  purpose: "Location scouting",
-  passengers: 2,
-  distance: 584,
-  co2: 0,
-}, {
-  id: "2",
-  date: "2024-01-14",
-  route: ["München Studio", "Nürnberg", "Frankfurt", "Köln Location"],
-  project: "Film Production XY",
-  purpose: "Equipment transport",
-  passengers: 0,
-  distance: 575,
-  co2: 0,
-}, {
-  id: "3",
-  date: "2024-01-13",
-  route: ["Home Office", "Berlin HQ"],
-  project: "Internal",
-  purpose: "Office meeting",
-  passengers: 0,
-  distance: 45,
-  co2: 0,
-}, {
-  id: "4",
-  date: "2024-01-12",
-  route: ["Berlin HQ", "Hannover", "Hamburg Meeting"],
-  project: "Client ABC",
-  purpose: "Client presentation",
-  passengers: 1,
-  warnings: ["Unusual distance"],
-  distance: 289,
-  co2: 0,
-}, {
-  id: "5",
-  date: "2024-01-11",
-  route: ["Hamburg Meeting", "Berlin HQ"],
-  project: "Client ABC",
-  purpose: "Return trip",
-  passengers: 0,
-  distance: 289,
-  co2: 0,
-}];
 export default function Trips() {
   const { profile } = useUserProfile();
   const { t, tf, locale } = useI18n();
