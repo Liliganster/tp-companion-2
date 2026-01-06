@@ -549,12 +549,12 @@ export default function AdvancedEmissions() {
                   {tf("advancedEmissions.resultsTitle", { count: computed.filtered.length })}
                 </h3>
                 {viewMode === "projects" && computed.results.length > 0 && (
-                  <Select value={selectedProjectId || ""} onValueChange={(value) => setSelectedProjectId(value || null)}>
+                  <Select value={selectedProjectId || "all"} onValueChange={(value) => setSelectedProjectId(value === "all" ? null : value)}>
                     <SelectTrigger className="w-48">
                       <SelectValue placeholder="Filtrar por proyecto..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Todos los proyectos</SelectItem>
+                      <SelectItem value="all">Todos los proyectos</SelectItem>
                       {computed.results.map((r) => (
                         <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                       ))}
