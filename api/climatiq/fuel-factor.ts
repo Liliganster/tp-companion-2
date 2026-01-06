@@ -45,7 +45,8 @@ function normalizeFuelType(input: unknown): FuelType | null {
 }
 
 function getEnvActivitySelection(fuelType: FuelType): ActivitySelection | null {
-  const fromEnv = fuelType === "gasoline" ? process.env.CLIMATIQ_ACTIVITY_ID_GASOLINE : process.env.CLIMATIQ_ACTIVITY_ID_DIESEL;
+  // Force ignore environment variable for gasoline to ensure volume-based ID is used
+  const fromEnv = fuelType === "gasoline" ? undefined : process.env.CLIMATIQ_ACTIVITY_ID_DIESEL;
   const activityId = typeof fromEnv === "string" ? fromEnv.trim() : "";
   if (!activityId) return null;
   return { activityId, region: FUEL_CONFIG[fuelType].region };
@@ -176,6 +177,8 @@ export default async function handler(req: any, res: any) {
           activity_id: activityId,
           region: region || config.region,
           data_version: dataVersion,
+          // Explicitly request volume-based factors if applicable
+          ...(config.paramType === "volume" ? { unit_type: "volume" } : {}),
         },
         parameters,
       };
