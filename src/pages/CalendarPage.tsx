@@ -137,8 +137,16 @@ export default function CalendarPage() {
       return [];
     }
     
-    // Siempre viaje de ida y vuelta desde dirección base
-    return [baseFullAddress, baseFullAddress];
+    // Extraer ubicación del evento
+    const eventLocation = event.location?.trim();
+    
+    if (!eventLocation) {
+      // Si no hay ubicación en el evento, viaje de ida y vuelta a la base
+      return [baseFullAddress, baseFullAddress];
+    }
+    
+    // Viaje: base -> ubicación del evento -> base (ida y vuelta con parada intermedia)
+    return [baseFullAddress, eventLocation, baseFullAddress];
   };
 
   // Calcular distancia entre ubicaciones usando Google Directions API
