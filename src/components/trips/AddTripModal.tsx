@@ -971,9 +971,31 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                   const existing = projects.find(p => p.name.trim().toLowerCase() === trimmedProject.toLowerCase());
                   if (existing) {
                     projectId = existing.id;
-                  } 
-                  // If not found, projectId remains undefined, but `trimmedProject` string is passed.
-                  // TripsContext will handle this as client metadata.
+                  } else {
+                    // Auto-create project if it doesn't exist
+                    const newId = uuidv4();
+                    try {
+                      await addProject({
+                        id: newId,
+                        name: trimmedProject,
+                        ratePerKm: parseLocaleNumber(profile.ratePerKm) ?? 0,
+                        starred: false,
+                        trips: 0,
+                        totalKm: 0,
+                        documents: 0,
+                        invoices: 0,
+                        estimatedCost: 0,
+                        shootingDays: 0,
+                        kmPerDay: 0,
+                        co2Emissions: 0,
+                        createdAt: new Date().toISOString()
+                      });
+                      projectId = newId;
+                      toast.success(`Proyecto "${trimmedProject}" creado`);
+                    } catch (err) {
+                      console.error("Failed to auto-create project:", err);
+                    }
+                  }
                 }
 
                 // 3. Save Trip
