@@ -674,10 +674,23 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
 	                    />
 	                    <CommandList>
                       <CommandEmpty>
-                          <div className="p-2">
-                             <p className="text-sm text-muted-foreground mb-2">{t("tripModal.projectNotFound")}</p>
+                          <div className="p-2 space-y-2">
+                             <p className="text-sm text-muted-foreground">{t("tripModal.projectNotFound")}</p>
                              <Button 
                                variant="secondary" 
+                               size="sm" 
+                               className="w-full" 
+                               disabled={!project.trim()}
+                               onClick={async () => {
+                                 await createProjectIfNeeded(project);
+                                 setProject(project.trim());
+                                 setProjectOpen(false);
+                               }}
+                             >
+                              {tf("tripModal.createProjectNamed", { name: project })}
+                             </Button>
+                             <Button 
+                               variant="outline" 
                                size="sm" 
                                className="w-full" 
                                disabled={!project.trim()}
@@ -687,8 +700,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                                  setProjectOpen(false);
                                }}
                              >
-                              {/* Using the name as Client/Producer without creating a project */}
-                              {tf("tripModal.useAsClient", { name: project }) || `Usar "${project}"`}
+                              {tf("tripModal.useAsClient", { name: project })}
                              </Button>
                           </div>
                       </CommandEmpty>

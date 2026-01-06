@@ -209,9 +209,6 @@ export default function CalendarPage() {
       // Extraer ubicaciones
       const route = extractLocationsFromEvent(event);
       
-      console.log("Route for import:", route);
-      console.log("Profile base:", { baseAddress: profile.baseAddress, city: profile.city, country: profile.country });
-      
       if (route.length < 2) {
         toast.error(t("calendar.importNeedBaseAddress"));
         setImporting(false);
@@ -227,17 +224,18 @@ export default function CalendarPage() {
         return;
       }
       
-      // Título del evento = cliente/empresa/productora (va en project como string)
+      // Título del evento = cliente/empresa/productora
       const clientName = event.title.trim();
       
-      // Crear viaje con la misma estructura que AddTripModal
+      // Crear viaje con proyecto DESCONOCIDO
       const tripId = uuidv4();
       const tripData = {
         id: tripId,
         date: event.date,
         route,
-        project: clientName, // El nombre del cliente va aquí (sin projectId)
-        projectId: undefined, // Sin projectId, el sistema lo tratará como client metadata
+        project: "DESCONOCIDO", // Proyecto estándar para importaciones
+        projectId: undefined, // Sin projectId, el sistema guardará como cliente metadata
+        clientName: clientName, // Nombre del cliente en metadata
         purpose: event.description?.substring(0, 500) || "",
         passengers: 0,
         distance,
@@ -959,20 +957,7 @@ export default function CalendarPage() {
                   <p className="text-sm font-medium">{t("calendar.importWillCreate")}</p>
                   <ul className="text-xs text-muted-foreground space-y-1 ml-4 list-disc">
                     <li>{t("calendar.importClientFromTitle")}</li>
-                    <li>
-                      {t("calendar.importRouteFromBase")}
-                      {selectedEvent?.location && (
-                        <div className="mt-1 text-xs text-muted-foreground/80">
-                          {profile.baseAddress && profile.city && profile.country ? (
-                            <>
-                              {[profile.baseAddress, profile.city, profile.country].filter(Boolean).join(", ")} → {selectedEvent.location} → {[profile.baseAddress, profile.city, profile.country].filter(Boolean).join(", ")}
-                            </>
-                          ) : null}
-                        </div>
-                      )}
-                    </li>
                     <li>{t("calendar.importProjectManual")}</li>
-                    <li>{t("calendar.importDistanceCalculated")}</li>
                   </ul>
                 </div>
               </div>
