@@ -21,6 +21,7 @@ interface ReportTrip {
   route: string[];
   passengers: number;
   distance: number;
+  reimbursement: number;
 }
 
 /* Mock report data (unused)
@@ -188,6 +189,15 @@ export default function ReportView() {
     })
     .sort((a, b) => getTripTime(a.date) - getTripTime(b.date) || a.id.localeCompare(b.id));
 
+  // Parse rates from profile
+  const parseLocaleNumber = (value: string | undefined) => {
+    if (!value) return 0;
+    const parsed = parseFloat(value.replace(",", "."));
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const ratePerKm = parseLocaleNumber(profile.ratePerKm);
+  const passengerSurcharge = parseLocaleNumber(profile.passengerSurcharge);
+
   const reportTrips: ReportTrip[] = filteredTrips.map((trip) => {
     const time = getTripTime(trip.date);
     const dateLabel = time
@@ -197,6 +207,7 @@ export default function ReportView() {
     const passengers = Number.isFinite(trip.passengers) ? trip.passengers : 0;
     const distance = Number.isFinite(trip.distance) ? trip.distance : 0;
     const producer = trip.clientName || getProducerForProject(trip.project);
+    const reimbursement = (distance * ratePerKm) + (passengers * passengerSurcharge);
 
     return {
       date: dateLabel,
@@ -205,11 +216,13 @@ export default function ReportView() {
       route: trip.route,
       passengers,
       distance,
+      reimbursement,
     };
   });
 
   const trips = reportTrips;
   const totalDistance = trips.reduce((acc, trip) => acc + (Number.isFinite(trip.distance) ? trip.distance : 0), 0);
+  const totalReimbursement = trips.reduce((acc, trip) => acc + (Number.isFinite(trip.reimbursement) ? trip.reimbursement : 0), 0);
 
   const downloadTextFile = (content: string, fileName: string, mimeType: string) => {
     const blob = new Blob([content], { type: mimeType });
@@ -252,6 +265,7 @@ export default function ReportView() {
     t("reportView.colRoute"),
     t("reportView.colPassengers"),
     t("reportView.colDistanceKm"),
+    t("reportView.colReimbursement"),
   ];
 
   const pdfHeaders = [
@@ -261,6 +275,7 @@ export default function ReportView() {
     t("reportView.colRoute"),
     t("reportView.colPassengersShort"),
     t("reportView.colDistanceKm"),
+    t("reportView.colReimbursement"),
   ];
 
   const rows = trips.map((trip) => [
@@ -270,6 +285,7 @@ export default function ReportView() {
     trip.route.join(" -> "),
     trip.passengers,
     trip.distance,
+    trip.reimbursement.toFixed(2),
   ]);
 
   const pdfRows = trips.map((trip) => [
@@ -279,6 +295,7 @@ export default function ReportView() {
     trip.route.join(" -> "),
     String(trip.passengers),
     trip.distance.toFixed(1),
+    `${trip.reimbursement.toFixed(2)} €`,
   ]);
 
   const canSave = !savedReport && filteredTrips.length > 0;
@@ -573,15 +590,21 @@ export default function ReportView() {
                   <span className="font-semibold">{t("reportView.driverLabel")}:</span> {driver}
                 </p>
                 <p>
+                  <span className="font-semibold">{t("reportView.licensePlateLabel")}:</span> {licensePlate}
+                </p>
+                <p>
                   <span className="font-semibold">{t("reportView.addressLabel")}:</span> {address}
                 </p>
               </div>
               <div className="sm:text-right">
                 <p>
-                  <span className="font-semibold">{t("reportView.licensePlateLabel")}:</span> {licensePlate}
+                  <span className="font-semibold">{t("reportView.projectLabel")}:</span> {projectLabel}
                 </p>
                 <p>
-                  <span className="font-semibold">{t("reportView.projectLabel")}:</span> {projectLabel}
+                  <span className="font-semibold">{t("reportView.passengerSurchargeLabel")}:</span> {profile.passengerSurcharge || "0"} €
+                </p>
+                <p>
+                  <span className="font-semibold">{t("reportView.ratePerKmLabel")}:</span> {profile.ratePerKm || "0"} €
                 </p>
               </div>
             </div>
@@ -590,14 +613,15 @@ export default function ReportView() {
 
             {/* Report Table */}
             <div className="overflow-x-auto -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 print:overflow-visible print:mx-0 print:px-0">
-              <table className="w-full text-xs sm:text-sm min-w-[600px] print:min-w-0 print:text-[9px] print:leading-tight table-fixed print:table-fixed">
+              <table className="w-full text-xs sm:text-sm min-w-[700px] print:min-w-0 print:text-[9px] print:leading-tight table-fixed print:table-fixed">
                 <colgroup>
+                  <col style={{ width: "9%" }} />
+                  <col style={{ width: "12%" }} />
+                  <col style={{ width: "14%" }} />
+                  <col style={{ width: "36%" }} />
+                  <col style={{ width: "5%" }} />
                   <col style={{ width: "10%" }} />
                   <col style={{ width: "14%" }} />
-                  <col style={{ width: "18%" }} />
-                  <col style={{ width: "41%" }} />
-                  <col style={{ width: "5%" }} />
-                  <col style={{ width: "12%" }} />
                 </colgroup>
                 <thead>
                   <tr className="border-b border-slate-600 print:border-black">
@@ -611,6 +635,7 @@ export default function ReportView() {
                       {t("reportView.colPassengersShort")}
                     </th>
                     <th className="text-right py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap">{t("reportView.colDistanceKm")}</th>
+                    <th className="text-right py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap">{t("reportView.colReimbursement")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -631,8 +656,11 @@ export default function ReportView() {
                       <td className="py-3 sm:py-4 px-2 print:py-2 print:px-1 align-top text-center hidden sm:table-cell">
                         {trip.passengers}
                       </td>
-                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-1 align-top text-right font-semibold whitespace-nowrap">
+                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-1 align-top text-right whitespace-nowrap">
                         {trip.distance.toFixed(1)}
+                      </td>
+                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-1 align-top text-right font-semibold whitespace-nowrap">
+                        {trip.reimbursement.toFixed(2)} €
                       </td>
                     </tr>
                   ))}
@@ -648,6 +676,21 @@ export default function ReportView() {
                     <td className="py-4 px-2 print:py-2 print:px-1 text-right font-bold text-sm sm:text-lg print:text-[10px] whitespace-nowrap">
                       {totalDistance.toFixed(1)} km
                     </td>
+                    <td className="py-4 px-2 print:py-2 print:px-1 text-right font-bold text-sm sm:text-lg print:text-[10px] whitespace-nowrap">
+                    </td>
+                  </tr>
+                  <tr className="border-t border-slate-500/50 print:hidden">
+                    <td colSpan={5} className="py-4 px-2 print:py-2 print:px-1 text-right font-semibold hidden sm:table-cell">
+                      {t("reportView.totalReimbursementLabel")}:
+                    </td>
+                    <td className="py-4 px-2 text-left font-semibold sm:hidden" colSpan={3}>
+                      {t("reportView.colReimbursement")}:
+                    </td>
+                    <td className="py-4 px-2 print:py-2 print:px-1 text-right whitespace-nowrap">
+                    </td>
+                    <td className="py-4 px-2 print:py-2 print:px-1 text-right font-bold text-sm sm:text-lg print:text-[10px] whitespace-nowrap text-green-400">
+                      {totalReimbursement.toFixed(2)} €
+                    </td>
                   </tr>
                   <tr className="hidden print:table-row border-t-2 border-black">
                     <td colSpan={5} className="py-2 px-1 text-right font-semibold">
@@ -655,6 +698,18 @@ export default function ReportView() {
                     </td>
                     <td className="py-2 px-1 text-right font-semibold text-[10px] whitespace-nowrap">
                       {totalDistance.toFixed(1)} km
+                    </td>
+                    <td className="py-2 px-1 text-right font-semibold text-[10px] whitespace-nowrap">
+                    </td>
+                  </tr>
+                  <tr className="hidden print:table-row border-t border-black">
+                    <td colSpan={5} className="py-2 px-1 text-right font-semibold">
+                      {t("reportView.totalReimbursementLabel")}:
+                    </td>
+                    <td className="py-2 px-1 text-right whitespace-nowrap">
+                    </td>
+                    <td className="py-2 px-1 text-right font-bold text-[10px] whitespace-nowrap">
+                      {totalReimbursement.toFixed(2)} €
                     </td>
                   </tr>
                 </tfoot>
