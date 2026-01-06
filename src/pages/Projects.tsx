@@ -46,6 +46,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { ProjectDetailModal } from "@/components/projects/ProjectDetailModal";
+import { ProjectEditModal } from "@/components/projects/ProjectEditModal";
 import { Project, useProjects } from "@/contexts/ProjectsContext";
 import { useTrips } from "@/contexts/TripsContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -112,11 +113,10 @@ export default function Projects() {
 
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
-  const [newProjectName, setNewProjectName] = useState("");
-  const [newProjectProducer, setNewProjectProducer] = useState("");
-  const [newProjectDescription, setNewProjectDescription] = useState("");
-  const [newProjectRatePerKm, setNewProjectRatePerKm] = useState("0.30");
-  const [newProjectRatePerPassenger, setNewProjectRatePerPassenger] = useState("0.05");
+
+  const editingProject = useMemo(() => 
+    projects.find((p) => p.id === editingProjectId) || null
+  , [projects, editingProjectId]);
 
 
 
@@ -416,14 +416,6 @@ export default function Projects() {
 
   const openEditProject = (project: Project) => {
     setEditingProjectId(project.id);
-    setNewProjectName(project.name ?? "");
-    setNewProjectProducer(project.producer ?? "");
-    setNewProjectDescription(project.description ?? "");
-    setNewProjectRatePerKm(
-      typeof project.ratePerKm === "number" && Number.isFinite(project.ratePerKm)
-        ? String(project.ratePerKm)
-        : "0.30",
-    );
     setCreateProjectOpen(true);
   };
 
@@ -517,26 +509,16 @@ export default function Projects() {
     });
   };
 
-  const resetCreateProjectForm = () => {
-    setEditingProjectId(null);
-    setNewProjectName("");
-    setNewProjectProducer("");
-    setNewProjectDescription("");
-    setNewProjectRatePerKm("0.30");
-    setNewProjectRatePerPassenger("0.05");
-  };
-
-  const handleCreateProject = async () => {
-    const name = newProjectName.trim();
-    if (!name) {
-      toast({
-        title: editingProjectId ? t("projects.edit") : t("projects.createNewProject"),
-        description: t("projects.projectName") + " es obligatorio",
-        variant: "destructive",
-      });
-      return;
-    }
-
+  const handleSaveProject = async (data: {
+    name: string;
+    producer?: string;
+    description?: string;
+    ratePerKm: number;
+    ratePerPassenger?: number;
+  }) => {
+    const { name, producer, description, ratePerKm, ratePerPassenger } = data;
+    
+    // Check for duplicates
     const exists = projects.some((p) => p.name.trim().toLowerCase() === name.toLowerCase() && p.id !== editingProjectId);
     if (exists) {
       toast({
@@ -544,22 +526,15 @@ export default function Projects() {
         description: "Ya existe un proyecto con ese nombre",
         variant: "destructive",
       });
-      return;
+      throw new Error("Duplicate project name");
     }
-
-    const ratePerKm = Number.parseFloat(String(newProjectRatePerKm).replace(",", "."));
-    const normalizedRatePerKm = Number.isFinite(ratePerKm) ? ratePerKm : 0;
-
-    // NOTE: rate per passenger is not stored in `projects` table currently.
-    // Keep the input for now, but don't persist it.
-    void newProjectRatePerPassenger;
 
     if (editingProjectId) {
       await updateProject(editingProjectId, {
         name,
-        producer: newProjectProducer.trim() || undefined,
-        description: newProjectDescription.trim() || undefined,
-        ratePerKm: normalizedRatePerKm,
+        producer,
+        description,
+        ratePerKm,
       });
 
       toast({
@@ -570,9 +545,9 @@ export default function Projects() {
       await addProject({
         id: uuidv4(),
         name,
-        producer: newProjectProducer.trim() || undefined,
-        description: newProjectDescription.trim() || undefined,
-        ratePerKm: normalizedRatePerKm,
+        producer,
+        description,
+        ratePerKm,
         starred: false,
         archived: false,
         trips: 0,
@@ -590,9 +565,7 @@ export default function Projects() {
         description: "Proyecto creado",
       });
     }
-
-    setCreateProjectOpen(false);
-    resetCreateProjectForm();
+    // Form reset is handled by Modal unmount/open change
   };
 
   const isAllSelected = filteredProjects.length > 0 && selectedIds.size === filteredProjects.length;
@@ -618,92 +591,24 @@ export default function Projects() {
                 <span className="hidden sm:inline">{t("projects.delete")} ({selectedIds.size})</span>
               </Button>
             )}
-            <Dialog
+            <ProjectEditModal
               open={createProjectOpen}
               onOpenChange={(open) => {
                 setCreateProjectOpen(open);
-                if (!open) resetCreateProjectForm();
+                if (!open) setEditingProjectId(null);
+              }}
+              project={editingProject}
+              onSave={handleSaveProject}
+            />
+            <Button
+              onClick={() => {
+                setEditingProjectId(null);
+                setCreateProjectOpen(true);
               }}
             >
-              <Button
-                onClick={() => {
-                  resetCreateProjectForm();
-                  setCreateProjectOpen(true);
-                }}
-              >
-                <Plus className="w-4 h-4" />
-                {t("projects.newProject")}
-              </Button>
-              <DialogContent className="glass max-w-lg">
-                <DialogHeader>
-                  <DialogTitle>{editingProjectId ? t("projects.edit") : t("projects.createNewProject")}</DialogTitle>
-                  <DialogDescription className="sr-only">
-                    {editingProjectId ? t("projects.edit") : t("projects.createNewProject")}
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="name">{t("projects.projectName")}</Label>
-                    <Input
-                      id="name"
-                      placeholder="e.g., Film Production XY"
-                      className="bg-secondary/50"
-                      value={newProjectName}
-                      onChange={(e) => setNewProjectName(e.target.value)}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="producer">{t("projects.company")}</Label>
-                    <Input
-                      id="producer"
-                      placeholder={t("projects.companyPlaceholder")}
-                      className="bg-secondary/50"
-                      value={newProjectProducer}
-                      onChange={(e) => setNewProjectProducer(e.target.value)}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="description">{t("projects.description")}</Label>
-                    <Textarea
-                      id="description"
-                      placeholder={t("projects.descriptionPlaceholder")}
-                      className="bg-secondary/50 resize-none"
-                      value={newProjectDescription}
-                      onChange={(e) => setNewProjectDescription(e.target.value)}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="rate">{t("projects.ratePerKm")}</Label>
-                      <Input
-                        id="rate"
-                        type="number"
-                        step="0.01"
-                        placeholder="0.30"
-                        className="bg-secondary/50"
-                        value={newProjectRatePerKm}
-                        onChange={(e) => setNewProjectRatePerKm(e.target.value)}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="ratePassenger">{t("projects.ratePerPassenger")}</Label>
-                      <Input
-                        id="ratePassenger"
-                        type="number"
-                        step="0.01"
-                        placeholder="0.05"
-                        className="bg-secondary/50"
-                        value={newProjectRatePerPassenger}
-                        onChange={(e) => setNewProjectRatePerPassenger(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <Button className="w-full mt-2" onClick={handleCreateProject}>
-                    {editingProjectId ? t("projects.edit") : t("projects.createProject")}
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+              <Plus className="w-4 h-4" />
+              {t("projects.newProject")}
+            </Button>
           </div>
         </div>
 
