@@ -258,6 +258,11 @@ export default function ReportView() {
     ? t("reportView.colClient") 
     : t("reportView.colCompanyProducer");
 
+  // For HTML table, split company/producer into two lines
+  const companyOrClientLabelHtml = reportType === "general" 
+    ? t("reportView.colClient") 
+    : (<>{t("reportView.colCompanyProducer").split("/")[0]}<br/>{t("reportView.colCompanyProducer").split("/")[1]}</>);
+
   const headers = [
     t("reportView.colDate"),
     t("reportView.colProject"),
@@ -634,8 +639,8 @@ export default function ReportView() {
                   <tr className="border-b border-slate-600 print:border-black">
                     <th className="text-left py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap">{t("reportView.colDate")}</th>
                     <th className="text-left py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap">{t("reportView.colProject")}</th>
-                    <th className="text-left py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap hidden md:table-cell">
-                      {companyOrClientLabel}
+                    <th className="text-left py-3 px-2 print:py-2 print:px-1 font-semibold hidden md:table-cell leading-tight">
+                      {companyOrClientLabelHtml}
                     </th>
                     <th className="text-left py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap">{t("reportView.colRoute")}</th>
                     <th className="text-center py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap hidden sm:table-cell">
