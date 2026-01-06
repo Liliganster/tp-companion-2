@@ -54,7 +54,11 @@ export function useClimatiqFuelFactor(fuelType: ClimatiqFuelFactor["fuelType"] |
         // If cache exists and hasn't expired, use it
         if (dbCache && !dbError) {
           const expiresAt = new Date(dbCache.expires_at);
-          if (now < expiresAt) {
+          // NEW: Invalidate cache if we need volume-based (liter) factors for gasoline but only have distance ones.
+          // This forces a re-fetch now that we've updated the API logic.
+          const isGasolineAndInvalid = fuelType === "gasoline" && !dbCache.kg_co2e_per_liter;
+          
+          if (now < expiresAt && !isGasolineAndInvalid) {
             const payload: ClimatiqFuelFactor = {
               fuelType,
               kgCo2ePerLiter: dbCache.kg_co2e_per_liter || undefined,
