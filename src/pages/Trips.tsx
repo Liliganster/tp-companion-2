@@ -121,13 +121,15 @@ export default function Trips() {
     }
   };
 
-  const [selectedProject, setSelectedProject] = useState(() => {
+  const [selectedProject, setSelectedProject] = useState<string>(() => {
     const value = loadTripsFilters()?.selectedProject;
-    return value && value.trim() ? value : "all";
+    if (!value || typeof value !== "string" || !value.trim()) return "all";
+    return value;
   });
-  const [selectedYear, setSelectedYear] = useState(() => {
+  const [selectedYear, setSelectedYear] = useState<string>(() => {
     const value = loadTripsFilters()?.selectedYear;
-    return value && value.trim() ? value : new Date().getFullYear().toString();
+    if (!value || typeof value !== "string" || !value.trim()) return new Date().getFullYear().toString();
+    return value;
   });
   const [tripPrefill, setTripPrefill] = useState<{
     route?: string[];
