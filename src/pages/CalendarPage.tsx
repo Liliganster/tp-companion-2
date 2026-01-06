@@ -992,29 +992,50 @@ export default function CalendarPage() {
                     </div>
                   )}
 
-                  <div>
-                    <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {t("tripModal.date")}
-                    </Label>
-                    <p className="text-sm">
+{/* Date moved to summary */}
+                </div>
+
+                {/* Info about how trip will be created */}
+                <div className="rounded-lg bg-secondary/50 p-3 grid gap-2 text-sm">
+                  <div className="grid grid-cols-[140px_1fr] gap-1">
+                    <span className="text-muted-foreground">{t("tripModal.date")}:</span>
+                    <span className="font-medium capitalize">
                       {new Date(selectedEvent.date + "T00:00:00").toLocaleDateString(locale, {
                         weekday: "long",
                         year: "numeric",
                         month: "long",
                         day: "numeric",
                       })}
-                    </p>
-                  </div>
-                </div>
+                    </span>
 
-                {/* Info about how trip will be created */}
-                <div className="rounded-lg bg-secondary/50 p-3 space-y-2">
-                  <p className="text-sm font-medium">{t("calendar.importWillCreate")}</p>
-                  <ul className="text-xs text-muted-foreground space-y-1 ml-4 list-disc">
-                    <li>{t("calendar.importClientFromTitle")}</li>
-                    <li>{t("calendar.importProjectManual")}</li>
-                  </ul>
+                    <span className="text-muted-foreground">{t("projects.company")}:</span>
+                    <span className="font-medium">{selectedEvent.title}</span>
+
+                    <span className="text-muted-foreground">{t("tripModal.project")}:</span>
+                    <span className="font-medium">
+                      {(() => {
+                        const clientName = selectedEvent.title.trim() || "Unknown Client";
+                        const existing = projects.find(p => p.name.startsWith("Unknown") && p.producer?.toLowerCase() === clientName.toLowerCase());
+                        if (existing) return existing.name;
+                        
+                        const unknownProjects = projects.filter((p) => p.name.startsWith("Unknown"));
+                        let maxNum = 0;
+                        for (const p of unknownProjects) {
+                            if (p.name === "Unknown") maxNum = Math.max(maxNum, 1);
+                            else {
+                                const match = p.name.match(/^Unknown (\d+)$/);
+                                if (match) maxNum = Math.max(maxNum, parseInt(match[1], 10));
+                            }
+                        }
+                        return (maxNum + 1) === 1 ? "Unknown" : `Unknown ${(maxNum + 1)}`;
+                      })()}
+                    </span>
+
+                    <span className="text-muted-foreground">{t("tripModal.route")}:</span>
+                    <span className="font-medium text-xs break-words">
+                      {extractLocationsFromEvent(selectedEvent).join(" → ")}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
