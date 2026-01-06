@@ -764,14 +764,16 @@ export default function Projects() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="bg-popover">
-                              <DropdownMenuItem onClick={() => {
+                              <DropdownMenuItem onClick={(e) => {
+                                e.stopPropagation();
                                 openProjectDetails(project);
                               }}>
                                 <Eye className="w-4 h-4 mr-2" />
                                 {t("projects.viewDetails")}
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   openEditProject(project);
                                 }}
                               >
@@ -780,6 +782,7 @@ export default function Projects() {
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="text-destructive"
+                                onClick={(e) => e.stopPropagation()}
                                 onSelect={(e) => {
                                   e.preventDefault();
                                   void handleDeleteProject(project);
