@@ -258,10 +258,10 @@ export default function ReportView() {
     ? t("reportView.colClient") 
     : t("reportView.colCompanyProducer");
 
-  // For HTML table, split company/producer into two lines
+  // For HTML table, split company/producer into two lines keeping the /
   const companyOrClientLabelHtml = reportType === "general" 
     ? t("reportView.colClient") 
-    : (<>{t("reportView.colCompanyProducer").split("/")[0]}<br/>{t("reportView.colCompanyProducer").split("/")[1]}</>);
+    : (<>{t("reportView.colCompanyProducer").split("/")[0]}/<br/>{t("reportView.colCompanyProducer").split("/")[1]}</>);
 
   const headers = [
     t("reportView.colDate"),
