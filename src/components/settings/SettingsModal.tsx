@@ -568,6 +568,21 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                             </p>
                           </div>
                         )}
+                        
+                        {fuelFactor.apiPayload && (
+                          <div className="mt-2 pt-2 border-t border-border/50">
+                             <details>
+                               <summary className="text-[10px] text-primary cursor-pointer hover:underline select-none">
+                                 {t("settings.debugViewRawData") || "Ver respuesta API (JSON)"}
+                               </summary>
+                               <ScrollArea className="h-48 w-full rounded border border-border bg-background/50 mt-2">
+                                 <pre className="p-2 text-[10px] font-mono whitespace-pre-wrap break-all">
+                                   {JSON.stringify(fuelFactor.apiPayload, null, 2)}
+                                 </pre>
+                               </ScrollArea>
+                             </details>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

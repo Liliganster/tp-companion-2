@@ -65,6 +65,7 @@ export function useClimatiqFuelFactor(fuelType: ClimatiqFuelFactor["fuelType"] |
               activityId: dbCache.activity_id || undefined,
               dataVersion: dbCache.data_version || undefined,
               cachedAt: dbCache.cached_at,
+              apiPayload: dbCache.raw_response,
             };
             writeOfflineCache(offlineCacheKey, payload);
             console.log(`[useClimatiqFuelFactor] Using cached data for ${fuelType}`);
@@ -99,6 +100,7 @@ export function useClimatiqFuelFactor(fuelType: ClimatiqFuelFactor["fuelType"] |
           activityId: typeof data?.activityId === "string" ? data.activityId : undefined,
           dataVersion: typeof data?.dataVersion === "string" ? data.dataVersion : undefined,
           cachedAt: new Date().toISOString(),
+          apiPayload: data,
         };
 
         // 3. Save to database for next time
