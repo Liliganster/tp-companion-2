@@ -5,8 +5,7 @@ const ESTIMATE_URL = "https://api.climatiq.io/data/v1/estimate";
 
 const DEFAULT_DATA_VERSION = "^21";
 
-// Diesel: EU region with volume (liters)
-// Gasoline: AT region with distance (km) - UBA Austria data
+// Only diesel supported - EU region with volume (liters)
 const FUEL_CONFIG: Record<FuelType, {
   activityId: string;
   region: string | null;
@@ -14,13 +13,6 @@ const FUEL_CONFIG: Record<FuelType, {
   fallbackValue: number;
   unit: string;
 }> = {
-  gasoline: {
-    activityId: "fuel-type_motor_gasoline-fuel_use_na",
-    region: "AT", // Austria
-    paramType: "volume",
-    fallbackValue: 2.31, // Standard kg CO2e/L fallback if API fails
-    unit: "kgCo2ePerLiter",
-  },
   diesel: {
     activityId: "fuel-type_diesel-fuel_use_na",
     region: "EU",
@@ -30,7 +22,7 @@ const FUEL_CONFIG: Record<FuelType, {
   },
 };
 
-type FuelType = "gasoline" | "diesel";
+type FuelType = "diesel";
 type ActivitySelection = { activityId: string; region: string };
 
 
@@ -38,14 +30,13 @@ function normalizeFuelType(input: unknown): FuelType | null {
   if (typeof input !== "string") return null;
   const v = input.trim().toLowerCase();
   if (!v) return null;
-  if (v === "gasoline" || v === "petrol") return "gasoline";
   if (v === "diesel") return "diesel";
   return null;
 }
 
 function getEnvActivitySelection(fuelType: FuelType): ActivitySelection | null {
   const fromEnv = fuelType === "gasoline" ? process.env.CLIMATIQ_ACTIVITY_ID_GASOLINE : process.env.CLIMATIQ_ACTIVITY_ID_DIESEL;
-  const activityId = typeof fromEnv === "string" ? fromEnv.trim() : "";
+  const activityId
   if (!activityId) return null;
   return { activityId, region: FUEL_CONFIG[fuelType].region };
 }

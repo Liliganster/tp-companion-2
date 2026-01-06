@@ -4,9 +4,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { isOffline, readOfflineCache, readOfflineCacheEntry, writeOfflineCache } from "@/lib/offlineCache";
 
 export type ClimatiqFuelFactor = {
-  fuelType: "gasoline" | "diesel";
+  fuelType: "diesel";
   kgCo2ePerLiter?: number;  // For diesel (volume-based)
-  kgCo2ePerKm?: number;     // For gasoline (distance-based)
   region: string | null;
   source?: string;
   year?: number | null;
