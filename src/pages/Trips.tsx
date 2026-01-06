@@ -111,18 +111,24 @@ export default function Trips() {
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== "object") return null;
-      const selectedProject = typeof parsed.selectedProject === "string" ? parsed.selectedProject : null;
-      const selectedYear = typeof parsed.selectedYear === "string" ? parsed.selectedYear : null;
+      const selectedProjectRaw = typeof parsed.selectedProject === "string" ? parsed.selectedProject : null;
+      const selectedYearRaw = typeof parsed.selectedYear === "string" ? parsed.selectedYear : null;
+      const selectedProject = selectedProjectRaw && selectedProjectRaw.trim() ? selectedProjectRaw : null;
+      const selectedYear = selectedYearRaw && selectedYearRaw.trim() ? selectedYearRaw : null;
       return { selectedProject, selectedYear };
     } catch {
       return null;
     }
   };
 
-  const [selectedProject, setSelectedProject] = useState(() => loadTripsFilters()?.selectedProject ?? "all");
-  const [selectedYear, setSelectedYear] = useState(
-    () => loadTripsFilters()?.selectedYear ?? new Date().getFullYear().toString()
-  );
+  const [selectedProject, setSelectedProject] = useState(() => {
+    const value = loadTripsFilters()?.selectedProject;
+    return value && value.trim() ? value : "all";
+  });
+  const [selectedYear, setSelectedYear] = useState(() => {
+    const value = loadTripsFilters()?.selectedYear;
+    return value && value.trim() ? value : new Date().getFullYear().toString();
+  });
   const [tripPrefill, setTripPrefill] = useState<{
     route?: string[];
     distance?: number;
