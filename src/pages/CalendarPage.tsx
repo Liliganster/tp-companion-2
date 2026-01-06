@@ -227,16 +227,47 @@ export default function CalendarPage() {
         return;
       }
       
-      // Crear proyecto "Unknown" con el título del evento como producer
-      const existingProject = projects.find((p) => p.name === "Unknown");
-      let projectId: string | undefined;
+      // Crear proyecto "Unknown" agrupado por cliente (event.title)
+      const clientName = event.title.trim() || "Unknown Client";
       
-      if (!existingProject) {
+      // Buscar proyecto existente "Unknown..." que tenga este mismo producer/cliente
+      const existingProject = projects.find(
+        (p) => p.name.startsWith("Unknown") && p.producer?.toLowerCase() === clientName.toLowerCase()
+      );
+
+      let projectId: string | undefined;
+      let finalProjectName = "Unknown";
+      
+      if (existingProject) {
+        projectId = existingProject.id;
+        finalProjectName = existingProject.name;
+      } else {
+        // Calcular el siguiente número para "Unknown X"
+        const unknownProjects = projects.filter((p) => p.name.startsWith("Unknown"));
+        let maxNum = 0;
+        
+        for (const p of unknownProjects) {
+          if (p.name === "Unknown") {
+            maxNum = Math.max(maxNum, 1);
+          } else {
+            const match = p.name.match(/^Unknown (\d+)$/);
+            if (match) {
+              maxNum = Math.max(maxNum, parseInt(match[1], 10));
+            }
+          }
+        }
+        
+        const nextNum = maxNum + 1;
+        // Si es el primero (1), se puede llamar "Unknown" o "Unknown 1". 
+        // El usuario dijo "por defecto es unknow" -> asumo el primero es "Unknown", siguientes "Unknown 2", etc.
+        const newProjectName = nextNum === 1 ? "Unknown" : `Unknown ${nextNum}`;
+        finalProjectName = newProjectName;
+
         // Crear nuevo proyecto
         const newProject = {
           id: uuidv4(),
-          name: "Unknown",
-          producer: event.title.trim(),
+          name: newProjectName,
+          producer: clientName,
           description: "Imported from Google Calendar",
           ratePerKm: 0.3,
           starred: false,
@@ -252,8 +283,6 @@ export default function CalendarPage() {
         
         const result = await addProject(newProject);
         projectId = newProject.id;
-      } else {
-        projectId = existingProject.id;
       }
       
       // Crear viaje con el proyecto
@@ -262,7 +291,7 @@ export default function CalendarPage() {
         id: tripId,
         date: event.date,
         route,
-        project: "Unknown",
+        project: finalProjectName,
         projectId: projectId,
         purpose: event.description?.substring(0, 500) || "",
         passengers: 0,
