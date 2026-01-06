@@ -227,13 +227,11 @@ export default function CalendarPage() {
         return;
       }
       
-      // Crear o buscar proyecto "Unknown" con el título del evento como producer
-      let projectId: string | undefined;
+      // Crear proyecto "Unknown" con el título del evento como producer
       const existingProject = projects.find((p) => p.name === "Unknown");
+      let projectId: string | undefined;
       
-      if (existingProject) {
-        projectId = existingProject.id;
-      } else {
+      if (!existingProject) {
         // Crear nuevo proyecto
         const newProject = {
           id: uuidv4(),
@@ -252,8 +250,10 @@ export default function CalendarPage() {
           co2Emissions: 0,
         };
         
-        await addProject(newProject);
+        const result = await addProject(newProject);
         projectId = newProject.id;
+      } else {
+        projectId = existingProject.id;
       }
       
       // Crear viaje con el proyecto
