@@ -128,12 +128,13 @@ export default function CalendarPage() {
 
   // Extraer ubicaciones del evento - siempre usa dirección base
   const extractLocationsFromEvent = (event: CalendarEvent): string[] => {
-    // Construir dirección base
-    const baseFullAddress = profile.baseAddress && profile.city && profile.country
-      ? [profile.baseAddress, profile.city, profile.country].filter(Boolean).join(", ")
-      : null;
+    // Construir dirección base exactamente igual que AddTripModal
+    const baseLocation = [profile.baseAddress, profile.city, profile.country]
+      .map((p) => p?.trim())
+      .filter(Boolean)
+      .join(", ");
     
-    if (!baseFullAddress) {
+    if (!baseLocation) {
       return [];
     }
     
@@ -142,11 +143,11 @@ export default function CalendarPage() {
     
     if (!eventLocation) {
       // Si no hay ubicación en el evento, viaje de ida y vuelta a la base
-      return [baseFullAddress, baseFullAddress];
+      return [baseLocation, baseLocation];
     }
     
-    // Viaje: base -> ubicación del evento -> base (ida y vuelta con parada intermedia)
-    return [baseFullAddress, eventLocation, baseFullAddress];
+    // Viaje: base -> ubicación del evento -> base (exactamente como AddTripModal con waypoints)
+    return [baseLocation, eventLocation, baseLocation];
   };
 
   // Calcular distancia entre ubicaciones usando Google Directions API
@@ -962,9 +963,9 @@ export default function CalendarPage() {
                       {t("calendar.importRouteFromBase")}
                       {selectedEvent?.location && (
                         <div className="mt-1 text-xs text-muted-foreground/80">
-                          {profile.baseAddress && profile.city ? (
+                          {profile.baseAddress && profile.city && profile.country ? (
                             <>
-                              {profile.city} → {selectedEvent.location} → {profile.city}
+                              {[profile.baseAddress, profile.city, profile.country].filter(Boolean).join(", ")} → {selectedEvent.location} → {[profile.baseAddress, profile.city, profile.country].filter(Boolean).join(", ")}
                             </>
                           ) : null}
                         </div>
