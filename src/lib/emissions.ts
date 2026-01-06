@@ -53,17 +53,13 @@ export function calculateTripEmissions(input: TripEmissionsInput): TripEmissions
     
     const liters = (distanceKm * fuelLPer100Km) / 100;
     
-    // For gasoline: convert kgCo2ePerKm to kgCo2ePerLiter using user's consumption
+    // For gasoline: use kgCo2ePerLiter explicitly.
+    // The API now returns a volume-based factor (Well-to-Wheel) for Austria.
     if (fuelType === "gasoline") {
-      const perKm = input.fuelKgCo2ePerKm == null ? null : Number(input.fuelKgCo2ePerKm);
-      if (Number.isFinite(perKm) && perKm > 0) {
-        // Convert: kgCo2ePerLiter = kgCo2ePerKm × 100 / consumo_L100km
-        const perLiter = perKm * 100 / fuelLPer100Km;
-        const co2Kg = liters * perLiter;
-        return { co2Kg: Math.round(co2Kg * 10) / 10, method: "fuel", liters: Math.round(liters * 10) / 10 };
-      }
-      // Fallback to default if no API factor
-      const factor = GASOLINE_KG_CO2_PER_LITER;
+      const perLiter = input.fuelKgCo2ePerLiter == null ? null : Number(input.fuelKgCo2ePerLiter);
+      // Use specific API factor if available, otherwise standard constant
+      const factor = Number.isFinite(perLiter) && perLiter > 0 ? perLiter : GASOLINE_KG_CO2_PER_LITER;
+      
       const co2Kg = liters * factor;
       return { co2Kg: Math.round(co2Kg * 10) / 10, method: "fuel", liters: Math.round(liters * 10) / 10 };
     }

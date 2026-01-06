@@ -15,11 +15,11 @@ const FUEL_CONFIG: Record<FuelType, {
   unit: string;
 }> = {
   gasoline: {
-    activityId: "passenger_vehicle-vehicle_type_car-fuel_source_gasoline-engine_size_na-vehicle_age_na-vehicle_weight_na",
-    region: "AT",
-    paramType: "distance",
-    fallbackValue: 0.258, // UBA Austria 2022 kg CO2e/km
-    unit: "kgCo2ePerKm",
+    activityId: "fuel-type_motor_gasoline-fuel_use_na",
+    region: "AT", // Austria
+    paramType: "volume",
+    fallbackValue: 2.31, // Standard kg CO2e/L fallback if API fails
+    unit: "kgCo2ePerLiter",
   },
   diesel: {
     activityId: "fuel-type_diesel-fuel_use_na",
