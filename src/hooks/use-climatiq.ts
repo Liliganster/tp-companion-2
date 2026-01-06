@@ -29,7 +29,7 @@ export function useClimatiqFuelFactor(fuelType: ClimatiqFuelFactor["fuelType"] |
   return useQuery({
     queryKey: ["climatiq", "fuelFactor", fuelType] as const,
     enabled,
-    staleTime: 1000 * 60 * 60, // 1 hour in-memory cache
+    staleTime: 0, // No cache - always fetch fresh data
     retry: 1,
     refetchOnWindowFocus: false,
     queryFn: async (): Promise<ClimatiqFuelFactor | null> => {
