@@ -100,6 +100,7 @@ const es = {
   "projects.ratePerKm": "Tarifa por km (€)",
   "projects.ratePerPassenger": "Tarifa por pasajero (€)",
   "projects.createProject": "Crear proyecto",
+  "projects.filterProducer": "Productora",
   "projects.searchPlaceholder": "Buscar proyectos...",
   "projects.year": "Año",
   "projects.allTime": "Todo el tiempo",
@@ -242,6 +243,7 @@ const es = {
 
   // Not found
   "notFound.message": "¡Ups! Página no encontrada",
+  "common.allCompanies": "Todas las empresas",
   "notFound.returnHome": "Volver al inicio",
 
   // Misc / charts
@@ -833,6 +835,7 @@ const en: Record<I18nKey, string> = {
   "projects.ratePerKm": "Rate per km (€)",
   "projects.ratePerPassenger": "Rate per passenger (€)",
   "projects.createProject": "Create project",
+  "projects.filterProducer": "Producer",
   "projects.searchPlaceholder": "Search projects...",
   "projects.year": "Year",
   "projects.allTime": "All time",
@@ -964,6 +967,7 @@ const en: Record<I18nKey, string> = {
   "auth.and": "and",
   "auth.terms": "Terms of Service",
   "auth.privacy": "Privacy Policy",
+  "common.allCompanies": "All Companies",
   "notFound.message": "Oops! Page not found",
   "notFound.returnHome": "Return to home",
   "chart.kmByProject": "Kilometers by project",
@@ -1552,6 +1556,7 @@ const de: Record<I18nKey, string> = {
   "projects.ratePerKm": "Satz pro km (€)",
   "projects.ratePerPassenger": "Satz pro Mitfahrer (€)",
   "projects.createProject": "Projekt erstellen",
+  "projects.filterProducer": "Produktionsfirma",
   "projects.searchPlaceholder": "Projekte suchen...",
   "projects.year": "Jahr",
   "projects.allTime": "Gesamte Zeit",
@@ -1684,6 +1689,7 @@ const de: Record<I18nKey, string> = {
   "auth.terms": "Nutzungsbedingungen",
   "auth.privacy": "Datenschutzrichtlinie",
   "notFound.message": "Ups! Seite nicht gefunden",
+  "common.allCompanies": "Alle Firmen",
   "notFound.returnHome": "Zur Startseite",
   "chart.kmByProject": "Kilometer nach Projekt",
   "chart.distance": "Distanz",

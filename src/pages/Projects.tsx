@@ -92,7 +92,8 @@ export default function Projects() {
       if (!parsed || typeof parsed !== "object") return null;
       const searchQuery = typeof parsed.searchQuery === "string" ? parsed.searchQuery : null;
       const selectedYear = typeof parsed.selectedYear === "string" ? parsed.selectedYear : null;
-      return { searchQuery, selectedYear };
+      const selectedProducer = typeof parsed.selectedProducer === "string" ? parsed.selectedProducer : null;
+      return { searchQuery, selectedYear, selectedProducer };
     } catch {
       return null;
     }
@@ -100,6 +101,7 @@ export default function Projects() {
 
   const [searchQuery, setSearchQuery] = useState(() => loadProjectsFilters()?.searchQuery ?? "");
   const [selectedYear, setSelectedYear] = useState(() => loadProjectsFilters()?.selectedYear ?? "all");
+  const [selectedProducer, setSelectedProducer] = useState(() => loadProjectsFilters()?.selectedProducer ?? "all");
   const { user } = useAuth();
   const { projects, addProject, updateProject, deleteProject, toggleStar } = useProjects();
   const { trips } = useTrips();
@@ -178,11 +180,11 @@ export default function Projects() {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(PROJECTS_FILTERS_KEY, JSON.stringify({ searchQuery, selectedYear }));
+      window.localStorage.setItem(PROJECTS_FILTERS_KEY, JSON.stringify({ searchQuery, selectedYear, selectedProducer }));
     } catch {
       // ignore
     }
-  }, [searchQuery, selectedYear]);
+  }, [searchQuery, selectedYear, selectedProducer]);
 
   useEffect(() => {
     const fetchCounts = async () => {

@@ -279,7 +279,7 @@ export default function CalendarPage() {
           shootingDays: 0,
           kmPerDay: 0,
           co2Emissions: 0,
-          createdAt: new Date().toISOString(),
+          createdAt: new Date(event.date).toISOString(),
         };
         
         const result = await addProject(newProject);
