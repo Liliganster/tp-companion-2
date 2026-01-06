@@ -667,49 +667,27 @@ export default function ReportView() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-slate-500 print:hidden">
-                    <td colSpan={5} className="py-4 px-2 print:py-2 print:px-1 text-right font-semibold hidden sm:table-cell">
-                      {t("reportView.totalDistanceLabel")}:
+                    <td colSpan={4} className="py-3 px-2 text-right font-semibold hidden sm:table-cell">
                     </td>
-                    <td className="py-4 px-2 text-left font-semibold sm:hidden" colSpan={3}>
-                      {t("reportView.totalShort")}:
+                    <td className="py-3 px-2 text-right font-semibold hidden sm:table-cell">
                     </td>
-                    <td className="py-4 px-2 print:py-2 print:px-1 text-right font-bold text-sm sm:text-lg print:text-[10px] whitespace-nowrap">
-                      {totalDistance.toFixed(1)} km
+                    <td className="py-3 px-2 text-right font-semibold whitespace-nowrap">
+                      {t("reportView.totalShort")}: {totalDistance.toFixed(1)} km
                     </td>
-                    <td className="py-4 px-2 print:py-2 print:px-1 text-right font-bold text-sm sm:text-lg print:text-[10px] whitespace-nowrap">
-                    </td>
-                  </tr>
-                  <tr className="border-t border-slate-500/50 print:hidden">
-                    <td colSpan={5} className="py-4 px-2 print:py-2 print:px-1 text-right font-semibold hidden sm:table-cell">
-                      {t("reportView.totalReimbursementLabel")}:
-                    </td>
-                    <td className="py-4 px-2 text-left font-semibold sm:hidden" colSpan={3}>
-                      {t("reportView.colReimbursement")}:
-                    </td>
-                    <td className="py-4 px-2 print:py-2 print:px-1 text-right whitespace-nowrap">
-                    </td>
-                    <td className="py-4 px-2 print:py-2 print:px-1 text-right font-bold text-sm sm:text-lg print:text-[10px] whitespace-nowrap text-green-400">
-                      {totalReimbursement.toFixed(2)} €
+                    <td className="py-3 px-2 text-right font-semibold whitespace-nowrap text-green-400">
+                      {t("reportView.totalShort")}: {totalReimbursement.toFixed(2)} €
                     </td>
                   </tr>
                   <tr className="hidden print:table-row border-t-2 border-black">
-                    <td colSpan={5} className="py-2 px-1 text-right font-semibold">
-                      {t("reportView.totalDistanceLabel")}:
+                    <td colSpan={4} className="py-2 px-1">
                     </td>
-                    <td className="py-2 px-1 text-right font-semibold text-[10px] whitespace-nowrap">
-                      {totalDistance.toFixed(1)} km
+                    <td className="py-2 px-1">
                     </td>
-                    <td className="py-2 px-1 text-right font-semibold text-[10px] whitespace-nowrap">
+                    <td className="py-2 px-1 text-right font-semibold text-[9px] whitespace-nowrap">
+                      {t("reportView.totalShort")}: {totalDistance.toFixed(1)} km
                     </td>
-                  </tr>
-                  <tr className="hidden print:table-row border-t border-black">
-                    <td colSpan={5} className="py-2 px-1 text-right font-semibold">
-                      {t("reportView.totalReimbursementLabel")}:
-                    </td>
-                    <td className="py-2 px-1 text-right whitespace-nowrap">
-                    </td>
-                    <td className="py-2 px-1 text-right font-bold text-[10px] whitespace-nowrap">
-                      {totalReimbursement.toFixed(2)} €
+                    <td className="py-2 px-1 text-right font-semibold text-[9px] whitespace-nowrap">
+                      {t("reportView.totalShort")}: {totalReimbursement.toFixed(2)} €
                     </td>
                   </tr>
                 </tfoot>
