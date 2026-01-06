@@ -389,8 +389,8 @@ export default function ReportView() {
 
         const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
         const pageWidth = doc.internal.pageSize.getWidth();
-        const margin = 48;
-        const headerBottomY = 112;
+        const margin = 40;
+        const headerBottomY = 120;
         const availableWidth = pageWidth - margin * 2;
 
         const drawLabelValueLeft = (x: number, y: number, label: string, value: string) => {
@@ -426,14 +426,17 @@ export default function ReportView() {
 
         const leftX = margin;
         const rightEdge = pageWidth - margin;
-        const metaY1 = 86;
-        const metaY2 = 104;
+        const metaY1 = 82;
+        const metaY2 = 96;
+        const metaY3 = 110;
 
         drawLabelValueLeft(leftX, metaY1, t("reportView.driverLabel"), driver);
-        drawLabelValueLeft(leftX, metaY2, t("reportView.addressLabel"), address);
+        drawLabelValueLeft(leftX, metaY2, t("reportView.licensePlateLabel"), licensePlate);
+        drawLabelValueLeft(leftX, metaY3, t("reportView.addressLabel"), address);
 
-        drawLabelValueRight(rightEdge, metaY1, t("reportView.licensePlateLabel"), licensePlate);
-        drawLabelValueRight(rightEdge, metaY2, t("reportView.projectLabel"), projectLabel);
+        drawLabelValueRight(rightEdge, metaY1, t("reportView.projectLabel"), projectLabel);
+        drawLabelValueRight(rightEdge, metaY2, t("reportView.passengerSurchargeLabel"), `${profile.passengerSurcharge || "0"} €`);
+        drawLabelValueRight(rightEdge, metaY3, t("reportView.ratePerKmLabel"), `${profile.ratePerKm || "0"} €`);
 
         doc.setDrawColor(0, 0, 0);
         doc.setLineWidth(0.5);
@@ -446,25 +449,26 @@ export default function ReportView() {
           const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
           const pad = 10;
 
-          const min = [58, 92, 120, 260, 38, 62];
-          const max = [72, 130, 180, 420, 55, 86];
+          // 7 columns: Date, Project, Company, Route, Passengers, Distance, Reimbursement
+          const min = [50, 70, 80, 180, 45, 55, 55];
+          const max = [65, 100, 140, 300, 55, 75, 75];
 
           const desired = pdfHeaders.map((header, colIndex) => {
             let maxTextWidth = doc.getTextWidth(String(header));
             for (const row of pdfRows) {
               const raw = row[colIndex] ?? "";
               const text =
-                colIndex === 3 ? String(raw).slice(0, 90) : String(raw);
+                colIndex === 3 ? String(raw).slice(0, 80) : String(raw);
               maxTextWidth = Math.max(maxTextWidth, doc.getTextWidth(text));
             }
-            return clamp(maxTextWidth + pad, min[colIndex], max[colIndex]);
+            return clamp(maxTextWidth + pad, min[colIndex] ?? 50, max[colIndex] ?? 80);
           });
 
           let widths = desired.slice();
           const sum = () => widths.reduce((acc, w) => acc + w, 0);
 
           if (sum() > availableWidth) {
-            const reducible = [2, 1, 3, 0, 5];
+            const reducible = [3, 2, 1, 0, 5, 6];
             for (let iteration = 0; iteration < 4 && sum() > availableWidth; iteration++) {
               const overflow = sum() - availableWidth;
               const totalSlack = reducible.reduce((acc, i) => acc + Math.max(0, widths[i] - min[i]), 0);
@@ -491,18 +495,20 @@ export default function ReportView() {
 
         autoTable(doc, {
           head: [pdfHeaders],
-          body: pdfRows.map((r) => [r[0], r[1], r[2], r[3], r[4], r[5]]),
+          body: pdfRows,
           foot: [
             [
-              { content: `${t("reportView.totalDistanceLabel")}:`, colSpan: 5, styles: { halign: "right", fontStyle: "bold" } },
-              { content: `${totalDistance.toFixed(1)} km`, styles: { halign: "right", fontStyle: "bold" } },
+              { content: "", colSpan: 4, styles: { fillColor: [255, 255, 255] } },
+              { content: "", styles: { halign: "center", fillColor: [255, 255, 255] } },
+              { content: `${t("reportView.totalShort")}: ${totalDistance.toFixed(1)} km`, styles: { halign: "right", fontStyle: "bold" } },
+              { content: `${t("reportView.totalShort")}: ${totalReimbursement.toFixed(2)} €`, styles: { halign: "right", fontStyle: "bold" } },
             ],
           ],
           startY: headerBottomY + 18,
           theme: "grid",
-          styles: { fontSize: 7.5, cellPadding: 3, textColor: 0, lineColor: [165, 165, 165], lineWidth: 0.35 },
-          headStyles: { fillColor: [255, 255, 255], textColor: 0, fontStyle: "bold", fontSize: 8, lineColor: 0, lineWidth: 0.6 },
-          footStyles: { fillColor: [255, 255, 255], textColor: 0, fontSize: 8, lineColor: 0, lineWidth: 0.6 },
+          styles: { fontSize: 7, cellPadding: 2.5, textColor: 0, lineColor: [165, 165, 165], lineWidth: 0.35 },
+          headStyles: { fillColor: [255, 255, 255], textColor: 0, fontStyle: "bold", fontSize: 7.5, lineColor: 0, lineWidth: 0.6 },
+          footStyles: { fillColor: [255, 255, 255], textColor: 0, fontSize: 7.5, lineColor: 0, lineWidth: 0.6 },
           margin: { left: margin, right: margin },
           columnStyles: {
             0: { cellWidth: columnWidths[0] },
@@ -511,6 +517,7 @@ export default function ReportView() {
             3: { cellWidth: columnWidths[3], overflow: "linebreak" },
             4: { cellWidth: columnWidths[4], halign: "center" },
             5: { cellWidth: columnWidths[5], halign: "right" },
+            6: { cellWidth: columnWidths[6], halign: "right" },
           },
         });
 
