@@ -25,8 +25,8 @@ import { useI18n } from "@/hooks/use-i18n";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { useTrips } from "@/contexts/TripsContext";
-import { useProjects } from "@/contexts/ProjectsContext";
 import { useUserProfile } from "@/contexts/UserProfileContext";
+import { useProjects } from "@/contexts/ProjectsContext";
 import { useNavigate } from "react-router-dom";
 import { uuidv4 } from "@/lib/utils";
 import { Trip } from "@/contexts/TripsContext";
@@ -81,9 +81,9 @@ export default function CalendarPage() {
   const { t, tf, locale } = useI18n();
   const { getAccessToken } = useAuth();
   const { addTrip } = useTrips();
-  const { projects, addProject } = useProjects();
   const { profile } = useUserProfile();
   const navigate = useNavigate();
+  const { projects, addProject } = useProjects();
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [isConnected, setIsConnected] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState(false);
@@ -227,29 +227,36 @@ export default function CalendarPage() {
         return;
       }
       
-      // Crear proyecto con producer = titulo del evento
-      const eventTitle = event.title.trim();
-      const projectId = uuidv4();
-      const newProject = {
-        id: projectId,
-        name: "Unknown",
-        producer: eventTitle,
-        description: "",
-        ratePerKm: 0.3,
-        starred: false,
-        trips: 0,
-        totalKm: 0,
-        documents: 0,
-        invoices: 0,
-        estimatedCost: 0,
-        shootingDays: 0,
-        kmPerDay: 0,
-        co2Emissions: 0,
-      };
+      // Crear o buscar proyecto "Unknown" con el título del evento como producer
+      let projectId: string | undefined;
+      const existingProject = projects.find((p) => p.name === "Unknown");
       
-      await addProject(newProject);
+      if (existingProject) {
+        projectId = existingProject.id;
+      } else {
+        // Crear nuevo proyecto
+        const newProject = {
+          id: uuidv4(),
+          name: "Unknown",
+          producer: event.title.trim(),
+          description: "Imported from Google Calendar",
+          ratePerKm: 0.3,
+          starred: false,
+          trips: 0,
+          totalKm: 0,
+          documents: 0,
+          invoices: 0,
+          estimatedCost: 0,
+          shootingDays: 0,
+          kmPerDay: 0,
+          co2Emissions: 0,
+        };
+        
+        await addProject(newProject);
+        projectId = newProject.id;
+      }
       
-      // Crear viaje con el projectId del nuevo proyecto
+      // Crear viaje con el proyecto
       const tripId = uuidv4();
       const tripData: Trip = {
         id: tripId,
