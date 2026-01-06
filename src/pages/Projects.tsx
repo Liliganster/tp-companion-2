@@ -138,6 +138,7 @@ export default function Projects() {
     distanceAtDefaultRate: number;
     invoiceDocs: ProjectDocument[];
     callSheetDocs: ProjectDocument[];
+    tripDocs: ProjectDocument[];
   };
 
   // Fetch document counts for projects
@@ -302,6 +303,7 @@ export default function Projects() {
         distanceAtDefaultRate: 0,
         invoiceDocs: [],
         callSheetDocs: [],
+        tripDocs: [],
       };
 
       current.trips += 1;
@@ -325,7 +327,7 @@ export default function Projects() {
           current.callSheetDocs.push({
              id: doc.id,
              name: doc.name,
-             type: "trip-document"
+             type: "document"
           });
         });
       }
@@ -357,6 +359,7 @@ export default function Projects() {
         distanceAtDefaultRate: 0,
         invoiceDocs: [],
         callSheetDocs: [],
+        tripDocs: [],
       };
 
       // Project callsheets: count unique paths from callsheet_jobs
@@ -558,6 +561,7 @@ export default function Projects() {
         shootingDays: 0,
         kmPerDay: 0,
         co2Emissions: 0,
+        createdAt: new Date().toISOString(),
       });
 
       toast({

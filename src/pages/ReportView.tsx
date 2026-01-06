@@ -546,7 +546,7 @@ export default function ReportView() {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-background border-b border-border px-4 sm:px-6 py-4 print:hidden">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="max-w-[1800px] mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <Button variant="ghost" onClick={() => navigate("/reports")} className="px-2 sm:px-4">
             <ArrowLeft className="w-4 h-4 mr-2" />
             <span className="hidden sm:inline">{t("reportView.backToReports")}</span>
@@ -585,7 +585,7 @@ export default function ReportView() {
 
       {/* Report Content */}
       <div className="p-4 sm:p-6 overflow-auto print:p-0 print:overflow-visible print:bg-white print:text-black">
-        <div className="max-w-7xl mx-auto print:max-w-none">
+        <div className="max-w-[1800px] mx-auto print:max-w-none">
           <div className="bg-slate-800 text-white rounded-lg p-4 sm:p-6 lg:p-8 print:bg-white print:text-black print:rounded-none print:p-8">
             {/* Report Header */}
             <div className="text-center mb-6">
