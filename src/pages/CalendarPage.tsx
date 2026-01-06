@@ -232,8 +232,8 @@ export default function CalendarPage() {
       const projectId = uuidv4();
       const newProject = {
         id: projectId,
-        name: "", // Sin nombre (aparecerá como Unknown)
-        producer: eventTitle, // Nombre del evento va en empresa/producer
+        name: "Unknown",
+        producer: eventTitle,
         description: "",
         ratePerKm: 0.3,
         starred: false,
@@ -255,8 +255,8 @@ export default function CalendarPage() {
         id: tripId,
         date: event.date,
         route,
-        project: "", // Sin nombre de proyecto (Unknown)
-        projectId: projectId, // ID del proyecto creado
+        project: "Unknown",
+        projectId: projectId,
         purpose: event.description?.substring(0, 500) || "",
         passengers: 0,
         distance,
