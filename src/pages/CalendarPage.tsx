@@ -161,6 +161,8 @@ export default function CalendarPage() {
       const destination = route[route.length - 1];
       const waypoints = route.slice(1, -1); // Paradas intermedias
       
+      console.log("Calculating distance with:", { origin, destination, waypoints });
+      
       const response = await fetch("/api/google/directions", {
         method: "POST",
         headers: {
@@ -176,7 +178,12 @@ export default function CalendarPage() {
       });
       
       const data: any = await response.json().catch(() => null);
-      if (!response.ok || !data?.distance) return 0;
+      console.log("Distance API response:", data);
+      
+      if (!response.ok || !data?.distance) {
+        console.error("Distance calculation failed:", response.status, data);
+        return 0;
+      }
       
       return data.distance;
     } catch (error) {
@@ -189,8 +196,18 @@ export default function CalendarPage() {
   const handleImportEventAsTrip = async (event: CalendarEvent) => {
     setImporting(true);
     try {
+      // Verificar que existe dirección base
+      if (!profile.baseAddress || !profile.city || !profile.country) {
+        toast.error(t("calendar.importNeedBaseAddress"));
+        setImporting(false);
+        return;
+      }
+      
       // Extraer ubicaciones
       const route = extractLocationsFromEvent(event);
+      
+      console.log("Route for import:", route);
+      console.log("Profile base:", { baseAddress: profile.baseAddress, city: profile.city, country: profile.country });
       
       if (route.length < 2) {
         toast.error(t("calendar.importNeedBaseAddress"));
