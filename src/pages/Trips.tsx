@@ -142,10 +142,10 @@ export default function Trips() {
 
   const uniqueProjects = useMemo(() => {
     const fromTrips = new Set(trips.map((t) => t.project).filter(Boolean));
-    const fromProjects = new Set(projects.map((p) => p.name));
+    const fromProjects = new Set(projects.map((p) => p.name).filter(Boolean));
     // Combine both sources
     const all = new Set([...fromTrips, ...fromProjects]);
-    return Array.from(all).sort((a, b) => a.localeCompare(b));
+    return Array.from(all).filter((p) => p.trim() !== "").sort((a, b) => a.localeCompare(b));
   }, [trips, projects]);
   // removed setProjects
   const [dateSort, setDateSort] = useState<"desc" | "asc">("desc");
