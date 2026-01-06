@@ -28,6 +28,7 @@ import { useTrips } from "@/contexts/TripsContext";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useNavigate } from "react-router-dom";
 import { uuidv4 } from "@/lib/utils";
+import { Trip } from "@/contexts/TripsContext";
 
 interface CalendarEvent {
   id: string;
@@ -224,21 +225,18 @@ export default function CalendarPage() {
         return;
       }
       
-      // Título del evento = cliente/empresa/productora
-      const clientName = event.title.trim();
-      
-      // Crear viaje con proyecto DESCONOCIDO
+      // Crear viaje sin proyecto (clientName = título del evento)
       const tripId = uuidv4();
-      const tripData = {
+      const tripData: Trip = {
         id: tripId,
         date: event.date,
         route,
-        project: "DESCONOCIDO", // Proyecto estándar para importaciones
-        projectId: undefined, // Sin projectId, el sistema guardará como cliente metadata
-        clientName: clientName, // Nombre del cliente en metadata
+        project: event.title.trim(), // Título del evento como nombre (será cliente metadata)
+        projectId: undefined, // Sin projectId - el usuario lo asignará después
         purpose: event.description?.substring(0, 500) || "",
         passengers: 0,
         distance,
+        co2: 0,
         ratePerKmOverride: null,
         specialOrigin: "base" as const,
       };
@@ -249,8 +247,6 @@ export default function CalendarPage() {
         toast.success(t("calendar.importSuccess"));
         setImportOpen(false);
         setSelectedEvent(null);
-        
-        // Navegar a la página de viajes
         navigate("/trips");
       }
     } catch (error) {
