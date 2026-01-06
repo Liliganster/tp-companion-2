@@ -736,7 +736,7 @@ export default function Projects() {
                       aria-label={t("projects.selectAll")}
                     />
                   </TableHead>
-                  <TableHead className="text-foreground font-semibold whitespace-nowrap hidden md:table-cell">{t("projects.tableDate")}</TableHead>
+
                   <TableHead className="text-foreground font-semibold whitespace-nowrap">{t("projects.tableProject")}</TableHead>
                   <TableHead className="text-foreground font-semibold whitespace-nowrap hidden sm:table-cell">{t("projects.tableCompany")}</TableHead>
                   <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("projects.tableTrips")}</TableHead>
@@ -782,9 +782,7 @@ export default function Projects() {
                             onClick={(e) => e.stopPropagation()}
                           />
                         </TableCell>
-                        <TableCell className="text-muted-foreground whitespace-nowrap hidden md:table-cell">
-                          {project.createdAt ? new Date(project.createdAt).toLocaleDateString(locale) : "-"}
-                        </TableCell>
+
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <button
