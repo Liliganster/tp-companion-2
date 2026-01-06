@@ -410,7 +410,7 @@ export default function AdvancedCosts() {
   return (
     <MainLayout>
       <VehicleConfigModal open={settingsOpen} onOpenChange={setSettingsOpen} />
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-[1800px] mx-auto space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-4 animate-fade-in">
           <div className="flex items-start gap-4">

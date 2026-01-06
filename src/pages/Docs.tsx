@@ -297,7 +297,7 @@ export default function Docs() {
 
   return (
     <MainLayout>
-      <div className="max-w-5xl mx-auto space-y-6">
+      <div className="max-w-[1800px] mx-auto space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold">{content.title}</h1>

@@ -59,7 +59,7 @@ export default function Advanced() {
 
   return (
     <MainLayout>
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-[1800px] mx-auto space-y-6">
         {/* Header */}
         <div className="animate-fade-in">
           <h1 className="text-2xl sm:text-3xl font-bold">{t("advanced.title")}</h1>

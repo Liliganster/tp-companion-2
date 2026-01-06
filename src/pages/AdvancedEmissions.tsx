@@ -447,7 +447,7 @@ export default function AdvancedEmissions() {
 
   return (
     <MainLayout>
-      <div className="max-w-5xl mx-auto space-y-6">
+      <div className="max-w-[1800px] mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between animate-fade-in">
           <div className="flex items-center gap-4">
