@@ -186,8 +186,8 @@ export default async function handler(req: any, res: any) {
 
   const selection = getEnvActivitySelection(fuelType) ?? getActivitySelection(fuelType);
 
-  // Use the fuel-specific config
-  const attempt = await estimateOnce(selection.activityId, config.region);
+  // Use the fuel-specific config - pass selection.region which contains "AT" for gasoline
+  const attempt = await estimateOnce(selection.activityId, selection.region);
 
   const data: any = attempt.data;
   if (!attempt.ok || !data) {
