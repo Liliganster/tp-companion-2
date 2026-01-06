@@ -9,7 +9,6 @@ export function UpdatePrompt() {
   const wbRef = useRef<WorkboxInstance | null>(null);
   const registeredRef = useRef(false);
   const promptShownRef = useRef(false);
-  const isInitialLoadRef = useRef(true);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
@@ -27,38 +26,37 @@ export function UpdatePrompt() {
 
         wbRef.current = wb;
 
+        // Show update prompt when a new SW is installed (isUpdate=true means not first install)
         wb.addEventListener("installed", (event: any) => {
           if (cancelled) return;
-          // Only show update prompt if this is not the initial load
-          // On initial load, the app already has the latest version
-          if (event?.isUpdate && !isInitialLoadRef.current) {
+          if (event?.isUpdate) {
+            console.log("[SW] New version installed, showing update prompt");
             setNeedRefresh(true);
           }
         });
 
+        // Show update prompt when a new SW is waiting to activate
         wb.addEventListener("waiting", () => {
           if (cancelled) return;
-          // Only show update prompt if this is not the initial load
-          if (!isInitialLoadRef.current) {
-            setNeedRefresh(true);
-          }
+          console.log("[SW] New version waiting, showing update prompt");
+          setNeedRefresh(true);
+        });
+
+        // Listen for controlling changes to auto-reload if SW takes control
+        wb.addEventListener("controlling", () => {
+          console.log("[SW] New version took control, reloading...");
+          window.location.reload();
         });
 
         const swRegistration = await wb.register();
         if (cancelled) return;
         if (swRegistration) setRegistration(swRegistration);
 
-        // If an update was downloaded while the app was in the background, `waiting` may already be set.
-        // But only show prompt if this is not the initial load
-        if (swRegistration?.waiting && !isInitialLoadRef.current) {
+        // If a SW is already waiting (downloaded in background), show prompt immediately
+        if (swRegistration?.waiting) {
+          console.log("[SW] Found waiting SW on load, showing update prompt");
           setNeedRefresh(true);
         }
-        
-        // Mark that initial load is complete after a short delay
-        // This allows the SW to activate on first load without showing the prompt
-        setTimeout(() => {
-          isInitialLoadRef.current = false;
-        }, 2000);
       } catch (error) {
         console.log("SW registration error", error);
       }
@@ -78,9 +76,9 @@ export function UpdatePrompt() {
       registration.update().catch(() => {});
     };
 
-    // Check for updates shortly after load, and then frequently while the tab is visible.
-    const initial = window.setTimeout(updateNow, 1_000);
-    const interval = window.setInterval(updateNow, 30_000);
+    // Check for updates immediately, then every 10 seconds while visible
+    updateNow();
+    const interval = window.setInterval(updateNow, 10_000);
 
     const onFocus = () => {
       updateNow();
@@ -99,7 +97,6 @@ export function UpdatePrompt() {
     document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
-      window.clearTimeout(initial);
       window.clearInterval(interval);
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("online", onOnline);
