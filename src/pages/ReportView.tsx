@@ -615,12 +615,12 @@ export default function ReportView() {
             <div className="overflow-x-auto -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 print:overflow-visible print:mx-0 print:px-0">
               <table className="w-full text-xs sm:text-sm min-w-[700px] print:min-w-0 print:text-[9px] print:leading-tight table-fixed print:table-fixed">
                 <colgroup>
-                  <col style={{ width: "9%" }} />
+                  <col style={{ width: "8%" }} />
                   <col style={{ width: "12%" }} />
-                  <col style={{ width: "14%" }} />
-                  <col style={{ width: "36%" }} />
-                  <col style={{ width: "5%" }} />
+                  <col style={{ width: "12%" }} />
+                  <col style={{ width: "32%" }} />
                   <col style={{ width: "10%" }} />
+                  <col style={{ width: "12%" }} />
                   <col style={{ width: "14%" }} />
                 </colgroup>
                 <thead>
