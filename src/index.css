@@ -326,3 +326,17 @@
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground) / 0.5);
 }
+
+/* Print styles - hide UI elements */
+@media print {
+  /* Hide toasts and notifications */
+  [data-sonner-toaster],
+  [data-radix-toast-viewport],
+  .toaster,
+  .toast,
+  [role="status"],
+  [aria-live="polite"] {
+    display: none !important;
+    visibility: hidden !important;
+  }
+}
