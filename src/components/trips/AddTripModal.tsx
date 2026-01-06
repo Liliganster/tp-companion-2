@@ -570,6 +570,18 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
     }
   }, [getAccessToken, getEffectiveRouteValues, googleRegion, isOpen]);
 
+  // Auto-calculate distance when using special types (Continue/Return)
+  useEffect(() => {
+    if (!isOpen) return;
+    if (specialOrigin === "base") return;
+
+    const timer = setTimeout(() => {
+      calculateDistance();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [calculateDistance, isOpen, specialOrigin, stops, date]);
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
