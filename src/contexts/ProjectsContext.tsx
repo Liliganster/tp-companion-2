@@ -38,6 +38,7 @@ export type Project = {
   ratePerKm: number;
   starred: boolean;
   archived?: boolean;
+  createdAt: string;
   trips: number;
   totalKm: number;
   documents: number;
@@ -138,6 +139,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
           description: p.description,
           ratePerKm: p.rate_per_km ? Number(p.rate_per_km) : 0,
           starred: p.starred,
+          createdAt: p.created_at,
           archived: p.archived,
           trips: trips,
           totalKm: totalKm,

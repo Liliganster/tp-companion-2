@@ -732,14 +732,15 @@ export default function Projects() {
                       aria-label={t("projects.selectAll")}
                     />
                   </TableHead>
+                  <TableHead className="text-foreground font-semibold whitespace-nowrap hidden md:table-cell">{t("projects.tableDate")}</TableHead>
                   <TableHead className="text-foreground font-semibold whitespace-nowrap">{t("projects.tableProject")}</TableHead>
                   <TableHead className="text-foreground font-semibold whitespace-nowrap hidden sm:table-cell">{t("projects.tableCompany")}</TableHead>
                   <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("projects.tableTrips")}</TableHead>
-                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden md:table-cell">{t("projects.tableTotalKm")}</TableHead>
-                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden md:table-cell">{t("projects.tableCo2")}</TableHead>
-                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("projects.tableDocuments")}</TableHead>
                   <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("projects.tableInvoices")}</TableHead>
+                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("projects.tableDocuments")}</TableHead>
+                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden md:table-cell">{t("projects.tableCo2")}</TableHead>
                   <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("projects.tableCost")}</TableHead>
+                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden md:table-cell">{t("projects.tableTotalKm")}</TableHead>
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -755,120 +756,123 @@ export default function Projects() {
                       (stats?.overrideCost ?? 0) + (stats?.distanceAtDefaultRate ?? 0) * (Number.isFinite(project.ratePerKm) ? project.ratePerKm : 0);
 
                     return (
-                  <TableRow
-                    key={project.id}
-                    className={`hover:bg-secondary/30 border-border/30 animate-slide-up cursor-pointer ${selectedIds.has(project.id) ? 'bg-primary/10' : ''}`}
-                    style={{ animationDelay: `${index * 50}ms` }}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openProjectDetails(project)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        openProjectDetails(project);
-                      }
-                    }}
-                  >
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedIds.has(project.id)}
-                        onCheckedChange={() => toggleSelect(project.id)}
-                        aria-label={tf("projects.selectProject", { name: project.name })}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleStar(project.id);
-                          }}
-                          className="shrink-0 opacity-60 hover:opacity-100 transition-opacity"
-                        >
-                          {project.starred ? (
-                            <Star className="w-4 h-4 text-warning fill-warning" />
-                          ) : (
-                            <StarOff className="w-4 h-4" />
-                          )}
-                        </button>
-                        <span className="font-medium">{project.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground hidden sm:table-cell">
-                      {project.producer || "-"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <Car className="w-4 h-4 text-primary" />
-                        <span>{tripsCount}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-medium hidden md:table-cell">
-                      {totalKm.toLocaleString(locale)} km
-                    </TableCell>
-                    <TableCell className="text-right hidden md:table-cell text-success">
-                      {(stats?.co2Emissions ?? 0).toFixed(1)} kg
-                    </TableCell>
-	                    <TableCell className="text-right hidden lg:table-cell">
-	                      <div className="flex items-center justify-end gap-1.5">
-	                        <FileText className="w-4 h-4 text-info" />
-	                        <span>{documents}</span>
-	                      </div>
-	                    </TableCell>
-	                    <TableCell className="text-right hidden lg:table-cell">
-	                      <div className="flex items-center justify-end gap-1.5">
-	                        <Receipt className="w-4 h-4 text-warning" />
-	                        <span>{invoices}</span>
-	                      </div>
-	                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1.5 text-success font-medium">
-                        <Euro className="w-4 h-4" />
-							<span>€{estimatedCost.toFixed(2)}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <MoreVertical className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="bg-popover">
-                          <DropdownMenuItem onClick={() => {
+                      <TableRow
+                        key={project.id}
+                        className={`hover:bg-secondary/30 border-border/30 animate-slide-up cursor-pointer ${selectedIds.has(project.id) ? 'bg-primary/10' : ''}`}
+                        style={{ animationDelay: `${index * 50}ms` }}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openProjectDetails(project)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
                             openProjectDetails(project);
-                          }}>
-                            <Eye className="w-4 h-4 mr-2" />
-                            {t("projects.viewDetails")}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => {
-                              openEditProject(project);
-                            }}
-                          >
-                            <Pencil className="w-4 h-4 mr-2" />
-                            {t("projects.edit")}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="text-destructive"
-                            onSelect={(e) => {
-                              e.preventDefault();
-                              void handleDeleteProject(project);
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            {t("projects.delete")}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
+                          }
+                        }}
+                      >
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedIds.has(project.id)}
+                            onCheckedChange={() => toggleSelect(project.id)}
+                            aria-label={tf("projects.selectProject", { name: project.name })}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </TableCell>
+                        <TableCell className="text-muted-foreground whitespace-nowrap hidden md:table-cell">
+                          {project.createdAt ? new Date(project.createdAt).toLocaleDateString(locale) : "-"}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleStar(project.id);
+                              }}
+                              className="shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+                            >
+                              {project.starred ? (
+                                <Star className="w-4 h-4 text-warning fill-warning" />
+                              ) : (
+                                <StarOff className="w-4 h-4" />
+                              )}
+                            </button>
+                            <span className="font-medium">{project.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground hidden sm:table-cell">
+                          {project.producer || "-"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Car className="w-4 h-4 text-primary" />
+                            <span>{tripsCount}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right hidden lg:table-cell">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Receipt className="w-4 h-4 text-warning" />
+                            <span>{invoices}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right hidden lg:table-cell">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <FileText className="w-4 h-4 text-info" />
+                            <span>{documents}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right hidden md:table-cell text-success">
+                          {(stats?.co2Emissions ?? 0).toFixed(1)} kg
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1.5 text-success font-medium">
+                            <Euro className="w-4 h-4" />
+                            <span>€{estimatedCost.toFixed(2)}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-medium hidden md:table-cell">
+                          {totalKm.toLocaleString(locale)} km
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="bg-popover">
+                              <DropdownMenuItem onClick={() => {
+                                openProjectDetails(project);
+                              }}>
+                                <Eye className="w-4 h-4 mr-2" />
+                                {t("projects.viewDetails")}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  openEditProject(project);
+                                }}
+                              >
+                                <Pencil className="w-4 h-4 mr-2" />
+                                {t("projects.edit")}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onSelect={(e) => {
+                                  e.preventDefault();
+                                  void handleDeleteProject(project);
+                                }}
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                {t("projects.delete")}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
                     );
                   })()
                 ))}
@@ -897,10 +901,10 @@ export default function Projects() {
               {tf("projects.summaryCount", { count: filteredProjects.length })}
             </span>
             <span className="font-medium">
-					{tf("projects.summaryTotal", { km: filteredProjects.reduce((acc, p) => {
-						const stats = statsByProjectKey.get(getProjectKey(p.name));
-						return acc + (stats?.totalKm ?? 0);
-					}, 0).toLocaleString(locale) })}
+              {tf("projects.summaryTotal", { km: filteredProjects.reduce((acc, p) => {
+                const stats = statsByProjectKey.get(getProjectKey(p.name));
+                return acc + (stats?.totalKm ?? 0);
+              }, 0).toLocaleString(locale) })}
             </span>
           </div>
         </div>
