@@ -127,7 +127,7 @@ export default async function handler(req: any, res: any) {
   if (!fuelType) return sendJson(res, 400, { error: "invalid_fuel_type" });
 
   const dataVersion = (process.env.CLIMATIQ_DATA_VERSION || DEFAULT_DATA_VERSION).trim() || DEFAULT_DATA_VERSION;
-  const cacheKey = `${fuelType}:${dataVersion}:v2`;
+  const cacheKey = `${fuelType}:${dataVersion}:v3`;
   const cached = getCached(cacheKey);
   if (cached) return sendJson(res, 200, cached);
 
