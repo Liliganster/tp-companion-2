@@ -260,9 +260,14 @@ export default function AdvancedEmissions() {
     const fuelRate = Number.isFinite(fuelLPer100Km) && fuelLPer100Km > 0 ? fuelLPer100Km : 0;
     const profileFuelRate = parseLocaleNumber(profile.fuelLPer100Km);
 
-    // The config modal controls the "analysis assumptions" (fuel efficiency). Prefer it over profile settings.
+    // The config modal controls the "analysis assumptions" (fuel efficiency). 
+    // Only use local config if explicitly saved (isConfigured). Otherwise default to User Profile.
     const analysisFuelRate =
-      fuelRate > 0 ? fuelRate : Number.isFinite(profileFuelRate) && Number(profileFuelRate) > 0 ? Number(profileFuelRate) : 0;
+      isConfigured && fuelRate > 0 
+        ? fuelRate 
+        : Number.isFinite(profileFuelRate) && Number(profileFuelRate) > 0 
+          ? Number(profileFuelRate) 
+          : fuelRate;
 
     const shouldUseAnalysisFuelRate =
       (profile.fuelType === "gasoline" || profile.fuelType === "diesel") && analysisFuelRate > 0;
