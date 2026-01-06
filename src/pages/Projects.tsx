@@ -57,6 +57,8 @@ import { parseLocaleNumber } from "@/lib/number";
 import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
 import { useClimatiqFuelFactor } from "@/hooks/use-climatiq";
 
+const getProjectKey = (name: string) => name.trim().toLowerCase();
+
 export default function Projects() {
   const { t, tf, locale } = useI18n();
   const { profile } = useUserProfile();
@@ -114,7 +116,7 @@ export default function Projects() {
   const [newProjectRatePerKm, setNewProjectRatePerKm] = useState("0.30");
   const [newProjectRatePerPassenger, setNewProjectRatePerPassenger] = useState("0.05");
 
-  const getProjectKey = (name: string) => name.trim().toLowerCase();
+
 
   interface ProjectDocument {
     id: string;
@@ -459,7 +461,7 @@ export default function Projects() {
       shootingDays,
       kmPerDay,
     };
-  }, [selectedProject, statsByProjectKey, trips, getProjectKey]);
+  }, [selectedProject, statsByProjectKey, trips]);
 
   const toggleSelectAll = () => {
     if (selectedIds.size === filteredProjects.length) {

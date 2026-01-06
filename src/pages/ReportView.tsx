@@ -84,6 +84,8 @@ const mockReportTrips: ReportTrip[] = [
 ];
 */
 
+const getProjectKey = (value: string) => value.trim().toLowerCase();
+
 export default function ReportView() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -149,7 +151,7 @@ export default function ReportView() {
   const address = savedReport?.address ?? (searchParams.get("address") || [profile.baseAddress, profile.city].filter(Boolean).join(", "));
   const licensePlate = savedReport?.licensePlate ?? (searchParams.get("licensePlate") || profile.licensePlate);
 
-  const getProjectKey = (value: string) => value.trim().toLowerCase();
+
   const getProducerForProject = (projectName: string) => {
     const key = getProjectKey(projectName);
     if (!key) return "";

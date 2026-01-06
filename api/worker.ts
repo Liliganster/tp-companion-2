@@ -331,7 +331,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
         log.info({ jobId: job.id, length: resultText?.length || 0, durationMs: geminiDuration }, "callsheet_gemini_response");
 
         // Initialize extraction log data
-        let extractionLogData: any = {
+        const extractionLogData: any = {
           user_id: String((job as any).user_id ?? ""),
           job_id: job.id,
           job_type: "callsheet",
