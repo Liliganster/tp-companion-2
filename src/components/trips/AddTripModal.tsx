@@ -317,6 +317,8 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
   const resolvePreviousDestinationForDate = useCallback(
     (targetDate: string) => {
       const parsedTarget = parseTripDateToTime(targetDate);
+      console.log("[resolvePrevious] Target:", targetDate, "Parsed:", parsedTarget);
+
       if (parsedTarget == null) {
         const fallback = (previousDestination ?? "").trim();
         return fallback || baseLocation;
@@ -326,10 +328,13 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
       const previousTrip = trips.find((candidate) => {
         if (candidate.id === trip?.id) return false;
         const parsedCandidate = parseTripDateToTime(candidate.date);
-        // Allow continuation from trips on the same day (<= instead of <)
-        // Since trips are sorted DESC, the first match is the "latest" trip on that day (or before).
-        return parsedCandidate != null && parsedCandidate <= parsedTarget;
+        
+        const isMatch = parsedCandidate != null && parsedCandidate <= parsedTarget;
+        // console.log("Can:", candidate.date, "Parsed:", parsedCandidate, "Match:", isMatch);
+        return isMatch;
       });
+      
+      console.log("[resolvePrevious] Found:", previousTrip?.date, previousTrip?.route);
 
       if (!previousTrip) {
         const fallback = (previousDestination ?? "").trim();
