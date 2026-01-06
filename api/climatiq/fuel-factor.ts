@@ -9,14 +9,14 @@ const DEFAULT_DATA_VERSION = "^21";
 // Gasoline: AT region with distance (km) - UBA Austria data
 const FUEL_CONFIG: Record<FuelType, {
   activityId: string;
-  region: string;
+  region: string | null;
   paramType: "volume" | "distance";
   fallbackValue: number;
   unit: string;
 }> = {
   gasoline: {
     activityId: "fuel-type_motor_gasoline-fuel_use_na",
-    region: "NA", // No region specificity for NA activity
+    region: "AT", // Austria
     paramType: "volume",
     fallbackValue: 2.31, // Standard kg CO2e/L fallback if API fails
     unit: "kgCo2ePerLiter",
@@ -84,7 +84,7 @@ function getActivitySelection(fuelType: FuelType): ActivitySelection {
   const config = FUEL_CONFIG[fuelType];
   return {
     activityId: config.activityId,
-    region: config.region,
+    region: config.region || "", // Empty string if null
   };
 }
 
@@ -159,9 +159,8 @@ export default async function handler(req: any, res: any) {
       const requestBody: any = {
         emission_factor: {
           activity_id: activityId,
-          region: region || config.region,
+          ...(region ? { region } : {}), // Only include region if provided
           data_version: dataVersion,
-          // Explicitly request volume-based factors if applicable
           ...(config.paramType === "volume" ? { unit_type: "volume" } : {}),
         },
         parameters,
@@ -214,7 +213,7 @@ export default async function handler(req: any, res: any) {
     return sendJson(res, 502, { error: "climatiq_error", message: "Invalid co2e payload" });
   }
 
-  const factorRegion = normalizeFactorRegion(data?.emission_factor?.region) || config.region;
+  const factorRegion = normalizeFactorRegion(data?.emission_factor?.region) || config.region || null;
   
   // Build response - use fuel-type specific field
   const emissionValue = Math.round(co2eKg * 1_000_000) / 1_000_000;
