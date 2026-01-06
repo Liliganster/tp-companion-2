@@ -123,6 +123,7 @@ export default function ReportView() {
   const selectedYear = savedReport?.year ?? (searchParams.get("year") || "");
   const queryStartDate = searchParams.get("startDate") || "";
   const queryEndDate = searchParams.get("endDate") || "";
+  const reportType = (savedReport?.reportType ?? searchParams.get("reportType") ?? "filmcrew") as "filmcrew" | "general";
 
   const normalizeProjectParam = (value: string) => {
     const trimmed = value.trim();
@@ -239,10 +240,15 @@ export default function ReportView() {
 
   const fileBase = `${t("reportView.filePrefix")}_${sanitizeFilePart(period)}_${sanitizeFilePart(projectLabel)}`;
 
+  // Column header changes based on report type
+  const companyOrClientLabel = reportType === "general" 
+    ? t("reportView.colClient") 
+    : t("reportView.colCompanyProducer");
+
   const headers = [
     t("reportView.colDate"),
     t("reportView.colProject"),
-    t("reportView.colCompanyProducer"),
+    companyOrClientLabel,
     t("reportView.colRoute"),
     t("reportView.colPassengers"),
     t("reportView.colDistanceKm"),
@@ -251,7 +257,7 @@ export default function ReportView() {
   const pdfHeaders = [
     t("reportView.colDate"),
     t("reportView.colProject"),
-    t("reportView.colCompanyProducer"),
+    companyOrClientLabel,
     t("reportView.colRoute"),
     t("reportView.colPassengersShort"),
     t("reportView.colDistanceKm"),
@@ -321,6 +327,7 @@ export default function ReportView() {
       driver,
       address,
       licensePlate,
+      reportType,
     });
 
     toast({
@@ -597,7 +604,7 @@ export default function ReportView() {
                     <th className="text-left py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap">{t("reportView.colDate")}</th>
                     <th className="text-left py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap">{t("reportView.colProject")}</th>
                     <th className="text-left py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap hidden md:table-cell">
-                      {t("reportView.colCompanyProducer")}
+                      {companyOrClientLabel}
                     </th>
                     <th className="text-left py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap">{t("reportView.colRoute")}</th>
                     <th className="text-center py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap hidden sm:table-cell">

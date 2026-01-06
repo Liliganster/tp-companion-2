@@ -131,6 +131,7 @@ export default function Reports() {
   };
 
   const [selectedProject, setSelectedProject] = useState("all");
+  const [reportType, setReportType] = useState<"filmcrew" | "general">("filmcrew");
   const toDateInputValue = (d: Date) => {
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -282,6 +283,7 @@ export default function Reports() {
       startDate: effectiveStartDate,
       endDate: effectiveEndDate,
       trips: String(selectedTrips.length),
+      reportType: reportType,
     });
     navigate(`/reports/view?${params.toString()}`);
   };
@@ -313,7 +315,7 @@ export default function Reports() {
         <div className="glass-card p-6 animate-fade-in animation-delay-100">
           <h2 className="font-semibold text-lg mb-4">{t("reports.generateNew")}</h2>
           
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
             <div className="space-y-2">
               <Label>{t("reports.project")}</Label>
               <Select value={selectedProject} onValueChange={setSelectedProject}>
@@ -331,6 +333,19 @@ export default function Reports() {
                         {name}
                       </SelectItem>
                     ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>{t("reports.reportType")}</Label>
+              <Select value={reportType} onValueChange={(v) => setReportType(v as "filmcrew" | "general")}>
+                <SelectTrigger className="bg-secondary/50">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="filmcrew">{t("reports.reportTypeFilmCrew")}</SelectItem>
+                  <SelectItem value="general">{t("reports.reportTypeGeneral")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
