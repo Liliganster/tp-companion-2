@@ -214,7 +214,14 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
       const newProject = {
         id: uuidv4(),
         name: trimmedName,
-        producer: "",
+        producer: (() => {
+           // Try to inherit producer logic
+           const originalProjectName = seedTrip?.project;
+           const originalProject = originalProjectName 
+              ? projects.find(p => p.name.trim().toLowerCase() === originalProjectName.trim().toLowerCase()) 
+              : null;
+           return originalProject?.producer ?? "";
+        })(),
         description: "Created via Trip",
         ratePerKm: 0.3,
         starred: false,
@@ -231,7 +238,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
       await addProject(newProject);
       toast.success(`Proyecto "${trimmedName}" creado`);
     },
-    [projects, addProject]
+    [projects, addProject, seedTrip]
   );
 
   const googleRegion = useMemo(() => {
