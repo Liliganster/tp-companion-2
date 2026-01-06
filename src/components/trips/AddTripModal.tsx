@@ -326,7 +326,9 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
       const previousTrip = trips.find((candidate) => {
         if (candidate.id === trip?.id) return false;
         const parsedCandidate = parseTripDateToTime(candidate.date);
-        return parsedCandidate != null && parsedCandidate < parsedTarget;
+        // Allow continuation from trips on the same day (<= instead of <)
+        // Since trips are sorted DESC, the first match is the "latest" trip on that day (or before).
+        return parsedCandidate != null && parsedCandidate <= parsedTarget;
       });
 
       if (!previousTrip) {
