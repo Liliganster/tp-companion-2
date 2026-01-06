@@ -2,7 +2,7 @@ import { requireSupabaseUser, sendJson } from "../_utils/supabase.js";
 import { enforceRateLimit } from "../_utils/rateLimit.js";
 
 const ESTIMATE_URL = "https://api.climatiq.io/data/v1/estimate";
-const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
 const DEFAULT_DATA_VERSION = "^21";
 
 // Diesel: EU region with volume (liters)
@@ -31,9 +31,8 @@ const FUEL_CONFIG: Record<FuelType, {
 };
 
 type FuelType = "gasoline" | "diesel";
-type CacheEntry = { expiresAtMs: number; payload: unknown };
 type ActivitySelection = { activityId: string; region: string };
-const CACHE = new Map<string, CacheEntry>();
+
 
 function normalizeFuelType(input: unknown): FuelType | null {
   if (typeof input !== "string") return null;
@@ -60,19 +59,7 @@ function normalizeFactorRegion(value: unknown): string | null {
   return region;
 }
 
-function getCached(key: string): unknown | null {
-  const entry = CACHE.get(key);
-  if (!entry) return null;
-  if (Date.now() >= entry.expiresAtMs) {
-    CACHE.delete(key);
-    return null;
-  }
-  return entry.payload;
-}
 
-function setCached(key: string, payload: unknown) {
-  CACHE.set(key, { expiresAtMs: Date.now() + CACHE_TTL_MS, payload });
-}
 
 function co2eToKg(value: number, unit: string): number | null {
   const u = unit.trim().toLowerCase();
@@ -127,9 +114,7 @@ export default async function handler(req: any, res: any) {
   if (!fuelType) return sendJson(res, 400, { error: "invalid_fuel_type" });
 
   const dataVersion = (process.env.CLIMATIQ_DATA_VERSION || DEFAULT_DATA_VERSION).trim() || DEFAULT_DATA_VERSION;
-  const cacheKey = `${fuelType}:${dataVersion}:v3`;
-  const cached = getCached(cacheKey);
-  if (cached) return sendJson(res, 200, cached);
+
 
   const apiKey = (process.env.CLIMATIQ_API_KEY || "").trim();
   const config = FUEL_CONFIG[fuelType];
@@ -146,11 +131,11 @@ export default async function handler(req: any, res: any) {
       source: "fallback",
       year: null,
       region: config.region,
-      cachedTtlSeconds: Math.round(CACHE_TTL_MS / 1000),
+
       method: "fallback",
       fallback: true,
     };
-    setCached(cacheKey, payload);
+
     return sendJson(res, 200, payload);
   }
 
@@ -248,7 +233,7 @@ export default async function handler(req: any, res: any) {
     source: data?.emission_factor?.source ?? "climatiq",
     year: data?.emission_factor?.year ?? null,
     region: factorRegion,
-    cachedTtlSeconds: Math.round(CACHE_TTL_MS / 1000),
+
     method: "data",
     fallback: false,
     request: {
@@ -266,7 +251,7 @@ export default async function handler(req: any, res: any) {
     },
   };
 
-  setCached(cacheKey, payload);
+
   return sendJson(res, 200, payload);
   } catch (err: any) {
     const message = typeof err?.message === "string" ? err.message : "Unexpected error";
