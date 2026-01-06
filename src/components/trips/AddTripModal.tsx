@@ -974,10 +974,19 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                   } else {
                     // Auto-create project if it doesn't exist
                     const newId = uuidv4();
+                    
+                    // Try to inherit producer from original project (e.g. "Unknown X" -> "Client Name")
+                    const originalProjectName = seedTrip?.project;
+                    const originalProject = originalProjectName 
+                      ? projects.find(p => p.name.trim().toLowerCase() === originalProjectName.trim().toLowerCase()) 
+                      : null;
+                    const inheritedProducer = originalProject?.producer;
+
                     try {
                       await addProject({
                         id: newId,
                         name: trimmedProject,
+                        producer: inheritedProducer, // Inherit client
                         ratePerKm: parseLocaleNumber(profile.ratePerKm) ?? 0,
                         starred: false,
                         trips: 0,
