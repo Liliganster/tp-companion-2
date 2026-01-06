@@ -25,6 +25,7 @@ import { useI18n } from "@/hooks/use-i18n";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { useTrips } from "@/contexts/TripsContext";
+import { useProjects } from "@/contexts/ProjectsContext";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useNavigate } from "react-router-dom";
 import { uuidv4 } from "@/lib/utils";
@@ -80,6 +81,7 @@ export default function CalendarPage() {
   const { t, tf, locale } = useI18n();
   const { getAccessToken } = useAuth();
   const { addTrip } = useTrips();
+  const { projects, addProject } = useProjects();
   const { profile } = useUserProfile();
   const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(() => new Date());
@@ -225,14 +227,36 @@ export default function CalendarPage() {
         return;
       }
       
-      // Crear viaje sin proyecto (clientName = título del evento)
+      // Crear proyecto con producer = titulo del evento
+      const eventTitle = event.title.trim();
+      const projectId = uuidv4();
+      const newProject = {
+        id: projectId,
+        name: "", // Sin nombre (aparecerá como Unknown)
+        producer: eventTitle, // Nombre del evento va en empresa/producer
+        description: "",
+        ratePerKm: 0.3,
+        starred: false,
+        trips: 0,
+        totalKm: 0,
+        documents: 0,
+        invoices: 0,
+        estimatedCost: 0,
+        shootingDays: 0,
+        kmPerDay: 0,
+        co2Emissions: 0,
+      };
+      
+      await addProject(newProject);
+      
+      // Crear viaje con el projectId del nuevo proyecto
       const tripId = uuidv4();
       const tripData: Trip = {
         id: tripId,
         date: event.date,
         route,
-        project: event.title.trim(), // Título del evento como nombre (será cliente metadata)
-        projectId: undefined, // Sin projectId - el usuario lo asignará después
+        project: "", // Sin nombre de proyecto (Unknown)
+        projectId: projectId, // ID del proyecto creado
         purpose: event.description?.substring(0, 500) || "",
         passengers: 0,
         distance,
