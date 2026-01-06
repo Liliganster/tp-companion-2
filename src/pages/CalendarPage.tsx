@@ -180,12 +180,14 @@ export default function CalendarPage() {
       const data: any = await response.json().catch(() => null);
       console.log("Distance API response:", data);
       
-      if (!response.ok || !data?.distance) {
+      if (!response.ok || !data?.totalDistanceMeters) {
         console.error("Distance calculation failed:", response.status, data);
         return 0;
       }
       
-      return data.distance;
+      // Convertir metros a kilómetros
+      const distanceKm = Math.round(data.totalDistanceMeters / 1000);
+      return distanceKm;
     } catch (error) {
       console.error("Error calculating distance:", error);
       return 0;
@@ -956,7 +958,18 @@ export default function CalendarPage() {
                   <p className="text-sm font-medium">{t("calendar.importWillCreate")}</p>
                   <ul className="text-xs text-muted-foreground space-y-1 ml-4 list-disc">
                     <li>{t("calendar.importClientFromTitle")}</li>
-                    <li>{t("calendar.importRouteFromBase")}</li>
+                    <li>
+                      {t("calendar.importRouteFromBase")}
+                      {selectedEvent?.location && (
+                        <div className="mt-1 text-xs text-muted-foreground/80">
+                          {profile.baseAddress && profile.city ? (
+                            <>
+                              {profile.city} → {selectedEvent.location} → {profile.city}
+                            </>
+                          ) : null}
+                        </div>
+                      )}
+                    </li>
                     <li>{t("calendar.importProjectManual")}</li>
                     <li>{t("calendar.importDistanceCalculated")}</li>
                   </ul>
