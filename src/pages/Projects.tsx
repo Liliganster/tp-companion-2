@@ -68,8 +68,8 @@ export default function Projects() {
     enabled: profile.fuelType === "ev",
   });
   const { data: fuelFactor } = useClimatiqFuelFactor(
-    profile.fuelType === "gasoline" || profile.fuelType === "diesel" ? profile.fuelType : null,
-    { enabled: profile.fuelType === "gasoline" || profile.fuelType === "diesel" },
+    profile.fuelType === "diesel" ? profile.fuelType : null,
+    { enabled: profile.fuelType === "diesel" },
   );
 
   const emissionsInput = useMemo(() => {

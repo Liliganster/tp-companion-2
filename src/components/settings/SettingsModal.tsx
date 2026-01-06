@@ -88,8 +88,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     enabled: open && profileData.fuelType === "ev",
   });
   const { data: fuelFactor } = useClimatiqFuelFactor(
-    profileData.fuelType === "gasoline" ? "gasoline" : profileData.fuelType === "diesel" ? "diesel" : null,
-    { enabled: open && (profileData.fuelType === "gasoline" || profileData.fuelType === "diesel") }
+    profileData.fuelType === "diesel" ? "diesel" : null,
+    { enabled: open && profileData.fuelType === "diesel" }
   );
 
   useEffect(() => {

@@ -190,8 +190,8 @@ export default function AdvancedEmissions() {
   });
   const gridKgCo2PerKwh = atGrid?.kgCo2PerKwh ?? null;
   const { data: fuelFactor, isLoading: isLoadingFuel } = useClimatiqFuelFactor(
-    profile.fuelType === "gasoline" || profile.fuelType === "diesel" ? profile.fuelType : null,
-    { enabled: profile.fuelType === "gasoline" || profile.fuelType === "diesel" },
+    profile.fuelType === "diesel" ? profile.fuelType : null,
+    { enabled: profile.fuelType === "diesel" },
   );
 
   const isLoadingEmissionsData = isLoadingGrid || isLoadingFuel;
