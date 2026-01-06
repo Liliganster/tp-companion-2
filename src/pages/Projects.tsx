@@ -427,11 +427,23 @@ export default function Projects() {
     setCreateProjectOpen(true);
   };
 
-  const filteredProjects = projects.filter(
-    (project) =>
+  const filteredProjects = projects.filter((project) => {
+    const matchesSearch =
       project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      project.producer?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      project.producer?.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesProducer = selectedProducer === "all" || project.producer === selectedProducer;
+
+    if (!matchesSearch || !matchesProducer) return false;
+
+    if (selectedYear !== "all") {
+      const key = getProjectKey(project.name);
+      const stats = statsByProjectKey.get(key);
+      if (!stats || stats.trips === 0) return false;
+    }
+
+    return true;
+  });
 
   const selectedProjectStats = useMemo(() => {
     if (!selectedProject) return null;
