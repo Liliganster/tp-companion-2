@@ -35,8 +35,8 @@ function normalizeFuelType(input: unknown): FuelType | null {
 }
 
 function getEnvActivitySelection(fuelType: FuelType): ActivitySelection | null {
-  const fromEnv = fuelType === "gasoline" ? process.env.CLIMATIQ_ACTIVITY_ID_GASOLINE : process.env.CLIMATIQ_ACTIVITY_ID_DIESEL;
-  const activityId
+  const fromEnv = process.env.CLIMATIQ_ACTIVITY_ID_DIESEL;
+  const activityId = typeof fromEnv === "string" ? fromEnv.trim() : "";
   if (!activityId) return null;
   return { activityId, region: FUEL_CONFIG[fuelType].region };
 }
