@@ -144,7 +144,7 @@ function getTrendLabel(current: number, previous: number): EmissionsResult["tren
   return "stable";
 }
 
-const ADV_EMISSIONS_CONFIG_KEY = "advancedEmissions:config:v1";
+const ADV_EMISSIONS_CONFIG_KEY = "advancedEmissions:config:v2";
 
 function loadAdvancedEmissionsConfig(): {
   isConfigured: boolean;
