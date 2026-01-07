@@ -31,9 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "Webhook not configured" });
   }
 
-  const stripe = new Stripe(STRIPE_SECRET_KEY, {
-    apiVersion: "2024-12-18.acacia",
-  });
+  const stripe = new Stripe(STRIPE_SECRET_KEY);
 
   const sig = req.headers["stripe-signature"];
   if (!sig || typeof sig !== "string") {

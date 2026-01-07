@@ -46,9 +46,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: "No active subscription found" });
     }
 
-    const stripe = new Stripe(STRIPE_SECRET_KEY, {
-      apiVersion: "2024-12-18.acacia",
-    });
+    const stripe = new Stripe(STRIPE_SECRET_KEY);
 
     // Create billing portal session
     const session = await stripe.billingPortal.sessions.create({

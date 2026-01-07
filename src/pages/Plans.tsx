@@ -4,7 +4,6 @@ import { Check, Crown, Sparkles, Zap, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemo, useState } from "react";
 import { useI18n } from "@/hooks/use-i18n";
-import { isStripeConfigured } from "@/lib/stripe";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
@@ -16,11 +15,6 @@ export default function Plans() {
   const handleUpgrade = async (planId: string) => {
     if (!session?.access_token) {
       toast.error(t("auth.loginRequired"));
-      return;
-    }
-
-    if (!isStripeConfigured()) {
-      toast.info(t("plans.comingSoon"));
       return;
     }
 
@@ -36,15 +30,25 @@ export default function Plans() {
         body: JSON.stringify({ planId }),
       });
 
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error("Non-JSON response:", text);
+        throw new Error("Server error - please try again");
+      }
+
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to create checkout");
+        throw new Error(data.message || data.error || "Failed to create checkout");
       }
 
       // Redirect to Stripe Checkout
       if (data.url) {
         window.location.href = data.url;
+      } else {
+        throw new Error("No checkout URL returned");
       }
     } catch (error: any) {
       console.error("Checkout error:", error);

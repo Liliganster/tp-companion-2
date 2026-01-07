@@ -6,9 +6,18 @@ const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_PRICE_PRO = process.env.STRIPE_PRICE_PRO;
 const APP_URL = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
-  : "http://localhost:5173";
+  : process.env.VITE_APP_URL || "http://localhost:5173";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Set CORS headers
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -16,12 +25,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Validate Stripe configuration
   if (!STRIPE_SECRET_KEY) {
     console.error("STRIPE_SECRET_KEY not configured");
-    return res.status(500).json({ error: "Stripe not configured" });
+    return res.status(500).json({ error: "stripe_not_configured", message: "Stripe secret key not configured" });
   }
 
   if (!STRIPE_PRICE_PRO) {
     console.error("STRIPE_PRICE_PRO not configured");
-    return res.status(500).json({ error: "Stripe price not configured" });
+    return res.status(500).json({ error: "stripe_price_not_configured", message: "Stripe price not configured" });
   }
 
   // Require authenticated user
@@ -29,9 +38,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!user) return;
 
   try {
-    const stripe = new Stripe(STRIPE_SECRET_KEY, {
-      apiVersion: "2024-12-18.acacia",
-    });
+    const stripe = new Stripe(STRIPE_SECRET_KEY);
 
     const { priceId, planId } = req.body ?? {};
 
@@ -97,10 +104,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       url: session.url,
     });
   } catch (error: any) {
-    console.error("Stripe checkout error:", error);
+    console.error("Stripe checkout error:", error?.message || error);
     return res.status(500).json({
-      error: "Failed to create checkout session",
-      message: error.message,
+      error: "checkout_failed",
+      message: error?.message || "Failed to create checkout session",
     });
   }
 }
