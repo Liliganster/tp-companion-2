@@ -44,7 +44,12 @@ export function calculateTripEmissions(input: TripEmissionsInput): TripEmissions
   const fuelType: FuelType = (input.fuelType ?? "unknown") as FuelType;
 
   if (fuelType === "gasoline" || fuelType === "diesel") {
-    const fuelLPer100Km = input.fuelLPer100Km == null ? null : Number(input.fuelLPer100Km);
+    // Validate reasonable range (requested improvement: avoid absurd values like 1000L/100km)
+    let fuelLPer100Km = fuelLPer100KmRaw;
+    if (Number.isFinite(fuelLPer100KmRaw) && fuelLPer100KmRaw! > 50) {
+       console.warn(`Consumo anormalmente alto detectado: ${fuelLPer100KmRaw} L/100km. Se limitará a 50 L/100km.`);
+       fuelLPer100Km = 50;
+    }
     
     // Always need consumption for fuel-based calculation
     if (!Number.isFinite(fuelLPer100Km) || fuelLPer100Km <= 0) {

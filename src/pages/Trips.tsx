@@ -103,16 +103,7 @@ export default function Trips() {
     {},
   );
 
-  useEffect(() => {
-    const state = location.state as any;
-    const next = state?.tripPrefill;
-    if (!next || typeof next !== "object") return;
 
-    setTripPrefill(next);
-    setPrefillModalOpen(true);
-
-    // Clear navigation state so it doesn't reopen on refresh/back.
-    navigate(location.pathname + location.search, { replace: true, state: null });
   useEffect(() => {
     const state = location.state as any;
     const next = state?.tripPrefill;
