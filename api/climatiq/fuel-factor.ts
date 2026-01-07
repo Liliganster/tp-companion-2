@@ -159,18 +159,15 @@ export default async function handler(req: any, res: any) {
         activity_id: activityId,
       };
 
-      // For gasoline AT: include region and unit_type
-      // For diesel EU: include data_version
+      // Add region if present (AT for gasoline, EU for diesel)
       if (region) {
         emissionFactor.region = region;
       }
 
+      // Add unit_type for volume-based calculations
       if (config.paramType === "volume") {
         emissionFactor.unit_type = "volume";
       }
-
-      // Add data_version (optional but recommended)
-      emissionFactor.data_version = dataVersion;
 
       const requestBody = {
         emission_factor: emissionFactor,
