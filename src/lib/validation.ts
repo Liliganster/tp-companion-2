@@ -57,17 +57,16 @@ export function getConsumptionErrorMessage(
 ): string | null {
   if (result.valid) return null;
   
+  // Type assertion: we know result is the error variant
+  const errorResult = result as { valid: false; type: "excessive" | "tooLow"; value: number };
   const unit = isEv ? "kWh/100km" : "L/100km";
   const maxValue = isEv ? 35 : 50;
   const minValue = isEv ? 10 : 3;
   
-  if (result.type === "excessive") {
-    return `Consumo excesivo: ${result.value} ${unit}. El máximo permitido es ${maxValue} ${unit}.`;
+  if (errorResult.type === "excessive") {
+    return `Consumo excesivo: ${errorResult.value} ${unit}. El máximo permitido es ${maxValue} ${unit}.`;
   }
   
-  if (result.type === "tooLow") {
-    return `Consumo demasiado bajo: ${result.value} ${unit}. El mínimo realista es ${minValue} ${unit}.`;
-  }
-  
-  return null;
+  // errorResult.type === "tooLow"
+  return `Consumo demasiado bajo: ${errorResult.value} ${unit}. El mínimo realista es ${minValue} ${unit}.`;
 }
