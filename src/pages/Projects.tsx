@@ -146,7 +146,11 @@ export default function Projects() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "callsheet_jobs", filter: `user_id=eq.${user.id}` },
-        { event: "*", schema: "public", table: "callsheet_jobs", filter: `user_id=eq.${user.id}` },
+        () => schedule(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "project_documents", filter: `user_id=eq.${user.id}` },
         () => schedule(),
       )
       .subscribe();
@@ -165,18 +169,6 @@ export default function Projects() {
     // If selectedProducer is empty/invalid, reset to all
     if (!selectedProducer) setSelectedProducer("all");
   }, [selectedYear, selectedProducer]);
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "project_documents", filter: `user_id=eq.${user.id}` },
-        () => schedule(),
-      )
-      .subscribe();
-
-    return () => {
-      if (timer) clearTimeout(timer);
-      supabase.removeChannel(channel);
-    };
-  }, [user?.id]);
 
   useEffect(() => {
     try {
