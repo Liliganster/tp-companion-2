@@ -1,12 +1,58 @@
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
-import { Check, Crown, Sparkles, Zap } from "lucide-react";
+import { Check, Crown, Sparkles, Zap, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useI18n } from "@/hooks/use-i18n";
+import { isStripeConfigured } from "@/lib/stripe";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 export default function Plans() {
   const { t, tf, language } = useI18n();
+  const { session } = useAuth();
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+
+  const handleUpgrade = async (planId: string) => {
+    if (!session?.access_token) {
+      toast.error(t("auth.loginRequired"));
+      return;
+    }
+
+    if (!isStripeConfigured()) {
+      toast.info(t("plans.comingSoon"));
+      return;
+    }
+
+    setLoadingPlan(planId);
+
+    try {
+      const response = await fetch("/api/stripe/create-checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ planId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to create checkout");
+      }
+
+      // Redirect to Stripe Checkout
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (error: any) {
+      console.error("Checkout error:", error);
+      toast.error(error.message || t("plans.checkoutError"));
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
 
   const priceFormatter = useMemo(() => {
     const locale = language === "de" ? "de-DE" : language === "en" ? "en-US" : "es-ES";
@@ -200,8 +246,20 @@ export default function Plans() {
                   {t("plans.currentPlan")}
                 </Button>
               ) : (
-                <Button variant="add" className="w-full">
-                  {tf("plans.upgradeTo", { name: plan.name })}
+                <Button 
+                  variant="add" 
+                  className="w-full"
+                  disabled={loadingPlan === "pro"}
+                  onClick={() => handleUpgrade("pro")}
+                >
+                  {loadingPlan === "pro" ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      {t("common.loading")}
+                    </>
+                  ) : (
+                    tf("plans.upgradeTo", { name: plan.name })
+                  )}
                 </Button>
               )}
             </div>
