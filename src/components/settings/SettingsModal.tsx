@@ -569,7 +569,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                           </div>
                         )}
                         
-                        {fuelFactor.apiPayload && (
+                        {fuelFactor?.apiPayload && (
                           <div className="mt-2 pt-2 border-t border-border/50">
                              <details>
                                <summary className="text-[10px] text-primary cursor-pointer hover:underline select-none">
