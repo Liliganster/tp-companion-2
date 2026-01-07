@@ -15,7 +15,7 @@ const FUEL_CONFIG: Record<FuelType, {
 }> = {
   gasoline: {
     activityId: "fuel-type_motor_gasoline-fuel_use_na",
-    region: null, // No region - this activity_id is not region-specific
+    region: "EU", // Testing EU region
     paramType: "volume",
     fallbackValue: 2.31, // Standard kg CO2e/L fallback if API fails
     unit: "kgCo2ePerLiter",
