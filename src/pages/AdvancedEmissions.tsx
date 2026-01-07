@@ -241,6 +241,17 @@ export default function AdvancedEmissions() {
   const [fuelEfficiency, setFuelEfficiency] = useState(() => loadAdvancedEmissionsConfig().fuelEfficiency);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
+  // Clean up old localStorage key on mount
+  useEffect(() => {
+    try {
+      if (typeof window === "undefined") return;
+      // Delete old v1 config to prevent any fallback to old "12" value
+      window.localStorage.removeItem("advancedEmissions:config:v1");
+    } catch {
+      // ignore
+    }
+  }, []);
+
   useEffect(() => {
     try {
       if (typeof window === "undefined") return;
