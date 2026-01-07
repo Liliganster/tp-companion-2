@@ -46,20 +46,14 @@ export function calculateTripEmissions(input: TripEmissionsInput): TripEmissions
   if (fuelType === "gasoline" || fuelType === "diesel") {
     let fuelLPer100Km = input.fuelLPer100Km == null ? null : Number(input.fuelLPer100Km);
     
-    // Validate reasonable range (3-50 L/100km)
-    // Below 3 L/100km: Too efficient, likely data error
-    // Above 50 L/100km: Absurdly high, limit to maximum reasonable consumption
+    // Validation warnings (UI forms should prevent saving invalid values)
     if (fuelLPer100Km !== null && Number.isFinite(fuelLPer100Km)) {
-      const originalValue = fuelLPer100Km;
-      
       if (fuelLPer100Km < 3 && fuelLPer100Km > 0) {
-        console.warn(`⚠️ Consumo anormalmente bajo detectado: ${fuelLPer100Km} L/100km. Verifique los datos. Usando fallback.`);
-        return { co2Kg: calculateCO2KgFromKm(distanceKm), method: "fallback_km" };
+        console.warn(`⚠️ Consumo anormalmente bajo: ${fuelLPer100Km} L/100km (mínimo realista: 3 L/100km)`);
       }
       
       if (fuelLPer100Km > 50) {
-        fuelLPer100Km = 50;
-        console.warn(`⚠️ Consumo excesivo detectado: ${originalValue} L/100km → Limitado a ${fuelLPer100Km} L/100km`);
+        console.warn(`⚠️ Consumo excesivo: ${fuelLPer100Km} L/100km (máximo realista: 50 L/100km)`);
       }
     }
     
@@ -97,17 +91,14 @@ export function calculateTripEmissions(input: TripEmissionsInput): TripEmissions
   if (fuelType === "ev") {
     let evKwhPer100Km = input.evKwhPer100Km == null ? null : Number(input.evKwhPer100Km);
     
-    // Validate reasonable range for EV (10-35 kWh/100km)
-    // Below 10 kWh/100km: Unrealistically efficient, likely data error
-    // Above 35 kWh/100km: Very high consumption, possibly heavy vehicle or extreme conditions
+    // Validation warnings (UI forms should prevent saving invalid values)
     if (evKwhPer100Km !== null && Number.isFinite(evKwhPer100Km)) {
       if (evKwhPer100Km < 10 && evKwhPer100Km > 0) {
-        console.warn(`Consumo EV anormalmente bajo detectado: ${evKwhPer100Km} kWh/100km. Verifique los datos. Usando fallback.`);
-        return { co2Kg: calculateCO2KgFromKm(distanceKm), method: "fallback_km" };
+        console.warn(`⚠️ Consumo EV anormalmente bajo: ${evKwhPer100Km} kWh/100km (mínimo realista: 10 kWh/100km)`);
       }
+      
       if (evKwhPer100Km > 35) {
-        console.warn(`Consumo EV anormalmente alto detectado: ${evKwhPer100Km} kWh/100km. Se limitará a 35 kWh/100km.`);
-        evKwhPer100Km = 35;
+        console.warn(`⚠️ Consumo EV excesivo: ${evKwhPer100Km} kWh/100km (máximo realista: 35 kWh/100km)`);
       }
     }
     

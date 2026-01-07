@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { useClimatiqFuelFactor } from "@/hooks/use-climatiq";
 import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
 import { Info, ExternalLink } from "lucide-react";
+import { validateFuelConsumption, validateEvConsumption, getConsumptionErrorMessage } from "@/lib/validation";
 
 interface VehicleConfigModalProps {
   open: boolean;
@@ -80,6 +81,25 @@ export function VehicleConfigModal({ open, onOpenChange }: VehicleConfigModalPro
       if (parseLocaleNumber(raw) == null) {
         // Keep it simple and explicit; prevents silent "null" writes.
         toast.error(`${t("vehicleConfig.invalidNumber")}: ${t(f.key as any)}`, { id: "vehicle-config-validate" });
+        return;
+      }
+    }
+
+    // Validate consumption ranges
+    if (isElectric) {
+      const evValue = parseLocaleNumber(evConsumption);
+      const result = validateEvConsumption(evValue);
+      if (!result.valid) {
+        const errorMsg = getConsumptionErrorMessage(result, true);
+        toast.error(errorMsg || "Consumo inválido", { id: "vehicle-config-consumption" });
+        return;
+      }
+    } else if (fuelType === "gasoline" || fuelType === "diesel") {
+      const fuelValue = parseLocaleNumber(fuelConsumption);
+      const result = validateFuelConsumption(fuelValue);
+      if (!result.valid) {
+        const errorMsg = getConsumptionErrorMessage(result, false);
+        toast.error(errorMsg || "Consumo inválido", { id: "vehicle-config-consumption" });
         return;
       }
     }

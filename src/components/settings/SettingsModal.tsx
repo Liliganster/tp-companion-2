@@ -38,8 +38,9 @@ import { useAppearance } from "@/contexts/AppearanceContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import { formatLocaleNumber } from "@/lib/number";
+import { formatLocaleNumber, parseLocaleNumber } from "@/lib/number";
 import { DEFAULT_GRID_KG_CO2_PER_KWH_FALLBACK } from "@/lib/emissions";
+import { validateFuelConsumption, validateEvConsumption, getConsumptionErrorMessage } from "@/lib/validation";
 
 interface SettingsModalProps {
   open: boolean;
@@ -248,6 +249,33 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   };
 
   const handleSave = () => {
+    // Validate consumption ranges before saving
+    if (profileData.fuelType === "ev") {
+      const evValue = parseLocaleNumber(profileData.evKwhPer100Km);
+      const result = validateEvConsumption(evValue);
+      if (!result.valid) {
+        const errorMsg = getConsumptionErrorMessage(result, true);
+        toast({
+          title: "Validación",
+          description: errorMsg || "Consumo inválido",
+          variant: "destructive",
+        });
+        return;
+      }
+    } else if (profileData.fuelType === "gasoline" || profileData.fuelType === "diesel") {
+      const fuelValue = parseLocaleNumber(profileData.fuelLPer100Km);
+      const result = validateFuelConsumption(fuelValue);
+      if (!result.valid) {
+        const errorMsg = getConsumptionErrorMessage(result, false);
+        toast({
+          title: "Validación",
+          description: errorMsg || "Consumo inválido",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     void saveProfile(profileData, {
       toastId: "settings-save",
       loadingText: t("settings.toastSaving"),
