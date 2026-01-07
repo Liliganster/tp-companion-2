@@ -99,8 +99,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           await updateUserProfile(`id=eq.${userId}`, {
             subscription_status: subscription.status,
             subscription_cancel_at_period_end: subscription.cancel_at_period_end,
-            subscription_current_period_end: subscription.current_period_end
-              ? new Date(subscription.current_period_end * 1000).toISOString()
+            subscription_current_period_end: (subscription as any).current_period_end
+              ? new Date((subscription as any).current_period_end * 1000).toISOString()
               : null,
             subscription_updated_at: new Date().toISOString(),
           });
@@ -125,7 +125,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
-        const subscriptionId = invoice.subscription as string;
+        const subscriptionId = (invoice as any).subscription as string;
 
         if (subscriptionId) {
           await updateUserProfile(`stripe_subscription_id=eq.${subscriptionId}`, {

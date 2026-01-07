@@ -39,7 +39,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     });
 
-    const profiles: any[] = await profileResponse.json().catch(() => []);
+    const data = await profileResponse.json().catch(() => []);
+    const profiles: any[] = Array.isArray(data) ? data : [];
     const profile = profiles?.[0];
 
     if (!profile?.stripe_customer_id) {
