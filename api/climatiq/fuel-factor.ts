@@ -155,13 +155,23 @@ export default async function handler(req: any, res: any) {
         ? { volume: 1, volume_unit: "l" }
         : { distance: 1, distance_unit: "km" };
       
-      const requestBody: any = {
-        emission_factor: {
-          activity_id: activityId,
-          ...(region ? { region } : {}), // Only include region if provided
-          data_version: dataVersion,
-          ...(config.paramType === "volume" ? { unit_type: "volume" } : {}),
-        },
+      const emissionFactor: any = {
+        activity_id: activityId,
+        data_version: dataVersion,
+      };
+
+      // Add region if present (required for gasoline AT)
+      if (region) {
+        emissionFactor.region = region;
+      }
+
+      // Add unit_type for volume-based calculations
+      if (config.paramType === "volume") {
+        emissionFactor.unit_type = "volume";
+      }
+
+      const requestBody = {
+        emission_factor: emissionFactor,
         parameters,
       };
 
