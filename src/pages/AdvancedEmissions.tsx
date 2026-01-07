@@ -561,7 +561,7 @@ export default function AdvancedEmissions() {
             <p className="text-muted-foreground text-center max-w-lg mb-8">
               {t("advancedEmissions.welcomeBody")}
             </p>
-            </Button>
+
           </div>
         ) : isLoadingEmissionsData ? (
           <div className="flex flex-col items-center justify-center py-24 animate-fade-in">
