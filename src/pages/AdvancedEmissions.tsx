@@ -18,6 +18,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   ArrowLeft,
   Settings2,
   Download,
@@ -29,7 +35,13 @@ import {
   Save,
   Flame,
   Loader2,
+  FileSpreadsheet,
+  FileText,
+  File as FileIcon,
 } from "lucide-react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/hooks/use-i18n";
@@ -403,49 +415,87 @@ export default function AdvancedEmissions() {
     setConfigModalOpen(false);
   };
 
-  const handleExport = () => {
+  const getExportData = () => {
     const rows = computed.results ?? [];
+    return rows.map(r => ({
+      Rank: r.rank,
+      Name: r.name,
+      "CO2 (kg)": r.co2Kg,
+      "Efficiency (kg/km)": r.efficiency,
+      "Distance (km)": r.distanceKm,
+      Trips: r.trips,
+      Rating: ratingLabel(r.rating),
+      Trend: trendLabel(r.trend),
+    }));
+  };
 
-    const header = [
-      "rank",
-      "name",
-      "co2Kg",
-      "efficiencyKgPerKm",
-      "distanceKm",
-      "trips",
-      "rating",
-      "trend",
-    ];
-
+  const handleExportCsv = () => {
+    const data = getExportData();
+    if (data.length === 0) return;
+    
+    const header = Object.keys(data[0]);
     const escape = (v: unknown) => {
       const s = String(v ?? "");
       if (/[\n\r",]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
       return s;
     };
 
-    const lines: string[] = [];
-    lines.push(header.join(","));
-    for (const r of rows) {
-      lines.push(
-        [
-          r.rank,
-          r.name,
-          r.co2Kg,
-          r.efficiency,
-          r.distanceKm,
-          r.trips,
-          ratingLabel(r.rating),
-          trendLabel(r.trend),
-        ].map(escape).join(","),
-      );
-    }
-
-    // Add summary row at end
-    lines.push("");
-    lines.push(["total", "", computed.totalCo2, computed.avgEfficiency, "", "", "", ""].map(escape).join(","));
+    const lines = [
+      header.map(escape).join(","),
+      ...data.map(row => Object.values(row).map(escape).join(","))
+    ];
 
     const fileBase = `advanced-emissions-${timeRange}-${viewMode}-${sortBy}`;
     downloadTextFile(lines.join("\n"), `${fileBase}.csv`, "text/csv;charset=utf-8");
+  };
+
+  const handleExportExcel = () => {
+    const data = getExportData();
+    if (data.length === 0) return;
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Emissions");
+    
+    const fileBase = `advanced-emissions-${timeRange}-${viewMode}-${sortBy}`;
+    XLSX.writeFile(workbook, `${fileBase}.xlsx`);
+  };
+
+  const handleExportPdf = () => {
+    const rows = computed.results ?? [];
+    if (rows.length === 0) return;
+
+    const doc = new jsPDF();
+    
+    // Title
+    doc.setFontSize(18);
+    doc.text(t("advancedEmissions.pageTitle"), 14, 22);
+    
+    doc.setFontSize(11);
+    doc.text(`${t("advancedEmissions.timeRange")}: ${timeRange}`, 14, 30);
+    doc.text(`Total CO2: ${computed.totalCo2} kg`, 14, 36);
+
+    const tableHeaders = [
+      ["Rank", "Name", "CO2 (kg)", "Eff (kg/km)", "Dist (km)", "Rating"]
+    ];
+
+    const tableData = rows.map(r => [
+      r.rank,
+      r.name,
+      r.co2Kg,
+      r.efficiency,
+      r.distanceKm,
+      ratingLabel(r.rating)
+    ]);
+
+    autoTable(doc, {
+      head: tableHeaders,
+      body: tableData,
+      startY: 44,
+    });
+
+    const fileBase = `advanced-emissions-${timeRange}-${viewMode}-${sortBy}`;
+    doc.save(`${fileBase}.pdf`);
   };
 
   return (
@@ -475,10 +525,28 @@ export default function AdvancedEmissions() {
               <Settings2 className="w-4 h-4" />
               <span className="hidden sm:inline">{t("advancedEmissions.configureButton")}</span>
             </Button>
-            <Button className="gap-2 bg-primary hover:bg-primary/90" type="button" onClick={handleExport}>
-              <Download className="w-4 h-4" />
-              {t("advancedEmissions.export")}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="gap-2 bg-primary hover:bg-primary/90" type="button">
+                  <Download className="w-4 h-4" />
+                  {t("advancedEmissions.export")}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleExportExcel} className="gap-2 cursor-pointer">
+                  <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                  <span>Excel (.xlsx)</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportPdf} className="gap-2 cursor-pointer">
+                  <FileText className="w-4 h-4 text-red-500" />
+                  <span>PDF (.pdf)</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportCsv} className="gap-2 cursor-pointer">
+                  <FileIcon className="w-4 h-4 text-gray-500" />
+                  <span>CSV (.csv)</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -493,13 +561,6 @@ export default function AdvancedEmissions() {
             <p className="text-muted-foreground text-center max-w-lg mb-8">
               {t("advancedEmissions.welcomeBody")}
             </p>
-            <Button
-              variant="add"
-              onClick={() => setConfigModalOpen(true)}
-              className="gap-2"
-            >
-              <Settings2 className="w-4 h-4" />
-              {t("advancedEmissions.configureButton")}
             </Button>
           </div>
         ) : isLoadingEmissionsData ? (
@@ -510,6 +571,23 @@ export default function AdvancedEmissions() {
         ) : (
           /* Results State */
           <div className="space-y-6 animate-fade-in">
+             {/* Legend */}
+             <div className="flex flex-wrap items-center gap-4 text-xs sm:text-sm p-3 rounded-lg border bg-card/50">
+                <span className="font-semibold mr-2">Guide:</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-success"></span>
+                  <span>Low CO₂ (Good)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>
+                  <span>Moderate</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-destructive"></span>
+                  <span>High CO₂ (Bad)</span>
+                </div>
+             </div>
+
             {/* Stats Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="glass-card p-5">
