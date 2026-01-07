@@ -548,6 +548,10 @@ const es = {
   "advancedRoutes.errorCreateFailed": "No se pudo crear la plantilla",
   "advancedRoutes.toastUpdated": "Plantilla actualizada",
   "advancedRoutes.toastCreated": "Plantilla creada",
+  "advancedRoutes.edit": "Editar",
+  "advancedRoutes.use": "Usar",
+  "advancedRoutes.loading": "Cargando…",
+  "advancedRoutes.noTemplatesInCategory": "No hay plantillas en esta categoría. Crea tu primera plantilla para empezar.",
   "advancedRoutes.toastSaveFailed": "No se pudo guardar la plantilla",
   "advancedRoutes.toastUsesUpdateFailed": "No se pudo actualizar el contador",
 
@@ -1285,6 +1289,10 @@ const en: Record<I18nKey, string> = {
   "advancedRoutes.errorCreateFailed": "Couldn't create the template",
   "advancedRoutes.toastUpdated": "Template updated",
   "advancedRoutes.toastCreated": "Template created",
+  "advancedRoutes.edit": "Edit",
+  "advancedRoutes.use": "Use",
+  "advancedRoutes.loading": "Loading…",
+  "advancedRoutes.noTemplatesInCategory": "No templates in this category. Create your first template to get started.",
   "advancedRoutes.toastSaveFailed": "Couldn't save the template",
   "advancedRoutes.toastUsesUpdateFailed": "Couldn't update the counter",
 
@@ -2020,6 +2028,10 @@ const de: Record<I18nKey, string> = {
   "advancedRoutes.errorCreateFailed": "Vorlage konnte nicht erstellt werden",
   "advancedRoutes.toastUpdated": "Vorlage aktualisiert",
   "advancedRoutes.toastCreated": "Vorlage erstellt",
+  "advancedRoutes.edit": "Bearbeiten",
+  "advancedRoutes.use": "Verwenden",
+  "advancedRoutes.loading": "Laden…",
+  "advancedRoutes.noTemplatesInCategory": "Keine Vorlagen in dieser Kategorie. Erstelle deine erste Vorlage, um loszulegen.",
   "advancedRoutes.toastSaveFailed": "Vorlage konnte nicht gespeichert werden",
   "advancedRoutes.toastUsesUpdateFailed": "Zähler konnte nicht aktualisiert werden",
 

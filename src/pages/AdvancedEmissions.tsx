@@ -621,23 +621,6 @@ export default function AdvancedEmissions() {
         ) : (
           /* Results State */
           <div className="space-y-6 animate-fade-in">
-             {/* Legend */}
-             <div className="flex flex-wrap items-center gap-4 text-xs sm:text-sm p-3 rounded-lg border bg-card/50">
-                <span className="font-semibold mr-2">Guide:</span>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-success"></span>
-                  <span>Low CO₂ (Good)</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>
-                  <span>Moderate</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-destructive"></span>
-                  <span>High CO₂ (Bad)</span>
-                </div>
-             </div>
-
             {/* Stats Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="glass-card p-5">

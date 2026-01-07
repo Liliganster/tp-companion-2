@@ -495,10 +495,10 @@ export default function AdvancedRoutes() {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <Button variant="outline" size="sm" onClick={() => openEditModal(template)} disabled={loading}>
-                    Editar
+                    {t("advancedRoutes.edit")}
                   </Button>
                   <Button size="sm" onClick={() => handleUseTemplate(template)} disabled={loading}>
-                    Usar
+                    {t("advancedRoutes.use")}
                   </Button>
                 </div>
               </div>
@@ -507,7 +507,7 @@ export default function AdvancedRoutes() {
         ) : (
           <div className="glass-card p-12 text-center animate-fade-in animation-delay-300">
             <p className="text-muted-foreground">
-              {loading ? "Cargando…" : "No hay plantillas en esta categoría. Crea tu primera plantilla para empezar."}
+              {loading ? t("advancedRoutes.loading") : t("advancedRoutes.noTemplatesInCategory")}
             </p>
           </div>
         )}
