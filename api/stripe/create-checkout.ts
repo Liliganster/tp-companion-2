@@ -2,8 +2,8 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import Stripe from "stripe";
 import { requireSupabaseUser } from "../_utils/supabase";
 
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const STRIPE_PRICE_PRO = process.env.STRIPE_PRICE_PRO;
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY?.replace(/\s/g, "");
+const STRIPE_PRICE_PRO = process.env.STRIPE_PRICE_PRO || process.env.VITE_STRIPE_PRICE_PRO;
 const APP_URL = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
   : process.env.VITE_APP_URL || "http://localhost:5173";
