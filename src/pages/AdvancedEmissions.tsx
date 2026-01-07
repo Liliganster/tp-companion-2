@@ -58,7 +58,7 @@ type EmissionsResult = {
   id: string;
   rank: number;
   name: string;
-  rating: "excellent" | "good" | "fair" | "poor";
+  rating: "muy-baja" | "baja" | "moderada" | "alta" | "muy-alta";
   trend: "stable" | "new" | "improving" | "worsening";
   co2Kg: number;
   efficiency: number;
@@ -139,11 +139,12 @@ function getRange(now: Date, timeRange: string): { start: Date; end: Date; prevS
 }
 
 function getRatingFromEfficiencyKgPerKm(eff: number): EmissionsResult["rating"] {
-  // Simple heuristic categories: lower kg/km is better.
-  if (eff <= 0.12) return "excellent";
-  if (eff <= 0.16) return "good";
-  if (eff <= 0.22) return "fair";
-  return "poor";
+  // Categorías objetivas según nivel de emisiones (kg CO₂/km)
+  if (eff <= 0.12) return "muy-baja";  // Excelente: vehículos muy eficientes
+  if (eff <= 0.16) return "baja";      // Buena: vehículos eficientes
+  if (eff <= 0.22) return "moderada";  // Moderada: promedio
+  if (eff <= 0.30) return "alta";      // Alta: vehículos menos eficientes
+  return "muy-alta";                   // Muy alta: vehículos ineficientes
 }
 
 function getTrendLabel(current: number, previous: number): EmissionsResult["trend"] {
@@ -204,14 +205,18 @@ export default function AdvancedEmissions() {
   const ratingLabel = useMemo(
     () => (rating: EmissionsResult["rating"]) => {
       switch (rating) {
-        case "excellent":
-          return t("advancedEmissions.ratingExcellent");
-        case "good":
-          return t("advancedEmissions.ratingGood");
-        case "fair":
-          return t("advancedEmissions.ratingFair");
+        case "muy-baja":
+          return t("advancedEmissions.ratingVeryLow");
+        case "baja":
+          return t("advancedEmissions.ratingLow");
+        case "moderada":
+          return t("advancedEmissions.ratingModerate");
+        case "alta":
+          return t("advancedEmissions.ratingHigh");
+        case "muy-alta":
+          return t("advancedEmissions.ratingVeryHigh");
         default:
-          return t("advancedEmissions.ratingPoor");
+          return t("advancedEmissions.ratingModerate");
       }
     },
     [t],
