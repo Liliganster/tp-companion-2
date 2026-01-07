@@ -157,6 +157,7 @@ export default async function handler(req: any, res: any) {
       
       const emissionFactor: any = {
         activity_id: activityId,
+        data_version: "^0",
       };
 
       // Add region if present (AT for gasoline, EU for diesel)
