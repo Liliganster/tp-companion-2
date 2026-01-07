@@ -130,8 +130,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     enabled: profile.fuelType === "ev",
   });
   const { data: fuelFactor, isLoading: isLoadingFuel } = useClimatiqFuelFactor(
-    profile.fuelType === "diesel" ? profile.fuelType : null,
-    { enabled: profile.fuelType === "diesel" },
+    profile.fuelType === "gasoline" || profile.fuelType === "diesel" ? profile.fuelType : null,
+    { enabled: profile.fuelType === "gasoline" || profile.fuelType === "diesel" },
   );
 
   const isLoadingEmissionsData = isLoadingGrid || isLoadingFuel;

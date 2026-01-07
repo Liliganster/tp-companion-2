@@ -33,8 +33,8 @@ export function VehicleConfigModal({ open, onOpenChange }: VehicleConfigModalPro
   const isElectric = fuelType === "ev";
 
   const { data: fuelFactor } = useClimatiqFuelFactor(
-    fuelType === "diesel" ? fuelType : null,
-    { enabled: fuelType === "diesel" },
+    fuelType === "gasoline" || fuelType === "diesel" ? fuelType : null,
+    { enabled: fuelType === "gasoline" || fuelType === "diesel" },
   );
   const { data: gridData } = useElectricityMapsCarbonIntensity("AT", {
     enabled: fuelType === "ev",

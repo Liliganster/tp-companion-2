@@ -69,8 +69,8 @@ export function TripsProvider({ children }: { children: ReactNode }) {
   });
 
   const { data: fuelFactor } = useClimatiqFuelFactor(
-    profile.fuelType === "diesel" ? profile.fuelType : null,
-    { enabled: profile.fuelType === "diesel" },
+    profile.fuelType === "gasoline" || profile.fuelType === "diesel" ? profile.fuelType : null,
+    { enabled: profile.fuelType === "gasoline" || profile.fuelType === "diesel" },
   );
 
   const emissionsInput = useMemo(() => {
