@@ -113,7 +113,32 @@ export default function Trips() {
 
     // Clear navigation state so it doesn't reopen on refresh/back.
     navigate(location.pathname + location.search, { replace: true, state: null });
+  useEffect(() => {
+    const state = location.state as any;
+    const next = state?.tripPrefill;
+    if (!next || typeof next !== "object") return;
+
+    setTripPrefill(next);
+    setPrefillModalOpen(true);
+
+    // Clear navigation state so it doesn't reopen on refresh/back.
+    navigate(location.pathname + location.search, { replace: true, state: null });
   }, [location.pathname, location.search, location.state, navigate]);
+
+  // Validate filters
+  useEffect(() => {
+    // If selectedProject is not 'all' and not found in uniqueProjects, reset to 'all'
+    if (selectedProject !== "all" && uniqueProjects.length > 0 && !uniqueProjects.includes(selectedProject)) {
+      setSelectedProject("all");
+    }
+    
+    // Validate year (simple check if it looks like a year, or reset if needed)
+    // For now we assume typical years, but if the list of years was dynamic we'd check against that.
+    // Here we just ensure it's not empty if not "all".
+    if (!selectedYear) {
+      setSelectedYear("all");
+    }
+  }, [selectedProject, uniqueProjects, selectedYear]);
 
   useEffect(() => {
     if (!supabase) return;

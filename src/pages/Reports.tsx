@@ -131,6 +131,20 @@ export default function Reports() {
   };
 
   const [selectedProject, setSelectedProject] = useState("all");
+  
+  // Validate selectedProject against trips list
+  useEffect(() => {
+    if (selectedProject === "all") return;
+    
+    // Get unique projects from trips
+    const uniqueProjects = Array.from(
+      new Set(trips.map((t) => t.project).map((p) => p.trim()).filter(Boolean))
+    );
+    
+    if (uniqueProjects.length > 0 && !uniqueProjects.includes(selectedProject)) {
+       setSelectedProject("all");
+    }
+  }, [selectedProject, trips]);
   const [reportType, setReportType] = useState<"filmcrew" | "general">("filmcrew");
   const toDateInputValue = (d: Date) => {
     const y = d.getFullYear();

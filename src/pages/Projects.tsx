@@ -146,8 +146,25 @@ export default function Projects() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "callsheet_jobs", filter: `user_id=eq.${user.id}` },
+        { event: "*", schema: "public", table: "callsheet_jobs", filter: `user_id=eq.${user.id}` },
         () => schedule(),
       )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+      if (timer) clearTimeout(timer);
+    };
+  }, [user?.id]);
+
+  // Validate filters
+  useEffect(() => {
+    // If selectedYear is empty/invalid, reset to all
+    if (!selectedYear) setSelectedYear("all");
+    
+    // If selectedProducer is empty/invalid, reset to all
+    if (!selectedProducer) setSelectedProducer("all");
+  }, [selectedYear, selectedProducer]);
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "project_documents", filter: `user_id=eq.${user.id}` },

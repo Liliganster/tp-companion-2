@@ -231,6 +231,20 @@ export default function AdvancedEmissions() {
     [t],
   );
 
+  const getRatingColor = (rating: EmissionsResult["rating"]) => {
+    switch (rating) {
+      case "excellent":
+      case "good":
+        return "bg-emerald-500/20 text-emerald-500";
+      case "fair":
+        return "bg-yellow-500/20 text-yellow-500";
+      case "poor":
+        return "bg-destructive/20 text-destructive";
+      default:
+        return "bg-secondary/40 text-muted-foreground";
+    }
+  };
+
   const fallbackTripName = t("advancedEmissions.fallbackTripName");
   const fallbackProjectName = t("advancedEmissions.fallbackProjectName");
 
@@ -244,10 +258,21 @@ export default function AdvancedEmissions() {
   const [fuelEfficiency, setFuelEfficiency] = useState(() => loadAdvancedEmissionsConfig().fuelEfficiency);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
-  // Clean up old localStorage key on mount
+  // Clean up old localStorage key on mount & validate selectedProjectId
   useEffect(() => {
     try {
       if (typeof window === "undefined") return;
+      window.localStorage.removeItem("advancedEmissions:config:v1");
+    } catch {}
+
+    // Validate selectedProjectId
+    if (selectedProjectId && selectedProjectId !== "all") {
+      const exists = projects.some(p => p.id === selectedProjectId);
+      if (!exists) {
+        setSelectedProjectId(null);
+      }
+    }
+  }, [selectedProjectId, projects]);
       // Delete old v1 config to prevent any fallback to old "12" value
       window.localStorage.removeItem("advancedEmissions:config:v1");
     } catch {
@@ -668,7 +693,7 @@ export default function AdvancedEmissions() {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-4">
                         <h4 className="font-semibold">{result.name}</h4>
-                        <span className="px-2 py-0.5 text-xs rounded-full bg-destructive/20 text-destructive">
+                        <span className={cn("px-2 py-0.5 text-xs rounded-full", getRatingColor(result.rating))}>
                           {ratingLabel(result.rating)}
                         </span>
                         <span className={cn(
