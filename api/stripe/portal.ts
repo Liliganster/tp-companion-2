@@ -1,8 +1,10 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import Stripe from "stripe";
-import { requireSupabaseUser, getAdminClient } from "../_utils/supabase";
+import { requireSupabaseUser } from "../_utils/supabase";
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const APP_URL = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
   : "http://localhost:5173";
@@ -16,20 +18,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "Stripe not configured" });
   }
 
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return res.status(500).json({ error: "Server configuration error" });
+  }
+
   const user = await requireSupabaseUser(req, res);
   if (!user) return;
 
   try {
-    const supabase = getAdminClient();
-    
     // Get user's Stripe customer ID
-    const { data: profile, error: profileError } = await supabase
-      .from("user_profiles")
-      .select("stripe_customer_id")
-      .eq("id", user.id)
-      .single();
+    const url = new URL(`${SUPABASE_URL}/rest/v1/user_profiles`);
+    url.searchParams.set("select", "stripe_customer_id");
+    url.searchParams.set("id", `eq.${user.id}`);
+    url.searchParams.set("limit", "1");
 
-    if (profileError || !profile?.stripe_customer_id) {
+    const profileResponse = await fetch(url.toString(), {
+      headers: {
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+      },
+    });
+
+    const profiles: any[] = await profileResponse.json().catch(() => []);
+    const profile = profiles?.[0];
+
+    if (!profile?.stripe_customer_id) {
       return res.status(400).json({ error: "No active subscription found" });
     }
 

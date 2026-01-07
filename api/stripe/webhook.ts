@@ -1,9 +1,10 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import Stripe from "stripe";
-import { getAdminClient } from "../_utils/supabase";
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 // Disable body parsing to get raw body for webhook verification
 export const config = {
@@ -49,7 +50,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: `Webhook Error: ${err.message}` });
   }
 
-  const supabase = getAdminClient();
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    console.error("Missing Supabase configuration");
+    return res.status(500).json({ error: "Server configuration error" });
+  }
+
+  // Helper to update user profile
+  async function updateUserProfile(filter: string, data: Record<string, any>) {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles?${filter}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        apikey: SUPABASE_SERVICE_ROLE_KEY!,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`Supabase update failed: ${response.status} ${text}`);
+    }
+  }
 
   try {
     switch (event.type) {
@@ -59,23 +81,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const planId = session.metadata?.plan_id;
 
         if (userId && planId) {
-          // Update user's subscription in database
-          const { error } = await supabase
-            .from("user_profiles")
-            .update({
-              plan_id: planId,
-              stripe_customer_id: session.customer as string,
-              stripe_subscription_id: session.subscription as string,
-              subscription_status: "active",
-              subscription_updated_at: new Date().toISOString(),
-            })
-            .eq("id", userId);
-
-          if (error) {
-            console.error("Failed to update user subscription:", error);
-          } else {
-            console.log(`User ${userId} upgraded to ${planId}`);
-          }
+          await updateUserProfile(`id=eq.${userId}`, {
+            plan_id: planId,
+            stripe_customer_id: session.customer as string,
+            stripe_subscription_id: session.subscription as string,
+            subscription_status: "active",
+            subscription_updated_at: new Date().toISOString(),
+          });
+          console.log(`User ${userId} upgraded to ${planId}`);
         }
         break;
       }
@@ -85,24 +98,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const userId = subscription.metadata?.supabase_user_id;
 
         if (userId) {
-          const status = subscription.status;
-          const cancelAtPeriodEnd = subscription.cancel_at_period_end;
-
-          const { error } = await supabase
-            .from("user_profiles")
-            .update({
-              subscription_status: status,
-              subscription_cancel_at_period_end: cancelAtPeriodEnd,
-              subscription_current_period_end: subscription.current_period_end
-                ? new Date(subscription.current_period_end * 1000).toISOString()
-                : null,
-              subscription_updated_at: new Date().toISOString(),
-            })
-            .eq("id", userId);
-
-          if (error) {
-            console.error("Failed to update subscription status:", error);
-          }
+          await updateUserProfile(`id=eq.${userId}`, {
+            subscription_status: subscription.status,
+            subscription_cancel_at_period_end: subscription.cancel_at_period_end,
+            subscription_current_period_end: subscription.current_period_end
+              ? new Date(subscription.current_period_end * 1000).toISOString()
+              : null,
+            subscription_updated_at: new Date().toISOString(),
+          });
         }
         break;
       }
@@ -112,21 +115,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const userId = subscription.metadata?.supabase_user_id;
 
         if (userId) {
-          // Downgrade to free plan
-          const { error } = await supabase
-            .from("user_profiles")
-            .update({
-              plan_id: "free",
-              subscription_status: "canceled",
-              subscription_updated_at: new Date().toISOString(),
-            })
-            .eq("id", userId);
-
-          if (error) {
-            console.error("Failed to downgrade user:", error);
-          } else {
-            console.log(`User ${userId} downgraded to free`);
-          }
+          await updateUserProfile(`id=eq.${userId}`, {
+            plan_id: "free",
+            subscription_status: "canceled",
+            subscription_updated_at: new Date().toISOString(),
+          });
+          console.log(`User ${userId} downgraded to free`);
         }
         break;
       }
@@ -136,18 +130,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const subscriptionId = invoice.subscription as string;
 
         if (subscriptionId) {
-          // Mark subscription as past_due
-          const { error } = await supabase
-            .from("user_profiles")
-            .update({
-              subscription_status: "past_due",
-              subscription_updated_at: new Date().toISOString(),
-            })
-            .eq("stripe_subscription_id", subscriptionId);
-
-          if (error) {
-            console.error("Failed to mark subscription past_due:", error);
-          }
+          await updateUserProfile(`stripe_subscription_id=eq.${subscriptionId}`, {
+            subscription_status: "past_due",
+            subscription_updated_at: new Date().toISOString(),
+          });
         }
         break;
       }
