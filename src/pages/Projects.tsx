@@ -55,8 +55,7 @@ import { uuidv4 } from "@/lib/utils";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { calculateTripEmissions } from "@/lib/emissions";
 import { parseLocaleNumber } from "@/lib/number";
-import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
-import { useClimatiqFuelFactor } from "@/hooks/use-climatiq";
+import { useEmissionsInput } from "@/hooks/use-emissions-input";
 
 const getProjectKey = (name: string) => name.trim().toLowerCase();
 
@@ -64,24 +63,7 @@ export default function Projects() {
   const { t, tf, locale } = useI18n();
   const { profile } = useUserProfile();
 
-  const { data: atGrid } = useElectricityMapsCarbonIntensity("AT", {
-    enabled: profile.fuelType === "ev",
-  });
-  const { data: fuelFactor } = useClimatiqFuelFactor(
-    profile.fuelType === "gasoline" || profile.fuelType === "diesel" ? profile.fuelType : null,
-    { enabled: profile.fuelType === "gasoline" || profile.fuelType === "diesel" },
-  );
-
-  const emissionsInput = useMemo(() => {
-    return {
-      fuelType: profile.fuelType,
-      fuelLPer100Km: parseLocaleNumber(profile.fuelLPer100Km),
-      fuelKgCo2ePerLiter: fuelFactor?.kgCo2ePerLiter ?? null,
-      fuelKgCo2ePerKm: fuelFactor?.kgCo2ePerKm ?? null,
-      evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
-      gridKgCo2PerKwh: atGrid?.kgCo2PerKwh ?? null,
-    };
-  }, [atGrid?.kgCo2PerKwh, fuelFactor?.kgCo2ePerKm, fuelFactor?.kgCo2ePerLiter, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType]);
+  const { emissionsInput, fuelFactorData: fuelFactor, gridData: atGrid } = useEmissionsInput();
 
   const PROJECTS_FILTERS_KEY = "filters:projects:v1";
   const loadProjectsFilters = () => {

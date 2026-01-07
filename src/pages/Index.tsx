@@ -12,12 +12,11 @@ import { useProjects } from "@/contexts/ProjectsContext";
 import { getProjectsForDashboard } from "@/lib/projects";
 import { useI18n } from "@/hooks/use-i18n";
 import { useTrips } from "@/contexts/TripsContext";
-import { calculateTreesNeeded, calculateTripEmissions } from "@/lib/emissions";
+import { calculateTreesNeeded, calculateTripEmissions, TripEmissionsInput } from "@/lib/emissions";
 import { parseLocaleNumber } from "@/lib/number";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
-import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
-import { useClimatiqFuelFactor } from "@/hooks/use-climatiq";
+import { useEmissionsInput } from "@/hooks/use-emissions-input";
 
 function parseTripDate(value: string): Date | null {
   if (!value) return null;
@@ -49,13 +48,7 @@ function sumKm(trips: Array<{ distance: number }>): number {
 
 function sumCo2(
   trips: Array<{ co2?: number; distance: number }>,
-  emissionsInput: {
-    fuelType: any;
-    fuelLPer100Km?: number | null;
-    fuelKgCo2ePerLiter?: number | null;
-    evKwhPer100Km?: number | null;
-    gridKgCo2PerKwh?: number | null;
-  },
+  emissionsInput: Omit<TripEmissionsInput, "distanceKm">,
 ): number {
   return trips.reduce((acc, t) => {
     // Always recalculate to reflect current profile settings
@@ -157,26 +150,7 @@ export default function Index() {
   const kpiTitleClassName = "text-base font-semibold leading-tight text-foreground uppercase tracking-wide";
   const kpiTitleWrapperClassName = "p-0 rounded-none bg-transparent";
 
-  const { data: atGrid, isLoading: isLoadingGrid } = useElectricityMapsCarbonIntensity("AT", {
-    enabled: profile.fuelType === "ev",
-  });
-  const { data: fuelFactor, isLoading: isLoadingFuel } = useClimatiqFuelFactor(
-    profile.fuelType === "gasoline" || profile.fuelType === "diesel" ? profile.fuelType : null,
-    { enabled: profile.fuelType === "gasoline" || profile.fuelType === "diesel" },
-  );
-
-  const isLoadingEmissionsData = isLoadingGrid || isLoadingFuel;
-
-  const emissionsInput = useMemo(() => {
-    return {
-      fuelType: profile.fuelType,
-      fuelLPer100Km: parseLocaleNumber(profile.fuelLPer100Km),
-      fuelKgCo2ePerLiter: fuelFactor?.kgCo2ePerLiter ?? null,
-      fuelKgCo2ePerKm: fuelFactor?.kgCo2ePerKm ?? null,
-      evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
-      gridKgCo2PerKwh: atGrid?.kgCo2PerKwh ?? null,
-    };
-  }, [atGrid?.kgCo2PerKwh, fuelFactor?.kgCo2ePerLiter, fuelFactor?.kgCo2ePerKm, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType]);
+  const { emissionsInput, isLoading: isLoadingEmissionsData } = useEmissionsInput();
 
   const totalKm = sumKm(trips);
   const co2Kg = sumCo2(trips, emissionsInput);

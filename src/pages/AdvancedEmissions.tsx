@@ -38,8 +38,7 @@ import { useProjects } from "@/contexts/ProjectsContext";
 import { calculateTreesNeeded, calculateTripEmissions } from "@/lib/emissions";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { parseLocaleNumber } from "@/lib/number";
-import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
-import { useClimatiqFuelFactor } from "@/hooks/use-climatiq";
+import { useEmissionsInput } from "@/hooks/use-emissions-input";
 
 type EmissionsResult = {
   id: string;
@@ -185,16 +184,8 @@ export default function AdvancedEmissions() {
   const { projects } = useProjects();
   const { profile } = useUserProfile();
 
-  const { data: atGrid, isLoading: isLoadingGrid } = useElectricityMapsCarbonIntensity("AT", {
-    enabled: profile.fuelType === "ev",
-  });
+  const { emissionsInput: baseEmissionsInput, fuelFactorData: fuelFactor, gridData: atGrid, isLoading: isLoadingEmissionsData } = useEmissionsInput();
   const gridKgCo2PerKwh = atGrid?.kgCo2PerKwh ?? null;
-  const { data: fuelFactor, isLoading: isLoadingFuel } = useClimatiqFuelFactor(
-    profile.fuelType === "gasoline" || profile.fuelType === "diesel" ? profile.fuelType : null,
-    { enabled: profile.fuelType === "gasoline" || profile.fuelType === "diesel" },
-  );
-
-  const isLoadingEmissionsData = isLoadingGrid || isLoadingFuel;
 
   const ratingLabel = useMemo(
     () => (rating: EmissionsResult["rating"]) => {
@@ -291,12 +282,8 @@ export default function AdvancedEmissions() {
       // Previously stored trip.co2 values may be outdated if the profile changed.
       const res = calculateTripEmissions({
         distanceKm,
-        fuelType: profile.fuelType,
-        fuelLPer100Km: shouldUseAnalysisFuelRate ? analysisFuelRate : parseLocaleNumber(profile.fuelLPer100Km),
-        fuelKgCo2ePerLiter: fuelFactor?.kgCo2ePerLiter ?? null,
-        fuelKgCo2ePerKm: fuelFactor?.kgCo2ePerKm ?? null,
-        evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
-        gridKgCo2PerKwh,
+        ...baseEmissionsInput,
+        fuelLPer100Km: shouldUseAnalysisFuelRate ? analysisFuelRate : baseEmissionsInput.fuelLPer100Km,
       });
       return res.co2Kg;
     };

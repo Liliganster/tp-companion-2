@@ -16,8 +16,7 @@ import { calculateTripEmissions } from "@/lib/emissions";
 import { parseLocaleNumber } from "@/lib/number";
 import { useTrips, type Trip } from "@/contexts/TripsContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
-import { useClimatiqFuelFactor } from "@/hooks/use-climatiq";
+import { useEmissionsInput } from "@/hooks/use-emissions-input";
 import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
 import { uuidv4 } from "@/lib/utils";
 import { parseMonthlyQuotaExceededReason } from "@/lib/aiQuotaReason";
@@ -126,26 +125,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     };
   }, [project?.id, open]);
 
-  const { data: atGrid, isLoading: isLoadingGrid } = useElectricityMapsCarbonIntensity("AT", {
-    enabled: profile.fuelType === "ev",
-  });
-  const { data: fuelFactor, isLoading: isLoadingFuel } = useClimatiqFuelFactor(
-    profile.fuelType === "gasoline" || profile.fuelType === "diesel" ? profile.fuelType : null,
-    { enabled: profile.fuelType === "gasoline" || profile.fuelType === "diesel" },
-  );
-
-  const isLoadingEmissionsData = isLoadingGrid || isLoadingFuel;
-
-  const emissionsInput = useMemo(() => {
-    return {
-      fuelType: profile.fuelType,
-      fuelLPer100Km: parseLocaleNumber(profile.fuelLPer100Km),
-      fuelKgCo2ePerLiter: fuelFactor?.kgCo2ePerLiter ?? null,
-      fuelKgCo2ePerKm: fuelFactor?.kgCo2ePerKm ?? null,
-      evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
-      gridKgCo2PerKwh: atGrid?.kgCo2PerKwh ?? null,
-    };
-  }, [atGrid?.kgCo2PerKwh, fuelFactor?.kgCo2ePerLiter, fuelFactor?.kgCo2ePerKm, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType]);
+  // Standardized emissions input
+  const { emissionsInput, isLoading: isLoadingEmissionsData } = useEmissionsInput();
 
   const calculateCO2 = useCallback((distance: number) => {
     return calculateTripEmissions({ distanceKm: distance, ...emissionsInput }).co2Kg;

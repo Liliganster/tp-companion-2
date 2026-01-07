@@ -15,6 +15,7 @@ import { useUserProfile } from "@/contexts/UserProfileContext";
 import { Project, useProjects } from "@/contexts/ProjectsContext";
 import { Trip, useTrips } from "@/contexts/TripsContext";
 import { parseLocaleNumber, roundTo } from "@/lib/number";
+import { useEmissionsInput } from "@/hooks/use-emissions-input";
 import { Badge } from "@/components/ui/badge";
 import { computeTripWarnings } from "@/lib/trip-warnings";
 import { useI18n } from "@/hooks/use-i18n";
@@ -32,26 +33,12 @@ export default function Trips() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const { data: atGrid, isLoading: isLoadingGrid } = useElectricityMapsCarbonIntensity("AT", {
-    enabled: profile.fuelType === "ev",
-  });
-  const { data: fuelFactor, isLoading: isLoadingFuel } = useClimatiqFuelFactor(
-    profile.fuelType === "gasoline" || profile.fuelType === "diesel" ? profile.fuelType : null,
-    { enabled: profile.fuelType === "gasoline" || profile.fuelType === "diesel" },
-  );
-
-  const isLoadingEmissionsData = isLoadingGrid || isLoadingFuel;
-
-  const emissionsInput = useMemo(() => {
-    return {
-      fuelType: profile.fuelType,
-      fuelLPer100Km: parseLocaleNumber(profile.fuelLPer100Km),
-      fuelKgCo2ePerLiter: fuelFactor?.kgCo2ePerLiter ?? null,
-      fuelKgCo2ePerKm: fuelFactor?.kgCo2ePerKm ?? null,
-      evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
-      gridKgCo2PerKwh: atGrid?.kgCo2PerKwh ?? null,
-    };
-  }, [atGrid?.kgCo2PerKwh, fuelFactor?.kgCo2ePerLiter, fuelFactor?.kgCo2ePerKm, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType]);
+  const { emissionsInput: localEmissionsInput, fuelFactorData: fuelFactor, gridData: atGrid, isLoading: isLoadingEmissionsData } = useEmissionsInput();
+  
+  // NOTE: TripsContext already provides calculated CO2 in `trips`.
+  // The local calculation here is redundant but ensures we use the very latest hook data if it differs from context.
+  // We alias it to `localEmissionsInput` to match the previous variable name if needed, or just `emissionsInput`.
+  const emissionsInput = localEmissionsInput;
 
   const calculateCO2 = (distance: number) => calculateTripEmissions({ distanceKm: distance, ...emissionsInput }).co2Kg;
 
