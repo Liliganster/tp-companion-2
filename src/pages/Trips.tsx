@@ -302,7 +302,7 @@ export default function Trips() {
 
   const calculateTripReimbursement = (trip: Trip) => {
     const baseRate = trip.ratePerKmOverride ?? settingsRatePerKm;
-    return roundTo(trip.distance * baseRate + trip.distance * trip.passengers * settingsPassengerSurchargePerKm, 2);
+    return roundTo(trip.distance * baseRate + trip.passengers * settingsPassengerSurchargePerKm, 2);
   };
 
   const formatInvoiceCountLabel = (count: number) => {
