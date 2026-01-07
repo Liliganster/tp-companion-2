@@ -49,7 +49,7 @@ import { useTrips } from "@/contexts/TripsContext";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { calculateTreesNeeded, calculateTripEmissions } from "@/lib/emissions";
 import { toast } from "sonner";
-import { validateFuelConsumption, validateEvConsumption } from "@/lib/validation";
+import { validateFuelConsumption, getConsumptionErrorMessage } from "@/lib/validation";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { parseLocaleNumber } from "@/lib/number";
 import { useEmissionsInput } from "@/hooks/use-emissions-input";
@@ -306,13 +306,9 @@ export default function AdvancedEmissions() {
     const result = validateFuelConsumption(fuelLPer100Km);
     if (!result.valid) {
       const unit = "L/100km";
-      if (result.type === "excessive") {
-        toast.warning(`⚠️ Consumo excesivo: ${result.value} ${unit} (máximo realista: 50 ${unit}). Los resultados pueden no ser precisos.`, {
-          id: "fuel-efficiency-warning",
-          duration: 4000,
-        });
-      } else if (result.type === "tooLow") {
-        toast.warning(`⚠️ Consumo demasiado bajo: ${result.value} ${unit} (mínimo realista: 3 ${unit}). Los resultados pueden no ser precisos.`, {
+      const errorMsg = getConsumptionErrorMessage(result, false);
+      if (errorMsg) {
+        toast.warning(errorMsg, {
           id: "fuel-efficiency-warning",
           duration: 4000,
         });
