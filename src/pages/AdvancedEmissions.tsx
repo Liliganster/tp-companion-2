@@ -240,12 +240,13 @@ export default function AdvancedEmissions() {
 
   const getRatingColor = (rating: EmissionsResult["rating"]) => {
     switch (rating) {
-      case "excellent":
-      case "good":
+      case "muy-baja":
+      case "baja":
         return "bg-emerald-500/20 text-emerald-500";
-      case "fair":
+      case "moderada":
         return "bg-yellow-500/20 text-yellow-500";
-      case "poor":
+      case "alta":
+      case "muy-alta":
         return "bg-destructive/20 text-destructive";
       default:
         return "bg-secondary/40 text-muted-foreground";
