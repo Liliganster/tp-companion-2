@@ -291,17 +291,17 @@ export default function AdvancedEmissions() {
     const now = new Date();
     const { start, end, prevStart, prevEnd } = getRange(now, timeRange);
     const fuelLPer100Km = Number.parseFloat(String(fuelEfficiency).replace(",", "."));
-    const fuelRate = Number.isFinite(fuelLPer100Km) && fuelLPer100Km > 0 ? fuelLPer100Km : 0;
+    const modalFuelRate = Number.isFinite(fuelLPer100Km) && fuelLPer100Km > 0 ? fuelLPer100Km : 0;
     const profileFuelRate = parseLocaleNumber(profile.fuelLPer100Km);
 
-    // The config modal controls the "analysis assumptions" (fuel efficiency). 
-    // Only use local config if explicitly saved (isConfigured). Otherwise default to User Profile.
-    const analysisFuelRate =
-      isConfigured && fuelRate > 0 
-        ? fuelRate 
+    // Priority: Modal value > Settings value
+    // The modal value ONLY affects CO2 ranking calculations, not trips or projects views
+    // If user sets a value in modal, use it. Otherwise, use settings default.
+    const analysisFuelRate = modalFuelRate > 0 
+        ? modalFuelRate 
         : Number.isFinite(profileFuelRate) && Number(profileFuelRate) > 0 
           ? Number(profileFuelRate) 
-          : fuelRate;
+          : 0;
 
     const shouldUseAnalysisFuelRate =
       (profile.fuelType === "gasoline" || profile.fuelType === "diesel") && analysisFuelRate > 0;
@@ -309,9 +309,8 @@ export default function AdvancedEmissions() {
     const projectNameById = new Map(projects.map((p) => [p.id, p.name] as const));
 
     const sumTripCo2 = (distanceKm: number, co2?: number) => {
-      // Always recalculate emissions based on current profile settings
-      // to ensure the ranking reflects the latest configuration.
-      // Previously stored trip.co2 values may be outdated if the profile changed.
+      // CO2 ranking calculations use the modal value (analysisFuelRate) if available
+      // This allows "what if" scenarios without affecting trips/projects views
       const res = calculateTripEmissions({
         distanceKm,
         ...baseEmissionsInput,
