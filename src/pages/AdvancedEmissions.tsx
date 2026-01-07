@@ -273,12 +273,7 @@ export default function AdvancedEmissions() {
       }
     }
   }, [selectedProjectId, projects]);
-      // Delete old v1 config to prevent any fallback to old "12" value
-      window.localStorage.removeItem("advancedEmissions:config:v1");
-    } catch {
-      // ignore
-    }
-  }, []);
+
 
   useEffect(() => {
     try {

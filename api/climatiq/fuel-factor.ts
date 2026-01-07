@@ -59,6 +59,9 @@ function normalizeFactorRegion(value: unknown): string | null {
   return region;
 }
 
+// In-memory server cache to reduce Supabase queries
+const serverCache = new Map<string, { data: any; expiresAt: number }>();
+
 
 
 function co2eToKg(value: number, unit: string): number | null {
@@ -123,16 +126,35 @@ export default async function handler(req: any, res: any) {
   }
   const supabase = createClient(supabaseUrl, supabaseKey);
 
-  // 1. Check cache first
-  const { data: cachedData, error: cacheError } = await supabase
-    .from("climatiq_cache")
-    .select("*")
-    .eq("user_id", user.id)
-    .eq("fuel_type", fuelType)
-    .single();
-
   const now = new Date();
-  const cacheValid = cachedData && !cacheError && new Date(cachedData.expires_at) > now;
+  const cacheKey = `${user.id}:${fuelType}`;
+  
+  // 1. Check in-memory cache first
+  let cachedData: any = null;
+  const inMemory = serverCache.get(cacheKey);
+  
+  if (inMemory && inMemory.expiresAt > now.getTime()) {
+    cachedData = inMemory.data;
+  } else {
+    // 2. Check persistent cache (Supabase)
+    const { data, error } = await supabase
+      .from("climatiq_cache")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("fuel_type", fuelType)
+      .single();
+
+    if (data && !error) {
+      cachedData = data;
+      // Populate in-memory cache
+      serverCache.set(cacheKey, { 
+        data, 
+        expiresAt: new Date(data.expires_at).getTime() 
+      });
+    }
+  }
+
+  const cacheValid = cachedData && new Date(cachedData.expires_at) > now;
 
   // If cache is valid, return it
   if (cacheValid) {
@@ -159,7 +181,7 @@ export default async function handler(req: any, res: any) {
   
   // If no API key, use cached value as fallback (if exists), otherwise use hardcoded fallback
   if (!apiKey) {
-    if (cachedData && !cacheError) {
+    if (cachedData) {
       // Use expired cache as fallback
       const payload = {
         fuelType,
@@ -308,6 +330,12 @@ export default async function handler(req: any, res: any) {
   await supabase
     .from("climatiq_cache")
     .upsert(cacheEntry, { onConflict: "user_id,fuel_type" });
+
+  // Update in-memory cache
+  serverCache.set(cacheKey, {
+    data: cacheEntry, // Note: camelCase vs snake_case might be mixed if we used Raw Supabase types before, but here cacheEntry uses snake_case which matches db.
+    expiresAt: new Date(cacheEntry.expires_at).getTime()
+  });
 
   const payload = {
     fuelType,
