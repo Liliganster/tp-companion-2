@@ -50,13 +50,16 @@ export function calculateTripEmissions(input: TripEmissionsInput): TripEmissions
     // Below 3 L/100km: Too efficient, likely data error
     // Above 50 L/100km: Absurdly high, limit to maximum reasonable consumption
     if (fuelLPer100Km !== null && Number.isFinite(fuelLPer100Km)) {
+      const originalValue = fuelLPer100Km;
+      
       if (fuelLPer100Km < 3 && fuelLPer100Km > 0) {
-        console.warn(`Consumo anormalmente bajo detectado: ${fuelLPer100Km} L/100km. Verifique los datos. Usando fallback.`);
+        console.warn(`⚠️ Consumo anormalmente bajo detectado: ${fuelLPer100Km} L/100km. Verifique los datos. Usando fallback.`);
         return { co2Kg: calculateCO2KgFromKm(distanceKm), method: "fallback_km" };
       }
+      
       if (fuelLPer100Km > 50) {
-        console.warn(`Consumo anormalmente alto detectado: ${fuelLPer100Km} L/100km. Se limitará a 50 L/100km.`);
         fuelLPer100Km = 50;
+        console.warn(`⚠️ Consumo excesivo detectado: ${originalValue} L/100km → Limitado a ${fuelLPer100Km} L/100km`);
       }
     }
     
