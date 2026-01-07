@@ -12,24 +12,24 @@ export type ClimatiqFuelFactor = {
   year?: number | null;
   activityId?: string;
   dataVersion?: string;
-  cachedTtlSeconds?: number;
   method?: string;
   fallback?: boolean;
   apiPayload?: unknown;
   cachedAt?: string;  // When it was cached
+  expiresAt?: string; // When cache expires
 };
 
 export function useClimatiqFuelFactor(fuelType: ClimatiqFuelFactor["fuelType"] | null, opts?: { enabled?: boolean }) {
   const { user, getAccessToken } = useAuth();
   const enabled = Boolean(user) && Boolean(fuelType) && (opts?.enabled ?? true);
 
-  // No long-term offline cache used to prevent 'stuck' stale data.
-  // We rely on React Query's in-memory cache for the session.
+  // Use React Query cache with 30 day stale time to match backend cache
   
   return useQuery({
     queryKey: ["climatiq", "fuelFactor", fuelType] as const,
     enabled,
-    staleTime: 0, // No cache - always fetch fresh data
+    staleTime: 30 * 24 * 60 * 60 * 1000, // 30 days in milliseconds
+    gcTime: 30 * 24 * 60 * 60 * 1000, // Keep in cache for 30 days
     retry: 1,
     refetchOnWindowFocus: false,
     queryFn: async (): Promise<ClimatiqFuelFactor | null> => {

@@ -1,4 +1,4 @@
-import { requireSupabaseUser, sendJson } from "../_utils/supabase.js";
+import { requireSupabaseUser, sendJson, getSupabaseServiceClient } from "../_utils/supabase.js";
 import { enforceRateLimit } from "../_utils/rateLimit.js";
 
 const ESTIMATE_URL = "https://api.climatiq.io/data/v1/estimate";
@@ -113,12 +113,65 @@ export default async function handler(req: any, res: any) {
   if (!fuelType) return sendJson(res, 400, { error: "invalid_fuel_type" });
 
   const dataVersion = (process.env.CLIMATIQ_DATA_VERSION || DEFAULT_DATA_VERSION).trim() || DEFAULT_DATA_VERSION;
+  const config = FUEL_CONFIG[fuelType];
+  const supabase = getSupabaseServiceClient();
 
+  // 1. Check cache first
+  const { data: cachedData, error: cacheError } = await supabase
+    .from("climatiq_cache")
+    .select("*")
+    .eq("user_id", user.id)
+    .eq("fuel_type", fuelType)
+    .single();
+
+  const now = new Date();
+  const cacheValid = cachedData && !cacheError && new Date(cachedData.expires_at) > now;
+
+  // If cache is valid, return it
+  if (cacheValid) {
+    const payload = {
+      fuelType,
+      ...(config.paramType === "volume" 
+        ? { kgCo2ePerLiter: Number(cachedData.kg_co2e_per_liter) }
+        : { kgCo2ePerKm: Number(cachedData.kg_co2e_per_km) }
+      ),
+      activityId: cachedData.activity_id,
+      dataVersion: cachedData.data_version,
+      source: cachedData.source || "cache",
+      year: cachedData.year,
+      region: cachedData.region,
+      method: "cache",
+      fallback: false,
+      cachedAt: cachedData.cached_at,
+      expiresAt: cachedData.expires_at,
+    };
+    return sendJson(res, 200, payload);
+  }
 
   const apiKey = (process.env.CLIMATIQ_API_KEY || "").trim();
-  const config = FUEL_CONFIG[fuelType];
   
+  // If no API key, use cached value as fallback (if exists), otherwise use hardcoded fallback
   if (!apiKey) {
+    if (cachedData && !cacheError) {
+      // Use expired cache as fallback
+      const payload = {
+        fuelType,
+        ...(config.paramType === "volume" 
+          ? { kgCo2ePerLiter: Number(cachedData.kg_co2e_per_liter) }
+          : { kgCo2ePerKm: Number(cachedData.kg_co2e_per_km) }
+        ),
+        activityId: cachedData.activity_id,
+        dataVersion: cachedData.data_version,
+        source: "fallback_from_cache",
+        year: cachedData.year,
+        region: cachedData.region,
+        method: "fallback",
+        fallback: true,
+      };
+      return sendJson(res, 200, payload);
+    }
+
+    // No cache available, use hardcoded fallback
     const payload = {
       fuelType,
       ...(config.paramType === "volume" 
@@ -130,11 +183,9 @@ export default async function handler(req: any, res: any) {
       source: "fallback",
       year: null,
       region: config.region,
-
       method: "fallback",
       fallback: true,
     };
-
     return sendJson(res, 200, payload);
   }
 
@@ -230,6 +281,27 @@ export default async function handler(req: any, res: any) {
     ? { volume: 1, volume_unit: "l" }
     : { distance: 1, distance_unit: "km" };
   
+  // Save to cache (upsert - insert or update)
+  const cacheEntry = {
+    user_id: user.id,
+    fuel_type: fuelType,
+    kg_co2e_per_liter: config.paramType === "volume" ? emissionValue : null,
+    kg_co2e_per_km: config.paramType === "distance" ? emissionValue : null,
+    region: factorRegion,
+    source: data?.emission_factor?.source ?? "climatiq",
+    year: data?.emission_factor?.year ?? null,
+    activity_id: selection.activityId,
+    data_version: dataVersion,
+    cached_at: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
+    raw_response: data,
+    updated_at: new Date().toISOString(),
+  };
+
+  await supabase
+    .from("climatiq_cache")
+    .upsert(cacheEntry, { onConflict: "user_id,fuel_type" });
+
   const payload = {
     fuelType,
     ...(config.paramType === "volume" 
@@ -241,9 +313,10 @@ export default async function handler(req: any, res: any) {
     source: data?.emission_factor?.source ?? "climatiq",
     year: data?.emission_factor?.year ?? null,
     region: factorRegion,
-
     method: "data",
     fallback: false,
+    cachedAt: cacheEntry.cached_at,
+    expiresAt: cacheEntry.expires_at,
     request: {
       emission_factor: {
         activity_id: attempt.activityId,
@@ -258,7 +331,6 @@ export default async function handler(req: any, res: any) {
       rawText: attempt.rawText,
     },
   };
-
 
   return sendJson(res, 200, payload);
   } catch (err: any) {

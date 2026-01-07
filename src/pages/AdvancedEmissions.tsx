@@ -155,15 +155,15 @@ function loadAdvancedEmissionsConfig(): {
 } {
   try {
     if (typeof window === "undefined") {
-      return { isConfigured: false, viewMode: "projects", sortBy: "co2", timeRange: "all", fuelEfficiency: "12" };
+      return { isConfigured: false, viewMode: "projects", sortBy: "co2", timeRange: "all", fuelEfficiency: "0" };
     }
     const raw = window.localStorage.getItem(ADV_EMISSIONS_CONFIG_KEY);
     if (!raw) {
-      return { isConfigured: false, viewMode: "projects", sortBy: "co2", timeRange: "all", fuelEfficiency: "12" };
+      return { isConfigured: false, viewMode: "projects", sortBy: "co2", timeRange: "all", fuelEfficiency: "0" };
     }
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") {
-      return { isConfigured: false, viewMode: "projects", sortBy: "co2", timeRange: "all", fuelEfficiency: "12" };
+      return { isConfigured: false, viewMode: "projects", sortBy: "co2", timeRange: "all", fuelEfficiency: "0" };
     }
 
     return {
@@ -171,10 +171,10 @@ function loadAdvancedEmissionsConfig(): {
       viewMode: typeof (parsed as any).viewMode === "string" ? (parsed as any).viewMode : "projects",
       sortBy: typeof (parsed as any).sortBy === "string" ? (parsed as any).sortBy : "co2",
       timeRange: typeof (parsed as any).timeRange === "string" ? (parsed as any).timeRange : "all",
-      fuelEfficiency: typeof (parsed as any).fuelEfficiency === "string" ? (parsed as any).fuelEfficiency : "12",
+      fuelEfficiency: typeof (parsed as any).fuelEfficiency === "string" ? (parsed as any).fuelEfficiency : "0",
     };
   } catch {
-    return { isConfigured: false, viewMode: "projects", sortBy: "co2", timeRange: "all", fuelEfficiency: "12" };
+    return { isConfigured: false, viewMode: "projects", sortBy: "co2", timeRange: "all", fuelEfficiency: "0" };
   }
 }
 
