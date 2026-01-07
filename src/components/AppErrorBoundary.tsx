@@ -21,6 +21,20 @@ export class AppErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: unknown, info: unknown) {
     captureClientError(error, { react: true, info });
+
+    // Handle chunk loading errors (new deployment)
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes("Failed to fetch dynamically imported module") || msg.includes("Importing a module script failed")) {
+      const storageKey = "chunk_load_error_reload";
+      const lastReload = sessionStorage.getItem(storageKey);
+      const now = Date.now();
+
+      // Only reload if we haven't reloaded in the last 10 seconds
+      if (!lastReload || now - Number(lastReload) > 10000) {
+        sessionStorage.setItem(storageKey, String(now));
+        window.location.reload();
+      }
+    }
   }
 
   private handleReload = () => {
