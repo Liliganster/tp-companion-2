@@ -34,8 +34,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Require authenticated user
-  const user = await requireSupabaseUser(req, res);
-  if (!user) return;
+  let user;
+  try {
+    user = await requireSupabaseUser(req, res);
+    if (!user) return; // Response handled in requireSupabaseUser
+  } catch (authError: any) {
+    console.error("Auth error:", authError);
+    return res.status(500).json({ error: "auth_failed", message: "Failed to authenticate user" });
+  }
 
   try {
     const stripe = new Stripe(STRIPE_SECRET_KEY);
