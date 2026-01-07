@@ -409,7 +409,7 @@ export default function AdvancedEmissions() {
       fuelLiters: clampRound(filteredLiters, 1),
       treesNeeded: filteredTreesNeeded,
     };
-  }, [fallbackProjectName, fallbackTripName, fuelEfficiency, fuelFactor?.kgCo2ePerLiter, gridKgCo2PerKwh, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType, projects, sortBy, timeRange, trips, viewMode]);
+  }, [fallbackProjectName, fallbackTripName, fuelEfficiency, fuelFactor?.kgCo2ePerLiter, gridKgCo2PerKwh, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType, projects, sortBy, timeRange, trips, viewMode, selectedProjectId, isConfigured]);
 
   const handleSaveConfig = () => {
     setIsConfigured(true);
