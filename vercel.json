@@ -11,30 +11,18 @@
   ],
   "functions": {
     "api/**/*.ts": {
-      "includeFiles": "src/**"
+      "memory": 1024,
+      "maxDuration": 10
     }
   },
-  "routes": [
+  "rewrites": [
     {
-      "src": "/sw\\.js",
-      "headers": {
-        "Cache-Control": "public, max-age=0, must-revalidate"
-      },
-      "continue": true
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
     },
     {
-      "src": "/manifest\\.webmanifest",
-      "headers": {
-        "Cache-Control": "public, max-age=0, must-revalidate"
-      },
-      "continue": true
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/.*",
-      "dest": "/index.html"
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
     }
   ],
   "git": {
