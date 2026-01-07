@@ -40,7 +40,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { formatLocaleNumber, parseLocaleNumber } from "@/lib/number";
 import { DEFAULT_GRID_KG_CO2_PER_KWH_FALLBACK } from "@/lib/emissions";
-import { validateFuelConsumption, validateEvConsumption, getConsumptionErrorMessage } from "@/lib/validation";
+import { validateFuelConsumption, validateEvConsumption, getConsumptionErrorData } from "@/lib/validation";
 
 interface SettingsModalProps {
   open: boolean;
@@ -49,7 +49,7 @@ interface SettingsModalProps {
 
 export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState("profile");
-  const { t, locale } = useI18n();
+  const { t, tf, locale } = useI18n();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -254,24 +254,34 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
       const evValue = parseLocaleNumber(profileData.evKwhPer100Km);
       const result = validateEvConsumption(evValue);
       if (!result.valid) {
-        const errorMsg = getConsumptionErrorMessage(result, true);
-        toast({
-          title: "Validación",
-          description: errorMsg || "Consumo inválido",
-          variant: "destructive",
-        });
+        const errorData = getConsumptionErrorData(result, true);
+        if (errorData) {
+          const msg = errorData.type === "excessive"
+            ? tf("validation.excessive", { value: errorData.value, unit: errorData.unit, max: errorData.max })
+            : tf("validation.tooLow", { value: errorData.value, unit: errorData.unit, min: errorData.min });
+          toast({
+            title: t("validation.title"),
+            description: msg,
+            variant: "destructive",
+          });
+        }
         return;
       }
     } else if (profileData.fuelType === "gasoline" || profileData.fuelType === "diesel") {
       const fuelValue = parseLocaleNumber(profileData.fuelLPer100Km);
       const result = validateFuelConsumption(fuelValue);
       if (!result.valid) {
-        const errorMsg = getConsumptionErrorMessage(result, false);
-        toast({
-          title: "Validación",
-          description: errorMsg || "Consumo inválido",
-          variant: "destructive",
-        });
+        const errorData = getConsumptionErrorData(result, false);
+        if (errorData) {
+          const msg = errorData.type === "excessive"
+            ? tf("validation.excessive", { value: errorData.value, unit: errorData.unit, max: errorData.max })
+            : tf("validation.tooLow", { value: errorData.value, unit: errorData.unit, min: errorData.min });
+          toast({
+            title: t("validation.title"),
+            description: msg,
+            variant: "destructive",
+          });
+        }
         return;
       }
     }

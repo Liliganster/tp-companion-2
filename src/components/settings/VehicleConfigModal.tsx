@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { useClimatiqFuelFactor } from "@/hooks/use-climatiq";
 import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
 import { Info, ExternalLink } from "lucide-react";
-import { validateFuelConsumption, validateEvConsumption, getConsumptionErrorMessage } from "@/lib/validation";
+import { validateFuelConsumption, validateEvConsumption, getConsumptionErrorData } from "@/lib/validation";
 
 interface VehicleConfigModalProps {
   open: boolean;
@@ -19,7 +19,7 @@ interface VehicleConfigModalProps {
 }
 
 export function VehicleConfigModal({ open, onOpenChange }: VehicleConfigModalProps) {
-  const { t } = useI18n();
+  const { t, tf } = useI18n();
   const { profile, saveProfile } = useUserProfile();
 
   const [fuelType, setFuelType] = useState(profile.fuelType ?? "unknown");
@@ -90,16 +90,26 @@ export function VehicleConfigModal({ open, onOpenChange }: VehicleConfigModalPro
       const evValue = parseLocaleNumber(evConsumption);
       const result = validateEvConsumption(evValue);
       if (!result.valid) {
-        const errorMsg = getConsumptionErrorMessage(result, true);
-        toast.error(errorMsg || "Consumo inválido", { id: "vehicle-config-consumption" });
+        const errorData = getConsumptionErrorData(result, true);
+        if (errorData) {
+          const msg = errorData.type === "excessive" 
+            ? tf("validation.excessive", { value: errorData.value, unit: errorData.unit, max: errorData.max })
+            : tf("validation.tooLow", { value: errorData.value, unit: errorData.unit, min: errorData.min });
+          toast.error(msg, { id: "vehicle-config-consumption" });
+        }
         return;
       }
     } else if (fuelType === "gasoline" || fuelType === "diesel") {
       const fuelValue = parseLocaleNumber(fuelConsumption);
       const result = validateFuelConsumption(fuelValue);
       if (!result.valid) {
-        const errorMsg = getConsumptionErrorMessage(result, false);
-        toast.error(errorMsg || "Consumo inválido", { id: "vehicle-config-consumption" });
+        const errorData = getConsumptionErrorData(result, false);
+        if (errorData) {
+          const msg = errorData.type === "excessive"
+            ? tf("validation.excessive", { value: errorData.value, unit: errorData.unit, max: errorData.max })
+            : tf("validation.tooLow", { value: errorData.value, unit: errorData.unit, min: errorData.min });
+          toast.error(msg, { id: "vehicle-config-consumption" });
+        }
         return;
       }
     }

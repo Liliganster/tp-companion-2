@@ -67,7 +67,7 @@ export default function Trips() {
   });
   const [selectedYear, setSelectedYear] = useState<string>(() => {
     const value = loadTripsFilters()?.selectedYear;
-    if (!value || typeof value !== "string" || !value.trim()) return new Date().getFullYear().toString();
+    if (!value || typeof value !== "string" || !value.trim()) return "all";
     return value;
   });
   const [tripPrefill, setTripPrefill] = useState<{

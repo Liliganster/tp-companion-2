@@ -49,12 +49,21 @@ export function validateEvConsumption(value: number | null | undefined): Consump
 }
 
 /**
- * Gets user-friendly error message for consumption validation failure
+ * Gets structured error data for consumption validation failure
+ * Returns data that can be used with i18n translations
  */
-export function getConsumptionErrorMessage(
+export type ConsumptionErrorData = {
+  type: "excessive" | "tooLow";
+  value: number;
+  unit: string;
+  max: number;
+  min: number;
+};
+
+export function getConsumptionErrorData(
   result: ConsumptionValidationResult,
   isEv: boolean
-): string | null {
+): ConsumptionErrorData | null {
   if (result.valid) return null;
   
   // Type assertion: we know result is the error variant
@@ -63,10 +72,11 @@ export function getConsumptionErrorMessage(
   const maxValue = isEv ? 35 : 50;
   const minValue = isEv ? 10 : 3;
   
-  if (errorResult.type === "excessive") {
-    return `Consumo excesivo: ${errorResult.value} ${unit}. El máximo permitido es ${maxValue} ${unit}.`;
-  }
-  
-  // errorResult.type === "tooLow"
-  return `Consumo demasiado bajo: ${errorResult.value} ${unit}. El mínimo realista es ${minValue} ${unit}.`;
+  return {
+    type: errorResult.type,
+    value: errorResult.value,
+    unit,
+    max: maxValue,
+    min: minValue,
+  };
 }

@@ -49,7 +49,7 @@ import { useTrips } from "@/contexts/TripsContext";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { calculateTreesNeeded, calculateTripEmissions } from "@/lib/emissions";
 import { toast } from "sonner";
-import { validateFuelConsumption, getConsumptionErrorMessage } from "@/lib/validation";
+import { validateFuelConsumption, getConsumptionErrorData } from "@/lib/validation";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { parseLocaleNumber } from "@/lib/number";
 import { useEmissionsInput } from "@/hooks/use-emissions-input";
@@ -305,16 +305,18 @@ export default function AdvancedEmissions() {
     
     const result = validateFuelConsumption(fuelLPer100Km);
     if (!result.valid) {
-      const unit = "L/100km";
-      const errorMsg = getConsumptionErrorMessage(result, false);
-      if (errorMsg) {
-        toast.warning(errorMsg, {
+      const errorData = getConsumptionErrorData(result, false);
+      if (errorData) {
+        const msg = errorData.type === "excessive"
+          ? tf("validation.excessive", { value: errorData.value, unit: errorData.unit, max: errorData.max })
+          : tf("validation.tooLow", { value: errorData.value, unit: errorData.unit, min: errorData.min });
+        toast.warning(msg, {
           id: "fuel-efficiency-warning",
           duration: 4000,
         });
       }
     }
-  }, [fuelEfficiency, isConfigured, profile.fuelType]);
+  }, [fuelEfficiency, isConfigured, profile.fuelType, tf]);
 
   const computed = useMemo(() => {
     const now = new Date();
@@ -683,7 +685,7 @@ export default function AdvancedEmissions() {
                       <SelectValue placeholder="Filtrar por proyecto..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todos los proyectos</SelectItem>
+                      <SelectItem value="all">{t("advancedEmissions.allProjects")}</SelectItem>
                       {computed.results.map((r) => (
                         <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                       ))}
