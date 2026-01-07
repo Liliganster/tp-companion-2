@@ -1,5 +1,6 @@
-import { requireSupabaseUser, sendJson, getSupabaseServiceClient } from "../_utils/supabase.js";
+import { requireSupabaseUser, sendJson } from "../_utils/supabase.js";
 import { enforceRateLimit } from "../_utils/rateLimit.js";
+import { createClient } from "@supabase/supabase-js";
 
 const ESTIMATE_URL = "https://api.climatiq.io/data/v1/estimate";
 
@@ -114,7 +115,13 @@ export default async function handler(req: any, res: any) {
 
   const dataVersion = (process.env.CLIMATIQ_DATA_VERSION || DEFAULT_DATA_VERSION).trim() || DEFAULT_DATA_VERSION;
   const config = FUEL_CONFIG[fuelType];
-  const supabase = getSupabaseServiceClient();
+  
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !supabaseKey) {
+    return sendJson(res, 500, { error: "Missing Supabase configuration" });
+  }
+  const supabase = createClient(supabaseUrl, supabaseKey);
 
   // 1. Check cache first
   const { data: cachedData, error: cacheError } = await supabase
