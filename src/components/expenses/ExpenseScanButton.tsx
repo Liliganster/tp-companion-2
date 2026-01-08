@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState, DragEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Camera, Loader2, RotateCw, Check, X, AlertCircle, Upload, ImageIcon, Trash2, FileText } from "lucide-react";
+import { Camera, Loader2, RotateCw, Check, X, AlertCircle, Upload, ImageIcon, Trash2, FileText, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -22,11 +22,19 @@ interface ExpenseExtractResult {
   date: string | null;
 }
 
+// Receipt document for display
+export interface ReceiptDocument {
+  id: string;
+  storagePath: string;
+  amount?: number | null;
+  name?: string;
+}
+
 interface ExpenseScanButtonProps {
   expenseType: ExpenseType;
   onExtracted: (result: ExpenseExtractResult, storagePath: string) => void;
-  onDeleted?: () => void;
-  existingReceiptPath?: string | null;
+  onReceiptDeleted?: (receiptId: string) => void;
+  existingReceipts?: ReceiptDocument[];
   disabled?: boolean;
   className?: string;
   tripId?: string;
@@ -98,8 +106,8 @@ async function rotateImage(imageUrl: string, degrees: number): Promise<string> {
 export function ExpenseScanButton({
   expenseType,
   onExtracted,
-  onDeleted,
-  existingReceiptPath,
+  onReceiptDeleted,
+  existingReceipts = [],
   disabled,
   className,
   tripId,
@@ -116,10 +124,12 @@ export function ExpenseScanButton({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [rotation, setRotation] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [deletingReceiptId, setDeletingReceiptId] = useState<string | null>(null);
   const [extractionResult, setExtractionResult] = useState<ExpenseExtractResult | null>(null);
   const [extractionError, setExtractionError] = useState<string | null>(null);
   const [storagePath, setStoragePath] = useState<string | null>(null);
+
+  const receiptCount = existingReceipts.length;
 
   const resetState = useCallback(() => {
     setImagePreview(null);
@@ -131,28 +141,28 @@ export function ExpenseScanButton({
     setIsDragging(false);
   }, []);
 
-  // Delete existing receipt from storage
-  const handleDeleteReceipt = useCallback(async () => {
-    if (!existingReceiptPath || !supabase) return;
+  // Delete a specific receipt from storage
+  const handleDeleteReceipt = useCallback(async (receipt: ReceiptDocument) => {
+    if (!receipt.storagePath || !supabase) return;
 
-    setIsDeleting(true);
+    setDeletingReceiptId(receipt.id);
     try {
       // Delete from Supabase Storage
       const { error } = await supabase.storage
         .from("project_documents")
-        .remove([existingReceiptPath]);
+        .remove([receipt.storagePath]);
 
       if (error) throw error;
 
       toast.success(t("expenseScan.receiptDeleted"));
-      onDeleted?.();
+      onReceiptDeleted?.(receipt.id);
     } catch (err) {
       console.error("Delete error:", err);
       toast.error(t("expenseScan.deleteError"));
     } finally {
-      setIsDeleting(false);
+      setDeletingReceiptId(null);
     }
-  }, [existingReceiptPath, onDeleted, t]);
+  }, [onReceiptDeleted, t]);
 
   // Process a file (from input, camera, or drag & drop)
   const processFile = useCallback((file: File) => {
@@ -355,55 +365,30 @@ export function ExpenseScanButton({
         onChange={handleFileSelect}
       />
 
-      {/* Trigger button - shows different state if receipt exists */}
-      {existingReceiptPath ? (
-        <div className="flex gap-1">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className={cn("h-10 w-10 shrink-0 border-green-500/50 text-green-500", className)}
-            disabled={disabled}
-            onClick={() => {
-              setIsOpen(true);
-              setShowUploadOptions(true);
-            }}
-            title={t("expenseScan.viewReceipt")}
-          >
-            <FileText className="w-5 h-5" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-10 w-10 shrink-0 text-destructive hover:bg-destructive/10"
-            disabled={disabled || isDeleting}
-            onClick={handleDeleteReceipt}
-            title={t("expenseScan.deleteReceipt")}
-          >
-            {isDeleting ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Trash2 className="w-4 h-4" />
-            )}
-          </Button>
-        </div>
-      ) : (
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className={cn("h-10 w-10 shrink-0", className)}
-          disabled={disabled}
-          onClick={() => {
-            setIsOpen(true);
-            setShowUploadOptions(true);
-          }}
-          title={t("expenseScan.scanReceipt")}
-        >
-          <Camera className="w-5 h-5" />
-        </Button>
-      )}
+      {/* Trigger button - shows count if receipts exist */}
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className={cn(
+          "h-10 w-10 shrink-0 relative",
+          receiptCount > 0 && "border-green-500/50 text-green-500",
+          className
+        )}
+        disabled={disabled}
+        onClick={() => {
+          setIsOpen(true);
+          setShowUploadOptions(true);
+        }}
+        title={receiptCount > 0 ? t("expenseScan.viewReceipts") : t("expenseScan.scanReceipt")}
+      >
+        {receiptCount > 0 ? <FileText className="w-5 h-5" /> : <Camera className="w-5 h-5" />}
+        {receiptCount > 0 && (
+          <span className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-medium">
+            {receiptCount}
+          </span>
+        )}
+      </Button>
 
       <Dialog open={isOpen} onOpenChange={(open) => !open && handleCancel()}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-hidden p-0">
@@ -414,7 +399,50 @@ export function ExpenseScanButton({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="px-4 pb-4 space-y-4">
+          <div className="px-4 pb-4 space-y-4 overflow-y-auto max-h-[70vh]">
+            {/* Existing receipts list */}
+            {existingReceipts.length > 0 && showUploadOptions && !imagePreview && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">
+                  {t("expenseScan.uploadedReceipts")} ({existingReceipts.length})
+                </p>
+                <div className="space-y-2">
+                  {existingReceipts.map((receipt) => (
+                    <div
+                      key={receipt.id}
+                      className="flex items-center justify-between gap-2 p-2 bg-secondary/30 rounded-lg"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-4 h-4 text-green-500 shrink-0" />
+                        <span className="text-sm truncate">
+                          {receipt.amount != null ? `${receipt.amount.toFixed(2)} €` : receipt.name || t("expenseScan.receipt")}
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0 text-destructive hover:bg-destructive/10"
+                        disabled={deletingReceiptId === receipt.id}
+                        onClick={() => handleDeleteReceipt(receipt)}
+                      >
+                        {deletingReceiptId === receipt.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <div className="pt-2 border-t border-border/50">
+                  <p className="text-xs text-muted-foreground">
+                    {t("expenseScan.addMoreReceipts")}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Upload options - shown when no image is selected */}
             {showUploadOptions && !imagePreview && (
               <div className="space-y-3">
@@ -436,14 +464,15 @@ export function ExpenseScanButton({
                     "w-12 h-12 rounded-full flex items-center justify-center",
                     isDragging ? "bg-primary/20" : "bg-secondary"
                   )}>
-                    <ImageIcon className={cn(
-                      "w-6 h-6",
-                      isDragging ? "text-primary" : "text-muted-foreground"
-                    )} />
+                    {existingReceipts.length > 0 ? (
+                      <Plus className={cn("w-6 h-6", isDragging ? "text-primary" : "text-muted-foreground")} />
+                    ) : (
+                      <ImageIcon className={cn("w-6 h-6", isDragging ? "text-primary" : "text-muted-foreground")} />
+                    )}
                   </div>
                   <div>
                     <p className="text-sm font-medium">
-                      {t("expenseScan.dragDropText")}
+                      {existingReceipts.length > 0 ? t("expenseScan.addAnotherReceipt") : t("expenseScan.dragDropText")}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
                       {t("expenseScan.clickToUpload")}

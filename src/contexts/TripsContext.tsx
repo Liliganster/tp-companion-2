@@ -44,8 +44,9 @@ export type Trip = {
     driveFileId?: string;
     storagePath?: string;
     bucketId?: "callsheets" | "project_documents";
-    kind?: "invoice" | "document";
+    kind?: "invoice" | "document" | "toll_receipt" | "parking_receipt" | "other_receipt";
     invoiceJobId?: string;
+    extractedAmount?: number | null; // Amount extracted from receipt
     createdAt: string; // ISO
   }>; // For trip-specific documents only
 };

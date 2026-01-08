@@ -38,7 +38,7 @@ import { useI18n } from "@/hooks/use-i18n";
 import { AddressAutocompleteInput } from "@/components/google/AddressAutocompleteInput";
 import { cascadeDeleteInvoiceJobById } from "@/lib/cascadeDelete";
 import { cancelInvoiceJobs } from "@/lib/aiJobCancellation";
-import { ExpenseScanButton } from "@/components/expenses/ExpenseScanButton";
+import { ExpenseScanButton, ReceiptDocument } from "@/components/expenses/ExpenseScanButton";
 
 interface Stop {
   id: string;
@@ -414,10 +414,6 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
   const [tollAmount, setTollAmount] = useState("");
   const [parkingAmount, setParkingAmount] = useState("");
   const [otherExpenses, setOtherExpenses] = useState("");
-  // Receipt storage paths
-  const [tollReceiptPath, setTollReceiptPath] = useState<string | null>(null);
-  const [parkingReceiptPath, setParkingReceiptPath] = useState<string | null>(null);
-  const [otherReceiptPath, setOtherReceiptPath] = useState<string | null>(null);
   const [project, setProject] = useState("");
   const [purpose, setPurpose] = useState("");
   const [specialOrigin, setSpecialOrigin] = useState<NonNullable<TripData["specialOrigin"]>>("base");
@@ -438,6 +434,22 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
   const [existingDocuments, setExistingDocuments] = useState<Trip["documents"]>([]);
   const cancelInvoiceJobIdsRef = useRef<Set<string>>(new Set());
   const invoiceInputRef = useRef<HTMLInputElement>(null);
+
+  // Helper to get receipts by type from documents
+  const getReceiptsByType = useCallback((kind: string): ReceiptDocument[] => {
+    return (existingDocuments || [])
+      .filter(d => d.kind === kind)
+      .map(d => ({
+        id: d.id,
+        storagePath: d.storagePath || "",
+        amount: d.extractedAmount ?? null,
+        name: d.name,
+      }));
+  }, [existingDocuments]);
+
+  const tollReceipts = useMemo(() => getReceiptsByType("toll_receipt"), [getReceiptsByType]);
+  const parkingReceipts = useMemo(() => getReceiptsByType("parking_receipt"), [getReceiptsByType]);
+  const otherReceipts = useMemo(() => getReceiptsByType("other_receipt"), [getReceiptsByType]);
 
   // Fetch coordinates for Base City to use as Autocomplete Bias
   useEffect(() => {
@@ -528,10 +540,6 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
     setTollAmount(seedTrip?.tollAmount != null ? formatLocaleNumber(seedTrip.tollAmount) : "");
     setParkingAmount(seedTrip?.parkingAmount != null ? formatLocaleNumber(seedTrip.parkingAmount) : "");
     setOtherExpenses(seedTrip?.otherExpenses != null ? formatLocaleNumber(seedTrip.otherExpenses) : "");
-    // Reset receipt paths (new trips don't have them yet)
-    setTollReceiptPath(null);
-    setParkingReceiptPath(null);
-    setOtherReceiptPath(null);
     setSaveTemplateOpen(false);
     setTemplateName("");
     // Initialize invoice fields
@@ -539,6 +547,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
     setInvoiceJobId(seedTrip?.invoiceJobId ?? null);
     setInvoiceAmount(seedTrip?.invoiceAmount ?? null);
     setInvoiceCurrency(seedTrip?.invoiceCurrency ?? null);
+    // Initialize documents (includes all receipts)
     setExistingDocuments(seedTrip?.documents ?? []);
     setInvoiceStatus(null);
     cancelInvoiceJobIdsRef.current = new Set();
@@ -1102,15 +1111,37 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                 <ExpenseScanButton
                   expenseType="toll"
                   tripId={trip?.id}
-                  existingReceiptPath={tollReceiptPath}
+                  existingReceipts={tollReceipts}
                   onExtracted={(result, storagePath) => {
+                    // SUM the new amount to existing
                     if (result.amount != null) {
-                      setTollAmount(formatLocaleNumber(result.amount));
+                      const currentValue = parseLocaleNumber(tollAmount, locale) || 0;
+                      const newTotal = currentValue + result.amount;
+                      setTollAmount(formatLocaleNumber(newTotal));
                     }
-                    setTollReceiptPath(storagePath);
+                    // Add receipt to documents array (accumulate, don't replace)
+                    const newDoc = {
+                      id: uuidv4(),
+                      name: `toll_receipt_${Date.now()}.webp`,
+                      mimeType: "image/webp",
+                      storagePath: storagePath,
+                      bucketId: "project_documents" as const,
+                      kind: "toll_receipt" as const,
+                      createdAt: new Date().toISOString(),
+                      extractedAmount: result.amount,
+                    };
+                    setExistingDocuments(prev => [...prev, newDoc as any]);
                   }}
-                  onDeleted={() => {
-                    setTollReceiptPath(null);
+                  onReceiptDeleted={(receiptId) => {
+                    // Find the receipt to get its amount
+                    const receipt = tollReceipts.find(r => r.id === receiptId);
+                    if (receipt?.amount) {
+                      const currentValue = parseLocaleNumber(tollAmount, locale) || 0;
+                      const newTotal = Math.max(0, currentValue - receipt.amount);
+                      setTollAmount(newTotal > 0 ? formatLocaleNumber(newTotal) : "");
+                    }
+                    // Remove only this specific receipt
+                    setExistingDocuments(prev => prev.filter(d => d.id !== receiptId));
                   }}
                 />
               </div>
@@ -1129,15 +1160,37 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                 <ExpenseScanButton
                   expenseType="parking"
                   tripId={trip?.id}
-                  existingReceiptPath={parkingReceiptPath}
+                  existingReceipts={parkingReceipts}
                   onExtracted={(result, storagePath) => {
+                    // SUM the new amount to existing
                     if (result.amount != null) {
-                      setParkingAmount(formatLocaleNumber(result.amount));
+                      const currentValue = parseLocaleNumber(parkingAmount, locale) || 0;
+                      const newTotal = currentValue + result.amount;
+                      setParkingAmount(formatLocaleNumber(newTotal));
                     }
-                    setParkingReceiptPath(storagePath);
+                    // Add receipt to documents array (accumulate, don't replace)
+                    const newDoc = {
+                      id: uuidv4(),
+                      name: `parking_receipt_${Date.now()}.webp`,
+                      mimeType: "image/webp",
+                      storagePath: storagePath,
+                      bucketId: "project_documents" as const,
+                      kind: "parking_receipt" as const,
+                      createdAt: new Date().toISOString(),
+                      extractedAmount: result.amount,
+                    };
+                    setExistingDocuments(prev => [...prev, newDoc as any]);
                   }}
-                  onDeleted={() => {
-                    setParkingReceiptPath(null);
+                  onReceiptDeleted={(receiptId) => {
+                    // Find the receipt to get its amount
+                    const receipt = parkingReceipts.find(r => r.id === receiptId);
+                    if (receipt?.amount) {
+                      const currentValue = parseLocaleNumber(parkingAmount, locale) || 0;
+                      const newTotal = Math.max(0, currentValue - receipt.amount);
+                      setParkingAmount(newTotal > 0 ? formatLocaleNumber(newTotal) : "");
+                    }
+                    // Remove only this specific receipt
+                    setExistingDocuments(prev => prev.filter(d => d.id !== receiptId));
                   }}
                 />
               </div>
@@ -1156,15 +1209,37 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                 <ExpenseScanButton
                   expenseType="other"
                   tripId={trip?.id}
-                  existingReceiptPath={otherReceiptPath}
+                  existingReceipts={otherReceipts}
                   onExtracted={(result, storagePath) => {
+                    // SUM the new amount to existing
                     if (result.amount != null) {
-                      setOtherExpenses(formatLocaleNumber(result.amount));
+                      const currentValue = parseLocaleNumber(otherExpenses, locale) || 0;
+                      const newTotal = currentValue + result.amount;
+                      setOtherExpenses(formatLocaleNumber(newTotal));
                     }
-                    setOtherReceiptPath(storagePath);
+                    // Add receipt to documents array (accumulate, don't replace)
+                    const newDoc = {
+                      id: uuidv4(),
+                      name: `other_receipt_${Date.now()}.webp`,
+                      mimeType: "image/webp",
+                      storagePath: storagePath,
+                      bucketId: "project_documents" as const,
+                      kind: "other_receipt" as const,
+                      createdAt: new Date().toISOString(),
+                      extractedAmount: result.amount,
+                    };
+                    setExistingDocuments(prev => [...prev, newDoc as any]);
                   }}
-                  onDeleted={() => {
-                    setOtherReceiptPath(null);
+                  onReceiptDeleted={(receiptId) => {
+                    // Find the receipt to get its amount
+                    const receipt = otherReceipts.find(r => r.id === receiptId);
+                    if (receipt?.amount) {
+                      const currentValue = parseLocaleNumber(otherExpenses, locale) || 0;
+                      const newTotal = Math.max(0, currentValue - receipt.amount);
+                      setOtherExpenses(newTotal > 0 ? formatLocaleNumber(newTotal) : "");
+                    }
+                    // Remove only this specific receipt
+                    setExistingDocuments(prev => prev.filter(d => d.id !== receiptId));
                   }}
                 />
               </div>
