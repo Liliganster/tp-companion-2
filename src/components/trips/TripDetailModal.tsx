@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { cascadeDeleteInvoiceJobById } from "@/lib/cascadeDelete";
-import { parseMonthlyQuotaExceededReason } from "@/lib/aiQuotaReason";
+
 import { cancelInvoiceJobs } from "@/lib/aiJobCancellation";
 
 interface TripDetailModalProps {
@@ -37,7 +37,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
   const [invoicePurpose, setInvoicePurpose] = useState<string>("");
   const [invoiceStatus, setInvoiceStatus] = useState<string>("");
   const [invoiceError, setInvoiceError] = useState<string>("");
-  const quotaToastShownRef = useRef(false);
+
 
   const liveTrip = useMemo(() => {
     if (!trip) return null;
@@ -51,7 +51,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
       setInvoicePurpose("");
       setInvoiceStatus("");
       setInvoiceError("");
-      quotaToastShownRef.current = false;
+
     } else if (liveTrip?.documents && liveTrip.documents.length > 0) {
         // Auto-load the first document
         viewDocument(liveTrip.documents[0]);
@@ -101,24 +101,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
       }
 
       if (job.status === "failed" || job.status === "needs_review" || job.status === "out_of_quota") {
-        if (!quotaToastShownRef.current && (job.status === "out_of_quota" || job.status === "needs_review")) {
-          const parsed = parseMonthlyQuotaExceededReason(job.needs_review_reason);
-          if (parsed) {
-            quotaToastShownRef.current = true;
-            const description =
-              parsed.used != null && parsed.limit != null
-                ? tf("aiQuota.monthlyLimitReachedBody", {
-                    used: String(parsed.used),
-                    limit: String(parsed.limit),
-                  })
-                : t("aiQuota.monthlyLimitReachedBodyGeneric");
-            toast({
-              title: t("aiQuota.monthlyLimitReachedTitle"),
-              description,
-              variant: "destructive",
-            });
-          }
-        }
+
         stop();
         return;
       }
@@ -180,7 +163,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
       return `${amount.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
     }
     if (liveTrip.invoiceJobId) {
-      if (invoiceStatus === "out_of_quota") return t("aiQuota.outOfQuotaBadge");
+
       if (invoiceStatus === "needs_review") return t("tripDetail.invoiceNeedsReview");
       if (invoiceStatus === "failed") return t("tripDetail.invoiceFailed");
       if (invoiceStatus === "cancelled") return t("tripDetail.invoiceCancelled");

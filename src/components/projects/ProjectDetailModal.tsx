@@ -19,7 +19,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEmissionsInput } from "@/hooks/use-emissions-input";
 import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
 import { uuidv4 } from "@/lib/utils";
-import { parseMonthlyQuotaExceededReason } from "@/lib/aiQuotaReason";
+
 import { cancelCallsheetJobs, cancelInvoiceJobs } from "@/lib/aiJobCancellation";
 
 const DEBUG = import.meta.env.DEV;
@@ -70,7 +70,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const [savingPendingTrips, setSavingPendingTrips] = useState(false);
   const realCallSheetsRef = useRef<ProjectDocument[]>([]);
   const projectDocsRef = useRef<ProjectDocument[]>([]);
-  const quotaNotifiedRef = useRef<Set<string>>(new Set());
+
 
   useEffect(() => {
     realCallSheetsRef.current = realCallSheets;
@@ -81,7 +81,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   }, [projectDocs]);
 
   useEffect(() => {
-    if (!open) quotaNotifiedRef.current = new Set();
+
   }, [open]);
 
   // Debug: verificar que project.id se pasa correctamente
@@ -708,32 +708,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           return;
         }
 
-        const notifyQuotaIfNeeded = (items: Array<{ id: string; status?: string; needs_review_reason?: string }>) => {
-          const newlyHit: Array<{ id: string; reason?: string }> = [];
-          for (const it of items ?? []) {
-            const id = String((it as any).id ?? "");
-            if (!id) continue;
-            const status = String((it as any).status ?? "");
-            if (status !== "out_of_quota" && status !== "needs_review") continue;
-            const reason = String((it as any).needs_review_reason ?? "");
-            if (!parseMonthlyQuotaExceededReason(reason)) continue;
-            if (quotaNotifiedRef.current.has(id)) continue;
-            quotaNotifiedRef.current.add(id);
-            newlyHit.push({ id, reason });
-          }
-
-          if (newlyHit.length === 0) return;
-
-          const parsed = parseMonthlyQuotaExceededReason(newlyHit[0]?.reason);
-          const description =
-            parsed?.used != null && parsed?.limit != null
-              ? tf("aiQuota.monthlyLimitReachedBody", { used: String(parsed.used), limit: String(parsed.limit) })
-              : t("aiQuota.monthlyLimitReachedBodyGeneric");
-
-          toast.error(t("aiQuota.monthlyLimitReachedTitle"), { description });
-        };
-
-        notifyQuotaIfNeeded((jobs as any[]) ?? []);
+// Skipping quota notification as it is now free tier
 
         // 1) Keep UI in sync so spinners stop when status changes.
         if (jobs && jobs.length > 0) {

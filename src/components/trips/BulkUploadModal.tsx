@@ -18,7 +18,7 @@ import { useTrips } from "@/contexts/TripsContext";
 import { uuidv4 } from "@/lib/utils";
 import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
 import { useAuth } from "@/contexts/AuthContext";
-import { parseMonthlyQuotaExceededReason } from "@/lib/aiQuotaReason";
+
 import { cancelCallsheetJobs } from "@/lib/aiJobCancellation";
 
 interface SavedTrip {
@@ -1022,16 +1022,9 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
           if (failureToastShownRef.current.has(id)) continue;
           failureToastShownRef.current.add(id);
 
-          const parsed = parseMonthlyQuotaExceededReason(j.needs_review_reason);
-          const isQuota = Boolean(parsed);
-          const description =
-            isQuota && parsed?.used != null && parsed?.limit != null
-              ? tf("aiQuota.monthlyLimitReachedBody", { used: String(parsed.used), limit: String(parsed.limit) })
-              : isQuota
-                ? t("aiQuota.monthlyLimitReachedBodyGeneric")
-                : String(j.needs_review_reason ?? "").trim() || undefined;
 
-          toast.error(t("bulk.errorProcessOneDoc"), { description });
+
+          toast.error(t("bulk.errorProcessOneDoc"), { description: String(j.needs_review_reason ?? "").trim() || undefined });
         }
 
         const pendingLoads = doneIds.filter((id) => !reviewByJobIdRef.current[id] && !savedByJobIdRef.current[id]);
@@ -1235,12 +1228,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
             {t("bulk.statusNeedsReview")}
           </Badge>
         );
-      case "out_of_quota":
-        return (
-          <Badge variant="outline" className="border-violet-400/40 text-violet-200">
-            {t("aiQuota.outOfQuotaBadge")}
-          </Badge>
-        );
+
       default:
         return (
           <Badge variant="outline" title={String(status)}>
