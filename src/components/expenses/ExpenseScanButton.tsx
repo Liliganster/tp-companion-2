@@ -1,7 +1,7 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, DragEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Camera, Loader2, RotateCw, Check, X, AlertCircle } from "lucide-react";
+import { Camera, Loader2, RotateCw, Check, X, AlertCircle, Upload, ImageIcon } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -104,8 +104,11 @@ export function ExpenseScanButton({
   const { t } = useI18n();
   const { user, getAccessToken } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const [isOpen, setIsOpen] = useState(false);
+  const [showUploadOptions, setShowUploadOptions] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [rotation, setRotation] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -120,12 +123,11 @@ export function ExpenseScanButton({
     setExtractionResult(null);
     setExtractionError(null);
     setStoragePath(null);
+    setIsDragging(false);
   }, []);
 
-  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  // Process a file (from input, camera, or drag & drop)
+  const processFile = useCallback((file: File) => {
     // Reset previous state
     resetState();
 
@@ -145,13 +147,39 @@ export function ExpenseScanButton({
     const reader = new FileReader();
     reader.onload = (event) => {
       setImagePreview(event.target?.result as string);
-      setIsOpen(true);
+      setShowUploadOptions(false);
     };
     reader.readAsDataURL(file);
+  }, [resetState, t]);
 
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
     // Reset input
     e.target.value = "";
-  }, [resetState, t]);
+  }, [processFile]);
+
+  // Drag & Drop handlers
+  const handleDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback((e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (file) processFile(file);
+  }, [processFile]);
 
   const handleRotate = useCallback(async () => {
     if (!imagePreview) return;
@@ -238,6 +266,7 @@ export function ExpenseScanButton({
 
     onExtracted(extractionResult, storagePath);
     setIsOpen(false);
+    setShowUploadOptions(false);
     resetState();
     toast.success(t("expenseScan.extracted"));
   }, [extractionResult, storagePath, onExtracted, resetState, t]);
@@ -246,6 +275,7 @@ export function ExpenseScanButton({
     // If we uploaded but user cancels, optionally delete the file
     // For now, we'll keep it (they might retry)
     setIsOpen(false);
+    setShowUploadOptions(false);
     resetState();
   }, [resetState]);
 
@@ -261,8 +291,16 @@ export function ExpenseScanButton({
 
   return (
     <>
+      {/* Hidden file inputs */}
       <input
         ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileSelect}
+      />
+      <input
+        ref={cameraInputRef}
         type="file"
         accept="image/*"
         capture="environment"
@@ -270,13 +308,17 @@ export function ExpenseScanButton({
         onChange={handleFileSelect}
       />
 
+      {/* Trigger button */}
       <Button
         type="button"
         variant="ghost"
         size="icon"
         className={cn("h-8 w-8 shrink-0", className)}
         disabled={disabled}
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() => {
+          setIsOpen(true);
+          setShowUploadOptions(true);
+        }}
         title={t("expenseScan.scanReceipt")}
       >
         <Camera className="w-4 h-4" />
@@ -292,6 +334,76 @@ export function ExpenseScanButton({
           </DialogHeader>
 
           <div className="px-4 pb-4 space-y-4">
+            {/* Upload options - shown when no image is selected */}
+            {showUploadOptions && !imagePreview && (
+              <div className="space-y-3">
+                {/* Drag & Drop zone */}
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={cn(
+                    "border-2 border-dashed rounded-lg p-6 cursor-pointer transition-colors",
+                    "flex flex-col items-center justify-center gap-3 text-center",
+                    isDragging 
+                      ? "border-primary bg-primary/10" 
+                      : "border-muted-foreground/30 hover:border-primary/50 hover:bg-secondary/30"
+                  )}
+                >
+                  <div className={cn(
+                    "w-12 h-12 rounded-full flex items-center justify-center",
+                    isDragging ? "bg-primary/20" : "bg-secondary"
+                  )}>
+                    <ImageIcon className={cn(
+                      "w-6 h-6",
+                      isDragging ? "text-primary" : "text-muted-foreground"
+                    )} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">
+                      {t("expenseScan.dragDropText")}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {t("expenseScan.clickToUpload")}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Action buttons row */}
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex items-center gap-2"
+                    onClick={() => cameraInputRef.current?.click()}
+                  >
+                    <Camera className="w-4 h-4" />
+                    {t("expenseScan.useCamera")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex items-center gap-2"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="w-4 h-4" />
+                    {t("expenseScan.uploadFile")}
+                  </Button>
+                </div>
+
+                {/* Cancel button */}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full"
+                  onClick={handleCancel}
+                >
+                  {t("expenseScan.cancel")}
+                </Button>
+              </div>
+            )}
+
             {/* Image Preview */}
             {imagePreview && !extractionResult && (
               <div className="relative">

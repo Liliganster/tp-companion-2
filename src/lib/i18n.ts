@@ -800,6 +800,10 @@ const es = {
   "expenseScan.rotateImage": "Rotar imagen",
   "expenseScan.noDataExtracted": "No se pudieron extraer datos del recibo",
   "expenseScan.uploadError": "Error al subir la imagen",
+  "expenseScan.dragDropText": "Arrastra y suelta la imagen aquí",
+  "expenseScan.clickToUpload": "o haz clic para seleccionar",
+  "expenseScan.useCamera": "Usar cámara",
+  "expenseScan.uploadFile": "Subir archivo",
 
 } as const;
 
@@ -1585,6 +1589,10 @@ const en: Record<I18nKey, string> = {
   "expenseScan.rotateImage": "Rotate image",
   "expenseScan.noDataExtracted": "Could not extract data from receipt",
   "expenseScan.uploadError": "Error uploading image",
+  "expenseScan.dragDropText": "Drag and drop image here",
+  "expenseScan.clickToUpload": "or click to select",
+  "expenseScan.useCamera": "Use camera",
+  "expenseScan.uploadFile": "Upload file",
 
 };
 
@@ -2367,6 +2375,10 @@ const de: Record<I18nKey, string> = {
   "expenseScan.rotateImage": "Bild drehen",
   "expenseScan.noDataExtracted": "Keine Daten aus dem Beleg extrahiert",
   "expenseScan.uploadError": "Fehler beim Hochladen",
+  "expenseScan.dragDropText": "Bild hier ablegen",
+  "expenseScan.clickToUpload": "oder klicken zum Auswählen",
+  "expenseScan.useCamera": "Kamera nutzen",
+  "expenseScan.uploadFile": "Datei hochladen",
 };
 
 const dict: Record<AppLanguage, Record<I18nKey, string>> = { es, en, de };
