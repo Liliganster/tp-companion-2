@@ -38,6 +38,7 @@ import { useI18n } from "@/hooks/use-i18n";
 import { AddressAutocompleteInput } from "@/components/google/AddressAutocompleteInput";
 import { cascadeDeleteInvoiceJobById } from "@/lib/cascadeDelete";
 import { cancelInvoiceJobs } from "@/lib/aiJobCancellation";
+import { ExpenseScanButton } from "@/components/expenses/ExpenseScanButton";
 
 interface Stop {
   id: string;
@@ -1075,39 +1076,75 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
           </div>
 
           {/* Per-trip expenses */}
+          <p className="text-xs text-muted-foreground -mb-2">
+            {t("tripModal.expensesHint")}
+          </p>
           <div className="grid grid-cols-3 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="tollAmount">{t("tripModal.toll")}</Label>
-              <Input
-                id="tollAmount"
-                type="text"
-                placeholder="0"
-                value={tollAmount}
-                onChange={(e) => setTollAmount(e.target.value)}
-                className="bg-secondary/50"
-              />
+              <div className="flex gap-1">
+                <Input
+                  id="tollAmount"
+                  type="text"
+                  placeholder="0"
+                  value={tollAmount}
+                  onChange={(e) => setTollAmount(e.target.value)}
+                  className="bg-secondary/50"
+                />
+                <ExpenseScanButton
+                  expenseType="toll"
+                  tripId={trip?.id}
+                  onExtracted={(result) => {
+                    if (result.amount != null) {
+                      setTollAmount(formatLocaleNumber(result.amount));
+                    }
+                  }}
+                />
+              </div>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="parkingAmount">{t("tripModal.parking")}</Label>
-              <Input
-                id="parkingAmount"
-                type="text"
-                placeholder="0"
-                value={parkingAmount}
-                onChange={(e) => setParkingAmount(e.target.value)}
-                className="bg-secondary/50"
-              />
+              <div className="flex gap-1">
+                <Input
+                  id="parkingAmount"
+                  type="text"
+                  placeholder="0"
+                  value={parkingAmount}
+                  onChange={(e) => setParkingAmount(e.target.value)}
+                  className="bg-secondary/50"
+                />
+                <ExpenseScanButton
+                  expenseType="parking"
+                  tripId={trip?.id}
+                  onExtracted={(result) => {
+                    if (result.amount != null) {
+                      setParkingAmount(formatLocaleNumber(result.amount));
+                    }
+                  }}
+                />
+              </div>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="otherExpenses">{t("tripModal.otherExpenses")}</Label>
-              <Input
-                id="otherExpenses"
-                type="text"
-                placeholder="0"
-                value={otherExpenses}
-                onChange={(e) => setOtherExpenses(e.target.value)}
-                className="bg-secondary/50"
-              />
+              <div className="flex gap-1">
+                <Input
+                  id="otherExpenses"
+                  type="text"
+                  placeholder="0"
+                  value={otherExpenses}
+                  onChange={(e) => setOtherExpenses(e.target.value)}
+                  className="bg-secondary/50"
+                />
+                <ExpenseScanButton
+                  expenseType="other"
+                  tripId={trip?.id}
+                  onExtracted={(result) => {
+                    if (result.amount != null) {
+                      setOtherExpenses(formatLocaleNumber(result.amount));
+                    }
+                  }}
+                />
+              </div>
             </div>
           </div>
 

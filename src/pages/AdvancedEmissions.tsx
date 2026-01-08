@@ -271,7 +271,9 @@ export default function AdvancedEmissions() {
     try {
       if (typeof window === "undefined") return;
       window.localStorage.removeItem("advancedEmissions:config:v1");
-    } catch {}
+    } catch {
+      // Ignore localStorage errors (e.g., private browsing)
+    }
 
     // Validate selectedProjectId
     if (selectedProjectId && selectedProjectId !== "all") {

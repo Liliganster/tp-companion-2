@@ -44,7 +44,7 @@ export function calculateTripEmissions(input: TripEmissionsInput): TripEmissions
   const fuelType: FuelType = (input.fuelType ?? "unknown") as FuelType;
 
   if (fuelType === "gasoline" || fuelType === "diesel") {
-    let fuelLPer100Km = input.fuelLPer100Km == null ? null : Number(input.fuelLPer100Km);
+    const fuelLPer100Km = input.fuelLPer100Km == null ? null : Number(input.fuelLPer100Km);
     
     // Validation warnings (UI forms should prevent saving invalid values)
     if (fuelLPer100Km !== null && Number.isFinite(fuelLPer100Km)) {
@@ -89,7 +89,7 @@ export function calculateTripEmissions(input: TripEmissionsInput): TripEmissions
   }
 
   if (fuelType === "ev") {
-    let evKwhPer100Km = input.evKwhPer100Km == null ? null : Number(input.evKwhPer100Km);
+    const evKwhPer100Km = input.evKwhPer100Km == null ? null : Number(input.evKwhPer100Km);
     
     // Validation warnings (UI forms should prevent saving invalid values)
     if (evKwhPer100Km !== null && Number.isFinite(evKwhPer100Km)) {

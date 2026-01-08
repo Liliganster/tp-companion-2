@@ -7,6 +7,7 @@ export type QuotaDecision = {
   allowed: boolean;
   limit: number;
   used: number;
+  remaining: number;
   reason?: string;
 };
 
@@ -99,7 +100,7 @@ export async function checkAiMonthlyQuota(userId: string): Promise<QuotaDecision
   const limit = AI_MONTHLY_LIMIT;
 
   if (envTruthy("BYPASS_AI_LIMITS")) {
-    return { allowed: true, limit, used: 0 };
+    return { allowed: true, limit, used: 0, remaining: limit };
   }
 
   const sinceIso = startOfCurrentMonthUtcIso();
@@ -114,9 +115,28 @@ export async function checkAiMonthlyQuota(userId: string): Promise<QuotaDecision
       limit,
       // If we are denying, consider the user at their limit (even if some slots are reserved by in-flight jobs).
       used: limit,
+      remaining: 0,
       reason: `monthly_quota_exceeded:${limit}/${limit}:reserved=${reserved}:done=${counts.done}:processing=${counts.processing}`,
     };
   }
 
-  return { allowed: true, limit, used: counts.done };
+  return { allowed: true, limit, used: counts.done, remaining: limit - counts.done };
+}
+
+/**
+ * Record AI usage for quota tracking
+ */
+export async function recordAiUsage(userId: string, kind: string, jobId: string): Promise<void> {
+  try {
+    await supabaseAdmin.from("ai_usage_events").insert({
+      user_id: userId,
+      kind,
+      job_id: jobId,
+      run_at: new Date().toISOString(),
+      status: "done",
+    });
+  } catch (err) {
+    // Best-effort - don't fail the request if recording fails
+    console.warn("Failed to record AI usage:", err);
+  }
 }
