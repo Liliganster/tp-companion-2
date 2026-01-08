@@ -4,12 +4,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, GripVertical, X, MapPin, Calendar, Home, Route, Loader2, Check, ChevronsUpDown, FileUp } from "lucide-react";
+import { Plus, GripVertical, X, MapPin, Calendar, Home, Route, Loader2, Check, ChevronsUpDown, FileUp, Upload, FileText, Trash2, Sparkles, Clock, CheckCircle, AlertCircle } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn, uuidv4 } from "@/lib/utils";
 import { useProjects } from "@/contexts/ProjectsContext";
-import { useTrips } from "@/contexts/TripsContext";
+import { Trip, useTrips } from "@/contexts/TripsContext";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -36,6 +36,8 @@ import { formatLocaleNumber, parseLocaleNumber } from "@/lib/number";
 import { getCountryCode } from "@/lib/country-mapping";
 import { useI18n } from "@/hooks/use-i18n";
 import { AddressAutocompleteInput } from "@/components/google/AddressAutocompleteInput";
+import { cascadeDeleteInvoiceJobById } from "@/lib/cascadeDelete";
+import { cancelInvoiceJobs } from "@/lib/aiJobCancellation";
 
 interface Stop {
   id: string;
@@ -163,6 +165,11 @@ interface TripData {
   tollAmount?: number | null;
   parkingAmount?: number | null;
   otherExpenses?: number | null;
+  // Invoice data
+  invoiceJobId?: string | null;
+  invoiceAmount?: number | null;
+  invoiceCurrency?: string | null;
+  documents?: Trip["documents"];
 }
 
 interface AddTripModalProps {
@@ -172,7 +179,7 @@ interface AddTripModalProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   previousDestination?: string;
-  onSave?: (trip: Required<Pick<TripData, "id" | "date" | "route" | "project" | "purpose" | "passengers" | "distance">> & Pick<TripData, "ratePerKmOverride" | "specialOrigin" | "projectId">) => void;
+  onSave?: (trip: Required<Pick<TripData, "id" | "date" | "route" | "project" | "purpose" | "passengers" | "distance">> & Pick<TripData, "ratePerKmOverride" | "specialOrigin" | "projectId" | "tollAmount" | "parkingAmount" | "otherExpenses" | "invoiceJobId" | "invoiceAmount" | "invoiceCurrency" | "documents">) => void;
 }
 
 export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previousDestination, onSave }: AddTripModalProps) {
@@ -416,6 +423,17 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
   const [templateName, setTemplateName] = useState("");
   const [templateLoading, setTemplateLoading] = useState(false);
 
+  // Invoice/document states
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
+  const [invoiceJobId, setInvoiceJobId] = useState<string | null>(null);
+  const [invoiceStatus, setInvoiceStatus] = useState<string | null>(null);
+  const [invoiceUploading, setInvoiceUploading] = useState(false);
+  const [invoiceAmount, setInvoiceAmount] = useState<number | null>(null);
+  const [invoiceCurrency, setInvoiceCurrency] = useState<string | null>(null);
+  const [existingDocuments, setExistingDocuments] = useState<Trip["documents"]>([]);
+  const cancelInvoiceJobIdsRef = useRef<Set<string>>(new Set());
+  const invoiceInputRef = useRef<HTMLInputElement>(null);
+
   // Fetch coordinates for Base City to use as Autocomplete Bias
   useEffect(() => {
     if (!profile.city || !profile.country) return;
@@ -507,6 +525,14 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
     setOtherExpenses(seedTrip?.otherExpenses != null ? formatLocaleNumber(seedTrip.otherExpenses) : "");
     setSaveTemplateOpen(false);
     setTemplateName("");
+    // Initialize invoice fields
+    setInvoiceFile(null);
+    setInvoiceJobId(seedTrip?.invoiceJobId ?? null);
+    setInvoiceAmount(seedTrip?.invoiceAmount ?? null);
+    setInvoiceCurrency(seedTrip?.invoiceCurrency ?? null);
+    setExistingDocuments(seedTrip?.documents ?? []);
+    setInvoiceStatus(null);
+    cancelInvoiceJobIdsRef.current = new Set();
   }, [isOpen, trip, prefill, baseLocation, resolvePreviousDestinationForDate]);
 
   const handleStopDraftChange = useCallback((id: string, value: string) => {
@@ -593,6 +619,166 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
 
     return () => clearTimeout(timer);
   }, [calculateDistance, isOpen, specialOrigin, stops, date]);
+
+  // Poll for invoice extraction results
+  useEffect(() => {
+    if (!isOpen || !invoiceJobId) return;
+
+    let cancelled = false;
+
+    const poll = async () => {
+      if (cancelled) return;
+
+      try {
+        const { data: job, error } = await supabase
+          .from("invoice_jobs")
+          .select("status")
+          .eq("id", invoiceJobId)
+          .maybeSingle();
+
+        if (error || !job) return;
+
+        const status = (job as { status?: string }).status ?? null;
+        setInvoiceStatus(status);
+
+        if (status === "done") {
+          // Fetch extraction results
+          const { data: results } = await supabase
+            .from("invoice_results")
+            .select("amount, currency")
+            .eq("job_id", invoiceJobId)
+            .maybeSingle();
+
+          if (results) {
+            const amt = (results as { amount?: number }).amount ?? null;
+            const cur = (results as { currency?: string }).currency ?? null;
+            setInvoiceAmount(amt);
+            setInvoiceCurrency(cur);
+          }
+        }
+      } catch {
+        // ignore polling errors
+      }
+    };
+
+    // Poll immediately and then every 3 seconds
+    void poll();
+    const interval = setInterval(poll, 3000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [isOpen, invoiceJobId]);
+
+  // Cancel any pending invoice jobs when modal closes
+  useEffect(() => {
+    return () => {
+      const idsToCancel = Array.from(cancelInvoiceJobIdsRef.current);
+      if (idsToCancel.length > 0) {
+        void cancelInvoiceJobs(idsToCancel);
+      }
+    };
+  }, []);
+
+  const handleInvoiceUpload = async (file: File) => {
+    if (!file) return;
+
+    setInvoiceFile(file);
+    setInvoiceUploading(true);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("No session");
+
+      const tripId = trip?.id || uuidv4();
+      const trimmedProject = project.trim();
+      
+      // Find project ID
+      let projectId: string | null = null;
+      if (trimmedProject) {
+        const existing = projects.find(p => p.name.trim().toLowerCase() === trimmedProject.toLowerCase());
+        projectId = existing?.id ?? null;
+      }
+
+      // Upload file to storage
+      const fileName = `${session.user.id}/${tripId}/${Date.now()}_${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from("project_documents")
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      // Create invoice job
+      const newJobId = uuidv4();
+      const { error: jobError } = await supabase.from("invoice_jobs").insert({
+        id: newJobId,
+        user_id: session.user.id,
+        trip_id: tripId,
+        project_id: projectId,
+        file_name: file.name,
+        storage_path: fileName,
+        status: "queued",
+      });
+
+      if (jobError) throw jobError;
+
+      setInvoiceJobId(newJobId);
+      setInvoiceStatus("queued");
+      cancelInvoiceJobIdsRef.current.add(newJobId);
+
+      // Add to documents list
+      setExistingDocuments(prev => [...prev, {
+        id: uuidv4(),
+        name: file.name,
+        mimeType: file.type,
+        storagePath: fileName,
+        bucketId: "project_documents",
+        invoiceJobId: newJobId,
+      }]);
+
+      // Trigger the worker
+      try {
+        void fetch(`/api/invoices/trigger-worker?jobId=${encodeURIComponent(newJobId)}`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+        });
+      } catch {
+        // ignore: cron/manual trigger can still process later
+      }
+
+      toast.success(t("tripModal.invoiceUploaded"));
+    } catch (e: any) {
+      console.error("Invoice upload error:", e);
+      toast.error(t("tripModal.invoiceUploadError"));
+      setInvoiceFile(null);
+    } finally {
+      setInvoiceUploading(false);
+    }
+  };
+
+  const handleDeleteInvoice = async () => {
+    if (!invoiceJobId) return;
+    if (!confirm(t("tripModal.confirmDeleteInvoice"))) return;
+
+    try {
+      await cascadeDeleteInvoiceJobById(supabase, invoiceJobId);
+      cancelInvoiceJobIdsRef.current.delete(invoiceJobId);
+      setInvoiceJobId(null);
+      setInvoiceFile(null);
+      setInvoiceStatus(null);
+      setInvoiceAmount(null);
+      setInvoiceCurrency(null);
+      setExistingDocuments(prev => prev.filter(d => d.invoiceJobId !== invoiceJobId));
+      toast.success(t("tripModal.invoiceDeleted"));
+    } catch (e) {
+      console.error("Delete invoice error:", e);
+      toast.error(t("tripModal.invoiceDeleteError"));
+    }
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -924,6 +1110,82 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
             </div>
           </div>
 
+          {/* Invoice/Document Section */}
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between">
+              <Label>{t("tripModal.invoice")}</Label>
+              {invoiceStatus && (
+                <span className={cn(
+                  "text-xs px-2 py-0.5 rounded-full flex items-center gap-1",
+                  invoiceStatus === "done" && "bg-green-500/20 text-green-400",
+                  invoiceStatus === "processing" && "bg-blue-500/20 text-blue-400",
+                  invoiceStatus === "queued" && "bg-yellow-500/20 text-yellow-400",
+                  invoiceStatus === "failed" && "bg-red-500/20 text-red-400"
+                )}>
+                  {invoiceStatus === "done" && <CheckCircle className="w-3 h-3" />}
+                  {invoiceStatus === "processing" && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {invoiceStatus === "queued" && <Clock className="w-3 h-3" />}
+                  {invoiceStatus === "failed" && <AlertCircle className="w-3 h-3" />}
+                  {t(`tripModal.invoiceStatus.${invoiceStatus}`)}
+                </span>
+              )}
+            </div>
+            
+            {invoiceJobId || existingDocuments.length > 0 ? (
+              <div className="bg-secondary/30 rounded-lg p-3 space-y-2">
+                {existingDocuments.map((doc) => (
+                  <div key={doc.id} className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm truncate">{doc.name}</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:bg-destructive/20"
+                      onClick={handleDeleteInvoice}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+                {invoiceAmount != null && invoiceStatus === "done" && (
+                  <div className="flex items-center gap-2 pt-2 border-t border-border/50">
+                    <Sparkles className="w-4 h-4 text-amber-400" />
+                    <span className="text-sm font-medium">
+                      {t("tripModal.extractedAmount")}: {invoiceAmount.toFixed(2)} {invoiceCurrency || "EUR"}
+                    </span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div
+                className="relative border-2 border-dashed border-border/50 rounded-lg p-4 cursor-pointer hover:border-primary/50 transition-colors"
+                onClick={() => invoiceInputRef.current?.click()}
+              >
+                <input
+                  ref={invoiceInputRef}
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void handleInvoiceUpload(file);
+                    e.target.value = "";
+                  }}
+                />
+                <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                  {invoiceUploading ? (
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  ) : (
+                    <Upload className="w-6 h-6" />
+                  )}
+                  <span className="text-sm">{t("tripModal.uploadInvoice")}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
           </div>
 
           <div className="flex items-center gap-2 mt-2">
@@ -1083,6 +1345,11 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                 }
 
                 // 3. Save Trip
+                // Remove the invoice job from the cancel set since we're saving
+                if (invoiceJobId) {
+                  cancelInvoiceJobIdsRef.current.delete(invoiceJobId);
+                }
+                
                 onSave?.({
                   id,
                   date,
@@ -1098,6 +1365,11 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                   tollAmount: tollValue == null ? null : Math.max(0, tollValue),
                   parkingAmount: parkingValue == null ? null : Math.max(0, parkingValue),
                   otherExpenses: otherValue == null ? null : Math.max(0, otherValue),
+                  // Invoice data
+                  invoiceJobId,
+                  invoiceAmount,
+                  invoiceCurrency,
+                  documents: existingDocuments,
                 });
               }}
             >

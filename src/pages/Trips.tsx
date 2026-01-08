@@ -411,6 +411,14 @@ export default function Trips() {
     specialOrigin?: "base" | "continue" | "return";
     callsheet_job_id?: string;
     documents?: Trip["documents"];
+    // Per-trip expenses
+    tollAmount?: number | null;
+    parkingAmount?: number | null;
+    otherExpenses?: number | null;
+    // Invoice extraction data
+    invoiceJobId?: string | null;
+    invoiceAmount?: number | null;
+    invoiceCurrency?: string | null;
   };
 
   const handleSaveTrip = async (data: SavedTrip) => {
@@ -432,6 +440,14 @@ export default function Trips() {
       specialOrigin: data.specialOrigin ?? "base",
       callsheet_job_id: data.callsheet_job_id,
       documents: data.documents,
+      // Per-trip expenses
+      tollAmount: data.tollAmount ?? null,
+      parkingAmount: data.parkingAmount ?? null,
+      otherExpenses: data.otherExpenses ?? null,
+      // Invoice extraction data
+      invoiceJobId: data.invoiceJobId ?? null,
+      invoiceAmount: data.invoiceAmount ?? null,
+      invoiceCurrency: data.invoiceCurrency ?? null,
     };
 
     const exists = trips.some((t) => t.id === data.id);
