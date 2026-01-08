@@ -266,7 +266,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
         const distance = typeof distanceKm === "number" ? distanceKm : 0;
         const producer = (result?.producer_value ?? "").trim();
-        const purpose = producer ? `Rodaje: ${producer}` : "Rodaje";
+        const purpose = producer ? tf("bulk.purposeWithProducer", { producer }) : t("bulk.purposeDefault");
 
         const nextTrip: Trip = {
           id: uuidv4(),

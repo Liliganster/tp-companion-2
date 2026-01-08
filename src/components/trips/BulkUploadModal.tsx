@@ -1295,7 +1295,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         date: reviewDate,
         project: trimmedProjectName,
         projectId: projectIdToUse, // Pass the ID
-        purpose: "Rodaje: " + reviewProducer, // Default purpose
+        purpose: reviewProducer ? tf("bulk.purposeWithProducer", { producer: reviewProducer }) : t("bulk.purposeDefault"), // Default purpose
         route: fullRoute, 
         passengers: 0,
         distance: parseFloat(reviewDistance) || 0,

@@ -918,7 +918,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
           <p className="text-xs text-muted-foreground -mb-2">
             {t("tripModal.expensesHint")}
           </p>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="tollAmount">{t("tripModal.toll")}</Label>
               <div className="flex gap-1">
