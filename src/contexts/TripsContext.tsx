@@ -23,9 +23,6 @@ export type Trip = {
   purpose: string;
   passengers: number;
   invoice?: string; // Legacy: invoice_number
-  invoiceAmount?: number | null; // New: extracted amount from invoice
-  invoiceCurrency?: string | null; // New: currency (EUR, USD, etc.)
-  invoiceJobId?: string | null; // New: link to invoice_job
   warnings?: string[];
   clientName?: string; // Metadata from template/input (stored in documents)
   co2: number;
@@ -37,6 +34,7 @@ export type Trip = {
   tollAmount?: number | null; // Peajes
   parkingAmount?: number | null; // Parking
   otherExpenses?: number | null; // Otros gastos (comida, multas, etc.)
+  fuelAmount?: number | null; // Fuel/gasolina
   documents?: Array<{
     id: string;
     name: string;
@@ -44,8 +42,7 @@ export type Trip = {
     driveFileId?: string;
     storagePath?: string;
     bucketId?: "callsheets" | "project_documents";
-    kind?: "invoice" | "document" | "toll_receipt" | "parking_receipt" | "other_receipt";
-    invoiceJobId?: string;
+    kind?: "invoice" | "document" | "toll_receipt" | "parking_receipt" | "other_receipt" | "fuel_receipt";
     extractedAmount?: number | null; // Amount extracted from receipt
     createdAt: string; // ISO
   }>; // For trip-specific documents only
@@ -133,9 +130,6 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         purpose: t.purpose || "",
         passengers: t.passengers || 0,
         invoice: t.invoice_number,
-        invoiceAmount: t.invoice_amount ?? null,
-        invoiceCurrency: t.invoice_currency ?? null,
-        invoiceJobId: t.invoice_job_id ?? null,
         distance: t.distance_km || 0,
         co2: 0, // Will be recalculated using API data in the trips memo
         ratePerKmOverride: t.rate_per_km_override,
@@ -144,6 +138,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         tollAmount: t.toll_amount ?? null,
         parkingAmount: t.parking_amount ?? null,
         otherExpenses: t.other_expenses ?? null,
+        fuelAmount: t.fuel_amount ?? null,
         documents: (t.documents || []).filter((d: any) => d.kind !== "client_meta"),
       }));
 
@@ -201,12 +196,12 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     void Promise.allSettled(updates.map((u) => supabase.from("trips").update({ co2_kg: u.co2 }).eq("id", u.id)));
   }, [emissionsInput, queryClient, queryKey, tripsQuery.data, user]);
 
-  // Keep invoice fields in sync when AI extraction updates trips in DB.
+  // Keep fields in sync when updates trips in DB.
   useEffect(() => {
     if (!user || !supabase) return;
 
     const channel = supabase
-      .channel("trips-invoice-sync")
+      .channel("trips-sync")
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "trips", filter: `user_id=eq.${user.id}` },
@@ -218,9 +213,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
               t.id === next.id
                 ? {
                     ...t,
-                    invoiceAmount: next.invoice_amount ?? null,
-                    invoiceCurrency: next.invoice_currency ?? null,
-                    invoiceJobId: next.invoice_job_id ?? null,
+                    fuelAmount: next.fuel_amount ?? null,
                     documents: (next.documents || []).filter((d: any) => d.kind !== "client_meta"),
                     clientName: (() => {
                         const docs = next.documents || [];
@@ -329,13 +322,11 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       rate_per_km_override: normalizedTrip.ratePerKmOverride,
       special_origin: normalizedTrip.specialOrigin,
       invoice_number: normalizedTrip.invoice,
-      invoice_amount: normalizedTrip.invoiceAmount,
-      invoice_currency: normalizedTrip.invoiceCurrency,
-      invoice_job_id: normalizedTrip.invoiceJobId,
       // Trip expenses
       toll_amount: normalizedTrip.tollAmount ?? null,
       parking_amount: normalizedTrip.parkingAmount ?? null,
       other_expenses: normalizedTrip.otherExpenses ?? null,
+      fuel_amount: normalizedTrip.fuelAmount ?? null,
       documents: documentsToSave
     };
     
@@ -464,13 +455,11 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     if (safePatch.ratePerKmOverride !== undefined) dbPatch.rate_per_km_override = safePatch.ratePerKmOverride;
     if (safePatch.specialOrigin !== undefined) dbPatch.special_origin = safePatch.specialOrigin;
     if (safePatch.invoice !== undefined) dbPatch.invoice_number = safePatch.invoice;
-    if (safePatch.invoiceAmount !== undefined) dbPatch.invoice_amount = safePatch.invoiceAmount;
-    if (safePatch.invoiceCurrency !== undefined) dbPatch.invoice_currency = safePatch.invoiceCurrency;
-    if (safePatch.invoiceJobId !== undefined) dbPatch.invoice_job_id = safePatch.invoiceJobId;
     // Trip expenses
     if (safePatch.tollAmount !== undefined) dbPatch.toll_amount = safePatch.tollAmount;
     if (safePatch.parkingAmount !== undefined) dbPatch.parking_amount = safePatch.parkingAmount;
     if (safePatch.otherExpenses !== undefined) dbPatch.other_expenses = safePatch.otherExpenses;
+    if (safePatch.fuelAmount !== undefined) dbPatch.fuel_amount = safePatch.fuelAmount;
     
     // Handle documents and client metadata
     const nextDocuments = safePatch.documents;
@@ -550,46 +539,9 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Keep invoice jobs/documents consistent with the trip's project when the user moves a trip.
-      const { error: invoiceJobsMoveError } = await supabase
-        .from("invoice_jobs")
-        .update({ project_id: nextProjectId ?? null })
-        .eq("trip_id", id);
-      if (invoiceJobsMoveError) {
-        console.warn("[TripsContext] No se pudo actualizar invoice_jobs.project_id al mover el viaje:", invoiceJobsMoveError);
-      }
-
       const nextProjectIdStr = typeof nextProjectId === "string" ? nextProjectId.trim() : "";
       if (nextProjectIdStr) {
         let projectDocsMoveError: any = null;
-        const invoiceJobIds = new Set<string>();
-        const primaryInvoiceJobId = String(prevTrip?.invoiceJobId ?? existingTrip?.invoiceJobId ?? "").trim();
-        if (primaryInvoiceJobId) invoiceJobIds.add(primaryInvoiceJobId);
-        for (const doc of prevTrip?.documents ?? existingTrip?.documents ?? []) {
-          const jid = String((doc as any)?.invoiceJobId ?? "").trim();
-          if (jid) invoiceJobIds.add(jid);
-        }
-
-        const invoiceJobIdList = Array.from(invoiceJobIds);
-        if (invoiceJobIdList.length > 0) {
-          // Some older rows may have NULL trip_id, so update by job id as well (best-effort).
-          const { error: invoiceJobsByIdError } = await supabase
-            .from("invoice_jobs")
-            .update({ project_id: nextProjectId ?? null })
-            .in("id", invoiceJobIdList);
-          if (invoiceJobsByIdError) {
-            console.warn("[TripsContext] No se pudo actualizar invoice_jobs por id al mover el viaje:", invoiceJobsByIdError);
-          }
-
-          const { error: docsByJobError } = await supabase
-            .from("project_documents")
-            .update({ project_id: nextProjectIdStr })
-            .in("invoice_job_id", invoiceJobIdList);
-          if (docsByJobError) {
-            projectDocsMoveError = projectDocsMoveError ?? docsByJobError;
-            console.warn("[TripsContext] No se pudo mover project_documents por invoice_job_id:", docsByJobError);
-          }
-        }
 
         const projectDocumentPaths = (prevTrip?.documents ?? existingTrip?.documents ?? [])
           .filter((d) => d?.bucketId === "project_documents")
