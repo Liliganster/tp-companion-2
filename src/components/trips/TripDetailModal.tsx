@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { MapPin, FileText, CircleDot, Eye, Car, Fuel, ParkingCircle, Receipt, Banknote } from "lucide-react";
+import { MapPin, FileText, CircleDot, Eye, Car, Receipt, ParkingCircle, Banknote } from "lucide-react";
 import { useI18n } from "@/hooks/use-i18n";
 import { TripGoogleMap } from "@/components/trips/TripGoogleMap";
 import { Trip, useTrips } from "@/contexts/TripsContext";
@@ -34,20 +34,6 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
     return trips.find((t) => t.id === trip.id) ?? trip;
   }, [trip, trips]);
 
-  // Calculate costs - must be before early return to maintain hook order
-  const energyPerKm = useMemo(() => {
-    if (profile.fuelType === "ev") {
-      const kwhPer100 = parseLocaleNumber(profile.evKwhPer100Km) ?? 0;
-      const pricePerKwh = parseLocaleNumber(profile.electricityPricePerKwh) ?? 0;
-      if (kwhPer100 > 0 && pricePerKwh > 0) return (kwhPer100 / 100) * pricePerKwh;
-    } else if (profile.fuelType === "gasoline" || profile.fuelType === "diesel") {
-      const litersPer100 = parseLocaleNumber(profile.fuelLPer100Km) ?? 0;
-      const pricePerLiter = parseLocaleNumber(profile.fuelPricePerLiter) ?? 0;
-      if (litersPer100 > 0 && pricePerLiter > 0) return (litersPer100 / 100) * pricePerLiter;
-    }
-    return 0;
-  }, [profile.fuelType, profile.evKwhPer100Km, profile.electricityPricePerKwh, profile.fuelLPer100Km, profile.fuelPricePerLiter]);
-
   useEffect(() => {
     if (!open) {
       setPreviewUrl(null);
@@ -74,20 +60,6 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
   })();
 
   const tripDocuments = liveTrip.documents ?? [];
-
-  const fuelCost = liveTrip.distance * energyPerKm;
-  const tollAmount = typeof liveTrip.tollAmount === "number" ? liveTrip.tollAmount : 0;
-  const parkingAmount = typeof liveTrip.parkingAmount === "number" ? liveTrip.parkingAmount : 0;
-  const otherExpenses = typeof liveTrip.otherExpenses === "number" ? liveTrip.otherExpenses : 0;
-  const totalExpenses = tollAmount + parkingAmount + otherExpenses;
-  const totalCost = fuelCost + totalExpenses;
-
-  const currencyFormatter = new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: "EUR",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
 
   const viewDocument = async (doc: NonNullable<Trip["documents"]>[number]) => {
     // Handle Supabase Storage files
@@ -202,57 +174,48 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
               </div>
             </div>
 
-            <Separator />
-
-            {/* Cost Breakdown */}
-            <div>
-              <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-3 block">{t("tripDetail.costBreakdown")}</Label>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <Fuel className="w-4 h-4 text-blue-500" />
-                    <span className="text-muted-foreground">{t("advancedCosts.breakdownFuelEnergy")}</span>
+            {/* Trip Expenses */}
+            {(liveTrip.tollAmount || liveTrip.parkingAmount || liveTrip.otherExpenses) && (
+              <>
+                <Separator />
+                <div>
+                  <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-3 block">{t("trips.expenses")}</Label>
+                  <div className="space-y-2">
+                    {liveTrip.tollAmount != null && liveTrip.tollAmount > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <Receipt className="w-4 h-4 text-yellow-500" />
+                          <span className="text-muted-foreground">{t("tripModal.toll")}</span>
+                        </div>
+                        <span className="font-medium">{liveTrip.tollAmount.toFixed(2)} €</span>
+                      </div>
+                    )}
+                    {liveTrip.parkingAmount != null && liveTrip.parkingAmount > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <ParkingCircle className="w-4 h-4 text-purple-500" />
+                          <span className="text-muted-foreground">{t("tripModal.parking")}</span>
+                        </div>
+                        <span className="font-medium">{liveTrip.parkingAmount.toFixed(2)} €</span>
+                      </div>
+                    )}
+                    {liveTrip.otherExpenses != null && liveTrip.otherExpenses > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <Banknote className="w-4 h-4 text-green-500" />
+                          <span className="text-muted-foreground">{t("tripModal.otherExpenses")}</span>
+                        </div>
+                        <span className="font-medium">{liveTrip.otherExpenses.toFixed(2)} €</span>
+                      </div>
+                    )}
                   </div>
-                  <span className="font-medium">{currencyFormatter.format(fuelCost)}</span>
                 </div>
-                {tollAmount > 0 && (
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <Receipt className="w-4 h-4 text-yellow-500" />
-                      <span className="text-muted-foreground">{t("tripModal.toll")}</span>
-                    </div>
-                    <span className="font-medium">{currencyFormatter.format(tollAmount)}</span>
-                  </div>
-                )}
-                {parkingAmount > 0 && (
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <ParkingCircle className="w-4 h-4 text-purple-500" />
-                      <span className="text-muted-foreground">{t("tripModal.parking")}</span>
-                    </div>
-                    <span className="font-medium">{currencyFormatter.format(parkingAmount)}</span>
-                  </div>
-                )}
-                {otherExpenses > 0 && (
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <Banknote className="w-4 h-4 text-green-500" />
-                      <span className="text-muted-foreground">{t("tripModal.otherExpenses")}</span>
-                    </div>
-                    <span className="font-medium">{currencyFormatter.format(otherExpenses)}</span>
-                  </div>
-                )}
-                <Separator className="my-2" />
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">{t("trips.totalCost")}</span>
-                  <span className="text-lg font-bold text-amber-500">{currencyFormatter.format(totalCost)}</span>
-                </div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
 
           <div className="flex-1 flex flex-col">
-            <Tabs defaultValue="map" className="flex-1 flex flex-col">
+            <Tabs defaultValue="document" className="flex-1 flex flex-col">
               <div className="flex-1 relative">
                 <TabsContent value="map" className="absolute inset-0 m-0">
                   <TripGoogleMap route={liveTrip.route} open={open} />

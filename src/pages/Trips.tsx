@@ -659,12 +659,6 @@ export default function Trips() {
                     </span>
                   </div>
                   <div className="flex justify-between md:flex-col md:gap-0.5">
-                    <span className="text-muted-foreground text-center">{t("trips.totalCost")}:</span>
-                    <span className="text-amber-500 font-medium text-center">
-                      {calculateTripTotalCost(trip) > 0 ? `${calculateTripTotalCost(trip).toFixed(2)} €` : "-"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between md:flex-col md:gap-0.5">
                     <span className="text-muted-foreground text-center">{t("trips.reimbursement")}:</span>
                     <span className="text-primary font-medium text-center">{calculateTripReimbursement(trip).toFixed(2)} €</span>
                   </div>
@@ -760,7 +754,6 @@ export default function Trips() {
                 <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">Factura</TableHead>
                 <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("trips.passengers")}</TableHead>
                 <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.expenses")}</TableHead>
-                <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.totalCost")}</TableHead>
                 <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.reimbursement")}</TableHead>
                 <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.distance")}</TableHead>
                 <TableHead className="w-10"></TableHead>
@@ -831,9 +824,6 @@ export default function Trips() {
                 <TableCell className="text-right text-muted-foreground hidden lg:table-cell">{trip.passengers || "-"}</TableCell>
                 <TableCell className="text-right text-orange-500 whitespace-nowrap">
                   {calculateTripExpenses(trip) > 0 ? `${calculateTripExpenses(trip).toFixed(2)} €` : "-"}
-                </TableCell>
-                <TableCell className="text-right text-amber-500 font-medium whitespace-nowrap">
-                  {calculateTripTotalCost(trip) > 0 ? `${calculateTripTotalCost(trip).toFixed(2)} €` : "-"}
                 </TableCell>
                 <TableCell className="text-right text-primary font-medium whitespace-nowrap">{calculateTripReimbursement(trip).toFixed(2)} €</TableCell>
                 <TableCell className="text-right font-semibold whitespace-nowrap">{trip.distance} km</TableCell>
