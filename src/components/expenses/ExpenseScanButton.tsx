@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState, DragEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Camera, Loader2, RotateCw, Check, X, AlertCircle, Upload, ImageIcon } from "lucide-react";
+import { Camera, Loader2, RotateCw, Check, X, AlertCircle, Upload, ImageIcon, Trash2, FileText } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -25,6 +25,8 @@ interface ExpenseExtractResult {
 interface ExpenseScanButtonProps {
   expenseType: ExpenseType;
   onExtracted: (result: ExpenseExtractResult, storagePath: string) => void;
+  onDeleted?: () => void;
+  existingReceiptPath?: string | null;
   disabled?: boolean;
   className?: string;
   tripId?: string;
@@ -96,6 +98,8 @@ async function rotateImage(imageUrl: string, degrees: number): Promise<string> {
 export function ExpenseScanButton({
   expenseType,
   onExtracted,
+  onDeleted,
+  existingReceiptPath,
   disabled,
   className,
   tripId,
@@ -112,6 +116,7 @@ export function ExpenseScanButton({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [rotation, setRotation] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [extractionResult, setExtractionResult] = useState<ExpenseExtractResult | null>(null);
   const [extractionError, setExtractionError] = useState<string | null>(null);
   const [storagePath, setStoragePath] = useState<string | null>(null);
@@ -125,6 +130,29 @@ export function ExpenseScanButton({
     setStoragePath(null);
     setIsDragging(false);
   }, []);
+
+  // Delete existing receipt from storage
+  const handleDeleteReceipt = useCallback(async () => {
+    if (!existingReceiptPath || !supabase) return;
+
+    setIsDeleting(true);
+    try {
+      // Delete from Supabase Storage
+      const { error } = await supabase.storage
+        .from("project_documents")
+        .remove([existingReceiptPath]);
+
+      if (error) throw error;
+
+      toast.success(t("expenseScan.receiptDeleted"));
+      onDeleted?.();
+    } catch (err) {
+      console.error("Delete error:", err);
+      toast.error(t("expenseScan.deleteError"));
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [existingReceiptPath, onDeleted, t]);
 
   // Process a file (from input, camera, or drag & drop)
   const processFile = useCallback((file: File) => {
@@ -327,21 +355,55 @@ export function ExpenseScanButton({
         onChange={handleFileSelect}
       />
 
-      {/* Trigger button */}
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        className={cn("h-9 w-9 shrink-0", className)}
-        disabled={disabled}
-        onClick={() => {
-          setIsOpen(true);
-          setShowUploadOptions(true);
-        }}
-        title={t("expenseScan.scanReceipt")}
-      >
-        <Camera className="w-5 h-5" />
-      </Button>
+      {/* Trigger button - shows different state if receipt exists */}
+      {existingReceiptPath ? (
+        <div className="flex gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className={cn("h-10 w-10 shrink-0 border-green-500/50 text-green-500", className)}
+            disabled={disabled}
+            onClick={() => {
+              setIsOpen(true);
+              setShowUploadOptions(true);
+            }}
+            title={t("expenseScan.viewReceipt")}
+          >
+            <FileText className="w-5 h-5" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-10 w-10 shrink-0 text-destructive hover:bg-destructive/10"
+            disabled={disabled || isDeleting}
+            onClick={handleDeleteReceipt}
+            title={t("expenseScan.deleteReceipt")}
+          >
+            {isDeleting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Trash2 className="w-4 h-4" />
+            )}
+          </Button>
+        </div>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className={cn("h-10 w-10 shrink-0", className)}
+          disabled={disabled}
+          onClick={() => {
+            setIsOpen(true);
+            setShowUploadOptions(true);
+          }}
+          title={t("expenseScan.scanReceipt")}
+        >
+          <Camera className="w-5 h-5" />
+        </Button>
+      )}
 
       <Dialog open={isOpen} onOpenChange={(open) => !open && handleCancel()}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-hidden p-0">
@@ -410,16 +472,6 @@ export function ExpenseScanButton({
                     {t("expenseScan.uploadFile")}
                   </Button>
                 </div>
-
-                {/* Cancel button */}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="w-full"
-                  onClick={handleCancel}
-                >
-                  {t("expenseScan.cancel")}
-                </Button>
               </div>
             )}
 
@@ -530,34 +582,35 @@ export function ExpenseScanButton({
               </div>
             )}
 
-            {/* Action buttons */}
-            <div className="flex gap-2">
-              {!extractionResult ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex-1"
-                    onClick={handleCancel}
-                    disabled={isProcessing}
-                  >
-                    <X className="w-4 h-4 mr-2" />
-                    {t("expenseScan.cancel")}
-                  </Button>
-                  <Button
-                    type="button"
-                    className="flex-1"
-                    onClick={handleProcess}
-                    disabled={isProcessing || !imagePreview}
-                  >
-                    {isProcessing ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Check className="w-4 h-4 mr-2" />
-                    )}
-                    {t("expenseScan.extract")}
-                  </Button>
-                </>
+            {/* Action buttons - only show when image is loaded */}
+            {imagePreview && (
+              <div className="flex gap-2">
+                {!extractionResult ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={handleCancel}
+                      disabled={isProcessing}
+                    >
+                      <X className="w-4 h-4 mr-2" />
+                      {t("expenseScan.cancel")}
+                    </Button>
+                    <Button
+                      type="button"
+                      className="flex-1"
+                      onClick={handleProcess}
+                      disabled={isProcessing}
+                    >
+                      {isProcessing ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Check className="w-4 h-4 mr-2" />
+                      )}
+                      {t("expenseScan.extract")}
+                    </Button>
+                  </>
               ) : (
                 <>
                   <Button
@@ -581,7 +634,8 @@ export function ExpenseScanButton({
                   </Button>
                 </>
               )}
-            </div>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

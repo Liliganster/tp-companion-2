@@ -808,6 +808,10 @@ const es = {
   "expenseScan.errorQuotaExceeded": "Has alcanzado el límite mensual de extracciones IA.",
   "expenseScan.errorFileNotFound": "No se encontró el archivo. Inténtalo de nuevo.",
   "expenseScan.errorServer": "Error del servidor. Inténtalo de nuevo en unos minutos.",
+  "expenseScan.viewReceipt": "Ver recibo",
+  "expenseScan.deleteReceipt": "Eliminar recibo",
+  "expenseScan.receiptDeleted": "Recibo eliminado correctamente",
+  "expenseScan.deleteError": "Error al eliminar el recibo",
 
 } as const;
 
@@ -1601,6 +1605,10 @@ const en: Record<I18nKey, string> = {
   "expenseScan.errorQuotaExceeded": "You have reached the monthly AI extraction limit.",
   "expenseScan.errorFileNotFound": "File not found. Please try again.",
   "expenseScan.errorServer": "Server error. Please try again in a few minutes.",
+  "expenseScan.viewReceipt": "View receipt",
+  "expenseScan.deleteReceipt": "Delete receipt",
+  "expenseScan.receiptDeleted": "Receipt deleted successfully",
+  "expenseScan.deleteError": "Error deleting receipt",
 
 };
 
@@ -2391,6 +2399,10 @@ const de: Record<I18nKey, string> = {
   "expenseScan.errorQuotaExceeded": "Monatliches KI-Extraktionslimit erreicht.",
   "expenseScan.errorFileNotFound": "Datei nicht gefunden. Bitte erneut versuchen.",
   "expenseScan.errorServer": "Serverfehler. Bitte in einigen Minuten erneut versuchen.",
+  "expenseScan.viewReceipt": "Beleg anzeigen",
+  "expenseScan.deleteReceipt": "Beleg löschen",
+  "expenseScan.receiptDeleted": "Beleg erfolgreich gelöscht",
+  "expenseScan.deleteError": "Fehler beim Löschen des Belegs",
 };
 
 const dict: Record<AppLanguage, Record<I18nKey, string>> = { es, en, de };

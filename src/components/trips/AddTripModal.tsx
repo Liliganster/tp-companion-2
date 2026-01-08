@@ -414,6 +414,10 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
   const [tollAmount, setTollAmount] = useState("");
   const [parkingAmount, setParkingAmount] = useState("");
   const [otherExpenses, setOtherExpenses] = useState("");
+  // Receipt storage paths
+  const [tollReceiptPath, setTollReceiptPath] = useState<string | null>(null);
+  const [parkingReceiptPath, setParkingReceiptPath] = useState<string | null>(null);
+  const [otherReceiptPath, setOtherReceiptPath] = useState<string | null>(null);
   const [project, setProject] = useState("");
   const [purpose, setPurpose] = useState("");
   const [specialOrigin, setSpecialOrigin] = useState<NonNullable<TripData["specialOrigin"]>>("base");
@@ -524,6 +528,10 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
     setTollAmount(seedTrip?.tollAmount != null ? formatLocaleNumber(seedTrip.tollAmount) : "");
     setParkingAmount(seedTrip?.parkingAmount != null ? formatLocaleNumber(seedTrip.parkingAmount) : "");
     setOtherExpenses(seedTrip?.otherExpenses != null ? formatLocaleNumber(seedTrip.otherExpenses) : "");
+    // Reset receipt paths (new trips don't have them yet)
+    setTollReceiptPath(null);
+    setParkingReceiptPath(null);
+    setOtherReceiptPath(null);
     setSaveTemplateOpen(false);
     setTemplateName("");
     // Initialize invoice fields
@@ -1094,10 +1102,15 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                 <ExpenseScanButton
                   expenseType="toll"
                   tripId={trip?.id}
-                  onExtracted={(result) => {
+                  existingReceiptPath={tollReceiptPath}
+                  onExtracted={(result, storagePath) => {
                     if (result.amount != null) {
                       setTollAmount(formatLocaleNumber(result.amount));
                     }
+                    setTollReceiptPath(storagePath);
+                  }}
+                  onDeleted={() => {
+                    setTollReceiptPath(null);
                   }}
                 />
               </div>
@@ -1116,10 +1129,15 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                 <ExpenseScanButton
                   expenseType="parking"
                   tripId={trip?.id}
-                  onExtracted={(result) => {
+                  existingReceiptPath={parkingReceiptPath}
+                  onExtracted={(result, storagePath) => {
                     if (result.amount != null) {
                       setParkingAmount(formatLocaleNumber(result.amount));
                     }
+                    setParkingReceiptPath(storagePath);
+                  }}
+                  onDeleted={() => {
+                    setParkingReceiptPath(null);
                   }}
                 />
               </div>
@@ -1138,10 +1156,15 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                 <ExpenseScanButton
                   expenseType="other"
                   tripId={trip?.id}
-                  onExtracted={(result) => {
+                  existingReceiptPath={otherReceiptPath}
+                  onExtracted={(result, storagePath) => {
                     if (result.amount != null) {
                       setOtherExpenses(formatLocaleNumber(result.amount));
                     }
+                    setOtherReceiptPath(storagePath);
+                  }}
+                  onDeleted={() => {
+                    setOtherReceiptPath(null);
                   }}
                 />
               </div>
