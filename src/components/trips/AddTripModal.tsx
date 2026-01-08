@@ -734,6 +734,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
         mimeType: file.type,
         storagePath: fileName,
         bucketId: "project_documents",
+        kind: "invoice",
         invoiceJobId: newJobId,
       }]);
 
@@ -1131,9 +1132,9 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
               )}
             </div>
             
-            {invoiceJobId || existingDocuments.length > 0 ? (
+            {invoiceJobId || existingDocuments.filter((d: any) => d.kind === "invoice").length > 0 ? (
               <div className="bg-secondary/30 rounded-lg p-3 space-y-2">
-                {existingDocuments.map((doc) => (
+                {existingDocuments.filter((d: any) => d.kind === "invoice").map((doc) => (
                   <div key={doc.id} className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
                       <FileText className="w-4 h-4 text-muted-foreground shrink-0" />

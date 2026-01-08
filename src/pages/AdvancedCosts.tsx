@@ -436,6 +436,7 @@ export default function AdvancedCosts() {
             name: file.name,
             storage_path: filePath,
             type: "invoice",
+            kind: "invoice",
             invoice_job_id: jobData.id,
           });
 
