@@ -248,18 +248,37 @@ export function ExpenseScanButton({
 
       if (!extractResponse.ok) {
         const errorData = await extractResponse.json().catch(() => ({}));
-        throw new Error(errorData.error || "Extraction failed");
+        const status = extractResponse.status;
+        
+        // Provide user-friendly error messages
+        if (status === 401) {
+          throw new Error(t("expenseScan.errorNotAuthenticated"));
+        } else if (status === 429) {
+          throw new Error(t("expenseScan.errorQuotaExceeded"));
+        } else if (status === 404) {
+          throw new Error(t("expenseScan.errorFileNotFound"));
+        } else if (status >= 500) {
+          throw new Error(t("expenseScan.errorServer"));
+        }
+        throw new Error(errorData.error || t("expenseScan.error"));
       }
 
       const result: ExpenseExtractResult = await extractResponse.json();
+      
+      // Check if extraction returned useful data
+      if (result.amount == null) {
+        setExtractionError(t("expenseScan.noDataExtracted"));
+        return;
+      }
+      
       setExtractionResult(result);
     } catch (err: any) {
       console.error("Processing error:", err);
-      setExtractionError(err.message || "Error processing receipt");
+      setExtractionError(err.message || t("expenseScan.error"));
     } finally {
       setIsProcessing(false);
     }
-  }, [imagePreview, user, getAccessToken, expenseType, tripId, projectId]);
+  }, [imagePreview, user, getAccessToken, expenseType, tripId, projectId, t]);
 
   const handleConfirm = useCallback(() => {
     if (!extractionResult || !storagePath) return;
@@ -311,9 +330,9 @@ export function ExpenseScanButton({
       {/* Trigger button */}
       <Button
         type="button"
-        variant="ghost"
+        variant="outline"
         size="icon"
-        className={cn("h-8 w-8 shrink-0", className)}
+        className={cn("h-9 w-9 shrink-0", className)}
         disabled={disabled}
         onClick={() => {
           setIsOpen(true);
@@ -321,7 +340,7 @@ export function ExpenseScanButton({
         }}
         title={t("expenseScan.scanReceipt")}
       >
-        <Camera className="w-4 h-4" />
+        <Camera className="w-5 h-5" />
       </Button>
 
       <Dialog open={isOpen} onOpenChange={(open) => !open && handleCancel()}>

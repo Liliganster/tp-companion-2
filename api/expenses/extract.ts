@@ -4,27 +4,15 @@ import { generateContentFromPDF } from "../../src/lib/ai/geminiClient.js";
 import { captureServerException, withApiObservability } from "../_utils/observability.js";
 import { enforceRateLimit } from "../_utils/rateLimit.js";
 import { checkAiMonthlyQuota, recordAiUsage } from "../_utils/aiQuota.js";
-import Tesseract from "tesseract.js";
 
 type ExpenseType = "toll" | "parking" | "fuel" | "other";
 
-// Run OCR on image buffer and return extracted text
-async function runOCR(imageBuffer: Buffer, mimeType: string): Promise<string> {
-  try {
-    // Create a data URL from the buffer for Tesseract
-    const base64 = imageBuffer.toString("base64");
-    const dataUrl = `data:${mimeType};base64,${base64}`;
-    
-    // Run Tesseract with Spanish + English + German for better receipt recognition (Austria)
-    const result = await Tesseract.recognize(dataUrl, "spa+eng+deu", {
-      logger: () => {}, // Silent logging
-    });
-    
-    return result.data.text.trim();
-  } catch (err) {
-    console.warn("OCR failed, continuing without OCR text:", err);
-    return "";
-  }
+// Skip OCR in serverless - Tesseract is too heavy for Vercel functions
+// Gemini Vision is good enough for receipt extraction
+async function runOCR(_imageBuffer: Buffer, _mimeType: string): Promise<string> {
+  // OCR disabled - Tesseract.js causes timeouts in serverless environments
+  // Gemini 2.5 Flash has excellent OCR capabilities built-in
+  return "";
 }
 
 // Build prompt with OCR text if available

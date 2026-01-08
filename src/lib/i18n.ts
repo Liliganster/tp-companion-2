@@ -798,12 +798,16 @@ const es = {
   "expenseScan.extracted": "Datos extraídos correctamente",
   "expenseScan.canEditAfter": "Puedes editar después de confirmar",
   "expenseScan.rotateImage": "Rotar imagen",
-  "expenseScan.noDataExtracted": "No se pudieron extraer datos del recibo",
+  "expenseScan.noDataExtracted": "No se pudo extraer el importe. Asegúrate de que el recibo sea legible.",
   "expenseScan.uploadError": "Error al subir la imagen",
   "expenseScan.dragDropText": "Arrastra y suelta la imagen aquí",
   "expenseScan.clickToUpload": "o haz clic para seleccionar",
   "expenseScan.useCamera": "Usar cámara",
   "expenseScan.uploadFile": "Subir archivo",
+  "expenseScan.errorNotAuthenticated": "Sesión expirada. Por favor, vuelve a iniciar sesión.",
+  "expenseScan.errorQuotaExceeded": "Has alcanzado el límite mensual de extracciones IA.",
+  "expenseScan.errorFileNotFound": "No se encontró el archivo. Inténtalo de nuevo.",
+  "expenseScan.errorServer": "Error del servidor. Inténtalo de nuevo en unos minutos.",
 
 } as const;
 
@@ -1587,12 +1591,16 @@ const en: Record<I18nKey, string> = {
   "expenseScan.extracted": "Data extracted successfully",
   "expenseScan.canEditAfter": "You can edit after confirming",
   "expenseScan.rotateImage": "Rotate image",
-  "expenseScan.noDataExtracted": "Could not extract data from receipt",
+  "expenseScan.noDataExtracted": "Could not extract amount. Make sure the receipt is readable.",
   "expenseScan.uploadError": "Error uploading image",
   "expenseScan.dragDropText": "Drag and drop image here",
   "expenseScan.clickToUpload": "or click to select",
   "expenseScan.useCamera": "Use camera",
   "expenseScan.uploadFile": "Upload file",
+  "expenseScan.errorNotAuthenticated": "Session expired. Please log in again.",
+  "expenseScan.errorQuotaExceeded": "You have reached the monthly AI extraction limit.",
+  "expenseScan.errorFileNotFound": "File not found. Please try again.",
+  "expenseScan.errorServer": "Server error. Please try again in a few minutes.",
 
 };
 
@@ -2373,12 +2381,16 @@ const de: Record<I18nKey, string> = {
   "expenseScan.extracted": "Daten erfolgreich extrahiert",
   "expenseScan.canEditAfter": "Nach Bestätigung bearbeitbar",
   "expenseScan.rotateImage": "Bild drehen",
-  "expenseScan.noDataExtracted": "Keine Daten aus dem Beleg extrahiert",
+  "expenseScan.noDataExtracted": "Betrag nicht erkannt. Bitte prüfen Sie, ob der Beleg lesbar ist.",
   "expenseScan.uploadError": "Fehler beim Hochladen",
   "expenseScan.dragDropText": "Bild hier ablegen",
   "expenseScan.clickToUpload": "oder klicken zum Auswählen",
   "expenseScan.useCamera": "Kamera nutzen",
   "expenseScan.uploadFile": "Datei hochladen",
+  "expenseScan.errorNotAuthenticated": "Sitzung abgelaufen. Bitte erneut anmelden.",
+  "expenseScan.errorQuotaExceeded": "Monatliches KI-Extraktionslimit erreicht.",
+  "expenseScan.errorFileNotFound": "Datei nicht gefunden. Bitte erneut versuchen.",
+  "expenseScan.errorServer": "Serverfehler. Bitte in einigen Minuten erneut versuchen.",
 };
 
 const dict: Record<AppLanguage, Record<I18nKey, string>> = { es, en, de };
