@@ -12,8 +12,7 @@ const es = {
   "nav.advanced": "Avanzado",
   "nav.settings": "Ajustes",
   "nav.menu": "Menú",
-  "nav.freePlan": "Plan gratuito",
-  "nav.upgradeToPro": "Mejorar a Pro",
+
   "nav.logout": "Cerrar sesión",
 
   // Dashboard
@@ -208,15 +207,7 @@ const es = {
   "advanced.emissionsTitle": "Emisiones CO₂",
   "advanced.emissionsBody": "Seguimiento de huella de carbono y eficiencia ambiental",
 
-  // Plans
-  "plans.title": "Elige tu plan",
-  "plans.subtitle": "Mejora a Pro para funciones ilimitadas y analítica avanzada",
-  "plans.mostPopular": "Más popular",
-  "plans.currentPlan": "Plan actual",
-  "plans.upgradeTo": "Mejorar a {name}",
-  "plans.needMoreAi": "¿Necesitas más extracciones IA?",
-  "plans.contactBody": "Contáctanos para planes enterprise con más límites y funciones a medida.",
-  "plans.contactSales": "Contactar ventas",
+
 
   // Auth
   "auth.tagline": "Seguimiento profesional de kilometraje",
@@ -754,10 +745,7 @@ const es = {
   "settings.build": "Build:",
   "tripDetail.invoiceNeedsReview": "Revisar",
   "tripDetail.invoiceFailed": "Error",
-  "aiQuota.monthlyLimitReachedTitle": "Límite de IA alcanzado",
-  "aiQuota.monthlyLimitReachedBody": "Has alcanzado tu cuota mensual de IA ({used}/{limit}).",
-  "aiQuota.monthlyLimitReachedBodyGeneric": "Has alcanzado tu cuota mensual de IA. Actualiza a Pro o espera al próximo mes.",
-  "aiQuota.outOfQuotaBadge": "Cuota agotada",
+
 } as const;
 
 export type I18nKey = keyof typeof es;
@@ -771,8 +759,7 @@ const en: Record<I18nKey, string> = {
   "nav.advanced": "Advanced",
   "nav.settings": "Settings",
   "nav.menu": "Menu",
-  "nav.freePlan": "Free plan",
-  "nav.upgradeToPro": "Upgrade to Pro",
+
   "nav.logout": "Logout",
   "dashboard.welcomeBack": "Welcome back, {name}",
   "dashboard.welcomeBackPrefix": "Welcome back,",
@@ -956,14 +943,7 @@ const en: Record<I18nKey, string> = {
   "advanced.costsBody": "Analyze expenses, fuel and maintenance",
   "advanced.emissionsTitle": "CO₂ emissions",
   "advanced.emissionsBody": "Track carbon footprint and environmental efficiency",
-  "plans.title": "Choose your plan",
-  "plans.subtitle": "Upgrade to Pro for unlimited features and advanced analytics",
-  "plans.mostPopular": "Most popular",
-  "plans.currentPlan": "Current plan",
-  "plans.upgradeTo": "Upgrade to {name}",
-  "plans.needMoreAi": "Need more AI extractions?",
-  "plans.contactBody": "Contact us for enterprise plans with higher limits and custom features.",
-  "plans.contactSales": "Contact sales",
+
   "auth.tagline": "Professional mileage tracking",
   "auth.featureTrips": "🚗 Track every trip",
   "auth.featureTripsBody": "Automatically log distances with GPS or AI-powered extraction from callsheets.",
@@ -1495,10 +1475,7 @@ const en: Record<I18nKey, string> = {
   "settings.build": "Build:",
   "tripDetail.invoiceNeedsReview": "Needs review",
   "tripDetail.invoiceFailed": "Error",
-  "aiQuota.monthlyLimitReachedTitle": "AI limit reached",
-  "aiQuota.monthlyLimitReachedBody": "You reached your monthly AI quota ({used}/{limit}).",
-  "aiQuota.monthlyLimitReachedBodyGeneric": "You reached your monthly AI quota. Upgrade to Pro or wait until next month.",
-  "aiQuota.outOfQuotaBadge": "Out of quota",
+
 };
 
 const de: Record<I18nKey, string> = {
@@ -1510,8 +1487,7 @@ const de: Record<I18nKey, string> = {
   "nav.advanced": "Erweitert",
   "nav.settings": "Einstellungen",
   "nav.menu": "Menü",
-  "nav.freePlan": "Kostenloser Plan",
-  "nav.upgradeToPro": "Auf Pro upgraden",
+
   "nav.logout": "Abmelden",
   "dashboard.welcomeBack": "Willkommen zurück, {name}",
   "dashboard.welcomeBackPrefix": "Willkommen zurück,",

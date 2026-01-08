@@ -14,7 +14,7 @@ export type UserProfile = {
   baseAddress: string;
   city: string;
   country: string;
-  planTier: "free" | "pro"; // Added planTier
+
   fuelType: "gasoline" | "diesel" | "ev" | "unknown";
   fuelLPer100Km: string; // gasoline/diesel
   evKwhPer100Km: string; // electric
@@ -36,7 +36,7 @@ const DEFAULT_PROFILE: UserProfile = {
   baseAddress: "",
   city: "",
   country: "",
-  planTier: "free",
+
   fuelType: "unknown",
   fuelLPer100Km: "",
   evKwhPer100Km: "",
@@ -130,7 +130,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
               baseAddress: data.base_address || "",
               city: data.city || "",
               country: data.country || "",
-              planTier: data.plan_tier || "free",
+
               fuelType,
               fuelLPer100Km: (data as any).fuel_l_per_100km == null ? "" : String((data as any).fuel_l_per_100km).replace(".", ","),
               evKwhPer100Km: (data as any).ev_kwh_per_100km == null ? "" : String((data as any).ev_kwh_per_100km).replace(".", ","),
@@ -151,7 +151,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
                 baseAddress: data.base_address || "",
                 city: data.city || "",
                 country: data.country || "",
-                planTier: data.plan_tier || "free",
+
                 fuelType,
                 fuelLPer100Km: (data as any).fuel_l_per_100km == null ? "" : String((data as any).fuel_l_per_100km).replace(".", ","),
                 evKwhPer100Km: (data as any).ev_kwh_per_100km == null ? "" : String((data as any).ev_kwh_per_100km).replace(".", ","),
@@ -202,7 +202,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
       base_address: nextProfile.baseAddress,
       city: nextProfile.city,
       country: nextProfile.country,
-      plan_tier: nextProfile.planTier,
+
       fuel_type: nextProfile.fuelType,
       fuel_l_per_100km: parseProfileNumber(nextProfile.fuelLPer100Km),
       ev_kwh_per_100km: parseProfileNumber(nextProfile.evKwhPer100Km),

@@ -75,17 +75,6 @@ export function MobileHeader({
               })}
               </nav>
 
-              {/* Plan badge */}
-              <div className="px-3 py-4">
-                <Link to="/plans" onClick={() => setOpen(false)} className="flex items-center gap-3 p-3 rounded-md bg-violet-500/10 border border-violet-500/30 hover:border-violet-500/50 transition-colors">
-                  <Crown className="w-5 h-5 text-violet-500" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{t("nav.freePlan")}</p>
-                    <p className="text-xs text-muted-foreground">{t("nav.upgradeToPro")}</p>
-                  </div>
-                </Link>
-              </div>
-
               {/* Bottom actions */}
               <div className="px-3 py-4 border-t border-border/50 space-y-3">
                 <button onClick={() => {

@@ -28,7 +28,7 @@ const Advanced = lazy(() => import("./pages/Advanced"));
 const AdvancedRoutes = lazy(() => import("./pages/AdvancedRoutes"));
 const AdvancedCosts = lazy(() => import("./pages/AdvancedCosts"));
 const AdvancedEmissions = lazy(() => import("./pages/AdvancedEmissions"));
-const Plans = lazy(() => import("./pages/Plans"));
+
 const Docs = lazy(() => import("./pages/Docs"));
 const LegalTerms = lazy(() => import("./pages/LegalTerms"));
 const LegalPrivacy = lazy(() => import("./pages/LegalPrivacy"));
@@ -161,14 +161,7 @@ const App = () => (
                             </RequireAuth>
                           }
                         />
-                        <Route
-                          path="/plans"
-                          element={
-                            <RequireAuth>
-                              <Plans />
-                            </RequireAuth>
-                          }
-                        />
+
                         <Route
                           path="/docs"
                           element={
