@@ -21,40 +21,24 @@ export default function Plans() {
     setLoadingPlan(planId);
 
     try {
-      const response = await fetch("/api/stripe/create-checkout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ planId }),
-      });
-
-      // Check if response is JSON
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await response.text();
-        console.error("Non-JSON response:", text);
-        throw new Error("Server error - please try again");
+      const STRIPE_LINK = "https://buy.stripe.com/test_eVqcN70in6k82pFaINgQE00";
+      const checkoutUrl = new URL(STRIPE_LINK);
+      
+      // Add client_reference_id for webhook tracking
+      checkoutUrl.searchParams.set("client_reference_id", session.user.id);
+      
+      // Auto-fill user email if available
+      if (session.user.email) {
+        checkoutUrl.searchParams.set("prefilled_email", session.user.email);
       }
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || data.error || "Failed to create checkout");
-      }
-
-      // Redirect to Stripe Checkout
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        throw new Error("No checkout URL returned");
-      }
+      window.location.href = checkoutUrl.toString();
     } catch (error: any) {
-      console.error("Checkout error:", error);
-      toast.error(error.message || t("plans.checkoutError"));
+      console.error("Redirection error:", error);
+      toast.error(t("plans.checkoutError"));
     } finally {
-      setLoadingPlan(null);
+      // Direct redirection doesn't need to clear loading state unless it fails
+      // setLoadingPlan(null); 
     }
   };
 

@@ -75,10 +75,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
-        const userId = session.metadata?.supabase_user_id;
-        const planId = session.metadata?.plan_id;
+        const userId = session.metadata?.supabase_user_id || session.client_reference_id;
+        const planId = session.metadata?.plan_id || "pro"; // Default to pro if using static link without plan_id metadata
 
-        if (userId && planId) {
+        if (userId) {
           await updateUserProfile(`id=eq.${userId}`, {
             plan_id: planId,
             stripe_customer_id: session.customer as string,

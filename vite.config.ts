@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react-swc";
 import { VitePWA } from "vite-plugin-pwa";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
-import Stripe from "stripe";
+
 
 function googleApiProxy(serverKey: string | undefined): Plugin {
   const GOOGLE_BASE = "https://maps.googleapis.com/maps/api";
@@ -267,114 +267,6 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
   };
 }
 
-function stripeProxy(options: { 
-  stripeSecretKey?: string; 
-  stripePricePro?: string; 
-  supabaseUrl?: string; 
-  supabaseServiceRoleKey?: string; 
-}): Plugin {
-  const checkAuth = async (req: any, supabaseUrl: string, serviceRole: string) => {
-    const authHeader = req.headers?.authorization || req.headers?.Authorization;
-    if (!authHeader) return null;
-    const token = authHeader.replace(/^Bearer\s+/i, "");
-    if (!token) return null;
-
-    try {
-      const resp = await fetch(`${supabaseUrl}/auth/v1/user`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          apikey: serviceRole,
-        },
-      });
-      if (!resp.ok) return null;
-      const data = await resp.json();
-      return data?.id ? { id: data.id, email: data.email } : null;
-    } catch {
-      return null;
-    }
-  };
-
-  const send = (res: any, statusCode: number, payload: unknown) => {
-    res.statusCode = statusCode;
-    res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify(payload));
-  };
-
-  const readBody = async (req: any) => {
-    const chunks: Buffer[] = [];
-    for await (const chunk of req) chunks.push(Buffer.from(chunk));
-    try {
-      return JSON.parse(Buffer.concat(chunks).toString("utf8"));
-    } catch {
-      return {};
-    }
-  };
-
-  return {
-    name: "stripe-proxy",
-    apply: "serve",
-    configureServer(server) {
-      server.middlewares.use(async (req, res, next) => {
-        if (!req.url?.startsWith("/api/stripe/create-checkout")) return next();
-        if (req.method !== "POST") {
-          res.statusCode = 405;
-          res.setHeader("Allow", "POST");
-          res.end();
-          return;
-        }
-
-        const { stripeSecretKey, stripePricePro, supabaseUrl, supabaseServiceRoleKey } = options;
-
-        if (!stripeSecretKey) return send(res, 500, { error: "stripe_not_configured", message: "Stripe secret key not configured" });
-        if (!stripePricePro) return send(res, 500, { error: "stripe_price_not_configured", message: "Stripe price not configured" });
-        if (!supabaseUrl || !supabaseServiceRoleKey) return send(res, 500, { error: "supabase_not_configured", message: "Supabase not configured locally" });
-
-        try {
-          const user = await checkAuth(req, supabaseUrl, supabaseServiceRoleKey);
-          if (!user) return send(res, 401, { error: "Invalid session" });
-
-          const body = await readBody(req);
-          const { planId } = body;
-
-          // Clean key to avoid newlines issues
-          const cleanKey = stripeSecretKey.replace(/\s/g, "");
-          const stripe = new Stripe(cleanKey);
-
-          // Get or create customer
-          const customers = await stripe.customers.list({ email: user.email, limit: 1 });
-          let customerId = customers.data[0]?.id;
-
-          if (!customerId) {
-            const customer = await stripe.customers.create({
-              email: user.email,
-              metadata: { supabase_user_id: user.id },
-            });
-            customerId = customer.id;
-          }
-
-          const session = await stripe.checkout.sessions.create({
-            customer: customerId,
-            mode: "subscription",
-            payment_method_types: ["card"],
-            line_items: [{ price: stripePricePro, quantity: 1 }],
-            success_url: `http://${req.headers.host}/settings?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `http://${req.headers.host}/plans?checkout=cancelled`,
-            metadata: { supabase_user_id: user.id, plan_id: planId || "pro" },
-            subscription_data: { metadata: { supabase_user_id: user.id, plan_id: planId || "pro" } },
-            allow_promotion_codes: true,
-            billing_address_collection: "required",
-            tax_id_collection: { enabled: true },
-          });
-
-          return send(res, 200, { sessionId: session.id, url: session.url });
-        } catch (error: any) {
-          console.error("Stripe Proxy Error:", error);
-          return send(res, 500, { error: "checkout_failed", message: error?.message || "Internal server error" });
-        }
-      });
-    },
-  };
-}
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -405,12 +297,7 @@ export default defineConfig(({ mode }) => {
       react(),
       mode === "development" && googleApiProxy(env.GOOGLE_MAPS_SERVER_KEY),
       mode === "development" && climatiqProxy(env.CLIMATIQ_API_KEY),
-      mode === "development" && stripeProxy({
-        stripeSecretKey: env.STRIPE_SECRET_KEY,
-        stripePricePro: env.STRIPE_PRICE_PRO || env.VITE_STRIPE_PRICE_PRO,
-        supabaseUrl: env.SUPABASE_URL,
-        supabaseServiceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY,
-      }),
+
       mode === "development" && componentTagger(),
       VitePWA({
         registerType: 'prompt',
