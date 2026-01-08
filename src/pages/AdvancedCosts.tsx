@@ -1,7 +1,7 @@
 import { useRef, useState, useMemo } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
-import { Upload, ArrowLeft } from "lucide-react";
+import { Upload, ArrowLeft, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
   Select,
@@ -11,7 +11,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { VehicleConfigModal } from "@/components/settings/VehicleConfigModal";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { useTrips } from "@/contexts/TripsContext";
 import { useUserProfile } from "@/contexts/UserProfileContext";
@@ -31,7 +30,6 @@ export default function AdvancedCosts() {
   const [activeTab, setActiveTab] = useState("resumen");
   const [periodFilter, setPeriodFilter] = useState("3m");
   const [projectFilter, setProjectFilter] = useState("all");
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [uploadingInvoice, setUploadingInvoice] = useState(false);
   const [chosenProjectId, setChosenProjectId] = useState("");
   const invoiceInputRef = useRef<HTMLInputElement>(null);
@@ -405,9 +403,18 @@ export default function AdvancedCosts() {
     }
   };
 
+  // Check if vehicle configuration is set in profile
+  const hasVehicleConfig = useMemo(() => {
+    if (profile.fuelType === "ev") {
+      return profile.evKwhPer100Km && profile.electricityPricePerKwh;
+    } else if (profile.fuelType === "gasoline" || profile.fuelType === "diesel") {
+      return profile.fuelLPer100Km && profile.fuelPricePerLiter;
+    }
+    return false;
+  }, [profile.electricityPricePerKwh, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelPricePerLiter, profile.fuelType]);
+
   return (
     <MainLayout>
-      <VehicleConfigModal open={settingsOpen} onOpenChange={setSettingsOpen} />
       <div className="max-w-[1800px] mx-auto space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-4 animate-fade-in">
@@ -422,6 +429,22 @@ export default function AdvancedCosts() {
 	              </p>
 	            </div>
 	          </div>
+
+          {/* Warning if no vehicle configuration */}
+          {!hasVehicleConfig && (
+            <div className="flex items-start gap-3 bg-destructive/10 border border-destructive/30 rounded-lg p-4">
+              <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-destructive">
+                  {t("advancedCosts.warningNoVehicleConfig")}
+                </p>
+                <p className="text-xs text-destructive/80 mt-1">
+                  {t("advancedCosts.warningNoVehicleConfigDetails")}
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center gap-2">
             <input
               ref={invoiceInputRef}
@@ -543,13 +566,7 @@ export default function AdvancedCosts() {
 	                  </li>
 	                  <li className="flex items-start gap-2">
 	                    <span className="w-2 h-2 rounded-full bg-muted-foreground mt-1.5 shrink-0" />
-	                    {t("advancedCosts.assumptionsHint")}{" "}
-	                    <button 
-	                      onClick={() => setSettingsOpen(true)}
-	                      className="text-primary hover:underline"
-	                    >
-	                      {t("advancedCosts.assumptionsEdit")}
-	                    </button>
+	                    {t("advancedCosts.assumptionsHint")}
 	                  </li>
 	                </ul>
 	              </div>

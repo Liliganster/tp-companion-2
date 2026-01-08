@@ -363,6 +363,54 @@ export default withApiObservability(async function handler(req: any, res: any, {
 
         log.info({ jobId }, "invoice_result_saved");
 
+        // E. Automatically categorize extracted invoice into trip expenses
+        // The invoice's purpose is mapped to the appropriate trip expense field:
+        // - "fuel" → stored in invoice_results for cost inference (not directly in trip)
+        // - "toll/peaje" → stored in trip.toll_amount
+        // - "parking/estacionamiento" → stored in trip.parking_amount
+        // - "food/meal/restaurant/fine/other" → stored in trip.other_expenses
+        // Get the trip_id from invoice_jobs to update the trip if available
+        const { data: invoiceJob, error: jobLookupError } = await supabaseAdmin
+          .from("invoice_jobs")
+          .select("trip_id")
+          .eq("id", job.id)
+          .maybeSingle();
+
+        if (jobLookupError) {
+          log.warn({ jobId: job.id, jobLookupError }, "invoice_jobs_lookup_failed");
+        } else if (invoiceJob?.trip_id) {
+          // Map purpose to expense field
+          const amount = extracted.totalAmount;
+          const purpose = (extracted.purpose || "").toLowerCase().trim();
+          let expenseField: "toll_amount" | "parking_amount" | "other_expenses" | null = null;
+
+          if (purpose.includes("fuel") || purpose.includes("petrol") || purpose.includes("diesel") || purpose.includes("gasolina") || purpose.includes("combustible")) {
+            // For fuel, we don't update trip expense fields.
+            // Fuel cost will be inferred from the invoice amount and vehicle consumption data.
+            log.info({ jobId, purpose }, "invoice_fuel_skipped_trip_update");
+          } else if (purpose.includes("toll") || purpose.includes("peaje") || purpose.includes("autopista")) {
+            expenseField = "toll_amount";
+          } else if (purpose.includes("parking") || purpose.includes("park") || purpose.includes("estacionamiento") || purpose.includes("aparcamiento")) {
+            expenseField = "parking_amount";
+          } else if (purpose.includes("food") || purpose.includes("meal") || purpose.includes("comida") || purpose.includes("restaurante") || 
+                     purpose.includes("fine") || purpose.includes("multa") || purpose.includes("other")) {
+            expenseField = "other_expenses";
+          }
+
+          if (expenseField) {
+            const { error: tripUpdateError } = await supabaseAdmin
+              .from("trips")
+              .update({ [expenseField]: amount })
+              .eq("id", invoiceJob.trip_id);
+
+            if (tripUpdateError) {
+              log.warn({ jobId: job.id, tripId: invoiceJob.trip_id, expenseField, tripUpdateError }, "trip_expense_update_failed");
+            } else {
+              log.info({ jobId, tripId: invoiceJob.trip_id, expenseField, amount }, "trip_expense_updated");
+            }
+          }
+        }
+
         const { data: doneRow, error: doneError } = await supabaseAdmin
           .from("invoice_jobs")
           .update({ status: "done", retry_count: currentRetry })
