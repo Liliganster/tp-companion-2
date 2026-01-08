@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { MapPin, FileText, CircleDot, Eye, Car, Receipt, ParkingCircle, Banknote } from "lucide-react";
+import { MapPin, FileText, CircleDot, Eye, Car, Receipt, ParkingCircle, Banknote, Users } from "lucide-react";
 import { useI18n } from "@/hooks/use-i18n";
 import { TripGoogleMap } from "@/components/trips/TripGoogleMap";
 import { Trip, useTrips } from "@/contexts/TripsContext";
@@ -169,7 +169,10 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
                 <p className="text-xl font-bold text-primary">{liveTrip.distance} km</p>
               </div>
               <div>
-                <Label className="text-xs uppercase tracking-wide text-muted-foreground">{t("trips.passengers")}</Label>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Users className="w-3.5 h-3.5 text-muted-foreground" />
+                  <Label className="text-xs uppercase tracking-wide text-muted-foreground">{t("trips.passengers")}</Label>
+                </div>
                 <p className="text-xl font-bold">{liveTrip.passengers || 0}</p>
               </div>
             </div>

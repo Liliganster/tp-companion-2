@@ -1113,7 +1113,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
           {/* Invoice/Document Section */}
           <div className="grid gap-2">
             <div className="flex items-center justify-between">
-              <Label>{t("tripModal.invoice")}</Label>
+              <Label>{t("tripModal.invoiceFuelTitle")}</Label>
               {invoiceStatus && (
                 <span className={cn(
                   "text-xs px-2 py-0.5 rounded-full flex items-center gap-1",
@@ -1180,7 +1180,8 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                   ) : (
                     <Upload className="w-6 h-6" />
                   )}
-                  <span className="text-sm">{t("tripModal.uploadInvoice")}</span>
+                  <span className="text-sm">{t("tripModal.uploadFuelInvoice")}</span>
+                  <span className="text-xs text-muted-foreground/70">{t("tripModal.fuelInvoiceHint")}</span>
                 </div>
               </div>
             )}

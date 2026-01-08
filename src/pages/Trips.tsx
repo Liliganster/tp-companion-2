@@ -305,12 +305,13 @@ export default function Trips() {
     return roundTo(trip.distance * baseRate + trip.passengers * settingsPassengerSurchargePerKm, 2);
   };
 
-  // Calculate trip expenses (toll + parking + other)
+  // Calculate trip expenses (toll + parking + other + invoice)
   const calculateTripExpenses = (trip: Trip) => {
     const toll = typeof trip.tollAmount === "number" ? trip.tollAmount : 0;
     const parking = typeof trip.parkingAmount === "number" ? trip.parkingAmount : 0;
     const other = typeof trip.otherExpenses === "number" ? trip.otherExpenses : 0;
-    return roundTo(toll + parking + other, 2);
+    const invoice = typeof trip.invoiceAmount === "number" ? trip.invoiceAmount : 0;
+    return roundTo(toll + parking + other + invoice, 2);
   };
 
   // Calculate energy cost per km from profile
