@@ -1,10 +1,10 @@
 import { supabaseAdmin } from "../../src/lib/supabaseServer.js";
 
-export type PlanTier = "free" | "pro";
+// Monthly AI extraction limit for all users
+const AI_MONTHLY_LIMIT = 5;
 
 export type QuotaDecision = {
   allowed: boolean;
-  tier: PlanTier;
   limit: number;
   used: number;
   reason?: string;
@@ -37,26 +37,6 @@ function isMissingRelation(err: any): boolean {
 function processingCutoffIso(minutes: number): string {
   const now = Date.now();
   return new Date(now - minutes * 60_000).toISOString();
-}
-
-function limitForTier(tier: PlanTier): number {
-  return tier === "pro" ? 100 : 5;
-}
-
-async function readUserTier(userId: string): Promise<PlanTier> {
-  try {
-    const { data, error } = await supabaseAdmin
-      .from("user_profiles")
-      .select("plan_tier")
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (error) return "free";
-    const raw = String((data as any)?.plan_tier ?? "free").toLowerCase();
-    return raw === "pro" ? "pro" : "free";
-  } catch {
-    return "free";
-  }
 }
 
 async function countExtractionsThisMonth(
@@ -116,31 +96,27 @@ async function countExtractionsThisMonth(
 }
 
 export async function checkAiMonthlyQuota(userId: string): Promise<QuotaDecision> {
+  const limit = AI_MONTHLY_LIMIT;
+
   if (envTruthy("BYPASS_AI_LIMITS")) {
-    const tier = await readUserTier(userId);
-    const limit = limitForTier(tier);
-    const used = 0;
-    return { allowed: true, tier, limit, used };
+    return { allowed: true, limit, used: 0 };
   }
 
-  const tier = await readUserTier(userId);
-  const limit = limitForTier(tier);
   const sinceIso = startOfCurrentMonthUtcIso();
   const counts = await countExtractionsThisMonth(userId, sinceIso);
   const reserved = counts.done + counts.processing;
 
   // Only "done" is billed/visible as usage, but we also reserve slots while jobs are processing
-  // to avoid spawning more Gemini calls than the plan allows.
+  // to avoid spawning more Gemini calls than the limit allows.
   if (counts.done >= limit || reserved > limit) {
     return {
       allowed: false,
-      tier,
       limit,
       // If we are denying, consider the user at their limit (even if some slots are reserved by in-flight jobs).
       used: limit,
-      reason: `monthly_quota_exceeded:${tier}:${limit}/${limit}:reserved=${reserved}:done=${counts.done}:processing=${counts.processing}`,
+      reason: `monthly_quota_exceeded:${limit}/${limit}:reserved=${reserved}:done=${counts.done}:processing=${counts.processing}`,
     };
   }
 
-  return { allowed: true, tier, limit, used: counts.done };
+  return { allowed: true, limit, used: counts.done };
 }

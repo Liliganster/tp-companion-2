@@ -33,13 +33,6 @@ const envSchema = z.object({
   SENTRY_DSN: optionalString(z.string().url()),
   VITE_SENTRY_DSN: optionalString(z.string().url()),
   VITE_GA_MEASUREMENT_ID: optionalString(z.string().min(6)),
-
-  // Stripe (optional - for paid plans)
-  STRIPE_SECRET_KEY: optionalString(z.string().startsWith("sk_")),
-  STRIPE_WEBHOOK_SECRET: optionalString(z.string().startsWith("whsec_")),
-  STRIPE_PRICE_PRO: optionalString(z.string().startsWith("price_")),
-  VITE_STRIPE_PUBLISHABLE_KEY: optionalString(z.string().startsWith("pk_")),
-  VITE_STRIPE_PRICE_PRO: optionalString(z.string().startsWith("price_")),
 });
 
 const mode = (process.argv[2] || "production").trim() || "production";

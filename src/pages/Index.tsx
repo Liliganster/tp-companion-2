@@ -76,7 +76,8 @@ export default function Index() {
   const { trips } = useTrips();
   const dashboardProjects = getProjectsForDashboard(projects);
 
-  const aiLimit = profile.planTier === "pro" ? 100 : 5;
+  // Fixed AI monthly limit for all users
+  const aiLimit = 5;
   const [aiUsedThisMonth, setAiUsedThisMonth] = useState<number | null>(null);
   const [aiQuotaLoading, setAiQuotaLoading] = useState(false);
 

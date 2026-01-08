@@ -745,6 +745,10 @@ const es = {
   "settings.build": "Build:",
   "tripDetail.invoiceNeedsReview": "Revisar",
   "tripDetail.invoiceFailed": "Error",
+  "aiQuota.monthlyLimitReachedTitle": "Límite de IA alcanzado",
+  "aiQuota.monthlyLimitReachedBody": "Has alcanzado tu cuota mensual de IA ({used}/{limit}).",
+  "aiQuota.monthlyLimitReachedBodyGeneric": "Has alcanzado tu cuota mensual de IA. Espera hasta el próximo mes.",
+  "aiQuota.outOfQuotaBadge": "Cuota agotada",
 
 } as const;
 
@@ -1475,6 +1479,10 @@ const en: Record<I18nKey, string> = {
   "settings.build": "Build:",
   "tripDetail.invoiceNeedsReview": "Needs review",
   "tripDetail.invoiceFailed": "Error",
+  "aiQuota.monthlyLimitReachedTitle": "AI limit reached",
+  "aiQuota.monthlyLimitReachedBody": "You have reached your monthly AI quota ({used}/{limit}).",
+  "aiQuota.monthlyLimitReachedBodyGeneric": "You have reached your monthly AI quota. Wait until next month.",
+  "aiQuota.outOfQuotaBadge": "Out of quota",
 
 };
 
@@ -1671,14 +1679,6 @@ const de: Record<I18nKey, string> = {
   "advanced.costsBody": "Analysiere Ausgaben, Kraftstoff und Wartung",
   "advanced.emissionsTitle": "CO₂-Emissionen",
   "advanced.emissionsBody": "CO₂-Fußabdruck und Effizienz verfolgen",
-  "plans.title": "Wähle deinen Plan",
-  "plans.subtitle": "Upgrade auf Pro für unbegrenzte Funktionen und Analysen",
-  "plans.mostPopular": "Am beliebtesten",
-  "plans.currentPlan": "Aktueller Plan",
-  "plans.upgradeTo": "Upgrade auf {name}",
-  "plans.needMoreAi": "Mehr KI-Extraktionen nötig?",
-  "plans.contactBody": "Kontaktiere uns für Enterprise-Pläne mit höheren Limits und individuellen Funktionen.",
-  "plans.contactSales": "Vertrieb kontaktieren",
   "auth.tagline": "Professionelles Kilometer-Tracking",
   "auth.featureTrips": "🚗 Jede Fahrt erfassen",
   "auth.featureTripsBody": "Distanzen automatisch per GPS oder KI-Extraktion aus Callsheets erfassen.",
@@ -2212,7 +2212,7 @@ const de: Record<I18nKey, string> = {
   "tripDetail.invoiceFailed": "Fehler",
   "aiQuota.monthlyLimitReachedTitle": "KI-Limit erreicht",
   "aiQuota.monthlyLimitReachedBody": "Du hast dein monatliches KI-Kontingent erreicht ({used}/{limit}).",
-  "aiQuota.monthlyLimitReachedBodyGeneric": "Du hast dein monatliches KI-Kontingent erreicht. Upgrade auf Pro oder warte bis nǬchsten Monat.",
+  "aiQuota.monthlyLimitReachedBodyGeneric": "Du hast dein monatliches KI-Kontingent erreicht. Warte bis nächsten Monat.",
   "aiQuota.outOfQuotaBadge": "Kontingent voll",
 };
 
