@@ -96,12 +96,6 @@ export default function Trips() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [tripToEdit, setTripToEdit] = useState<Trip | null>(null);
   const { toast } = useToast();
-  const [invoiceResultsByJobId, setInvoiceResultsByJobId] = useState<Record<string, { total_amount?: any; currency?: any }>>(
-    {},
-  );
-  const [invoiceJobsById, setInvoiceJobsById] = useState<Record<string, { status?: string; needs_review_reason?: string }>>(
-    {},
-  );
 
 
   useEffect(() => {
@@ -130,67 +124,6 @@ export default function Trips() {
       setSelectedYear("all");
     }
   }, [selectedProject, uniqueProjects, selectedYear]);
-
-  useEffect(() => {
-    if (!supabase) return;
-
-    const jobIds = Array.from(
-      new Set(
-        (trips ?? [])
-          .map((tr) => (typeof (tr as any).invoiceJobId === "string" ? (tr as any).invoiceJobId : ""))
-          .filter(Boolean),
-      ),
-    );
-
-    if (jobIds.length === 0) {
-      setInvoiceResultsByJobId({});
-      setInvoiceJobsById({});
-      return;
-    }
-
-    let cancelled = false;
-    (async () => {
-      const { data: jobRows, error: jobsError } = await supabase
-        .from("invoice_jobs")
-        .select("id, status, needs_review_reason")
-        .in("id", jobIds);
-
-      const { data, error } = await supabase
-        .from("invoice_results")
-        .select("job_id, total_amount, currency")
-        .in("job_id", jobIds);
-
-      if (cancelled) return;
-      if (jobsError) {
-        if (import.meta.env.DEV) console.warn("[Trips] Failed to fetch invoice_jobs:", jobsError);
-      } else {
-        const nextJobs: Record<string, { status?: string; needs_review_reason?: string }> = {};
-        for (const row of jobRows ?? []) {
-          const id = String((row as any).id ?? "");
-          if (!id) continue;
-          nextJobs[id] = { status: (row as any).status, needs_review_reason: (row as any).needs_review_reason };
-        }
-        setInvoiceJobsById(nextJobs);
-      }
-
-      if (error) {
-        if (import.meta.env.DEV) console.warn("[Trips] Failed to fetch invoice_results:", error);
-        return;
-      }
-
-      const next: Record<string, { total_amount?: any; currency?: any }> = {};
-      for (const row of data ?? []) {
-        const jobId = String((row as any).job_id ?? "");
-        if (!jobId) continue;
-        next[jobId] = { total_amount: (row as any).total_amount, currency: (row as any).currency };
-      }
-      setInvoiceResultsByJobId(next);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [trips]);
 
   useEffect(() => {
     try {
@@ -305,13 +238,26 @@ export default function Trips() {
     return roundTo(trip.distance * baseRate + trip.passengers * settingsPassengerSurchargePerKm, 2);
   };
 
-  // Calculate trip expenses (toll + parking + other + invoice)
+  // Calculate trip expenses (toll + parking + other + fuel)
   const calculateTripExpenses = (trip: Trip) => {
     const toll = typeof trip.tollAmount === "number" ? trip.tollAmount : 0;
     const parking = typeof trip.parkingAmount === "number" ? trip.parkingAmount : 0;
     const other = typeof trip.otherExpenses === "number" ? trip.otherExpenses : 0;
-    const invoice = typeof trip.invoiceAmount === "number" ? trip.invoiceAmount : 0;
-    return roundTo(toll + parking + other + invoice, 2);
+    const fuel = typeof trip.fuelAmount === "number" ? trip.fuelAmount : 0;
+    return roundTo(toll + parking + other + fuel, 2);
+  };
+
+  // Count total receipts/invoices for a trip
+  const getTripReceiptCount = (trip: Trip) => {
+    const docs = Array.isArray(trip.documents) ? trip.documents : [];
+    // Count all receipt documents
+    return docs.filter((d) => 
+      d?.kind === "toll_receipt" || 
+      d?.kind === "parking_receipt" || 
+      d?.kind === "fuel_receipt" || 
+      d?.kind === "other_receipt" ||
+      d?.kind === "invoice"
+    ).length;
   };
 
   // Calculate energy cost per km from profile
@@ -335,67 +281,19 @@ export default function Trips() {
     return roundTo(fuelCost + expenses, 2);
   };
 
-  const formatInvoiceCountLabel = (count: number) => {
+  const formatReceiptCountLabel = (count: number) => {
     const lang = String(locale || "").toLowerCase();
-    if (lang.startsWith("de")) return count === 1 ? "1 Rechnung" : `${count} Rechnungen`;
-    if (lang.startsWith("en")) return count === 1 ? "1 invoice" : `${count} invoices`;
+    if (lang.startsWith("de")) return count === 1 ? "1 Beleg" : `${count} Belege`;
+    if (lang.startsWith("en")) return count === 1 ? "1 receipt" : `${count} receipts`;
     return count === 1 ? "1 factura" : `${count} facturas`;
   };
 
-  const formatTripInvoiceCell = (trip: Trip) => {
-    const docs = Array.isArray((trip as any).documents) ? ((trip as any).documents as any[]) : [];
-    const invoiceDocCount = docs.filter((d) => d?.kind === "invoice" || typeof d?.invoiceJobId === "string").length;
-
-    const amount = Number((trip as any).invoiceAmount);
-    if (Number.isFinite(amount) && amount > 0) {
-      const currency = String((trip as any).invoiceCurrency || "EUR").toUpperCase();
-      return `${amount.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+  const formatTripReceiptCell = (trip: Trip) => {
+    const count = getTripReceiptCount(trip);
+    if (count > 0) {
+      return <Badge variant="outline">{formatReceiptCountLabel(count)}</Badge>;
     }
-
-    const jobId = typeof (trip as any).invoiceJobId === "string" ? ((trip as any).invoiceJobId as string) : "";
-    if (jobId) {
-      const job = invoiceJobsById[jobId];
-      const status = String(job?.status ?? "");
-      const reason = String(job?.needs_review_reason ?? "");
-
-      if (status === "needs_review") {
-        return (
-          <Badge
-            variant="outline"
-            className="border-orange-500/40 text-orange-500"
-            title={reason || undefined}
-          >
-            {t("tripDetail.invoiceNeedsReview")}
-          </Badge>
-        );
-      }
-
-      if (status === "failed") {
-        return (
-          <Badge variant="destructive" title={reason || undefined}>
-            {t("tripDetail.invoiceFailed")}
-          </Badge>
-        );
-      }
-
-      if (status === "cancelled") {
-        return <Badge variant="outline">{t("tripDetail.invoiceCancelled")}</Badge>;
-      }
-
-      const fromResults = invoiceResultsByJobId[jobId];
-      const extracted = Number(fromResults?.total_amount);
-      if (Number.isFinite(extracted) && extracted > 0) {
-        const currency = String(fromResults?.currency || "EUR").toUpperCase();
-        return `${extracted.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
-      }
-      return <Badge variant="secondary">{t("tripDetail.invoiceExtracting")}</Badge>;
-    }
-
-    if (invoiceDocCount > 0) {
-      return <Badge variant="outline">{formatInvoiceCountLabel(invoiceDocCount)}</Badge>;
-    }
-
-    return trip.invoice || "-";
+    return "-";
   };
 
   type SavedTrip = {
@@ -416,10 +314,7 @@ export default function Trips() {
     tollAmount?: number | null;
     parkingAmount?: number | null;
     otherExpenses?: number | null;
-    // Invoice extraction data
-    invoiceJobId?: string | null;
-    invoiceAmount?: number | null;
-    invoiceCurrency?: string | null;
+    fuelAmount?: number | null;
   };
 
   const handleSaveTrip = async (data: SavedTrip) => {
@@ -445,10 +340,7 @@ export default function Trips() {
       tollAmount: data.tollAmount ?? null,
       parkingAmount: data.parkingAmount ?? null,
       otherExpenses: data.otherExpenses ?? null,
-      // Invoice extraction data
-      invoiceJobId: data.invoiceJobId ?? null,
-      invoiceAmount: data.invoiceAmount ?? null,
-      invoiceCurrency: data.invoiceCurrency ?? null,
+      fuelAmount: data.fuelAmount ?? null,
     };
 
     const exists = trips.some((t) => t.id === data.id);
@@ -752,7 +644,7 @@ export default function Trips() {
                 <TableHead className="text-foreground font-semibold whitespace-nowrap">{t("trips.route")}</TableHead>
                 <TableHead className="text-foreground font-semibold whitespace-nowrap">{t("trips.project")}</TableHead>
                 <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.co2")}</TableHead>
-                <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">Factura</TableHead>
+                <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.receipts")}</TableHead>
                 <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("trips.passengers")}</TableHead>
                 <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.expenses")}</TableHead>
                 <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.reimbursement")}</TableHead>
@@ -821,7 +713,7 @@ export default function Trips() {
                 <TableCell className="text-right text-emerald-500 whitespace-nowrap">
                   {isLoadingEmissionsData ? <Loader2 className="w-3 h-3 animate-spin inline" /> : `${calculateCO2(trip.distance)} kg`}
                 </TableCell>
-                <TableCell className="text-right whitespace-nowrap">{formatTripInvoiceCell(trip)}</TableCell>
+                <TableCell className="text-right whitespace-nowrap">{formatTripReceiptCell(trip)}</TableCell>
                 <TableCell className="text-right text-muted-foreground hidden lg:table-cell">{trip.passengers || "-"}</TableCell>
                 <TableCell className="text-right text-orange-500 whitespace-nowrap">
                   {calculateTripExpenses(trip) > 0 ? `${calculateTripExpenses(trip).toFixed(2)} €` : "-"}

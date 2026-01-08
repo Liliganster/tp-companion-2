@@ -10,6 +10,7 @@ import { cascadeDeleteCallsheetJobById, cascadeDeleteInvoiceJobById } from "@/li
 import { toast } from "sonner";
 import { CallsheetUploader } from "@/components/callsheets/CallsheetUploader";
 import { ProjectInvoiceUploader } from "@/components/projects/ProjectInvoiceUploader";
+import { ProjectExpenseSection } from "@/components/projects/ProjectExpenseSection";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { calculateTripEmissions } from "@/lib/emissions";
@@ -1513,6 +1514,9 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                 )}
               </div>
             </div>
+
+            {/* Project Expenses */}
+            <ProjectExpenseSection projectId={project.id} />
 
             {/* Call Sheets */}
             <div className="glass-card p-4">

@@ -93,22 +93,8 @@ export default function Index() {
       setAiQuotaLoading(true);
       const sinceIso = startOfCurrentMonthUtcIso();
 
-      const countTable = async (table: "invoice_jobs" | "callsheet_jobs") => {
-        // Avoid HEAD requests (some proxies/browsers can fail them); GET + limit(0) still returns `count`.
-        const { count } = await supabase
-          .from(table)
-          .select("id", { count: "exact" })
-          // Use GET + small range to still get `count` without HEAD.
-          .range(0, 0)
-          .eq("user_id", user.id)
-          .eq("status", "done")
-          .gte("processed_at", sinceIso);
-        return typeof count === "number" ? count : 0;
-      };
-
       try {
-        let used: number | null = null;
-
+        // Use ai_usage_events as primary source (includes callsheet, invoice, expense)
         const { count: usageCount, error: usageError } = await supabase
           .from("ai_usage_events")
           .select("id", { count: "exact" })
@@ -118,20 +104,21 @@ export default function Index() {
           .gte("run_at", sinceIso);
 
         if (!usageError) {
-          used = typeof usageCount === "number" ? usageCount : 0;
+          if (!cancelled) setAiUsedThisMonth(typeof usageCount === "number" ? usageCount : 0);
         } else if (!isMissingRelation(usageError)) {
           console.warn("Error fetching ai_usage_events:", usageError);
+          if (!cancelled) setAiUsedThisMonth(0);
+        } else {
+          // Fallback to callsheet_jobs only if ai_usage_events table doesn't exist
+          const { count } = await supabase
+            .from("callsheet_jobs")
+            .select("id", { count: "exact" })
+            .range(0, 0)
+            .eq("user_id", user.id)
+            .eq("status", "done")
+            .gte("processed_at", sinceIso);
+          if (!cancelled) setAiUsedThisMonth(typeof count === "number" ? count : 0);
         }
-
-        if (used == null) {
-          const [invoiceDone, callsheetDone] = await Promise.all([
-            countTable("invoice_jobs"),
-            countTable("callsheet_jobs"),
-          ]);
-          used = invoiceDone + callsheetDone;
-        }
-
-        if (!cancelled) setAiUsedThisMonth(used);
       } catch (e) {
         console.error("Error fetching AI quota:", e);
         if (!cancelled) setAiUsedThisMonth(null);

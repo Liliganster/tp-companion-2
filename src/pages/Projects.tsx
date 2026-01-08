@@ -281,7 +281,6 @@ export default function Projects() {
       if (!matchesYear) continue;
 
       const distance = Number.isFinite(trip.distance) ? trip.distance : 0;
-      const invoices = trip.invoice?.trim() ? 1 : 0;
       const co2 = calculateTripEmissions({ distanceKm: distance, ...emissionsInput }).co2Kg;
 
       const current = map.get(key) ?? {
@@ -299,21 +298,20 @@ export default function Projects() {
 
       current.trips += 1;
       current.totalKm += distance;
-      current.invoices += invoices;
       current.co2Emissions += co2;
       
-      // Aggregate invoice documents (Trip Invoices)
-      if (trip.invoice && trip.invoice.trim() !== "") {
-           current.invoiceDocs.push({
-               id: `${trip.id}-invoice`,
-               name: `Factura ${trip.id}`,
-               type: "invoice",
-               storage_path: trip.invoice
-           });
-      }
-
-      // Trip-specific documents (NOT callsheets - those are project documents)
+      // Count trip receipts (toll, parking, fuel, other receipts)
       if (trip.documents && trip.documents.length > 0) {
+        const tripReceiptCount = trip.documents.filter(doc => 
+          doc.kind === "toll_receipt" || 
+          doc.kind === "parking_receipt" || 
+          doc.kind === "fuel_receipt" || 
+          doc.kind === "other_receipt" ||
+          doc.kind === "invoice"
+        ).length;
+        current.invoices += tripReceiptCount;
+        
+        // Add trip documents
         trip.documents.forEach(doc => {
           current.callSheetDocs.push({
              id: doc.id,
@@ -363,6 +361,7 @@ export default function Projects() {
       }
 
       current.documents = uniqueDocuments.size;
+      // Add project invoices (from project_documents)
       current.invoices += projectInvoiceCountsByKey[key] ?? 0;
 
       map.set(key, current);

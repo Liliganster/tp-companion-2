@@ -64,6 +64,7 @@ const es = {
   "trips.passengers": "Pasajeros",
   "trips.reimbursement": "Reembolso",
   "trips.expenses": "Gastos",
+  "trips.receipts": "Facturas",
   "trips.totalCost": "Coste total",
   "trips.distance": "Distancia",
   "trips.viewMap": "Ver mapa",
@@ -413,6 +414,14 @@ const es = {
   "projectDetail.extractDataWithAi": "Extraer datos con IA",
   "projectDetail.processing": "Procesando...",
   "projectDetail.processNow": "Procesar ahora",
+
+  // Project expenses
+  "projectExpenses.title": "Gastos del proyecto",
+  "projectExpenses.description": "Facturas que no están asociadas a un viaje específico. Escanea o sube recibos con cámara o arrastrando archivos.",
+  "projectExpenses.total": "Total",
+  "projectExpenses.saveError": "Error al guardar gasto",
+  "expenses.receipt": "recibo",
+  "expenses.receipts": "recibos",
 
   "vehicleConfig.title": "Parámetros de vehículo y costes",
   "vehicleConfig.subtitle": "Configura tu vehículo para estimar costes sin facturas.",
@@ -865,6 +874,7 @@ const en: Record<I18nKey, string> = {
   "trips.passengers": "Passengers",
   "trips.reimbursement": "Reimbursement",
   "trips.expenses": "Expenses",
+  "trips.receipts": "Receipts",
   "trips.totalCost": "Total cost",
   "trips.distance": "Distance",
   "trips.viewMap": "View map",
@@ -1201,6 +1211,14 @@ const en: Record<I18nKey, string> = {
   "projectDetail.extractDataWithAi": "Extract data with AI",
   "projectDetail.processing": "Processing...",
   "projectDetail.processNow": "Process now",
+
+  // Project expenses
+  "projectExpenses.title": "Project expenses",
+  "projectExpenses.description": "Receipts not associated with a specific trip. Scan or upload receipts using camera or drag and drop.",
+  "projectExpenses.total": "Total",
+  "projectExpenses.saveError": "Error saving expense",
+  "expenses.receipt": "receipt",
+  "expenses.receipts": "receipts",
 
   "vehicleConfig.title": "Vehicle & cost parameters",
   "vehicleConfig.subtitle": "Configure your vehicle to estimate costs without invoices.",
@@ -1651,6 +1669,7 @@ const de: Record<I18nKey, string> = {
   "trips.passengers": "Mitfahrer",
   "trips.reimbursement": "Erstattung",
   "trips.expenses": "Ausgaben",
+  "trips.receipts": "Belege",
   "trips.totalCost": "Gesamtkosten",
   "trips.distance": "Distanz",
   "trips.viewMap": "Karte ansehen",
@@ -1986,6 +2005,14 @@ const de: Record<I18nKey, string> = {
   "projectDetail.extractDataWithAi": "Daten mit KI extrahieren",
   "projectDetail.processing": "Verarbeitet...",
   "projectDetail.processNow": "Jetzt verarbeiten",
+
+  // Project expenses
+  "projectExpenses.title": "Projektausgaben",
+  "projectExpenses.description": "Belege, die keiner bestimmten Fahrt zugeordnet sind. Scannen oder laden Sie Belege per Kamera oder Drag & Drop hoch.",
+  "projectExpenses.total": "Gesamt",
+  "projectExpenses.saveError": "Fehler beim Speichern der Ausgabe",
+  "expenses.receipt": "Beleg",
+  "expenses.receipts": "Belege",
 
   "vehicleConfig.title": "Fahrzeug- und Kostenparameter",
   "vehicleConfig.subtitle": "Konfiguriere dein Fahrzeug, um Kosten ohne Rechnungen zu schätzen.",
