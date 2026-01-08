@@ -76,9 +76,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
         const userId = session.metadata?.supabase_user_id || session.client_reference_id;
-        const planId = session.metadata?.plan_id || "pro"; // Default to pro if using static link without plan_id metadata
+        const planId = session.metadata?.plan_id || "pro";
 
         if (userId) {
+          console.log(`Processing checkout for user: ${userId}`);
+          
+          // 1. Update user profile in Supabase
           await updateUserProfile(`id=eq.${userId}`, {
             plan_id: planId,
             stripe_customer_id: session.customer as string,
@@ -86,14 +89,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             subscription_status: "active",
             subscription_updated_at: new Date().toISOString(),
           });
-          console.log(`User ${userId} upgraded to ${planId}`);
+
+          // 2. IMPORTANT: Sync identity back to Stripe Customer
+          // This ensures that future subscription.updated/deleted events 
+          // (which might lack session metadata) will carry this info.
+          if (session.customer && typeof session.customer === "string") {
+            try {
+              await stripe.customers.update(session.customer, {
+                metadata: { supabase_user_id: userId }
+              });
+              console.log(`Synced Supabase User ID ${userId} to Stripe Customer ${session.customer}`);
+            } catch (customerErr: any) {
+              console.error("Failed to sync identity to Stripe Customer:", customerErr.message);
+            }
+          }
+          
+          console.log(`Successfully upgraded user ${userId} to ${planId}`);
+        } else {
+          console.error("No userId found in checkout session metadata or client_reference_id");
         }
         break;
       }
 
       case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription;
-        const userId = subscription.metadata?.supabase_user_id;
+        let userId = subscription.metadata?.supabase_user_id;
+
+        // If metadata is missing, fallback to searching by stripe_customer_id
+        if (!userId && subscription.customer) {
+          console.log(`Missing metadata in subscription. Falling back to customer lookup: ${subscription.customer}`);
+          const response = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles?stripe_customer_id=eq.${subscription.customer}&select=id`, {
+            headers: {
+              Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+              apikey: SUPABASE_SERVICE_ROLE_KEY!,
+            },
+          });
+          if (response.ok) {
+            const users = await response.json() as any[];
+            userId = users[0]?.id;
+          }
+        }
 
         if (userId) {
           await updateUserProfile(`id=eq.${userId}`, {
@@ -104,13 +139,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               : null,
             subscription_updated_at: new Date().toISOString(),
           });
+          console.log(`Updated subscription for user ${userId}: ${subscription.status}`);
         }
         break;
       }
 
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription;
-        const userId = subscription.metadata?.supabase_user_id;
+        let userId = subscription.metadata?.supabase_user_id;
+
+        // Fallback for missing metadata
+        if (!userId && subscription.customer) {
+          const response = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles?stripe_customer_id=eq.${subscription.customer}&select=id`, {
+            headers: {
+              Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+              apikey: SUPABASE_SERVICE_ROLE_KEY!,
+            },
+          });
+          if (response.ok) {
+            const users = await response.json() as any[];
+            userId = users[0]?.id;
+          }
+        }
 
         if (userId) {
           await updateUserProfile(`id=eq.${userId}`, {
