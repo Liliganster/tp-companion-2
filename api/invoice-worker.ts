@@ -354,6 +354,8 @@ export default withApiObservability(async function handler(req: any, res: any, {
           invoice_date: extracted.invoiceDate || null,
           vendor_name: extracted.vendorName || null,
           purpose: extracted.purpose || null,
+          quantity: extracted.quantity || null,
+          unit: extracted.unit || null,
         });
 
         if (resultInsertError) {
@@ -365,7 +367,9 @@ export default withApiObservability(async function handler(req: any, res: any, {
 
         // E. Automatically categorize extracted invoice into trip expenses
         // The invoice's purpose is mapped to the appropriate trip expense field:
-        // - "fuel" → stored in invoice_results for cost inference (not directly in trip)
+        // - "fuel" → stored in invoice_results with quantity (liters) and unit
+        //   The cost per liter can be calculated as: total_amount / quantity
+        //   This real fuel cost will be used instead of the vehicle config estimate
         // - "toll/peaje" → stored in trip.toll_amount
         // - "parking/estacionamiento" → stored in trip.parking_amount
         // - "food/meal/restaurant/fine/other" → stored in trip.other_expenses
@@ -385,9 +389,14 @@ export default withApiObservability(async function handler(req: any, res: any, {
           let expenseField: "toll_amount" | "parking_amount" | "other_expenses" | null = null;
 
           if (purpose.includes("fuel") || purpose.includes("petrol") || purpose.includes("diesel") || purpose.includes("gasolina") || purpose.includes("combustible")) {
-            // For fuel, we don't update trip expense fields.
-            // Fuel cost will be inferred from the invoice amount and vehicle consumption data.
-            log.info({ jobId, purpose }, "invoice_fuel_skipped_trip_update");
+            // For fuel invoices:
+            // - Quantity (liters) is already stored in invoice_results.quantity
+            // - Total amount is in invoice_results.total_amount
+            // - Cost per liter = total_amount / quantity (will be calculated when needed)
+            // No trip update needed for fuel
+            const fuelQuantity = extracted.quantity || null;
+            const fuelUnit = extracted.unit || "liters";
+            log.info({ jobId, amount, fuelQuantity, fuelUnit }, "invoice_fuel_extracted");
           } else if (purpose.includes("toll") || purpose.includes("peaje") || purpose.includes("autopista")) {
             expenseField = "toll_amount";
           } else if (purpose.includes("parking") || purpose.includes("park") || purpose.includes("estacionamiento") || purpose.includes("aparcamiento")) {

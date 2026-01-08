@@ -18,6 +18,14 @@ export const InvoiceExtractionResultSchema = z.object({
   invoiceDate: dateIso.nullable().optional(),
   vendorName: z.string().trim().min(1).max(120).nullable().optional(),
   purpose: z.string().trim().min(1).max(120).nullable().optional(),
+  quantity: z.preprocess((v) => {
+    if (typeof v === "string") {
+      const normalized = v.trim().replace(/\s+/g, "").replace(",", ".");
+      return normalized ? Number(normalized) : v;
+    }
+    return v;
+  }, z.number().finite().positive().max(10_000_000).nullable().optional()),
+  unit: z.string().trim().min(1).max(32).nullable().optional(),
 });
 
 export type InvoiceExtractionResult = z.infer<typeof InvoiceExtractionResultSchema>;

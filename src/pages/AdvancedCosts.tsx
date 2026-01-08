@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo } from "react";
+import { useRef, useState, useMemo, useEffect } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Upload, ArrowLeft, AlertCircle } from "lucide-react";
@@ -14,6 +14,7 @@ import { Progress } from "@/components/ui/progress";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { useTrips } from "@/contexts/TripsContext";
 import { useUserProfile } from "@/contexts/UserProfileContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
 import { formatSupabaseError } from "@/lib/supabaseErrors";
 import { toast } from "sonner";
@@ -24,6 +25,7 @@ import { parseLocaleNumber } from "@/lib/number";
 export default function AdvancedCosts() {
   const navigate = useNavigate();
   const { t, tf, locale } = useI18n();
+  const { user } = useAuth();
   const { projects, refreshProjects } = useProjects();
   const { trips } = useTrips();
   const { profile } = useUserProfile();
@@ -32,6 +34,7 @@ export default function AdvancedCosts() {
   const [projectFilter, setProjectFilter] = useState("all");
   const [uploadingInvoice, setUploadingInvoice] = useState(false);
   const [chosenProjectId, setChosenProjectId] = useState("");
+  const [invoiceResults, setInvoiceResults] = useState<any[]>([]);
   const invoiceInputRef = useRef<HTMLInputElement>(null);
 
   const currencyFormatter = useMemo(
@@ -95,22 +98,83 @@ export default function AdvancedCosts() {
     return amount;
   };
 
+  // Load invoice results for fuel cost calculation
+  useEffect(() => {
+    if (!supabase || !user) return;
+
+    const loadInvoiceResults = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("invoice_results")
+          .select("*")
+          .not("purpose", "is", null);
+
+        if (error) {
+          console.warn("[AdvancedCosts] Failed to load invoice_results:", error);
+          return;
+        }
+
+        setInvoiceResults(data || []);
+      } catch (err) {
+        console.warn("[AdvancedCosts] Exception loading invoice_results:", err);
+      }
+    };
+
+    loadInvoiceResults();
+  }, [user]);
+
   const costRates = useMemo(() => {
     let energyPerKm = 0;
-    if (profile.fuelType === "ev") {
-      const kwhPer100 = parseLocaleNumber(profile.evKwhPer100Km) ?? 0;
-      const pricePerKwh = parseLocaleNumber(profile.electricityPricePerKwh) ?? 0;
-      if (kwhPer100 > 0 && pricePerKwh > 0) energyPerKm = (kwhPer100 / 100) * pricePerKwh;
-    } else if (profile.fuelType === "gasoline" || profile.fuelType === "diesel") {
-      const litersPer100 = parseLocaleNumber(profile.fuelLPer100Km) ?? 0;
-      const pricePerLiter = parseLocaleNumber(profile.fuelPricePerLiter) ?? 0;
-      if (litersPer100 > 0 && pricePerLiter > 0) energyPerKm = (litersPer100 / 100) * pricePerLiter;
+    
+    // First, try to calculate fuel cost from actual invoices
+    const fuelInvoices = invoiceResults.filter((inv: any) => {
+      const purpose = (inv.purpose || "").toLowerCase();
+      return purpose.includes("fuel") || purpose.includes("petrol") || purpose.includes("diesel") || 
+             purpose.includes("gasolina") || purpose.includes("combustible");
+    });
+
+    if (fuelInvoices.length > 0) {
+      // Calculate average cost per liter from fuel invoices
+      let totalFuelCost = 0;
+      let totalFuelLiters = 0;
+
+      for (const invoice of fuelInvoices) {
+        const amount = invoiceAmountToEur(toNumber(invoice.total_amount), invoice.currency);
+        const quantity = toNumber(invoice.quantity);
+        
+        if (quantity > 0 && amount > 0) {
+          totalFuelCost += amount;
+          totalFuelLiters += quantity;
+        }
+      }
+
+      if (totalFuelLiters > 0) {
+        const costPerLiter = totalFuelCost / totalFuelLiters;
+        const consumption = parseLocaleNumber(profile.fuelLPer100Km) ?? 0;
+        if (consumption > 0) {
+          energyPerKm = (consumption / 100) * costPerLiter;
+        }
+      }
+    }
+
+    // Fall back to profile configuration if no fuel invoices
+    if (energyPerKm <= 0) {
+      if (profile.fuelType === "ev") {
+        const kwhPer100 = parseLocaleNumber(profile.evKwhPer100Km) ?? 0;
+        const pricePerKwh = parseLocaleNumber(profile.electricityPricePerKwh) ?? 0;
+        if (kwhPer100 > 0 && pricePerKwh > 0) energyPerKm = (kwhPer100 / 100) * pricePerKwh;
+      } else if (profile.fuelType === "gasoline" || profile.fuelType === "diesel") {
+        const litersPer100 = parseLocaleNumber(profile.fuelLPer100Km) ?? 0;
+        const pricePerLiter = parseLocaleNumber(profile.fuelPricePerLiter) ?? 0;
+        if (litersPer100 > 0 && pricePerLiter > 0) energyPerKm = (litersPer100 / 100) * pricePerLiter;
+      }
     }
 
     return {
       energyPerKm: Math.max(0, energyPerKm),
     };
   }, [
+    invoiceResults,
     profile.electricityPricePerKwh,
     profile.evKwhPer100Km,
     profile.fuelLPer100Km,
