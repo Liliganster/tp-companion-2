@@ -98,9 +98,6 @@ export default function AdvancedCosts() {
   };
 
   const costRates = useMemo(() => {
-    const maintenancePerKm = parseLocaleNumber(profile.maintenanceEurPerKm) ?? 0;
-    const otherPerKm = parseLocaleNumber(profile.otherEurPerKm) ?? 0;
-
     let energyPerKm = 0;
     if (profile.fuelType === "ev") {
       const kwhPer100 = parseLocaleNumber(profile.evKwhPer100Km) ?? 0;
@@ -112,13 +109,8 @@ export default function AdvancedCosts() {
       if (litersPer100 > 0 && pricePerLiter > 0) energyPerKm = (litersPer100 / 100) * pricePerLiter;
     }
 
-    const totalPerKm = Math.max(0, energyPerKm) + Math.max(0, maintenancePerKm) + Math.max(0, otherPerKm);
-
     return {
       energyPerKm: Math.max(0, energyPerKm),
-      maintenancePerKm: Math.max(0, maintenancePerKm),
-      otherPerKm: Math.max(0, otherPerKm),
-      totalPerKm,
     };
   }, [
     profile.electricityPricePerKwh,
@@ -126,8 +118,6 @@ export default function AdvancedCosts() {
     profile.fuelLPer100Km,
     profile.fuelPricePerLiter,
     profile.fuelType,
-    profile.maintenanceEurPerKm,
-    profile.otherEurPerKm,
   ]);
 
   const periodTrips = useMemo(() => {
@@ -153,13 +143,16 @@ export default function AdvancedCosts() {
     const totalDistance = periodTrips.reduce((sum, t) => sum + toNumber(t.distance), 0);
     const totalTrips = periodTrips.length;
     
-    // Prefer invoice amounts; otherwise estimate from vehicle config.
-    const totalCost = periodTrips.reduce((sum, t) => {
-      const invoiceEur = invoiceAmountToEur(toNumber(t.invoiceAmount), t.invoiceCurrency);
-      if (invoiceEur > 0) return sum + invoiceEur;
-      const distance = toNumber(t.distance);
-      return sum + distance * costRates.totalPerKm;
-    }, 0);
+    // Calculate energy cost (fuel/electricity) from distance
+    const energyCost = totalDistance * costRates.energyPerKm;
+    
+    // Sum real trip expenses
+    const totalTollAmount = periodTrips.reduce((sum, t) => sum + toNumber(t.tollAmount ?? 0), 0);
+    const totalParkingAmount = periodTrips.reduce((sum, t) => sum + toNumber(t.parkingAmount ?? 0), 0);
+    const totalOtherExpenses = periodTrips.reduce((sum, t) => sum + toNumber(t.otherExpenses ?? 0), 0);
+    
+    // Total cost = energy + real expenses
+    const totalCost = energyCost + totalTollAmount + totalParkingAmount + totalOtherExpenses;
 
     const costPerKm = totalDistance > 0 ? totalCost / totalDistance : 0;
 
@@ -168,20 +161,20 @@ export default function AdvancedCosts() {
       totalTrips,
       estimatedCost: totalCost,
       costPerKm,
+      energyCost,
+      totalTollAmount,
+      totalParkingAmount,
+      totalOtherExpenses,
     };
-  }, [costRates.totalPerKm, periodTrips]);
+  }, [costRates.energyPerKm, periodTrips]);
 
   const costBreakdown = useMemo(
     () => {
       const total = Number(summaryData.estimatedCost) || 0;
-      const hasRates = costRates.totalPerKm > 0;
-      const fuelRatio = hasRates ? costRates.energyPerKm / costRates.totalPerKm : 0.6;
-      const maintenanceRatio = hasRates ? costRates.maintenancePerKm / costRates.totalPerKm : 0.25;
-      const otherRatio = hasRates ? costRates.otherPerKm / costRates.totalPerKm : 0.15;
-
-      const fuel = total * fuelRatio;
-      const maintenance = total * maintenanceRatio;
-      const other = total * otherRatio;
+      const fuel = summaryData.energyCost;
+      const tolls = summaryData.totalTollAmount;
+      const parking = summaryData.totalParkingAmount;
+      const other = summaryData.totalOtherExpenses;
       const avgPerTrip = summaryData.totalTrips > 0 ? total / summaryData.totalTrips : 0;
 
       const pct = (value: number) => {
@@ -193,8 +186,9 @@ export default function AdvancedCosts() {
 
       return [
         { label: t("advancedCosts.breakdownFuelEnergy"), value: fuel, color: "bg-info", percent: pct(fuel) },
-        { label: t("advancedCosts.breakdownMaintenance"), value: maintenance, color: "bg-info", percent: pct(maintenance) },
-        { label: t("advancedCosts.breakdownOther"), value: other, color: "bg-info", percent: pct(other) },
+        { label: t("advancedCosts.breakdownTolls"), value: tolls, color: "bg-warning", percent: pct(tolls) },
+        { label: t("advancedCosts.breakdownParking"), value: parking, color: "bg-secondary", percent: pct(parking) },
+        { label: t("advancedCosts.breakdownOther"), value: other, color: "bg-destructive", percent: pct(other) },
         {
           label: t("advancedCosts.breakdownAvgPerTrip"),
           value: avgPerTrip,
@@ -204,11 +198,11 @@ export default function AdvancedCosts() {
       ];
     },
     [
-      costRates.energyPerKm,
-      costRates.maintenancePerKm,
-      costRates.otherPerKm,
-      costRates.totalPerKm,
+      summaryData.energyCost,
       summaryData.estimatedCost,
+      summaryData.totalOtherExpenses,
+      summaryData.totalParkingAmount,
+      summaryData.totalTollAmount,
       summaryData.totalTrips,
       t,
     ],
@@ -216,18 +210,24 @@ export default function AdvancedCosts() {
 
   const costAssumptions = useMemo(() => ({
     fuelPerKm: costRates.energyPerKm,
-    maintenanceTotal: summaryData.totalDistance * costRates.maintenancePerKm,
-    otherTotal: summaryData.totalDistance * costRates.otherPerKm,
-  }), [costRates.energyPerKm, costRates.maintenancePerKm, costRates.otherPerKm, summaryData.totalDistance]);
+    tollsTotal: summaryData.totalTollAmount,
+    parkingTotal: summaryData.totalParkingAmount,
+    otherTotal: summaryData.totalOtherExpenses,
+  }), [costRates.energyPerKm, summaryData.totalTollAmount, summaryData.totalParkingAmount, summaryData.totalOtherExpenses]);
 
   const projectCosts = useMemo(() => projects.map(p => {
     const projectTrips = periodTrips.filter(t => t.projectId === p.id);
     const distance = projectTrips.reduce((sum, t) => sum + toNumber(t.distance), 0);
-    const total = projectTrips.reduce((sum, t) => {
-      const invoiceEur = invoiceAmountToEur(toNumber(t.invoiceAmount), t.invoiceCurrency);
-      if (invoiceEur > 0) return sum + invoiceEur;
-      return sum + toNumber(t.distance) * costRates.totalPerKm;
-    }, 0);
+    
+    // Calculate energy cost from distance
+    const energyCost = distance * costRates.energyPerKm;
+    
+    // Sum real trip expenses
+    const tollsCost = projectTrips.reduce((sum, t) => sum + toNumber(t.tollAmount ?? 0), 0);
+    const parkingCost = projectTrips.reduce((sum, t) => sum + toNumber(t.parkingAmount ?? 0), 0);
+    const otherCost = projectTrips.reduce((sum, t) => sum + toNumber(t.otherExpenses ?? 0), 0);
+    
+    const total = energyCost + tollsCost + parkingCost + otherCost;
     
     return {
       projectId: p.id,
@@ -237,7 +237,7 @@ export default function AdvancedCosts() {
       total,
       perKm: distance > 0 ? total / distance : 0,
     };
-  }), [costRates.totalPerKm, periodTrips, projects]);
+  }), [costRates.energyPerKm, periodTrips, projects]);
 
   const visibleProjectCosts = useMemo(() => {
     if (projectFilter === "all") return projectCosts;
@@ -245,22 +245,24 @@ export default function AdvancedCosts() {
   }, [projectCosts, projectFilter]);
 
   const monthlyCosts = useMemo(() => {
-    const byMonth = new Map<string, { distance: number; trips: number; total: number }>();
+    const byMonth = new Map<string, { distance: number; trips: number; energy: number; tolls: number; parking: number; other: number }>();
     
     periodTrips.forEach(t => {
       const date = parseTripDate(t.date);
       if (!date) return;
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      const existing = byMonth.get(monthKey) || { distance: 0, trips: 0, total: 0 };
+      const existing = byMonth.get(monthKey) || { distance: 0, trips: 0, energy: 0, tolls: 0, parking: 0, other: 0 };
 
-      const invoiceEur = invoiceAmountToEur(toNumber(t.invoiceAmount), t.invoiceCurrency);
-      const estimated = toNumber(t.distance) * costRates.totalPerKm;
-      const total = invoiceEur > 0 ? invoiceEur : estimated;
+      const distance = toNumber(t.distance);
+      const energyCost = distance * costRates.energyPerKm;
       
       byMonth.set(monthKey, {
-        distance: existing.distance + toNumber(t.distance),
+        distance: existing.distance + distance,
         trips: existing.trips + 1,
-        total: existing.total + total,
+        energy: existing.energy + energyCost,
+        tolls: existing.tolls + toNumber(t.tollAmount ?? 0),
+        parking: existing.parking + toNumber(t.parkingAmount ?? 0),
+        other: existing.other + toNumber(t.otherExpenses ?? 0),
       });
     });
 
@@ -272,12 +274,7 @@ export default function AdvancedCosts() {
         const monthName = monthDate.toLocaleDateString(locale, { month: "long", year: "numeric" });
         const monthShort = monthDate.toLocaleDateString(locale, { month: "short", year: "numeric" });
 
-        const total = data.total;
-        const fallbackSplit = (ratio: number) => total * ratio;
-        const hasRates = costRates.totalPerKm > 0;
-        const fuelRatio = hasRates ? costRates.energyPerKm / costRates.totalPerKm : 0.6;
-        const maintenanceRatio = hasRates ? costRates.maintenancePerKm / costRates.totalPerKm : 0.25;
-        const otherRatio = hasRates ? costRates.otherPerKm / costRates.totalPerKm : 0.15;
+        const total = data.energy + data.tolls + data.parking + data.other;
         
         return {
           monthKey,
@@ -285,14 +282,15 @@ export default function AdvancedCosts() {
           monthShort,
           distance: data.distance,
           trips: data.trips,
-          fuel: hasRates ? total * fuelRatio : fallbackSplit(0.6),
-          maintenance: hasRates ? total * maintenanceRatio : fallbackSplit(0.25),
-          other: hasRates ? total * otherRatio : fallbackSplit(0.15),
+          fuel: data.energy,
+          tolls: data.tolls,
+          parking: data.parking,
+          other: data.other,
           total,
           perKm: data.distance > 0 ? total / data.distance : 0,
         };
       });
-	  }, [costRates.energyPerKm, costRates.maintenancePerKm, costRates.otherPerKm, costRates.totalPerKm, locale, periodTrips]);
+	  }, [costRates.energyPerKm, locale, periodTrips]);
 
   const monthlyChartData = useMemo(() => [...monthlyCosts].slice().reverse(), [monthlyCosts]);
 
@@ -523,7 +521,7 @@ export default function AdvancedCosts() {
 	                </div>
 	              </div>
 
-	              {/* Cost Assumptions */}
+	              {/* Cost Summary */}
 	              <div className="glass-card p-6">
 	                <h3 className="font-semibold mb-4">{t("advancedCosts.assumptionsTitle")}</h3>
 	                <ul className="space-y-3 text-sm text-muted-foreground">
@@ -533,7 +531,11 @@ export default function AdvancedCosts() {
 	                  </li>
 	                  <li className="flex items-start gap-2">
 	                    <span className="w-2 h-2 rounded-full bg-muted-foreground mt-1.5 shrink-0" />
-	                    {tf("advancedCosts.assumptionMaintenanceTotal", { amount: currencyFormatter.format(costAssumptions.maintenanceTotal) })}
+	                    {tf("advancedCosts.assumptionTollsTotal", { amount: currencyFormatter.format(costAssumptions.tollsTotal) })}
+	                  </li>
+	                  <li className="flex items-start gap-2">
+	                    <span className="w-2 h-2 rounded-full bg-muted-foreground mt-1.5 shrink-0" />
+	                    {tf("advancedCosts.assumptionParkingTotal", { amount: currencyFormatter.format(costAssumptions.parkingTotal) })}
 	                  </li>
 	                  <li className="flex items-start gap-2">
 	                    <span className="w-2 h-2 rounded-full bg-muted-foreground mt-1.5 shrink-0" />
@@ -770,9 +772,15 @@ export default function AdvancedCosts() {
                           fill="hsl(210, 100%, 50%)"
                         />
                         <Bar
-                          dataKey="maintenance"
+                          dataKey="tolls"
                           stackId="a"
-                          name={t("advancedCosts.breakdownMaintenance")}
+                          name={t("advancedCosts.breakdownTolls")}
+                          fill="hsl(40, 100%, 50%)"
+                        />
+                        <Bar
+                          dataKey="parking"
+                          stackId="a"
+                          name={t("advancedCosts.breakdownParking")}
                           fill="hsl(270, 100%, 60%)"
                         />
                         <Bar dataKey="other" stackId="a" name={t("advancedCosts.breakdownOther")} fill="hsl(150, 70%, 45%)" />
@@ -802,7 +810,10 @@ export default function AdvancedCosts() {
 	                        {t("advancedCosts.tableFuelEnergy")}
 	                      </th>
 	                      <th className="text-right py-3 px-3 font-semibold text-xs uppercase text-muted-foreground whitespace-nowrap">
-	                        {t("advancedCosts.tableMaintenance")}
+	                        {t("advancedCosts.tableTolls")}
+	                      </th>
+	                      <th className="text-right py-3 px-3 font-semibold text-xs uppercase text-muted-foreground whitespace-nowrap">
+	                        {t("advancedCosts.tableParking")}
 	                      </th>
 	                      <th className="text-right py-3 px-3 font-semibold text-xs uppercase text-muted-foreground whitespace-nowrap">
 	                        {t("advancedCosts.tableOther")}
@@ -818,7 +829,7 @@ export default function AdvancedCosts() {
                   <tbody>
                     {monthlyCosts.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="py-6 px-3 text-center text-sm text-muted-foreground">
+                        <td colSpan={9} className="py-6 px-3 text-center text-sm text-muted-foreground">
                           {t("advancedCosts.chartNoData")}
                         </td>
                       </tr>
@@ -834,7 +845,10 @@ export default function AdvancedCosts() {
                             {currencyFormatter.format(item.fuel)}
                           </td>
                           <td className="py-4 px-3 text-right text-muted-foreground whitespace-nowrap">
-                            {currencyFormatter.format(item.maintenance)}
+                            {currencyFormatter.format(item.tolls)}
+                          </td>
+                          <td className="py-4 px-3 text-right text-muted-foreground whitespace-nowrap">
+                            {currencyFormatter.format(item.parking)}
                           </td>
                           <td className="py-4 px-3 text-right text-muted-foreground whitespace-nowrap">
                             {currencyFormatter.format(item.other)}

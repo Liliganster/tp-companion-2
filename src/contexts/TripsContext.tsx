@@ -33,6 +33,10 @@ export type Trip = {
   ratePerKmOverride?: number | null;
   specialOrigin?: "base" | "continue" | "return";
   callsheet_job_id?: string; // Reference to callsheet_job (project document)
+  // Trip expenses (optional)
+  tollAmount?: number | null; // Peajes
+  parkingAmount?: number | null; // Parking
+  otherExpenses?: number | null; // Otros gastos (comida, multas, etc.)
   documents?: Array<{
     id: string;
     name: string;
@@ -135,6 +139,10 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         co2: 0, // Will be recalculated using API data in the trips memo
         ratePerKmOverride: t.rate_per_km_override,
         specialOrigin: t.special_origin,
+        // Trip expenses
+        tollAmount: t.toll_amount ?? null,
+        parkingAmount: t.parking_amount ?? null,
+        otherExpenses: t.other_expenses ?? null,
         documents: (t.documents || []).filter((d: any) => d.kind !== "client_meta"),
       }));
 
@@ -323,6 +331,10 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       invoice_amount: normalizedTrip.invoiceAmount,
       invoice_currency: normalizedTrip.invoiceCurrency,
       invoice_job_id: normalizedTrip.invoiceJobId,
+      // Trip expenses
+      toll_amount: normalizedTrip.tollAmount ?? null,
+      parking_amount: normalizedTrip.parkingAmount ?? null,
+      other_expenses: normalizedTrip.otherExpenses ?? null,
       documents: documentsToSave
     };
     
@@ -454,6 +466,10 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     if (safePatch.invoiceAmount !== undefined) dbPatch.invoice_amount = safePatch.invoiceAmount;
     if (safePatch.invoiceCurrency !== undefined) dbPatch.invoice_currency = safePatch.invoiceCurrency;
     if (safePatch.invoiceJobId !== undefined) dbPatch.invoice_job_id = safePatch.invoiceJobId;
+    // Trip expenses
+    if (safePatch.tollAmount !== undefined) dbPatch.toll_amount = safePatch.tollAmount;
+    if (safePatch.parkingAmount !== undefined) dbPatch.parking_amount = safePatch.parkingAmount;
+    if (safePatch.otherExpenses !== undefined) dbPatch.other_expenses = safePatch.otherExpenses;
     
     // Handle documents and client metadata
     const nextDocuments = safePatch.documents;

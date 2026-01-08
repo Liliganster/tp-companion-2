@@ -149,7 +149,7 @@ export default function Docs() {
           body: [
             "Projects group trips and documents.",
             "In project details you can upload project-level invoices (not tied to a specific trip).",
-            "Invoice tables show AI status (queued/processing/done/out_of_quota/needs_review/failed).",
+            "Invoice tables show AI status (queued/processing/done/needs_review/failed/cancelled)",
           ],
         },
         {

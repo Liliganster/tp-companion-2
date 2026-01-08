@@ -27,8 +27,6 @@ export function VehicleConfigModal({ open, onOpenChange }: VehicleConfigModalPro
   const [fuelPrice, setFuelPrice] = useState(profile.fuelPricePerLiter ?? "");
   const [evConsumption, setEvConsumption] = useState(profile.evKwhPer100Km ?? "");
   const [electricityPrice, setElectricityPrice] = useState(profile.electricityPricePerKwh ?? "");
-  const [maintenancePerKm, setMaintenancePerKm] = useState(profile.maintenanceEurPerKm ?? "");
-  const [otherPerKm, setOtherPerKm] = useState(profile.otherEurPerKm ?? "");
   const [saving, setSaving] = useState(false);
 
   const isElectric = fuelType === "ev";
@@ -48,8 +46,6 @@ export function VehicleConfigModal({ open, onOpenChange }: VehicleConfigModalPro
     setFuelPrice(profile.fuelPricePerLiter ?? "");
     setEvConsumption(profile.evKwhPer100Km ?? "");
     setElectricityPrice(profile.electricityPricePerKwh ?? "");
-    setMaintenancePerKm(profile.maintenanceEurPerKm ?? "");
-    setOtherPerKm(profile.otherEurPerKm ?? "");
   }, [open, profile]);
 
   const estimatedFuelPerKm = useMemo(() => {
@@ -71,8 +67,6 @@ export function VehicleConfigModal({ open, onOpenChange }: VehicleConfigModalPro
     const fields: Array<{ key: string; value: string }> = [
       { key: isElectric ? "vehicleConfig.evConsumption" : "vehicleConfig.fuelConsumption", value: isElectric ? evConsumption : fuelConsumption },
       { key: isElectric ? "vehicleConfig.energyPrice" : "vehicleConfig.fuelPrice", value: isElectric ? electricityPrice : fuelPrice },
-      { key: "vehicleConfig.maintenancePerKm", value: maintenancePerKm },
-      { key: "vehicleConfig.otherPerKm", value: otherPerKm },
     ];
 
     for (const f of fields) {
@@ -123,8 +117,6 @@ export function VehicleConfigModal({ open, onOpenChange }: VehicleConfigModalPro
         evKwhPer100Km: isElectric ? evConsumption : "",
         fuelPricePerLiter: isElectric ? "" : fuelPrice,
         electricityPricePerKwh: isElectric ? electricityPrice : "",
-        maintenanceEurPerKm: maintenancePerKm,
-        otherEurPerKm: otherPerKm,
       },
       {
         toastId: "vehicle-config-save",
@@ -186,24 +178,7 @@ export function VehicleConfigModal({ open, onOpenChange }: VehicleConfigModalPro
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pb-2">
-          <div className="space-y-2">
-            <Label className="text-sm text-muted-foreground">{t("vehicleConfig.maintenancePerKm")}</Label>
-            <Input
-              type="text"
-              value={maintenancePerKm}
-              onChange={(e) => setMaintenancePerKm(e.target.value)}
-              className="bg-secondary/50"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label className="text-sm text-muted-foreground">{t("vehicleConfig.otherPerKm")}</Label>
-            <Input
-              type="text"
-              value={otherPerKm}
-              onChange={(e) => setOtherPerKm(e.target.value)}
-              className="bg-secondary/50"
-            />
-          </div>
+          <div className="sm:col-span-2" />
           <div className="space-y-2">
             <Label className="text-sm text-muted-foreground">{t("vehicleConfig.estimatedFuelPerKm")}</Label>
             <Input type="text" value={estimatedFuelPerKm.toFixed(2).replace(".", ",")} readOnly className="bg-secondary/30" />

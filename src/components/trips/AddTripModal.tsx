@@ -159,6 +159,10 @@ interface TripData {
   distance?: number;
   ratePerKmOverride?: number | null;
   specialOrigin?: "base" | "continue" | "return";
+  // Per-trip expenses
+  tollAmount?: number | null;
+  parkingAmount?: number | null;
+  otherExpenses?: number | null;
 }
 
 interface AddTripModalProps {
@@ -398,6 +402,10 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
   const [date, setDate] = useState("");
   const [distance, setDistance] = useState("");
   const [passengers, setPassengers] = useState("");
+  // Per-trip expense states
+  const [tollAmount, setTollAmount] = useState("");
+  const [parkingAmount, setParkingAmount] = useState("");
+  const [otherExpenses, setOtherExpenses] = useState("");
   const [project, setProject] = useState("");
   const [purpose, setPurpose] = useState("");
   const [specialOrigin, setSpecialOrigin] = useState<NonNullable<TripData["specialOrigin"]>>("base");
@@ -493,6 +501,10 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
     setSpecialOrigin(defaultSpecialOrigin || "base");
     const rateOverride = seedTrip?.ratePerKmOverride;
     setTripRate(rateOverride != null ? formatLocaleNumber(rateOverride) : "");
+    // Initialize expense fields
+    setTollAmount(seedTrip?.tollAmount != null ? formatLocaleNumber(seedTrip.tollAmount) : "");
+    setParkingAmount(seedTrip?.parkingAmount != null ? formatLocaleNumber(seedTrip.parkingAmount) : "");
+    setOtherExpenses(seedTrip?.otherExpenses != null ? formatLocaleNumber(seedTrip.otherExpenses) : "");
     setSaveTemplateOpen(false);
     setTemplateName("");
   }, [isOpen, trip, prefill, baseLocation, resolvePreviousDestinationForDate]);
@@ -875,6 +887,43 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
             />
           </div>
 
+          {/* Per-trip expenses */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="tollAmount">{t("tripModal.toll")}</Label>
+              <Input
+                id="tollAmount"
+                type="text"
+                placeholder="0"
+                value={tollAmount}
+                onChange={(e) => setTollAmount(e.target.value)}
+                className="bg-secondary/50"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="parkingAmount">{t("tripModal.parking")}</Label>
+              <Input
+                id="parkingAmount"
+                type="text"
+                placeholder="0"
+                value={parkingAmount}
+                onChange={(e) => setParkingAmount(e.target.value)}
+                className="bg-secondary/50"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="otherExpenses">{t("tripModal.otherExpenses")}</Label>
+              <Input
+                id="otherExpenses"
+                type="text"
+                placeholder="0"
+                value={otherExpenses}
+                onChange={(e) => setOtherExpenses(e.target.value)}
+                className="bg-secondary/50"
+              />
+            </div>
+          </div>
+
           </div>
 
           <div className="flex items-center gap-2 mt-2">
@@ -967,6 +1016,10 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                 const distanceValue = parseLocaleNumber(distance) ?? 0;
                 const passengersValue = parseLocaleNumber(passengers) ?? 0;
                 const rateOverride = parseLocaleNumber(tripRate);
+                // Parse expense values
+                const tollValue = parseLocaleNumber(tollAmount);
+                const parkingValue = parseLocaleNumber(parkingAmount);
+                const otherValue = parseLocaleNumber(otherExpenses);
                 const { routeValues } = getEffectiveRouteValues();
 
                 if (!date.trim()) {
@@ -1041,6 +1094,10 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                   distance: Math.max(0, distanceValue),
                   ratePerKmOverride: rateOverride == null ? null : Math.max(0, rateOverride),
                   specialOrigin,
+                  // Per-trip expenses
+                  tollAmount: tollValue == null ? null : Math.max(0, tollValue),
+                  parkingAmount: parkingValue == null ? null : Math.max(0, parkingValue),
+                  otherExpenses: otherValue == null ? null : Math.max(0, otherValue),
                 });
               }}
             >
