@@ -305,6 +305,35 @@ export default function Trips() {
     return roundTo(trip.distance * baseRate + trip.passengers * settingsPassengerSurchargePerKm, 2);
   };
 
+  // Calculate trip expenses (toll + parking + other)
+  const calculateTripExpenses = (trip: Trip) => {
+    const toll = typeof trip.tollAmount === "number" ? trip.tollAmount : 0;
+    const parking = typeof trip.parkingAmount === "number" ? trip.parkingAmount : 0;
+    const other = typeof trip.otherExpenses === "number" ? trip.otherExpenses : 0;
+    return roundTo(toll + parking + other, 2);
+  };
+
+  // Calculate energy cost per km from profile
+  const energyPerKm = useMemo(() => {
+    if (profile.fuelType === "ev") {
+      const kwhPer100 = parseLocaleNumber(profile.evKwhPer100Km) ?? 0;
+      const pricePerKwh = parseLocaleNumber(profile.electricityPricePerKwh) ?? 0;
+      if (kwhPer100 > 0 && pricePerKwh > 0) return (kwhPer100 / 100) * pricePerKwh;
+    } else if (profile.fuelType === "gasoline" || profile.fuelType === "diesel") {
+      const litersPer100 = parseLocaleNumber(profile.fuelLPer100Km) ?? 0;
+      const pricePerLiter = parseLocaleNumber(profile.fuelPricePerLiter) ?? 0;
+      if (litersPer100 > 0 && pricePerLiter > 0) return (litersPer100 / 100) * pricePerLiter;
+    }
+    return 0;
+  }, [profile.fuelType, profile.evKwhPer100Km, profile.electricityPricePerKwh, profile.fuelLPer100Km, profile.fuelPricePerLiter]);
+
+  // Calculate total trip cost (fuel + expenses)
+  const calculateTripTotalCost = (trip: Trip) => {
+    const fuelCost = trip.distance * energyPerKm;
+    const expenses = calculateTripExpenses(trip);
+    return roundTo(fuelCost + expenses, 2);
+  };
+
   const formatInvoiceCountLabel = (count: number) => {
     const lang = String(locale || "").toLowerCase();
     if (lang.startsWith("de")) return count === 1 ? "1 Rechnung" : `${count} Rechnungen`;
@@ -596,7 +625,7 @@ export default function Trips() {
                 </div>
 
                 {/* Stats Grid - Better responsive grid */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1 sm:gap-2 text-xs sm:text-sm">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-1 sm:gap-2 text-xs sm:text-sm">
                   <div className="flex justify-between md:flex-col md:gap-0.5">
                     <span className="text-muted-foreground">Distancia:</span>
                     <span className="font-medium">{trip.distance} km</span>
@@ -608,12 +637,20 @@ export default function Trips() {
                     </span>
                   </div>
                   <div className="flex justify-between md:flex-col md:gap-0.5">
-                    <span className="text-muted-foreground text-center">Reembolso:</span>
-                    <span className="text-primary font-medium text-center">{calculateTripReimbursement(trip).toFixed(2)} €</span>
+                    <span className="text-muted-foreground text-center">{t("trips.expenses")}:</span>
+                    <span className="text-orange-500 font-medium text-center">
+                      {calculateTripExpenses(trip) > 0 ? `${calculateTripExpenses(trip).toFixed(2)} €` : "-"}
+                    </span>
                   </div>
                   <div className="flex justify-between md:flex-col md:gap-0.5">
-                    <span className="text-muted-foreground text-center">Pasajeros:</span>
-                    <span className="font-medium text-center">{trip.passengers || "-"}</span>
+                    <span className="text-muted-foreground text-center">{t("trips.totalCost")}:</span>
+                    <span className="text-amber-500 font-medium text-center">
+                      {calculateTripTotalCost(trip) > 0 ? `${calculateTripTotalCost(trip).toFixed(2)} €` : "-"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between md:flex-col md:gap-0.5">
+                    <span className="text-muted-foreground text-center">{t("trips.reimbursement")}:</span>
+                    <span className="text-primary font-medium text-center">{calculateTripReimbursement(trip).toFixed(2)} €</span>
                   </div>
                 </div>
               </div>
@@ -706,6 +743,8 @@ export default function Trips() {
                 <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.co2")}</TableHead>
                 <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">Factura</TableHead>
                 <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("trips.passengers")}</TableHead>
+                <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.expenses")}</TableHead>
+                <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.totalCost")}</TableHead>
                 <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.reimbursement")}</TableHead>
                 <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.distance")}</TableHead>
                 <TableHead className="w-10"></TableHead>
@@ -774,6 +813,12 @@ export default function Trips() {
                 </TableCell>
                 <TableCell className="text-right whitespace-nowrap">{formatTripInvoiceCell(trip)}</TableCell>
                 <TableCell className="text-right text-muted-foreground hidden lg:table-cell">{trip.passengers || "-"}</TableCell>
+                <TableCell className="text-right text-orange-500 whitespace-nowrap">
+                  {calculateTripExpenses(trip) > 0 ? `${calculateTripExpenses(trip).toFixed(2)} €` : "-"}
+                </TableCell>
+                <TableCell className="text-right text-amber-500 font-medium whitespace-nowrap">
+                  {calculateTripTotalCost(trip) > 0 ? `${calculateTripTotalCost(trip).toFixed(2)} €` : "-"}
+                </TableCell>
                 <TableCell className="text-right text-primary font-medium whitespace-nowrap">{calculateTripReimbursement(trip).toFixed(2)} €</TableCell>
                 <TableCell className="text-right font-semibold whitespace-nowrap">{trip.distance} km</TableCell>
                 <TableCell>
