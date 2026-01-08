@@ -34,6 +34,20 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
     return trips.find((t) => t.id === trip.id) ?? trip;
   }, [trip, trips]);
 
+  // Calculate costs - must be before early return to maintain hook order
+  const energyPerKm = useMemo(() => {
+    if (profile.fuelType === "ev") {
+      const kwhPer100 = parseLocaleNumber(profile.evKwhPer100Km) ?? 0;
+      const pricePerKwh = parseLocaleNumber(profile.electricityPricePerKwh) ?? 0;
+      if (kwhPer100 > 0 && pricePerKwh > 0) return (kwhPer100 / 100) * pricePerKwh;
+    } else if (profile.fuelType === "gasoline" || profile.fuelType === "diesel") {
+      const litersPer100 = parseLocaleNumber(profile.fuelLPer100Km) ?? 0;
+      const pricePerLiter = parseLocaleNumber(profile.fuelPricePerLiter) ?? 0;
+      if (litersPer100 > 0 && pricePerLiter > 0) return (litersPer100 / 100) * pricePerLiter;
+    }
+    return 0;
+  }, [profile.fuelType, profile.evKwhPer100Km, profile.electricityPricePerKwh, profile.fuelLPer100Km, profile.fuelPricePerLiter]);
+
   useEffect(() => {
     if (!open) {
       setPreviewUrl(null);
@@ -44,6 +58,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
     }
   }, [liveTrip, open]);
 
+  // Early return AFTER all hooks
   if (!liveTrip) return null;
 
   const formattedDate = (() => {
@@ -60,32 +75,12 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
 
   const tripDocuments = liveTrip.documents ?? [];
 
-  // Calculate costs
-  const energyPerKm = useMemo(() => {
-    if (profile.fuelType === "ev") {
-      const kwhPer100 = parseLocaleNumber(profile.evKwhPer100Km) ?? 0;
-      const pricePerKwh = parseLocaleNumber(profile.electricityPricePerKwh) ?? 0;
-      if (kwhPer100 > 0 && pricePerKwh > 0) return (kwhPer100 / 100) * pricePerKwh;
-    } else if (profile.fuelType === "gasoline" || profile.fuelType === "diesel") {
-      const litersPer100 = parseLocaleNumber(profile.fuelLPer100Km) ?? 0;
-      const pricePerLiter = parseLocaleNumber(profile.fuelPricePerLiter) ?? 0;
-      if (litersPer100 > 0 && pricePerLiter > 0) return (litersPer100 / 100) * pricePerLiter;
-    }
-    return 0;
-  }, [profile.fuelType, profile.evKwhPer100Km, profile.electricityPricePerKwh, profile.fuelLPer100Km, profile.fuelPricePerLiter]);
-
   const fuelCost = liveTrip.distance * energyPerKm;
   const tollAmount = typeof liveTrip.tollAmount === "number" ? liveTrip.tollAmount : 0;
   const parkingAmount = typeof liveTrip.parkingAmount === "number" ? liveTrip.parkingAmount : 0;
   const otherExpenses = typeof liveTrip.otherExpenses === "number" ? liveTrip.otherExpenses : 0;
   const totalExpenses = tollAmount + parkingAmount + otherExpenses;
   const totalCost = fuelCost + totalExpenses;
-
-  // Reimbursement calculation
-  const settingsRatePerKm = parseLocaleNumber(profile.ratePerKm) ?? 0;
-  const settingsPassengerSurcharge = parseLocaleNumber(profile.passengerSurcharge) ?? 0;
-  const baseRate = liveTrip.ratePerKmOverride ?? settingsRatePerKm;
-  const reimbursement = liveTrip.distance * baseRate + liveTrip.passengers * settingsPassengerSurcharge;
 
   const currencyFormatter = new Intl.NumberFormat(locale, {
     style: "currency",
@@ -253,19 +248,6 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
                   <span className="text-lg font-bold text-amber-500">{currencyFormatter.format(totalCost)}</span>
                 </div>
               </div>
-            </div>
-
-            <Separator />
-
-            {/* Reimbursement */}
-            <div>
-              <Label className="text-xs uppercase tracking-wide text-muted-foreground">{t("trips.reimbursement")}</Label>
-              <p className="text-2xl font-bold text-primary">{currencyFormatter.format(reimbursement)}</p>
-              {liveTrip.ratePerKmOverride != null && (
-                <p className="text-xs text-muted-foreground">
-                  {t("tripDetail.customRate")}: {liveTrip.ratePerKmOverride} €/km
-                </p>
-              )}
             </div>
           </div>
 
