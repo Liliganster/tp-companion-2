@@ -749,7 +749,6 @@ const es = {
   "settings.supportBody": "¿Necesitas ayuda? Contáctanos",
   "settings.contactSupport": "Contactar soporte",
   "settings.build": "Build:",
-  "tripDetail.invoiceNeedsReview": "Revisar",
   "tripDetail.invoiceFailed": "Error",
   "tripDetail.invoiceNeedsReview": "Revisar",
 
