@@ -48,6 +48,8 @@ export function PlanProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      console.log(`[PlanContext] Fetching subscription for user ${user.id}`);
+      
       // First try to get from view (includes computed limits)
       const { data, error } = await supabase
         .from("user_subscriptions")
@@ -56,14 +58,16 @@ export function PlanProvider({ children }: { children: ReactNode }) {
         .single();
 
       if (error && error.code !== "PGRST116") {
-        console.error("Error fetching subscription:", error);
+        console.error("[PlanContext] Error fetching subscription:", error);
       }
 
       if (data) {
+        console.log(`[PlanContext] Loaded plan: ${data.plan_tier} for user ${user.id}`);
         setSubscription(data as SubscriptionData);
       } else {
         // No subscription found, user gets default basic plan
         // The API endpoint will create one when first accessed
+        console.log(`[PlanContext] No subscription found for ${user.id}, using default basic`);
         setSubscription({
           plan_tier: "basic",
           status: "active",
@@ -75,7 +79,7 @@ export function PlanProvider({ children }: { children: ReactNode }) {
         });
       }
     } catch (err) {
-      console.error("Failed to fetch subscription:", err);
+      console.error("[PlanContext] Failed to fetch subscription:", err);
     } finally {
       setIsLoading(false);
     }
@@ -153,9 +157,14 @@ export function PlanProvider({ children }: { children: ReactNode }) {
 
   // Upgrade to a plan tier via API
   const upgradeToPlan = useCallback(async (tier: PlanTier): Promise<boolean> => {
-    if (!session?.access_token) return false;
+    if (!session?.access_token) {
+      console.error("[PlanContext] No session token available");
+      return false;
+    }
 
     try {
+      console.log(`[PlanContext] Starting upgrade to ${tier}`);
+      
       const res = await fetch("/api/user/subscription", {
         method: "POST",
         headers: {
@@ -166,15 +175,19 @@ export function PlanProvider({ children }: { children: ReactNode }) {
       });
 
       if (!res.ok) {
-        console.error("Failed to upgrade plan:", await res.text());
+        const errorText = await res.text();
+        console.error(`[PlanContext] Failed to upgrade plan:`, errorText);
         return false;
       }
 
+      const data = await res.json();
+      console.log(`[PlanContext] Upgrade successful, new tier: ${data.tier}`);
+      
       // Refresh subscription data
       await fetchSubscription();
       return true;
     } catch (err) {
-      console.error("Error upgrading plan:", err);
+      console.error("[PlanContext] Error during upgrade:", err);
       return false;
     }
   }, [session?.access_token, fetchSubscription]);

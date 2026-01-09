@@ -4,32 +4,38 @@ import { Badge } from "@/components/ui/badge";
 import { Check, X, Crown, Zap, Mail, Loader2 } from "lucide-react";
 import { useI18n } from "@/hooks/use-i18n";
 import { usePlan } from "@/contexts/PlanContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { useState } from "react";
 
+// Payment Link de Stripe - créalo en https://dashboard.stripe.com/payment-links
+// Después de crearlo, copia el URL y pégalo aquí
+const STRIPE_PAYMENT_LINK = import.meta.env.VITE_STRIPE_PAYMENT_LINK || "https://buy.stripe.com/test_XXXXXX";
+
 export default function Plans() {
   const { t } = useI18n();
-  const { planTier, isLoading, upgradeToPlan } = usePlan();
+  const { planTier, isLoading } = usePlan();
+  const { session, user } = useAuth();
   const [upgrading, setUpgrading] = useState(false);
 
-  const handleUpgrade = async (tier: "basic" | "pro") => {
-    setUpgrading(true);
-    try {
-      const success = await upgradeToPlan(tier);
-      if (success) {
-        toast.success(
-          tier === "pro" 
-            ? "¡Bienvenido a Pro! Ya tienes acceso a todas las funciones." 
-            : "Plan actualizado correctamente."
-        );
-      } else {
-        toast.error("No se pudo actualizar el plan. Inténtalo de nuevo.");
-      }
-    } catch (err) {
-      toast.error("Error al actualizar el plan.");
-    } finally {
-      setUpgrading(false);
+  const handleStripeCheckout = () => {
+    if (!session?.access_token || !user?.id) {
+      toast.error("Por favor inicia sesión");
+      return;
     }
+
+    setUpgrading(true);
+    console.log("[Plans] Redirecting to Stripe Payment Link...");
+    
+    // Agregar client_reference_id para identificar al usuario en el webhook
+    const paymentUrl = new URL(STRIPE_PAYMENT_LINK);
+    paymentUrl.searchParams.set("client_reference_id", user.id);
+    if (user.email) {
+      paymentUrl.searchParams.set("prefilled_email", user.email);
+    }
+    
+    // Redirigir al Payment Link de Stripe
+    window.location.href = paymentUrl.toString();
   };
 
   const basicFeatures = [
@@ -106,7 +112,6 @@ export default function Plans() {
               variant="outline" 
               className="w-full" 
               disabled={planTier === "basic" || upgrading || isLoading}
-              onClick={() => handleUpgrade("basic")}
             >
               {upgrading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -130,7 +135,7 @@ export default function Plans() {
                 <h2 className="text-xl font-semibold">{t("plans.pro.name")}</h2>
               </div>
               <div className="flex items-baseline gap-1 mb-2">
-                <span className="text-4xl font-bold">19 €</span>
+                <span className="text-4xl font-bold">9,99 €</span>
                 <span className="text-muted-foreground">/{t("plans.perMonth")}</span>
               </div>
               <p className="text-sm text-muted-foreground">{t("plans.pro.description")}</p>
@@ -148,14 +153,14 @@ export default function Plans() {
             <Button 
               className="w-full"
               disabled={planTier === "pro" || upgrading || isLoading}
-              onClick={() => handleUpgrade("pro")}
+              onClick={handleStripeCheckout}
             >
               {upgrading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : planTier === "pro" ? (
                 t("plans.currentPlan")
               ) : (
-                t("plans.upgradeToPro")
+                "Pagar con Stripe"
               )}
             </Button>
           </div>

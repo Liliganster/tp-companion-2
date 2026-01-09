@@ -51,18 +51,27 @@ function getEffectiveLimits(
 }
 
 async function getSubscription(userId: string): Promise<UserSubscription | null> {
-  const { data, error } = await supabaseAdmin
-    .from("user_subscriptions")
-    .select("*")
-    .eq("user_id", userId)
-    .single();
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("user_subscriptions")
+      .select("*")
+      .eq("user_id", userId)
+      .single();
 
-  if (error && error.code !== "PGRST116") {
-    console.error("Error fetching subscription:", error);
-    throw error;
+    if (error) {
+      if (error.code === "PGRST116") {
+        // No rows found - this is OK, we'll create a default one
+        return null;
+      }
+      console.error("Error fetching subscription:", error);
+      throw error;
+    }
+
+    return data;
+  } catch (err) {
+    console.error("Error in getSubscription:", err);
+    throw err;
   }
-
-  return data;
 }
 
 async function createDefaultSubscription(userId: string): Promise<UserSubscription> {
@@ -121,6 +130,8 @@ async function handlePost(
     return sendJson(res, 400, { error: "Invalid plan tier" });
   }
 
+  console.log(`[Subscription] User ${userId} upgrading to ${tier}`);
+
   const updateData: Record<string, any> = {
     plan_tier: tier,
     status: "active",
@@ -140,31 +151,38 @@ async function handlePost(
     updateData.custom_limits = customLimits;
   }
 
-  const { data, error } = await supabaseAdmin
-    .from("user_subscriptions")
-    .upsert({
-      user_id: userId,
-      ...updateData,
-    })
-    .select()
-    .single();
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("user_subscriptions")
+      .upsert({
+        user_id: userId,
+        ...updateData,
+      })
+      .select()
+      .single();
 
-  if (error) {
-    console.error("Error updating subscription:", error);
-    return sendJson(res, 500, { error: "Failed to update subscription" });
+    if (error) {
+      console.error(`[Subscription] Error updating subscription for ${userId}:`, error);
+      return sendJson(res, 500, { error: "Failed to update subscription" });
+    }
+
+    console.log(`[Subscription] Successfully updated ${userId} to ${tier}`);
+
+    const planInfo: PlanInfo = {
+      tier: data.plan_tier as PlanTier,
+      status: data.status,
+      limits: getEffectiveLimits(data.plan_tier as PlanTier, data.custom_limits),
+      startedAt: data.started_at,
+      expiresAt: data.expires_at,
+      priceCents: data.price_cents,
+      currency: data.currency,
+    };
+
+    return sendJson(res, 200, planInfo);
+  } catch (err) {
+    console.error(`[Subscription] Exception updating subscription for ${userId}:`, err);
+    return sendJson(res, 500, { error: "Internal server error" });
   }
-
-  const planInfo: PlanInfo = {
-    tier: data.plan_tier as PlanTier,
-    status: data.status,
-    limits: getEffectiveLimits(data.plan_tier as PlanTier, data.custom_limits),
-    startedAt: data.started_at,
-    expiresAt: data.expires_at,
-    priceCents: data.price_cents,
-    currency: data.currency,
-  };
-
-  return sendJson(res, 200, planInfo);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

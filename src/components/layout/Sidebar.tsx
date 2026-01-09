@@ -7,6 +7,7 @@ import { useState } from "react";
 import { getProfileInitial, useUserProfile } from "@/contexts/UserProfileContext";
 import { useI18n } from "@/hooks/use-i18n";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePlan } from "@/contexts/PlanContext";
 interface SidebarProps {
   onSettingsClick: () => void;
 }
@@ -18,6 +19,7 @@ export function Sidebar({
   const { profile } = useUserProfile();
   const { signOut } = useAuth();
   const { t } = useI18n();
+  const { planTier } = usePlan();
   const profileInitial = getProfileInitial(profile.fullName);
   const navigation = [{
     name: t("nav.dashboard"),
@@ -95,22 +97,29 @@ export function Sidebar({
 
       {/* Bottom actions */}
       <div className="px-3 py-4 border-t border-border/50 space-y-3">
+        {/* Plan Card - Estilo como la imagen */}
         <Link
           to="/plans"
           className={cn(
-            "nav-item w-full",
-            location.pathname === "/plans" && "nav-item-active",
-            collapsed && "justify-center px-2"
+            "block w-full rounded-lg p-3 transition-all",
+            "bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400",
+            collapsed && "p-2"
           )}
           title={collapsed ? t("nav.plans") : undefined}
         >
-          <Crown className="w-5 h-5 shrink-0 text-yellow-500" />
-          {!collapsed && (
-            <span className="flex items-center gap-2">
-              {t("nav.plans")}
-              <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-500 font-medium">Pro</span>
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            <Crown className="w-5 h-5 shrink-0 text-yellow-300" />
+            {!collapsed && (
+              <div className="flex flex-col">
+                <span className="text-sm font-semibold text-white">
+                  {planTier === "pro" ? "Pro Plan" : t("plans.sidebar.free")}
+                </span>
+                <span className="text-xs text-purple-200">
+                  {planTier === "pro" ? t("plans.sidebar.manage") : t("plans.sidebar.upgrade")}
+                </span>
+              </div>
+            )}
+          </div>
         </Link>
         <button onClick={onSettingsClick} className={cn("nav-item w-full", collapsed && "justify-center px-2")} title={collapsed ? t("nav.settings") : undefined}>
           <Settings className="w-5 h-5 shrink-0" />
