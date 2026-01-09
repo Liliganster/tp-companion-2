@@ -1055,6 +1055,35 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     };
   }, [aiStep, jobIds, t, tf]);
 
+  const jobsForUi = useMemo(() => {
+    return jobIds.map((id) => {
+      const meta = jobMetaById[id];
+      const state = jobStateById[id];
+      const review = reviewByJobId[id];
+      const saving = Boolean(savingByJobId[id]);
+      const saved = Boolean(savedByJobId[id]);
+      return {
+        id,
+        fileName: meta?.fileName ?? id,
+        status: (state?.status ?? "queued") as JobStatus,
+        reason: state?.needsReviewReason ?? null,
+        review,
+        saving,
+        saved,
+      };
+    });
+  }, [jobIds, jobMetaById, jobStateById, reviewByJobId, savingByJobId, savedByJobId]);
+
+  const jobStats = useMemo(() => {
+    const total = jobsForUi.length;
+    const done = jobsForUi.filter((j) => j.status === "done").length;
+    const ready = jobsForUi.filter((j) => Boolean(j.review) && !j.saved && !j.review?.optimizing).length;
+    const saved = jobsForUi.filter((j) => j.saved).length;
+    const failed = jobsForUi.filter((j) => j.status === "failed" || j.status === "needs_review" || j.status === "out_of_quota").length;
+    const pending = total - done - failed;
+    return { total, done, ready, saved, failed, pending };
+  }, [jobsForUi]);
+
   // UI safety net: if all jobs are terminal, stop the processing step immediately.
   useEffect(() => {
     if (aiStep !== "processing") return;
@@ -1187,35 +1216,6 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     if (okCount > 0) toast.success(tf("bulk.toastSavedTrips", { count: okCount }));
     if (failCount > 0) toast.error(tf("bulk.toastFailedTrips", { count: failCount }));
   };
-
-  const jobsForUi = useMemo(() => {
-    return jobIds.map((id) => {
-      const meta = jobMetaById[id];
-      const state = jobStateById[id];
-      const review = reviewByJobId[id];
-      const saving = Boolean(savingByJobId[id]);
-      const saved = Boolean(savedByJobId[id]);
-      return {
-        id,
-        fileName: meta?.fileName ?? id,
-        status: (state?.status ?? "queued") as JobStatus,
-        reason: state?.needsReviewReason ?? null,
-        review,
-        saving,
-        saved,
-      };
-    });
-  }, [jobIds, jobMetaById, jobStateById, reviewByJobId, savingByJobId, savedByJobId]);
-
-  const jobStats = useMemo(() => {
-    const total = jobsForUi.length;
-    const done = jobsForUi.filter((j) => j.status === "done").length;
-    const ready = jobsForUi.filter((j) => Boolean(j.review) && !j.saved && !j.review?.optimizing).length;
-    const saved = jobsForUi.filter((j) => j.saved).length;
-    const failed = jobsForUi.filter((j) => j.status === "failed" || j.status === "needs_review" || j.status === "out_of_quota").length;
-    const pending = total - done - failed;
-    return { total, done, ready, saved, failed, pending };
-  }, [jobsForUi]);
 
   const renderJobStatusBadge = (status: JobStatus, saved: boolean) => {
     if (saved) {
