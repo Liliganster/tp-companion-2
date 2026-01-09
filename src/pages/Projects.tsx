@@ -57,12 +57,14 @@ import { useUserProfile } from "@/contexts/UserProfileContext";
 import { calculateTripEmissions } from "@/lib/emissions";
 import { parseLocaleNumber } from "@/lib/number";
 import { useEmissionsInput } from "@/hooks/use-emissions-input";
+import { usePlanLimits } from "@/hooks/use-plan-limits";
 
 const getProjectKey = (name: string) => name.trim().toLowerCase();
 
 export default function Projects() {
   const { t, tf, locale } = useI18n();
   const { profile } = useUserProfile();
+  const { canAddProject } = usePlanLimits();
 
   const { emissionsInput, fuelFactorData: fuelFactor, gridData: atGrid } = useEmissionsInput();
 
@@ -527,6 +529,16 @@ export default function Projects() {
   }) => {
     const { name, producer, description, ratePerKm, ratePerPassenger } = data;
     
+    // Check plan limits for new projects
+    if (!editingProjectId && !canAddProject.allowed) {
+      toast({
+        title: t("limits.maxProjectsReached"),
+        description: canAddProject.message,
+        variant: "destructive",
+      });
+      throw new Error("Project limit reached");
+    }
+
     // Check for duplicates
     const exists = projects.some((p) => p.name.trim().toLowerCase() === name.toLowerCase() && p.id !== editingProjectId);
     if (exists) {

@@ -30,6 +30,7 @@ import { useProjects } from "@/contexts/ProjectsContext";
 import { useNavigate } from "react-router-dom";
 import { uuidv4 } from "@/lib/utils";
 import { Trip } from "@/contexts/TripsContext";
+import { usePlanLimits } from "@/hooks/use-plan-limits";
 
 interface CalendarEvent {
   id: string;
@@ -84,6 +85,7 @@ export default function CalendarPage() {
   const { profile } = useUserProfile();
   const navigate = useNavigate();
   const { projects, addProject } = useProjects();
+  const { canAddNonAITrip, canAddProject } = usePlanLimits();
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [isConnected, setIsConnected] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState(false);
@@ -200,6 +202,12 @@ export default function CalendarPage() {
 
   // Importar evento como viaje
   const handleImportEventAsTrip = async (event: CalendarEvent) => {
+    // Check plan limits for non-AI trips
+    if (!canAddNonAITrip.allowed) {
+      toast.error(canAddNonAITrip.message || t("limits.maxTripsReached"));
+      return;
+    }
+    
     setImporting(true);
     try {
       // Verificar que existe dirección base
@@ -262,6 +270,13 @@ export default function CalendarPage() {
         // El usuario dijo "por defecto es unknow" -> asumo el primero es "Unknown", siguientes "Unknown 2", etc.
         const newProjectName = nextNum === 1 ? "Unknown" : `Unknown ${nextNum}`;
         finalProjectName = newProjectName;
+
+        // Check project limit before creating new project
+        if (!canAddProject.allowed) {
+          toast.error(canAddProject.message || t("limits.maxProjectsReached"));
+          setImporting(false);
+          return;
+        }
 
         // Crear nuevo proyecto
         const newProject = {

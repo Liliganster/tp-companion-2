@@ -28,6 +28,7 @@ import { useUserProfile } from "@/contexts/UserProfileContext";
 import { toast } from "sonner";
 import { AddressAutocompleteInput } from "@/components/google/AddressAutocompleteInput";
 import { getCountryCode } from "@/lib/country-mapping";
+import { usePlan } from "@/contexts/PlanContext";
 
 interface RouteTemplate {
   id: string;
@@ -62,6 +63,7 @@ export default function AdvancedRoutes() {
   const { t } = useI18n();
   const { user, getAccessToken } = useAuth();
   const { profile } = useUserProfile();
+  const { limits } = usePlan();
   const googleRegion = useMemo(() => getCountryCode(profile.country), [profile.country]);
   const baseLocation = useMemo(() => {
     const parts = [profile.baseAddress, profile.city, profile.country].map((p) => String(p ?? "").trim()).filter(Boolean);
@@ -350,6 +352,13 @@ export default function AdvancedRoutes() {
         closeModal();
         toast.success(t("advancedRoutes.toastUpdated"));
       } else {
+        // Check template limit
+        if (templates.length >= limits.maxRouteTemplates) {
+          toast.error(t("limits.maxTemplatesReached"));
+          setLoading(false);
+          return;
+        }
+
         const payload = {
           user_id: user.id,
           name,

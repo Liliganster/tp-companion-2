@@ -5,7 +5,7 @@ import { NotificationDropdown } from "@/components/dashboard/NotificationDropdow
 import { RecentTrips } from "@/components/dashboard/RecentTrips";
 import { ProjectChart } from "@/components/dashboard/ProjectChart";
 import { Button } from "@/components/ui/button";
-import { ArrowDown, ArrowUp, Plus, Settings, Sparkles, Check, AlertCircle, Loader2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Settings, Sparkles, Check, AlertCircle, Loader2, Car } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useProjects } from "@/contexts/ProjectsContext";
@@ -17,6 +17,8 @@ import { parseLocaleNumber } from "@/lib/number";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
 import { useEmissionsInput } from "@/hooks/use-emissions-input";
+import { usePlan } from "@/contexts/PlanContext";
+import { usePlanLimits } from "@/hooks/use-plan-limits";
 
 function parseTripDate(value: string): Date | null {
   if (!value) return null;
@@ -74,10 +76,15 @@ export default function Index() {
   const { t, locale } = useI18n();
   const { projects } = useProjects();
   const { trips } = useTrips();
+  const { limits } = usePlan();
+  const { tripCounts } = usePlanLimits();
   const dashboardProjects = getProjectsForDashboard(projects);
+  
+  // Trips quota
+  const tripsQuotaFull = tripCounts.total >= limits.maxActiveTrips;
 
-  // Fixed AI monthly limit for all users
-  const aiLimit = 5;
+  // AI monthly limit from plan
+  const aiLimit = limits.aiJobsPerMonth;
   const [aiUsedThisMonth, setAiUsedThisMonth] = useState<number | null>(null);
   const [aiQuotaLoading, setAiQuotaLoading] = useState(false);
 
@@ -210,6 +217,11 @@ export default function Index() {
               </div>
             </div>
             <div className="flex items-center gap-4">
+              {/* Trips Quota */}
+              <div className={`flex items-center gap-2 px-3 py-2 border rounded border-inherit ${tripsQuotaFull ? 'bg-red-900/50' : 'bg-[#0d4731]'}`}>
+                <Car className="w-4 h-4 text-[#fcfcfc]" />
+                <span className={`text-sm font-medium tabular-nums ${tripsQuotaFull ? 'text-red-300' : 'text-emerald-300'}`}>{tripCounts.total}/{limits.maxActiveTrips}</span>
+              </div>
               {/* AI Quota */}
               <div className="flex items-center gap-2 px-3 py-2 border rounded border-inherit bg-[#311084]">
                 <Sparkles className="w-4 h-4 text-[#fcfcfc]" />

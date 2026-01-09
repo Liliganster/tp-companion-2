@@ -6,6 +6,7 @@ import { TripsProvider } from "@/contexts/TripsContext";
 import { ReportsProvider } from "@/contexts/ReportsContext";
 import { AppearanceProvider } from "@/contexts/AppearanceContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { PlanProvider } from "@/contexts/PlanContext";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { AnalyticsListener } from "@/components/AnalyticsListener";
 import { CookieConsentBanner } from "@/components/analytics/CookieConsentBanner";
@@ -177,21 +178,23 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <AppearanceProvider>
       <AuthProvider>
-        <DataMigration />
-        <UserProfileProvider>
-          <ProjectsProvider>
-            <TripsProvider>
-              <ReportsProvider>
-                <TooltipProvider>
-                  <Sonner />
-                  <UpdatePrompt />
-                  <GlobalLoadingBar />
-                  <AppContent />
-                </TooltipProvider>
-              </ReportsProvider>
-            </TripsProvider>
-          </ProjectsProvider>
-        </UserProfileProvider>
+        <PlanProvider>
+          <DataMigration />
+          <UserProfileProvider>
+            <ProjectsProvider>
+              <TripsProvider>
+                <ReportsProvider>
+                  <TooltipProvider>
+                    <Sonner />
+                    <UpdatePrompt />
+                    <GlobalLoadingBar />
+                    <AppContent />
+                  </TooltipProvider>
+                </ReportsProvider>
+              </TripsProvider>
+            </ProjectsProvider>
+          </UserProfileProvider>
+        </PlanProvider>
       </AuthProvider>
     </AppearanceProvider>
   </QueryClientProvider>

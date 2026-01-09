@@ -25,6 +25,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
 import { useClimatiqFuelFactor } from "@/hooks/use-climatiq";
+import { usePlanLimits } from "@/hooks/use-plan-limits";
 
 export default function Trips() {
   const { profile } = useUserProfile();
@@ -32,6 +33,7 @@ export default function Trips() {
   const { getAccessToken } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const { canAddNonAITrip, checkStopsLimit, limits, tripCounts } = usePlanLimits();
 
   const { emissionsInput: localEmissionsInput, fuelFactorData: fuelFactor, gridData: atGrid, isLoading: isLoadingEmissionsData } = useEmissionsInput();
   
@@ -325,6 +327,31 @@ export default function Trips() {
     const trimmedProject = data.project.trim();
     const trimmedInvoice = data.invoice?.trim() ? data.invoice.trim() : undefined;
 
+    const exists = trips.some((t) => t.id === data.id);
+
+    // Check plan limits for new trips (not updates)
+    if (!exists) {
+      if (!canAddNonAITrip.allowed) {
+        toast({
+          title: t("limits.maxTripsReached"),
+          description: canAddNonAITrip.message,
+          variant: "destructive",
+        });
+        return false;
+      }
+    }
+
+    // Check stops limit
+    const stopsCheck = checkStopsLimit(data.route.length);
+    if (!stopsCheck.allowed) {
+      toast({
+        title: t("limits.maxStopsReached"),
+        description: tf("limits.maxStopsReached", { limit: limits.maxStopsPerTrip }),
+        variant: "destructive",
+      });
+      return false;
+    }
+
     const nextTrip: Trip = {
       id: data.id,
       date: data.date,
@@ -347,7 +374,6 @@ export default function Trips() {
       fuelAmount: data.fuelAmount ?? null,
     };
 
-    const exists = trips.some((t) => t.id === data.id);
     const ok = exists ? await updateTrip(data.id, nextTrip) : await addTrip(nextTrip);
     if (ok) {
       toast({
@@ -439,9 +465,17 @@ export default function Trips() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">
-            {t("trips.title")}
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl sm:text-3xl font-bold">
+              {t("trips.title")}
+            </h1>
+            <Badge 
+              variant={canAddNonAITrip.allowed ? "secondary" : "destructive"} 
+              className="text-sm font-medium"
+            >
+              {tripCounts.total}/{limits.maxActiveTrips}
+            </Badge>
+          </div>
           <p className="text-muted-foreground mt-1">
             {t("trips.subtitle")}
           </p>

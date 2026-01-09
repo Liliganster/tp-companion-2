@@ -20,6 +20,7 @@ import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimizati
 import { useAuth } from "@/contexts/AuthContext";
 
 import { cancelCallsheetJobs } from "@/lib/aiJobCancellation";
+import { usePlanLimits } from "@/hooks/use-plan-limits";
 
 interface SavedTrip {
   id: string;
@@ -178,6 +179,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const { profile } = useUserProfile();
   const { projects, addProject } = useProjects();
   const { trips } = useTrips();
+  const { checkCSVImportLimit, checkStopsLimit, canAddNonAITrip } = usePlanLimits();
 
   // Reset state when modal closes or tab changes
   useEffect(() => {
@@ -485,6 +487,18 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
       if (parsedTrips.length === 0) {
         toast.error(t("bulk.errorNoValidTrips"));
+        return;
+      }
+
+      // Check plan limits for CSV import
+      if (!canAddNonAITrip.allowed) {
+        toast.error(canAddNonAITrip.message || t("limits.maxTripsReached"));
+        return;
+      }
+
+      const importLimit = checkCSVImportLimit(parsedTrips.length);
+      if (!importLimit.allowed) {
+        toast.error(importLimit.message || t("limits.csvImportExceedsLimit"));
         return;
       }
 

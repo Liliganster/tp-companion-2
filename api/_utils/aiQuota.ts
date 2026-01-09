@@ -1,7 +1,10 @@
 import { supabaseAdmin } from "../../src/lib/supabaseServer.js";
+import { getPlanLimits, DEFAULT_PLAN, type PlanTier } from "./plans.js";
 
-// Monthly AI extraction limit for all users
-const AI_MONTHLY_LIMIT = 5;
+// Get AI monthly limit from plan (default to basic plan)
+function getAIMonthlyLimit(planTier?: PlanTier | string | null): number {
+  return getPlanLimits(planTier ?? DEFAULT_PLAN).aiJobsPerMonth;
+}
 
 export type QuotaDecision = {
   allowed: boolean;
@@ -96,8 +99,8 @@ async function countExtractionsThisMonth(
   };
 }
 
-export async function checkAiMonthlyQuota(userId: string): Promise<QuotaDecision> {
-  const limit = AI_MONTHLY_LIMIT;
+export async function checkAiMonthlyQuota(userId: string, planTier?: PlanTier | string | null): Promise<QuotaDecision> {
+  const limit = getAIMonthlyLimit(planTier);
 
   if (envTruthy("BYPASS_AI_LIMITS")) {
     return { allowed: true, limit, used: 0, remaining: limit };
