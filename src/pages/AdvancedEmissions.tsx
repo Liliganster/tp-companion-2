@@ -341,7 +341,7 @@ export default function AdvancedEmissions() {
 
     const projectNameById = new Map(projects.map((p) => [p.id, p.name] as const));
 
-    const sumTripCo2 = (distanceKm: number, co2?: number) => {
+    const sumTripCo2 = (distanceKm: number) => {
       // CO2 ranking calculations use the modal value (analysisFuelRate) if available
       // This allows "what if" scenarios without affecting trips/projects views
       const res = calculateTripEmissions({
@@ -377,7 +377,7 @@ export default function AdvancedEmissions() {
       const map = new Map<string, Agg>();
       for (const tr of source) {
         const distance = Number.isFinite(Number(tr.distance)) ? Number(tr.distance) : 0;
-        const co2 = sumTripCo2(distance, tr.co2);
+        const co2 = sumTripCo2(distance);
 
         if (viewMode === "all") {
           const key = tr.id;
@@ -412,7 +412,7 @@ export default function AdvancedEmissions() {
 
       // Calculate fuel/electricity consumption
       const fuelLiters = analysisFuelRate > 0 ? (a.distanceKm * analysisFuelRate) / 100 : 0;
-      const kwhUsed = profile.evKwhPer100Km ? (a.distanceKm * parseLocaleNumber(profile.evKwhPer100Km)) / 100 : 0;
+      const kwhUsed = profile.fuelType === "ev" && profile.evKwhPer100Km ? (a.distanceKm * parseLocaleNumber(profile.evKwhPer100Km)) / 100 : 0;
       
       return {
         id: a.id,
@@ -460,7 +460,7 @@ export default function AdvancedEmissions() {
       fuelLiters: clampRound(filteredLiters, 1),
       treesNeeded: filteredTreesNeeded,
     };
-  }, [fallbackProjectName, fallbackTripName, fuelEfficiency, fuelFactor?.kgCo2ePerLiter, gridKgCo2PerKwh, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType, projects, sortBy, timeRange, trips, viewMode, selectedProjectId, isConfigured]);
+  }, [fallbackProjectName, fallbackTripName, fuelEfficiency, fuelFactor?.kgCo2ePerLiter, fuelFactor?.kgCo2ePerKm, gridKgCo2PerKwh, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType, projects, sortBy, timeRange, trips, viewMode, selectedProjectId, isConfigured]);
 
   const handleSaveConfig = () => {
     setIsConfigured(true);
