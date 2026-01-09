@@ -95,6 +95,23 @@ export function Sidebar({
 
       {/* Bottom actions */}
       <div className="px-3 py-4 border-t border-border/50 space-y-3">
+        <Link
+          to="/plans"
+          className={cn(
+            "nav-item w-full",
+            location.pathname === "/plans" && "nav-item-active",
+            collapsed && "justify-center px-2"
+          )}
+          title={collapsed ? t("nav.plans") : undefined}
+        >
+          <Crown className="w-5 h-5 shrink-0 text-yellow-500" />
+          {!collapsed && (
+            <span className="flex items-center gap-2">
+              {t("nav.plans")}
+              <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-500 font-medium">Pro</span>
+            </span>
+          )}
+        </Link>
         <button onClick={onSettingsClick} className={cn("nav-item w-full", collapsed && "justify-center px-2")} title={collapsed ? t("nav.settings") : undefined}>
           <Settings className="w-5 h-5 shrink-0" />
           {!collapsed && <span>{t("nav.settings")}</span>}
