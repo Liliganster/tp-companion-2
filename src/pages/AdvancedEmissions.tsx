@@ -38,6 +38,7 @@ import {
   FileSpreadsheet,
   FileText,
   File as FileIcon,
+  ChevronsDown,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -199,6 +200,10 @@ export default function AdvancedEmissions() {
   const { projects } = useProjects();
   const { profile } = useUserProfile();
 
+  // Pagination state - show 5 results initially
+  const ITEMS_PER_PAGE = 5;
+  const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
+
   const { emissionsInput: baseEmissionsInput, fuelFactorData: fuelFactor, gridData: atGrid, isLoading: isLoadingEmissionsData } = useEmissionsInput();
   const gridKgCo2PerKwh = atGrid?.kgCo2PerKwh ?? null;
 
@@ -265,6 +270,11 @@ export default function AdvancedEmissions() {
   const [timeRange, setTimeRange] = useState(() => loadAdvancedEmissionsConfig().timeRange);
   const [fuelEfficiency, setFuelEfficiency] = useState(() => loadAdvancedEmissionsConfig().fuelEfficiency);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setVisibleCount(ITEMS_PER_PAGE);
+  }, [viewMode, sortBy, timeRange, selectedProjectId]);
 
   // Clean up old localStorage key on mount & validate selectedProjectId
   useEffect(() => {
@@ -691,68 +701,81 @@ export default function AdvancedEmissions() {
                   </div>
                 </div>
               ) : (
-                computed.filtered.map((result) => (
-                <div key={result.id} className="glass-card p-5">
-                  <div className="flex items-start gap-4">
-                    {/* Rank Badge */}
-                    <div className="flex items-center justify-center w-12 h-12 rounded-full bg-amber-500/20 text-amber-500 font-bold">
-                      #{result.rank}
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-4">
-                        <h4 className="font-semibold">{result.name}</h4>
-                        <span className={cn("px-2 py-0.5 text-xs rounded-full", getRatingColor(result.rating))}>
-                          {ratingLabel(result.rating)}
-                        </span>
-                        <span className={cn(
-                          "px-2 py-0.5 text-xs rounded-full flex items-center gap-1",
-                          result.trend === "improving"
-                            ? "bg-success/20 text-success"
-                            : result.trend === "worsening"
-                              ? "bg-destructive/20 text-destructive"
-                              : "bg-secondary/40 text-muted-foreground"
-                        )}>
-                          {result.trend === "improving" ? "↓" : result.trend === "worsening" ? "↑" : "→"} {trendLabel(result.trend)}
-                        </span>
+                <>
+                  {computed.filtered.slice(0, visibleCount).map((result) => (
+                  <div key={result.id} className="glass-card p-5">
+                    <div className="flex items-start gap-4">
+                      {/* Rank Badge */}
+                      <div className="flex items-center justify-center w-12 h-12 rounded-full bg-amber-500/20 text-amber-500 font-bold">
+                        #{result.rank}
                       </div>
 
-                      {/* Stats Grid */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.metricCo2Kg")}</p>
-                          <p className="text-lg font-semibold">{result.co2Kg}</p>
+                      {/* Content */}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-4">
+                          <h4 className="font-semibold">{result.name}</h4>
+                          <span className={cn("px-2 py-0.5 text-xs rounded-full", getRatingColor(result.rating))}>
+                            {ratingLabel(result.rating)}
+                          </span>
+                          <span className={cn(
+                            "px-2 py-0.5 text-xs rounded-full flex items-center gap-1",
+                            result.trend === "improving"
+                              ? "bg-success/20 text-success"
+                              : result.trend === "worsening"
+                                ? "bg-destructive/20 text-destructive"
+                                : "bg-secondary/40 text-muted-foreground"
+                          )}>
+                            {result.trend === "improving" ? "↓" : result.trend === "worsening" ? "↑" : "→"} {trendLabel(result.trend)}
+                          </span>
                         </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.metricEfficiency")}</p>
-                          <p className="text-lg font-semibold">{result.efficiency}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.metricDistance")}</p>
-                          <p className="text-lg font-semibold">{result.distanceKm}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.metricTrips")}</p>
-                          <p className="text-lg font-semibold">{result.trips}</p>
-                        </div>
-                        {profile.fuelType !== "ev" && result.fuelLiters !== undefined && (
+
+                        {/* Stats Grid */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
                           <div>
-                            <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.fuelConsumption")}</p>
-                            <p className="text-lg font-semibold">{result.fuelLiters} L</p>
+                            <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.metricCo2Kg")}</p>
+                            <p className="text-lg font-semibold">{result.co2Kg}</p>
                           </div>
-                        )}
-                        {profile.fuelType === "ev" && result.kwhUsed !== undefined && (
                           <div>
-                            <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.electricConsumption")}</p>
-                            <p className="text-lg font-semibold">{result.kwhUsed} kWh</p>
+                            <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.metricEfficiency")}</p>
+                            <p className="text-lg font-semibold">{result.efficiency}</p>
                           </div>
-                        )}
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.metricDistance")}</p>
+                            <p className="text-lg font-semibold">{result.distanceKm}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.metricTrips")}</p>
+                            <p className="text-lg font-semibold">{result.trips}</p>
+                          </div>
+                          {profile.fuelType !== "ev" && result.fuelLiters !== undefined && (
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.fuelConsumption")}</p>
+                              <p className="text-lg font-semibold">{result.fuelLiters} L</p>
+                            </div>
+                          )}
+                          {profile.fuelType === "ev" && result.kwhUsed !== undefined && (
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.electricConsumption")}</p>
+                              <p className="text-lg font-semibold">{result.kwhUsed} kWh</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-                ))
+                  ))}
+                  
+                  {/* Load More Button */}
+                  {computed.filtered.length > visibleCount && (
+                    <button
+                      onClick={() => setVisibleCount(prev => prev + ITEMS_PER_PAGE)}
+                      className="w-full flex items-center justify-center gap-2 text-sm text-primary hover:text-primary/80 font-medium py-3 rounded-md hover:bg-muted/50 transition-colors glass-card"
+                    >
+                      <ChevronsDown className="w-4 h-4" />
+                      {t("trips.loadMore")} ({computed.filtered.length - visibleCount} {t("advancedCosts.remaining")})
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>

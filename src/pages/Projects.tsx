@@ -35,6 +35,7 @@ import {
   Calendar,
   Receipt,
   Leaf,
+  ChevronsDown,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -100,7 +101,9 @@ export default function Projects() {
     projects.find((p) => p.id === editingProjectId) || null
   , [projects, editingProjectId]);
 
-
+  // Pagination state - show 5 projects initially
+  const ITEMS_PER_PAGE = 5;
+  const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
 
   interface ProjectDocument {
     id: string;
@@ -430,6 +433,19 @@ export default function Projects() {
     return true;
   });
 
+  // Paginated projects
+  const visibleProjects = useMemo(() => 
+    filteredProjects.slice(0, visibleCount), 
+    [filteredProjects, visibleCount]
+  );
+  const hasMoreProjects = filteredProjects.length > visibleCount;
+  const remainingCount = filteredProjects.length - visibleCount;
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setVisibleCount(ITEMS_PER_PAGE);
+  }, [searchQuery, selectedYear, selectedProducer]);
+
   const selectedProjectStats = useMemo(() => {
     if (!selectedProject) return null;
     const baseStats = statsByProjectKey.get(getProjectKey(selectedProject.name));
@@ -660,7 +676,7 @@ export default function Projects() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredProjects.map((project, index) => (
+                {visibleProjects.map((project, index) => (
                   (() => {
                     const stats = statsByProjectKey.get(getProjectKey(project.name)) ?? null;
                     const tripsCount = stats?.trips ?? 0;
@@ -795,6 +811,19 @@ export default function Projects() {
               </TableBody>
             </Table>
           </div>
+          
+          {/* Load More Button */}
+          {hasMoreProjects && (
+            <div className="p-4 border-t border-border/50">
+              <button
+                onClick={() => setVisibleCount(prev => prev + ITEMS_PER_PAGE)}
+                className="w-full flex items-center justify-center gap-2 text-sm text-primary hover:text-primary/80 font-medium py-2 rounded-md hover:bg-muted/50 transition-colors"
+              >
+                <ChevronsDown className="w-4 h-4" />
+                {t("trips.loadMore")} ({remainingCount} {t("advancedCosts.remaining")})
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Empty state */}

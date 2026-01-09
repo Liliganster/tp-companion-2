@@ -24,6 +24,7 @@ import {
   Check,
   Trash2,
   Calendar,
+  ChevronsDown,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
@@ -131,6 +132,10 @@ export default function Reports() {
   };
 
   const [selectedProject, setSelectedProject] = useState("all");
+  
+  // Pagination state - show 5 reports initially
+  const ITEMS_PER_PAGE = 5;
+  const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
   
   // Validate selectedProject against trips list
   useEffect(() => {
@@ -439,7 +444,7 @@ export default function Reports() {
                 </tr>
               </thead>
               <tbody>
-                {reports.map((report) => (
+                {reports.slice(0, visibleCount).map((report) => (
                   <tr key={report.id} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
                     <td className="py-4 px-4">
                       <Checkbox />
@@ -492,6 +497,19 @@ export default function Reports() {
               </tbody>
             </table>
           </div>
+          
+          {/* Load More Button */}
+          {reports.length > visibleCount && (
+            <div className="p-4 border-t border-border/50">
+              <button
+                onClick={() => setVisibleCount(prev => prev + ITEMS_PER_PAGE)}
+                className="w-full flex items-center justify-center gap-2 text-sm text-primary hover:text-primary/80 font-medium py-2 rounded-md hover:bg-muted/50 transition-colors"
+              >
+                <ChevronsDown className="w-4 h-4" />
+                {t("trips.loadMore")} ({reports.length - visibleCount} {t("advancedCosts.remaining")})
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
