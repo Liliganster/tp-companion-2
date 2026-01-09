@@ -39,26 +39,21 @@ export default function Plans() {
   };
 
   const basicFeatures = [
-    { text: t("plans.features.trips20"), included: true },
+    { text: t("plans.features.unlimitedTrips"), included: true },
     { text: t("plans.features.projects3"), included: true },
-    { text: t("plans.features.ai5"), included: true },
-    { text: t("plans.features.stops10"), included: true },
-    { text: t("plans.features.csvExport"), included: true },
     { text: t("plans.features.basicReports"), included: true },
+    { text: t("plans.features.ai5"), included: true },
+    { text: t("plans.features.csvExport"), included: true },
     { text: t("plans.features.calendarSync"), included: false },
-    { text: t("plans.features.routeTemplates"), included: false },
-    { text: t("plans.features.costAnalysis"), included: false },
   ];
 
   const proFeatures = [
-    { text: t("plans.features.trips2000"), included: true },
-    { text: t("plans.features.projects30"), included: true },
-    { text: t("plans.features.ai60"), included: true },
-    { text: t("plans.features.stops25"), included: true },
-    { text: t("plans.features.csvExport"), included: true },
+    { text: t("plans.features.unlimitedTrips"), included: true },
+    { text: t("plans.features.unlimitedProjects"), included: true },
     { text: t("plans.features.advancedReports"), included: true },
+    { text: t("plans.features.ai60"), included: true },
     { text: t("plans.features.calendarSync"), included: true },
-    { text: t("plans.features.routeTemplates50"), included: true },
+    { text: t("plans.features.routeTemplates"), included: true },
     { text: t("plans.features.costAnalysis"), included: true },
     { text: t("plans.features.prioritySupport"), included: true },
   ];
@@ -125,7 +120,7 @@ export default function Plans() {
 
           {/* Pro Plan */}
           <div className="glass-card p-6 rounded-xl border-2 border-primary relative flex flex-col">
-            <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground">
+            <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-500 text-black hover:bg-yellow-500">
               {t("plans.mostPopular")}
             </Badge>
             
@@ -160,7 +155,7 @@ export default function Plans() {
               ) : planTier === "pro" ? (
                 t("plans.currentPlan")
               ) : (
-                "Pagar con Stripe"
+                t("plans.upgradeButton")
               )}
             </Button>
           </div>
