@@ -15,8 +15,9 @@ import { NetworkStatusBanner } from "@/components/app/NetworkStatusBanner";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { UpdatePrompt } from "@/components/pwa/UpdatePrompt";
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { Loader2 } from "lucide-react";
+import { useI18n } from "@/hooks/use-i18n";
 
 const Index = lazy(() => import("./pages/Index"));
 const Trips = lazy(() => import("./pages/Trips"));
@@ -55,6 +56,123 @@ function RouteFallback() {
   );
 }
 
+function AppContent() {
+  const { language } = useI18n();
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
+
+  return (
+    <BrowserRouter>
+      <AnalyticsListener />
+      <CookieConsentBanner />
+      <NetworkStatusBanner />
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/auth/reset" element={<ResetPassword />} />
+
+          <Route path="/legal/terms" element={<LegalTerms />} />
+          <Route path="/legal/privacy" element={<LegalPrivacy />} />
+          <Route path="/legal/cookies" element={<LegalCookies />} />
+          <Route
+            path="/"
+            element={
+              <RequireAuth>
+                <Index />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/trips"
+            element={
+              <RequireAuth>
+                <Trips />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/projects"
+            element={
+              <RequireAuth>
+                <Projects />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/reports"
+            element={
+              <RequireAuth>
+                <Reports />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/reports/view"
+            element={
+              <RequireAuth>
+                <ReportView />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/calendar"
+            element={
+              <RequireAuth>
+                <CalendarPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/advanced"
+            element={
+              <RequireAuth>
+                <Advanced />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/advanced/routes"
+            element={
+              <RequireAuth>
+                <AdvancedRoutes />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/advanced/costs"
+            element={
+              <RequireAuth>
+                <AdvancedCosts />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/advanced/emissions"
+            element={
+              <RequireAuth>
+                <AdvancedEmissions />
+              </RequireAuth>
+            }
+          />
+
+          <Route
+            path="/docs"
+            element={
+              <RequireAuth>
+                <Docs />
+              </RequireAuth>
+            }
+          />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
+    </BrowserRouter>
+  );
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AppearanceProvider>
@@ -68,112 +186,7 @@ const App = () => (
                   <Sonner />
                   <UpdatePrompt />
                   <GlobalLoadingBar />
-                  <BrowserRouter>
-                    <AnalyticsListener />
-                    <CookieConsentBanner />
-                    <NetworkStatusBanner />
-                    <Suspense fallback={<RouteFallback />}>
-                      <Routes>
-                        <Route path="/auth" element={<Auth />} />
-                        <Route path="/auth/callback" element={<AuthCallback />} />
-                        <Route path="/auth/reset" element={<ResetPassword />} />
-
-                        <Route path="/legal/terms" element={<LegalTerms />} />
-                        <Route path="/legal/privacy" element={<LegalPrivacy />} />
-                        <Route path="/legal/cookies" element={<LegalCookies />} />
-                        <Route
-                          path="/"
-                          element={
-                            <RequireAuth>
-                              <Index />
-                            </RequireAuth>
-                          }
-                        />
-                        <Route
-                          path="/trips"
-                          element={
-                            <RequireAuth>
-                              <Trips />
-                            </RequireAuth>
-                          }
-                        />
-                        <Route
-                          path="/projects"
-                          element={
-                            <RequireAuth>
-                              <Projects />
-                            </RequireAuth>
-                          }
-                        />
-                        <Route
-                          path="/reports"
-                          element={
-                            <RequireAuth>
-                              <Reports />
-                            </RequireAuth>
-                          }
-                        />
-                        <Route
-                          path="/reports/view"
-                          element={
-                            <RequireAuth>
-                              <ReportView />
-                            </RequireAuth>
-                          }
-                        />
-                        <Route
-                          path="/calendar"
-                          element={
-                            <RequireAuth>
-                              <CalendarPage />
-                            </RequireAuth>
-                          }
-                        />
-                        <Route
-                          path="/advanced"
-                          element={
-                            <RequireAuth>
-                              <Advanced />
-                            </RequireAuth>
-                          }
-                        />
-                        <Route
-                          path="/advanced/routes"
-                          element={
-                            <RequireAuth>
-                              <AdvancedRoutes />
-                            </RequireAuth>
-                          }
-                        />
-                        <Route
-                          path="/advanced/costs"
-                          element={
-                            <RequireAuth>
-                              <AdvancedCosts />
-                            </RequireAuth>
-                          }
-                        />
-                        <Route
-                          path="/advanced/emissions"
-                          element={
-                            <RequireAuth>
-                              <AdvancedEmissions />
-                            </RequireAuth>
-                          }
-                        />
-
-                        <Route
-                          path="/docs"
-                          element={
-                            <RequireAuth>
-                              <Docs />
-                            </RequireAuth>
-                          }
-                        />
-                        <Route path="*" element={<NotFound />} />
-                      </Routes>
-                    </Suspense>
-                  </BrowserRouter>
+                  <AppContent />
                 </TooltipProvider>
               </ReportsProvider>
             </TripsProvider>

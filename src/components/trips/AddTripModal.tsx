@@ -402,6 +402,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
   const [stops, setStops] = useState<Stop[]>(() => getInitialStops());
   const stopDraftsRef = useRef<Record<string, string>>({});
   const destinationBeforeReturnRef = useRef<string | null>(null);
+  const previousRouteRef = useRef<string>("");
   const [date, setDate] = useState("");
   const [distance, setDistance] = useState("");
   const [passengers, setPassengers] = useState("");
@@ -614,12 +615,20 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
     if (!isOpen) return;
     if (specialOrigin === "base") return;
 
+    const { origin, destination, waypoints } = getEffectiveRouteValues();
+    // Create a unique string from the route values
+    const currentRoute = JSON.stringify({ origin, destination, waypoints });
+    
+    // Only recalculate if the route has actually changed
+    if (currentRoute === previousRouteRef.current) return;
+    previousRouteRef.current = currentRoute;
+
     const timer = setTimeout(() => {
       calculateDistance();
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [calculateDistance, isOpen, specialOrigin, stops, date]);
+  }, [calculateDistance, getEffectiveRouteValues, isOpen, specialOrigin]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -911,6 +920,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
               value={purpose}
               onChange={(e) => setPurpose(e.target.value)}
               className="bg-secondary/50"
+              spellCheck="true"
             />
           </div>
 
