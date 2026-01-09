@@ -29,7 +29,7 @@ export default function AdvancedCosts() {
   
   // Pagination state
   const PROJECTS_PER_PAGE = 5;
-  const TRIPS_PER_PAGE = 5;
+  const TRIPS_PER_PAGE = 10;
   const [visibleProjectsCount, setVisibleProjectsCount] = useState(PROJECTS_PER_PAGE);
   const [visibleTripsCount, setVisibleTripsCount] = useState<Record<string, number>>({});
 
