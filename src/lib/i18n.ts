@@ -639,6 +639,9 @@ const es = {
   "advancedCosts.tableReimbursement": "Reembolso",
   "advancedCosts.total": "Total",
   "advancedCosts.infoFooter": "Los costes se calculan según tu configuración de vehículo y los gastos registrados en cada viaje.",
+  "advancedCosts.loadMoreProjects": "Cargar más proyectos",
+  "advancedCosts.loadMoreTrips": "Cargar más viajes",
+  "advancedCosts.remaining": "restantes",
 
   "advancedEmissions.configTitle": "Configuración de análisis CO₂",
   "advancedEmissions.configSubtitle": "Configura las preferencias de análisis de emisiones CO₂",
@@ -1454,6 +1457,9 @@ const en: Record<I18nKey, string> = {
   "advancedCosts.tableReimbursement": "Reimbursement",
   "advancedCosts.total": "Total",
   "advancedCosts.infoFooter": "Costs are calculated based on your vehicle configuration and expenses recorded for each trip.",
+  "advancedCosts.loadMoreProjects": "Load more projects",
+  "advancedCosts.loadMoreTrips": "Load more trips",
+  "advancedCosts.remaining": "remaining",
 
   "advancedEmissions.configTitle": "CO₂ analysis settings",
   "advancedEmissions.configSubtitle": "Set your CO₂ emissions analysis preferences",
@@ -2266,6 +2272,9 @@ const de: Record<I18nKey, string> = {
   "advancedCosts.tableReimbursement": "Erstattung",
   "advancedCosts.total": "Gesamt",
   "advancedCosts.infoFooter": "Die Kosten werden basierend auf deiner Fahrzeugkonfiguration und den für jede Fahrt erfassten Ausgaben berechnet.",
+  "advancedCosts.loadMoreProjects": "Mehr Projekte laden",
+  "advancedCosts.loadMoreTrips": "Mehr Fahrten laden",
+  "advancedCosts.remaining": "übrig",
 
   "advancedEmissions.configTitle": "CO₂-Analyse konfigurieren",
   "advancedEmissions.configSubtitle": "Einstellungen für die CO₂-Analyse festlegen",

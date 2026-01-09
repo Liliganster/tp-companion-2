@@ -26,6 +26,12 @@ export default function AdvancedCosts() {
   
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("this-year");
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  
+  // Pagination state
+  const PROJECTS_PER_PAGE = 5;
+  const TRIPS_PER_PAGE = 5;
+  const [visibleProjectsCount, setVisibleProjectsCount] = useState(PROJECTS_PER_PAGE);
+  const [visibleTripsCount, setVisibleTripsCount] = useState<Record<string, number>>({});
 
   const {
     summary,
@@ -33,6 +39,39 @@ export default function AdvancedCosts() {
     availableYears,
     hasVehicleConfig,
   } = useCostAnalysis(trips, projects, profile, periodFilter);
+
+  // Reset pagination when filter changes
+  const handlePeriodChange = (newPeriod: PeriodFilter) => {
+    setPeriodFilter(newPeriod);
+    setVisibleProjectsCount(PROJECTS_PER_PAGE);
+    setVisibleTripsCount({});
+    setExpandedProjects(new Set());
+  };
+
+  // Paginated projects
+  const visibleProjects = useMemo(() => {
+    return projectCosts.slice(0, visibleProjectsCount);
+  }, [projectCosts, visibleProjectsCount]);
+
+  const hasMoreProjects = projectCosts.length > visibleProjectsCount;
+
+  // Get visible trips for a project
+  const getVisibleTrips = (projectId: string, allTrips: typeof projectCosts[0]['tripsData']) => {
+    const count = visibleTripsCount[projectId] ?? TRIPS_PER_PAGE;
+    return allTrips.slice(0, count);
+  };
+
+  const hasMoreTrips = (projectId: string, totalTrips: number) => {
+    const count = visibleTripsCount[projectId] ?? TRIPS_PER_PAGE;
+    return totalTrips > count;
+  };
+
+  const loadMoreTrips = (projectId: string) => {
+    setVisibleTripsCount(prev => ({
+      ...prev,
+      [projectId]: (prev[projectId] ?? TRIPS_PER_PAGE) + TRIPS_PER_PAGE
+    }));
+  };
 
   const currencyFormatter = useMemo(
     () =>
@@ -127,7 +166,7 @@ export default function AdvancedCosts() {
 
           {/* Period filter dropdown */}
           <div className="flex items-center gap-2">
-            <Select value={periodFilter} onValueChange={(v) => setPeriodFilter(v as PeriodFilter)}>
+            <Select value={periodFilter} onValueChange={(v) => handlePeriodChange(v as PeriodFilter)}>
               <SelectTrigger className="w-[200px] bg-secondary/50">
                 <SelectValue />
               </SelectTrigger>
@@ -265,8 +304,11 @@ export default function AdvancedCosts() {
                   </tr>
                 </thead>
                 <tbody>
-                  {projectCosts.map((project) => {
+                  {visibleProjects.map((project) => {
                     const isExpanded = expandedProjects.has(project.projectId);
+                    const visibleTrips = getVisibleTrips(project.projectId, project.tripsData);
+                    const showMoreTrips = hasMoreTrips(project.projectId, project.tripsData.length);
+                    
                     return (
                       <>
                         <tr
@@ -310,44 +352,64 @@ export default function AdvancedCosts() {
                           </td>
                         </tr>
                         {/* Expanded trips */}
-                        {isExpanded && project.tripsData.map((trip) => {
-                          const tripDistance = typeof trip.distance === "number" ? trip.distance : 0;
-                          const tripToll = typeof trip.tollAmount === "number" ? trip.tollAmount : 0;
-                          const tripParking = typeof trip.parkingAmount === "number" ? trip.parkingAmount : 0;
-                          const tripOther = typeof trip.otherExpenses === "number" ? trip.otherExpenses : 0;
-                          const tripFuel = typeof trip.fuelAmount === "number" ? trip.fuelAmount : 0;
-                          const tripCost = (tripFuel > 0 ? tripFuel : tripDistance * (summary.realCost / summary.totalDistance || 0)) + tripToll + tripParking + tripOther;
-                          
-                          // Get project rate for this trip's project
-                          const tripProject = projects.find(p => p.id === trip.projectId);
-                          const projectRate = tripProject?.ratePerKm ?? 0;
-                          const tripRate = trip.ratePerKmOverride ?? (projectRate > 0 ? projectRate : parseFloat(profile.ratePerKm?.replace(",", ".") || "0") || 0);
-                          const tripReimb = tripDistance * tripRate + (trip.passengers || 0) * (parseFloat(profile.passengerSurcharge?.replace(",", ".") || "0") || 0);
-                          const tripBalance = tripReimb - tripCost;
-                          
-                          return (
-                            <tr key={trip.id} className="bg-muted/20 border-b border-border/30">
-                              <td className="py-2 px-2"></td>
-                              <td className="py-2 px-2 text-muted-foreground text-xs">
-                                <span className="ml-4">
-                                  {trip.date} · {trip.route?.join(" → ") || "-"}
-                                </span>
-                              </td>
-                              <td className="py-2 px-2 text-right text-muted-foreground text-xs">
-                                {distanceFormatter.format(tripDistance)}
-                              </td>
-                              <td className="py-2 px-2 text-right text-orange-600/70 dark:text-orange-400/70 text-xs">
-                                {currencyFormatter.format(tripCost)}
-                              </td>
-                              <td className="py-2 px-2 text-right text-blue-600/70 dark:text-blue-400/70 text-xs">
-                                {currencyFormatter.format(tripReimb)}
-                              </td>
-                              <td className={cn("py-2 px-2 text-right text-xs", tripBalance >= 0 ? "text-green-600/70 dark:text-green-400/70" : "text-red-600/70 dark:text-red-400/70")}>
-                                {tripBalance >= 0 ? "+" : ""}{currencyFormatter.format(tripBalance)}
-                              </td>
-                            </tr>
-                          );
-                        })}
+                        {isExpanded && (
+                          <>
+                            {visibleTrips.map((trip) => {
+                              const tripDistance = typeof trip.distance === "number" ? trip.distance : 0;
+                              const tripToll = typeof trip.tollAmount === "number" ? trip.tollAmount : 0;
+                              const tripParking = typeof trip.parkingAmount === "number" ? trip.parkingAmount : 0;
+                              const tripOther = typeof trip.otherExpenses === "number" ? trip.otherExpenses : 0;
+                              const tripFuel = typeof trip.fuelAmount === "number" ? trip.fuelAmount : 0;
+                              const tripCost = (tripFuel > 0 ? tripFuel : tripDistance * (summary.realCost / summary.totalDistance || 0)) + tripToll + tripParking + tripOther;
+                              
+                              // Get project rate for this trip's project
+                              const tripProject = projects.find(p => p.id === trip.projectId);
+                              const projectRate = tripProject?.ratePerKm ?? 0;
+                              const tripRate = trip.ratePerKmOverride ?? (projectRate > 0 ? projectRate : parseFloat(profile.ratePerKm?.replace(",", ".") || "0") || 0);
+                              const tripReimb = tripDistance * tripRate + (trip.passengers || 0) * (parseFloat(profile.passengerSurcharge?.replace(",", ".") || "0") || 0);
+                              const tripBalance = tripReimb - tripCost;
+                              
+                              return (
+                                <tr key={trip.id} className="bg-muted/20 border-b border-border/30">
+                                  <td className="py-2 px-2"></td>
+                                  <td className="py-2 px-2 text-muted-foreground text-xs">
+                                    <span className="ml-4">
+                                      {trip.date} · {trip.route?.join(" → ") || "-"}
+                                    </span>
+                                  </td>
+                                  <td className="py-2 px-2 text-right text-muted-foreground text-xs">
+                                    {distanceFormatter.format(tripDistance)}
+                                  </td>
+                                  <td className="py-2 px-2 text-right text-orange-600/70 dark:text-orange-400/70 text-xs">
+                                    {currencyFormatter.format(tripCost)}
+                                  </td>
+                                  <td className="py-2 px-2 text-right text-blue-600/70 dark:text-blue-400/70 text-xs">
+                                    {currencyFormatter.format(tripReimb)}
+                                  </td>
+                                  <td className={cn("py-2 px-2 text-right text-xs", tripBalance >= 0 ? "text-green-600/70 dark:text-green-400/70" : "text-red-600/70 dark:text-red-400/70")}>
+                                    {tripBalance >= 0 ? "+" : ""}{currencyFormatter.format(tripBalance)}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                            {/* Load more trips button */}
+                            {showMoreTrips && (
+                              <tr className="bg-muted/10">
+                                <td colSpan={6} className="py-2 px-2">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      loadMoreTrips(project.projectId);
+                                    }}
+                                    className="w-full text-xs text-primary hover:text-primary/80 font-medium py-1"
+                                  >
+                                    {t("advancedCosts.loadMoreTrips")} ({project.tripsData.length - visibleTrips.length} {t("advancedCosts.remaining")})
+                                  </button>
+                                </td>
+                              </tr>
+                            )}
+                          </>
+                        )}
                       </>
                     );
                   })}
@@ -372,6 +434,18 @@ export default function AdvancedCosts() {
                   </tr>
                 </tfoot>
               </table>
+              
+              {/* Load more projects button */}
+              {hasMoreProjects && (
+                <div className="pt-4 border-t border-border/50">
+                  <button
+                    onClick={() => setVisibleProjectsCount(prev => prev + PROJECTS_PER_PAGE)}
+                    className="w-full text-sm text-primary hover:text-primary/80 font-medium py-2 rounded-md hover:bg-muted/50 transition-colors"
+                  >
+                    {t("advancedCosts.loadMoreProjects")} ({projectCosts.length - visibleProjectsCount} {t("advancedCosts.remaining")})
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
