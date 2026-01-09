@@ -44,9 +44,35 @@ export function Sidebar({
     href: "/advanced",
     icon: Sparkles
   }];
-  return <aside className={cn("hidden lg:flex flex-col sticky top-0 h-screen shrink-0 glass border-r border-border/50 transition-all duration-300", collapsed ? "w-20" : "w-64")}>
+  return <aside className={cn("hidden lg:flex flex-col sticky top-0 h-screen shrink-0 glass border-r border-border/50 transition-all duration-300 relative", collapsed ? "w-20" : "w-64")}>
+      {/* Expand/Collapse Edge Indicator */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-10 group"
+          >
+            {/* Línea vertical (estado normal) */}
+            <div className="w-1 h-8 bg-border/50 rounded-full group-hover:opacity-0 transition-opacity" />
+            {/* Flecha (estado hover) */}
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="w-5 h-5 rounded-full bg-primary/90 flex items-center justify-center shadow-sm">
+                {collapsed ? (
+                  <ChevronRight className="w-3 h-3 text-primary-foreground" />
+                ) : (
+                  <ChevronLeft className="w-3 h-3 text-primary-foreground" />
+                )}
+              </div>
+            </div>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="right" className="text-xs">
+          {collapsed ? t("nav.expand") : t("nav.collapse")}
+        </TooltipContent>
+      </Tooltip>
+
       {/* Logo */}
-      <div className="flex items-center justify-between h-16 px-4 border-b border-border/50">
+      <div className="flex items-center justify-center h-16 px-4 border-b border-border/50">
         {!collapsed && <Link to="/" className="flex items-center gap-2">
             <img src="/favicon-32x32.png" alt="Fahrtenbuch Pro" className="w-8 h-8" />
             <span className="font-semibold text-lg text-foreground">Fahrtenbuch Pro</span>
@@ -54,24 +80,7 @@ export function Sidebar({
         {collapsed && <Link to="/" className="flex items-center justify-center w-full">
             <img src="/favicon-32x32.png" alt="Fahrtenbuch Pro" className="w-8 h-8" />
           </Link>}
-        {!collapsed && <Button variant="ghost" size="icon" onClick={() => setCollapsed(!collapsed)} className="h-8 w-8 opacity-0 hover:opacity-100 transition-opacity">
-          <ChevronLeft className="h-4 w-4" />
-        </Button>}
       </div>
-
-      {/* Collapse/Expand Button */}
-      {collapsed && <div className="px-2 py-2 border-b border-border/50">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" onClick={() => setCollapsed(!collapsed)} className="h-8 w-8 mx-auto">
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="text-xs">
-            {t("nav.menu")} expandir
-          </TooltipContent>
-        </Tooltip>
-      </div>}
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">

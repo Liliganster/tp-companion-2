@@ -12,6 +12,8 @@ const es = {
   "nav.advanced": "Avanzado",
   "nav.settings": "Ajustes",
   "nav.menu": "Menú",
+  "nav.expand": "Expandir",
+  "nav.collapse": "Contraer",
 
   "nav.logout": "Cerrar sesión",
 
@@ -847,6 +849,8 @@ const en: Record<I18nKey, string> = {
   "nav.advanced": "Advanced",
   "nav.settings": "Settings",
   "nav.menu": "Menu",
+  "nav.expand": "Expand",
+  "nav.collapse": "Collapse",
 
   "nav.logout": "Logout",
   "dashboard.welcomeBack": "Welcome back, {name}",
@@ -1663,6 +1667,8 @@ const de: Record<I18nKey, string> = {
   "nav.advanced": "Erweitert",
   "nav.settings": "Einstellungen",
   "nav.menu": "Menü",
+  "nav.expand": "Erweitern",
+  "nav.collapse": "Reduzieren",
 
   "nav.logout": "Abmelden",
   "dashboard.welcomeBack": "Willkommen zurück, {name}",
