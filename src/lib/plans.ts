@@ -61,20 +61,30 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
   },
 
   pro: {
-    // Pro plan will be configured later with higher/unlimited values
-    // For now, using same as basic (will be updated when pro is implemented)
-    maxActiveTrips: 20,
-    maxActiveTripsAI: 5,
-    maxActiveTripsNonAI: 15,
-    maxStopsPerTrip: 10,
-    aiJobsPerMonth: 5,
-    allowedAITypes: ["callsheet", "invoice"],
-    maxActiveProjects: 3,
-    maxRouteTemplates: 5,
-    maxDistanceCalculationsPerMonth: 20,
-    maxTripsPerCSVImport: 20,
-    maxTripsPerCalendarImport: 20,
-    maxTripsPerDriveImport: 20,
+    // Pro plan - full features for power users
+    // Trips
+    maxActiveTrips: 2000,
+    maxActiveTripsAI: 2000,       // No separate limit, uses total
+    maxActiveTripsNonAI: 2000,    // No separate limit, uses total
+    maxStopsPerTrip: 25,          // Google Directions Advanced SKU limit
+
+    // AI - 60 jobs/month, all extraction types
+    aiJobsPerMonth: 60,
+    allowedAITypes: ["callsheet", "invoice", "expense"],
+
+    // Projects
+    maxActiveProjects: 30,
+
+    // Templates
+    maxRouteTemplates: 50,
+
+    // Google Maps - 1000 calculations/month
+    maxDistanceCalculationsPerMonth: 1000,
+
+    // Import limits - 2000 per operation
+    maxTripsPerCSVImport: 2000,
+    maxTripsPerCalendarImport: 2000,
+    maxTripsPerDriveImport: 2000,
   },
 };
 
