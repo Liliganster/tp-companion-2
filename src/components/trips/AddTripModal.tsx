@@ -354,7 +354,77 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
   const getInitialStops = (): Stop[] => {
     const defaultSpecialOrigin: TripData["specialOrigin"] = seedTrip?.specialOrigin ?? "base";
 
-    const originDefault = defaultSpecialOrigin === "base" ? baseLocation : resolvePreviousDestinationForDate(seedTrip?.date || "");
+    // Inline the logic from resolvePreviousDestinationForDate to avoid TDZ issues in production builds
+    const resolveOriginForDate = (targetDate: string): string => {
+      const trimmed = (targetDate || "").trim();
+      let parsedTarget: number | null = null;
+      
+      if (trimmed) {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+          const time = Date.parse(trimmed);
+          parsedTarget = Number.isFinite(time) ? time : null;
+        } else {
+          const dmy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(trimmed);
+          if (dmy) {
+            const day = Number(dmy[1]);
+            const month = Number(dmy[2]);
+            const year = Number(dmy[3]);
+            if (Number.isFinite(day) && Number.isFinite(month) && Number.isFinite(year) &&
+                year >= 1900 && year <= 3000 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+              parsedTarget = Date.UTC(year, month - 1, day);
+            }
+          } else {
+            const fallbackTime = Date.parse(trimmed);
+            parsedTarget = Number.isFinite(fallbackTime) ? fallbackTime : null;
+          }
+        }
+      }
+      
+      if (parsedTarget == null) {
+        const fallback = (previousDestination ?? "").trim();
+        return fallback || baseLocation;
+      }
+
+      const previousTrip = trips.find((candidate) => {
+        if (candidate.id === trip?.id) return false;
+        const candidateDate = (candidate.date || "").trim();
+        let parsedCandidate: number | null = null;
+        
+        if (candidateDate) {
+          if (/^\d{4}-\d{2}-\d{2}$/.test(candidateDate)) {
+            const time = Date.parse(candidateDate);
+            parsedCandidate = Number.isFinite(time) ? time : null;
+          } else {
+            const dmy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(candidateDate);
+            if (dmy) {
+              const day = Number(dmy[1]);
+              const month = Number(dmy[2]);
+              const year = Number(dmy[3]);
+              if (Number.isFinite(day) && Number.isFinite(month) && Number.isFinite(year) &&
+                  year >= 1900 && year <= 3000 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+                parsedCandidate = Date.UTC(year, month - 1, day);
+              }
+            } else {
+              const fallbackTime = Date.parse(candidateDate);
+              parsedCandidate = Number.isFinite(fallbackTime) ? fallbackTime : null;
+            }
+          }
+        }
+        
+        return parsedCandidate != null && parsedCandidate <= parsedTarget!;
+      });
+      
+      if (!previousTrip) {
+        const fallback = (previousDestination ?? "").trim();
+        return baseLocation || fallback;
+      }
+
+      const route = Array.isArray(previousTrip.route) ? previousTrip.route : [];
+      const destination = route.length > 0 ? String(route[route.length - 1] ?? "").trim() : "";
+      return destination || baseLocation;
+    };
+
+    const originDefault = defaultSpecialOrigin === "base" ? baseLocation : resolveOriginForDate(seedTrip?.date || "");
     const destinationDefault = baseLocation;
 
     if (!seedTrip) {
