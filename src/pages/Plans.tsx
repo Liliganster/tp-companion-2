@@ -75,7 +75,7 @@ export default function Plans() {
         {/* Plans Grid - 2 columns */}
         <div className="grid md:grid-cols-2 gap-6 animate-fade-in animation-delay-100">
           {/* Basic Plan */}
-          <div className="glass-card p-6 rounded-xl border border-border/50 flex flex-col">
+          <div className="bg-zinc-900/50 backdrop-blur-sm p-8 rounded-2xl border border-zinc-800 flex flex-col hover:border-zinc-700 transition-colors">
             <div className="mb-6">
               <div className="flex items-center gap-2 mb-2">
                 <Zap className="w-5 h-5 text-blue-400" />
@@ -105,7 +105,7 @@ export default function Plans() {
 
             <Button 
               variant="outline" 
-              className="w-full" 
+              className="w-full py-6 rounded-xl border-zinc-700 hover:bg-zinc-800" 
               disabled={planTier === "basic" || upgrading || isLoading}
             >
               {upgrading ? (
@@ -119,8 +119,8 @@ export default function Plans() {
           </div>
 
           {/* Pro Plan */}
-          <div className="glass-card p-6 rounded-xl border-2 border-primary relative flex flex-col">
-            <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-500 text-black hover:bg-yellow-500">
+          <div className="bg-zinc-900/50 backdrop-blur-sm p-8 rounded-2xl border-2 border-zinc-700 relative flex flex-col hover:border-zinc-600 transition-colors">
+            <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-500 text-black hover:bg-yellow-500 font-medium px-4 py-1 rounded-full">
               {t("plans.mostPopular")}
             </Badge>
             
@@ -146,7 +146,7 @@ export default function Plans() {
             </ul>
 
             <Button 
-              className="w-full"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-6 rounded-xl"
               disabled={planTier === "pro" || upgrading || isLoading}
               onClick={handleStripeCheckout}
             >
@@ -162,7 +162,7 @@ export default function Plans() {
         </div>
 
         {/* Enterprise CTA Banner */}
-        <div className="glass-card p-6 rounded-xl text-center animate-fade-in animation-delay-200">
+        <div className="bg-zinc-900/50 backdrop-blur-sm p-8 rounded-2xl border border-zinc-800 text-center animate-fade-in animation-delay-200">
           <h3 className="text-lg font-semibold mb-2">{t("plans.needMore")}</h3>
           <p className="text-muted-foreground text-sm mb-4 max-w-xl mx-auto">
             {t("plans.enterpriseContact")}
