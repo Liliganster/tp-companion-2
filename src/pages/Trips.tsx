@@ -3,7 +3,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Filter, Upload, Calendar, MoreVertical, Pencil, Trash2, Map as MapIcon, CalendarPlus, ChevronUp, ChevronDown, AlertTriangle, Loader2 } from "lucide-react";
+import { Plus, Filter, Upload, Calendar, MoreVertical, Pencil, Trash2, Map as MapIcon, CalendarPlus, ChevronUp, ChevronDown, AlertTriangle, Loader2, ChevronsDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -96,6 +96,10 @@ export default function Trips() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [tripToEdit, setTripToEdit] = useState<Trip | null>(null);
   const { toast } = useToast();
+  
+  // Pagination state - show 5 trips initially
+  const TRIPS_PER_PAGE = 5;
+  const [visibleTripsCount, setVisibleTripsCount] = useState(TRIPS_PER_PAGE);
 
 
   useEffect(() => {
@@ -370,11 +374,27 @@ export default function Trips() {
 
   const tripWarnings = computeTripWarnings(trips, t);
 
-  const visibleTrips = [...filteredTrips].sort((a, b) => {
+  // All sorted trips (for total counts)
+  const allSortedTrips = useMemo(() => [...filteredTrips].sort((a, b) => {
     const diff = getTripTime(a) - getTripTime(b);
     if (diff !== 0) return dateSort === "asc" ? diff : -diff;
     return a.id.localeCompare(b.id);
-  });
+  }), [filteredTrips, dateSort]);
+  
+  // Paginated trips - only show visibleTripsCount
+  const visibleTrips = useMemo(() => 
+    allSortedTrips.slice(0, visibleTripsCount), 
+    [allSortedTrips, visibleTripsCount]
+  );
+  
+  const hasMoreTrips = allSortedTrips.length > visibleTripsCount;
+  const remainingTripsCount = allSortedTrips.length - visibleTripsCount;
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setVisibleTripsCount(TRIPS_PER_PAGE);
+  }, [selectedProject, selectedYear, dateSort]);
+
   const toggleSelectAll = () => {
     if (selectedIds.size === visibleTrips.length) {
       setSelectedIds(new Set());
@@ -613,11 +633,22 @@ export default function Trips() {
             </DropdownMenu>
           </div>
         </div>)}
+        
+        {/* Load More Button - Mobile */}
+        {hasMoreTrips && (
+          <button
+            onClick={() => setVisibleTripsCount(prev => prev + TRIPS_PER_PAGE)}
+            className="w-full flex items-center justify-center gap-2 text-sm text-primary hover:text-primary/80 font-medium py-3 rounded-md hover:bg-muted/50 transition-colors glass-card"
+          >
+            <ChevronsDown className="w-4 h-4" />
+            {t("trips.loadMore")} ({remainingTripsCount} {t("advancedCosts.remaining")})
+          </button>
+        )}
       </div>
 
       {/* Desktop Table View - Only on large screens */}
       <div className="hidden lg:block glass-card overflow-hidden animate-fade-in animation-delay-200">
-        <div className={visibleTrips.length > 8 ? "overflow-x-auto overflow-y-auto max-h-[32rem]" : "overflow-x-auto"}>
+        <div className="overflow-x-auto">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow className="hover:bg-transparent border-border/50">
@@ -783,16 +814,29 @@ export default function Trips() {
             </TableBody>
           </Table>
         </div>
+        
+        {/* Load More Button */}
+        {hasMoreTrips && (
+          <div className="p-4 border-t border-border/50">
+            <button
+              onClick={() => setVisibleTripsCount(prev => prev + TRIPS_PER_PAGE)}
+              className="w-full flex items-center justify-center gap-2 text-sm text-primary hover:text-primary/80 font-medium py-2 rounded-md hover:bg-muted/50 transition-colors"
+            >
+              <ChevronsDown className="w-4 h-4" />
+              {t("trips.loadMore")} ({remainingTripsCount} {t("advancedCosts.remaining")})
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Summary */}
       <div className="glass-card p-4 animate-fade-in">
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">
-            {tf("trips.showing", { count: visibleTrips.length })}
+            {tf("trips.showing", { count: visibleTrips.length })} {t("trips.of")} {allSortedTrips.length}
           </span>
           <span className="font-medium">
-            {tf("trips.total", { km: visibleTrips.reduce((acc, trip) => acc + trip.distance, 0).toLocaleString(locale) })}
+            {tf("trips.total", { km: allSortedTrips.reduce((acc, trip) => acc + trip.distance, 0).toLocaleString(locale) })}
           </span>
         </div>
       </div>
