@@ -317,7 +317,12 @@ export default function AdvancedCosts() {
                           const tripOther = typeof trip.otherExpenses === "number" ? trip.otherExpenses : 0;
                           const tripFuel = typeof trip.fuelAmount === "number" ? trip.fuelAmount : 0;
                           const tripCost = (tripFuel > 0 ? tripFuel : tripDistance * (summary.realCost / summary.totalDistance || 0)) + tripToll + tripParking + tripOther;
-                          const tripReimb = tripDistance * (parseFloat(profile.ratePerKm?.replace(",", ".") || "0") || 0) + (trip.passengers || 0) * (parseFloat(profile.passengerSurcharge?.replace(",", ".") || "0") || 0);
+                          
+                          // Get project rate for this trip's project
+                          const tripProject = projects.find(p => p.id === trip.projectId);
+                          const projectRate = tripProject?.ratePerKm ?? 0;
+                          const tripRate = trip.ratePerKmOverride ?? (projectRate > 0 ? projectRate : parseFloat(profile.ratePerKm?.replace(",", ".") || "0") || 0);
+                          const tripReimb = tripDistance * tripRate + (trip.passengers || 0) * (parseFloat(profile.passengerSurcharge?.replace(",", ".") || "0") || 0);
                           const tripBalance = tripReimb - tripCost;
                           
                           return (

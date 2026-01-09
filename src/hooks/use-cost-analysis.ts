@@ -169,10 +169,11 @@ export function useCostAnalysis(
     return finalFuelCost + toll + parking + other;
   };
 
-  // Calculate trip reimbursement
-  const calculateTripReimbursement = (trip: Trip): number => {
+  // Calculate trip reimbursement - needs project rate
+  const calculateTripReimbursement = (trip: Trip, projectRatePerKm: number): number => {
     const distance = toNumber(trip.distance);
-    const baseRate = trip.ratePerKmOverride ?? ratePerKm;
+    // Priority: trip override > project rate > profile rate
+    const baseRate = trip.ratePerKmOverride ?? (projectRatePerKm > 0 ? projectRatePerKm : ratePerKm);
     const passengers = toNumber(trip.passengers);
     return distance * baseRate + passengers * passengerSurcharge;
   };
@@ -183,7 +184,9 @@ export function useCostAnalysis(
       const projectTrips = filteredTrips.filter((t) => t.projectId === project.id);
       const distance = projectTrips.reduce((sum, t) => sum + toNumber(t.distance), 0);
       const realCost = projectTrips.reduce((sum, t) => sum + calculateTripRealCost(t), 0);
-      const reimbursement = projectTrips.reduce((sum, t) => sum + calculateTripReimbursement(t), 0);
+      // Use project's ratePerKm for reimbursement calculation
+      const projectRate = project.ratePerKm ?? 0;
+      const reimbursement = projectTrips.reduce((sum, t) => sum + calculateTripReimbursement(t, projectRate), 0);
       const balance = reimbursement - realCost;
 
       return {
@@ -200,6 +203,13 @@ export function useCostAnalysis(
       };
     }).filter((p) => p.trips > 0); // Only show projects with trips in period
   }, [filteredTrips, projects, energyPerKm, ratePerKm, passengerSurcharge]);
+
+  // Create a map of project rates for quick lookup
+  const projectRateMap = useMemo(() => {
+    const map = new Map<string, number>();
+    projects.forEach((p) => map.set(p.id, p.ratePerKm ?? 0));
+    return map;
+  }, [projects]);
 
   // Calculate summary
   const summary = useMemo((): CostSummary => {
@@ -222,7 +232,13 @@ export function useCostAnalysis(
     const otherCost = filteredTrips.reduce((sum, t) => sum + toNumber(t.otherExpenses), 0);
 
     const realCost = fuelCost + tollsCost + parkingCost + otherCost;
-    const reimbursement = filteredTrips.reduce((sum, t) => sum + calculateTripReimbursement(t), 0);
+    
+    // Calculate reimbursement using project rates
+    const reimbursement = filteredTrips.reduce((sum, t) => {
+      const projectRate = t.projectId ? projectRateMap.get(t.projectId) ?? 0 : 0;
+      return sum + calculateTripReimbursement(t, projectRate);
+    }, 0);
+    
     const balance = reimbursement - realCost;
 
     return {
@@ -238,7 +254,7 @@ export function useCostAnalysis(
       parkingCost,
       otherCost,
     };
-  }, [filteredTrips, energyPerKm, ratePerKm, passengerSurcharge]);
+  }, [filteredTrips, energyPerKm, projectRateMap, ratePerKm, passengerSurcharge]);
 
   return {
     summary,
