@@ -1228,6 +1228,12 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
             {t("bulk.statusNeedsReview")}
           </Badge>
         );
+      case "out_of_quota":
+        return (
+          <Badge variant="destructive" className="bg-red-500/20 border-red-500/40 text-red-500">
+            {t("bulk.statusOutOfQuota")}
+          </Badge>
+        );
 
       default:
         return (
@@ -1806,9 +1812,33 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                             )}
 
                             {showFailed && (
-                              <div className="text-sm text-muted-foreground">
-                                {job.reason || t("bulk.docProcessFailed")}
-                              </div>
+                              <>
+                                {job.status === "out_of_quota" ? (
+                                  <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-3 space-y-2">
+                                    <p className="text-sm font-semibold text-red-600 dark:text-red-400">
+                                      {t("bulk.outOfQuotaTitle")}
+                                    </p>
+                                    <p className="text-xs text-red-600/80 dark:text-red-400/80">
+                                      {t("bulk.outOfQuotaMessage")}
+                                    </p>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      className="w-full gap-1"
+                                      onClick={() => {
+                                        // Navegar a página de planes/suscripción
+                                        window.location.href = "/settings?tab=subscription";
+                                      }}
+                                    >
+                                      {t("bulk.outOfQuotaButton")}
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <div className="text-sm text-muted-foreground">
+                                    {job.reason || t("bulk.docProcessFailed")}
+                                  </div>
+                                )}
+                              </>
                             )}
                           </CardContent>
                         </Card>

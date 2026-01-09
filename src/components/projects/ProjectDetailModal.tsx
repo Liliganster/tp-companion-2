@@ -1495,8 +1495,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                           </span>
                         ) : null}
                         {sheet.status === 'out_of_quota' ? (
-                          <span title={sheet.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-full cursor-help bg-violet-500/20 text-violet-200">
-                            {t("aiQuota.outOfQuotaBadge")}
+                          <span title={sheet.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-full cursor-help bg-red-500/20 text-red-500">
+                            {t("projectDetail.outOfQuota")}
                           </span>
                         ) : null}
                         {sheet.status === 'failed' ? (
@@ -1507,7 +1507,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                       </div>
                       
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {sheet.status !== 'queued' && sheet.status !== 'processing' && (
+                        {sheet.status !== 'queued' && sheet.status !== 'processing' && sheet.status !== 'out_of_quota' && (
                           <Button 
                             variant="ghost" 
                             size="icon" 
