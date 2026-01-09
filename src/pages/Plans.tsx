@@ -130,7 +130,7 @@ export default function Plans() {
                 <h2 className="text-lg font-semibold">{t("plans.pro.name")}</h2>
               </div>
               <div className="flex items-baseline gap-1 mb-1">
-                <span className="text-3xl font-bold">9,99 €</span>
+                <span className="text-3xl font-bold">19 €</span>
                 <span className="text-muted-foreground text-sm">/{t("plans.perMonth")}</span>
               </div>
               <p className="text-xs text-muted-foreground">{t("plans.pro.description")}</p>
