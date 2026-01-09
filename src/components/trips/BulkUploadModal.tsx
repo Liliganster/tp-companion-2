@@ -1008,6 +1008,11 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
           (j: any) => j.status === "failed" || j.status === "needs_review" || j.status === "out_of_quota",
         );
 
+        const hasPending = jobs.some((j: any) => {
+          const s = String(j?.status ?? "");
+          return s === "created" || s === "queued" || s === "processing";
+        });
+
         setProcessingDone(doneIds.length);
         setJobStateById((prev) => {
           const next = { ...prev };
@@ -1022,15 +1027,21 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
           if (failureToastShownRef.current.has(id)) continue;
           failureToastShownRef.current.add(id);
 
-
-
-          toast.error(t("bulk.errorProcessOneDoc"), { description: String(j.needs_review_reason ?? "").trim() || undefined });
+          const status = String(j.status ?? "");
+          if (status === "out_of_quota") {
+            toast.error(t("bulk.outOfQuotaTitle"), { description: t("bulk.outOfQuotaMessage") });
+          } else {
+            toast.error(t("bulk.errorProcessOneDoc"), {
+              description: String(j.needs_review_reason ?? "").trim() || undefined,
+            });
+          }
         }
 
         const pendingLoads = doneIds.filter((id) => !reviewByJobIdRef.current[id] && !savedByJobIdRef.current[id]);
         if (pendingLoads.length > 0) await Promise.allSettled(pendingLoads.map((id) => loadJobResult(id)));
 
-        if (aiStep === "processing" && doneIds.length > 0) setAiStep("review");
+        // Move to review as soon as there are no pending jobs.
+        if (aiStep === "processing" && (!hasPending || doneIds.length > 0)) setAiStep("review");
       } catch (e) {
         console.error("Polling error", e);
       }
@@ -1043,6 +1054,13 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       clearInterval(interval);
     };
   }, [aiStep, jobIds, t, tf]);
+
+  // UI safety net: if all jobs are terminal, stop the processing step immediately.
+  useEffect(() => {
+    if (aiStep !== "processing") return;
+    if (jobStats.total === 0) return;
+    if (jobStats.pending === 0) setAiStep("review");
+  }, [aiStep, jobStats.pending, jobStats.total]);
 
   const createdProjectsByNameRef = useRef<Record<string, string>>({});
 
@@ -1503,7 +1521,11 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
             {aiStep === "processing" && (
               <div className="space-y-4">
                 <div className="text-center py-10 space-y-3">
-                  <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto" />
+                  {jobStats.total > 0 && jobStats.pending === 0 ? (
+                    <CheckCircle className="w-12 h-12 text-primary mx-auto" />
+                  ) : (
+                    <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto" />
+                  )}
                   <div>
                     <h3 className="text-lg font-medium">{t("bulk.aiProcessingTitle")}</h3>
                     <p className="text-muted-foreground">
