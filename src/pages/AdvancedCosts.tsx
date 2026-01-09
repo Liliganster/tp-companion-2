@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, AlertCircle, ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus, Settings, Wallet, Receipt, BarChart3, Fuel, Car, ParkingCircle, Package } from "lucide-react";
@@ -310,9 +310,8 @@ export default function AdvancedCosts() {
                     const showMoreTrips = hasMoreTrips(project.projectId, project.tripsData.length);
                     
                     return (
-                      <>
+                      <React.Fragment key={project.projectId}>
                         <tr
-                          key={project.projectId}
                           className="border-b border-border/50 hover:bg-muted/30 cursor-pointer transition-colors"
                           onClick={() => toggleProjectExpanded(project.projectId)}
                         >
@@ -410,7 +409,7 @@ export default function AdvancedCosts() {
                             )}
                           </>
                         )}
-                      </>
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
