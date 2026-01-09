@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { LayoutDashboard, FolderKanban, FileText, Calendar, Settings, Sparkles, Crown, LogOut, ChevronLeft, ChevronRight, Route } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useState } from "react";
 import { getProfileInitial, useUserProfile } from "@/contexts/UserProfileContext";
 import { useI18n } from "@/hooks/use-i18n";
@@ -53,16 +54,23 @@ export function Sidebar({
         {collapsed && <Link to="/" className="flex items-center justify-center w-full">
             <img src="/favicon-32x32.png" alt="Fahrtenbuch Pro" className="w-8 h-8" />
           </Link>}
-        {!collapsed && <Button variant="ghost" size="icon" onClick={() => setCollapsed(!collapsed)} className="h-8 w-8">
+        {!collapsed && <Button variant="ghost" size="icon" onClick={() => setCollapsed(!collapsed)} className="h-8 w-8 opacity-0 hover:opacity-100 transition-opacity">
           <ChevronLeft className="h-4 w-4" />
         </Button>}
       </div>
 
       {/* Collapse/Expand Button */}
       {collapsed && <div className="px-2 py-2 border-b border-border/50">
-        <Button variant="ghost" size="icon" onClick={() => setCollapsed(!collapsed)} className="h-8 w-8 mx-auto">
-          <ChevronRight className="h-4 w-4" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" onClick={() => setCollapsed(!collapsed)} className="h-8 w-8 mx-auto">
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="text-xs">
+            {t("nav.menu")} expandir
+          </TooltipContent>
+        </Tooltip>
       </div>}
 
       {/* Navigation */}
