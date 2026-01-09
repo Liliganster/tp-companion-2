@@ -101,14 +101,14 @@ async function countExtractionsThisMonth(
 
 export async function checkAiMonthlyQuota(userId: string, planTier?: PlanTier | string | null): Promise<QuotaDecision> {
   const limit = getAIMonthlyLimit(planTier);
-
-  if (envTruthy("BYPASS_AI_LIMITS")) {
-    return { allowed: true, limit, used: 0, remaining: limit };
-  }
-
   const sinceIso = startOfCurrentMonthUtcIso();
   const counts = await countExtractionsThisMonth(userId, sinceIso);
   const reserved = counts.done + counts.processing;
+
+  // When bypass is enabled, always allow but still count usage for monitoring
+  if (envTruthy("BYPASS_AI_LIMITS")) {
+    return { allowed: true, limit, used: counts.done, remaining: Infinity };
+  }
 
   // Only "done" is billed/visible as usage, but we also reserve slots while jobs are processing
   // to avoid spawning more Gemini calls than the limit allows.

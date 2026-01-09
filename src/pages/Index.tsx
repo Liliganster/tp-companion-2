@@ -15,7 +15,6 @@ import { useTrips } from "@/contexts/TripsContext";
 import { calculateTreesNeeded, calculateTripEmissions, TripEmissionsInput } from "@/lib/emissions";
 import { parseLocaleNumber } from "@/lib/number";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabaseClient";
 import { useEmissionsInput } from "@/hooks/use-emissions-input";
 import { usePlan } from "@/contexts/PlanContext";
 import { usePlanLimits } from "@/hooks/use-plan-limits";
@@ -58,18 +57,6 @@ function sumCo2(
   }, 0);
 }
 
-function startOfCurrentMonthUtcIso(): string {
-  const now = new Date();
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
-  return start.toISOString();
-}
-
-function isMissingRelation(err: any): boolean {
-  const code = String(err?.code ?? "");
-  const msg = String(err?.message ?? "").toLowerCase();
-  return code === "PGRST205" || code === "42P01" || msg.includes("could not find the relation") || msg.includes("schema cache");
-}
-
 export default function Index() {
   const { profile } = useUserProfile();
   const { user } = useAuth();
@@ -83,48 +70,45 @@ export default function Index() {
   // Trips quota
   const tripsQuotaFull = tripCounts.total >= limits.maxActiveTrips;
 
-  // AI monthly limit from plan
-  const aiLimit = limits.aiJobsPerMonth;
+  // AI monthly quota from API (respects plan and bypass)
   const [aiUsedThisMonth, setAiUsedThisMonth] = useState<number | null>(null);
+  const [aiLimitFromApi, setAiLimitFromApi] = useState<number>(limits.aiJobsPerMonth);
+  const [aiBypassEnabled, setAiBypassEnabled] = useState(false);
   const [aiQuotaLoading, setAiQuotaLoading] = useState(false);
+  const { getAccessToken } = useAuth();
 
   useEffect(() => {
     let cancelled = false;
 
-    async function fetchAiUsed() {
-      if (!supabase || !user?.id) {
+    async function fetchAiQuota() {
+      if (!user?.id) {
         setAiUsedThisMonth(null);
         return;
       }
 
       setAiQuotaLoading(true);
-      const sinceIso = startOfCurrentMonthUtcIso();
 
       try {
-        // Use ai_usage_events as primary source (includes callsheet, invoice, expense)
-        const { count: usageCount, error: usageError } = await supabase
-          .from("ai_usage_events")
-          .select("id", { count: "exact" })
-          .range(0, 0)
-          .eq("user_id", user.id)
-          .eq("status", "done")
-          .gte("run_at", sinceIso);
+        const token = await getAccessToken();
+        if (!token) {
+          if (!cancelled) setAiUsedThisMonth(null);
+          return;
+        }
 
-        if (!usageError) {
-          if (!cancelled) setAiUsedThisMonth(typeof usageCount === "number" ? usageCount : 0);
-        } else if (!isMissingRelation(usageError)) {
-          console.warn("Error fetching ai_usage_events:", usageError);
-          if (!cancelled) setAiUsedThisMonth(0);
-        } else {
-          // Fallback to callsheet_jobs only if ai_usage_events table doesn't exist
-          const { count } = await supabase
-            .from("callsheet_jobs")
-            .select("id", { count: "exact" })
-            .range(0, 0)
-            .eq("user_id", user.id)
-            .eq("status", "done")
-            .gte("processed_at", sinceIso);
-          if (!cancelled) setAiUsedThisMonth(typeof count === "number" ? count : 0);
+        const response = await fetch("/api/user/ai-quota", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch AI quota");
+        }
+
+        const data = await response.json();
+        
+        if (!cancelled) {
+          setAiBypassEnabled(data.bypass === true);
+          setAiLimitFromApi(data.limit);
+          setAiUsedThisMonth(data.used);
         }
       } catch (e) {
         console.error("Error fetching AI quota:", e);
@@ -134,13 +118,13 @@ export default function Index() {
       }
     }
 
-    void fetchAiUsed();
-    const id = setInterval(fetchAiUsed, 30_000);
+    void fetchAiQuota();
+    const id = setInterval(fetchAiQuota, 30_000);
     return () => {
       cancelled = true;
       clearInterval(id);
     };
-  }, [user?.id]);
+  }, [user?.id, getAccessToken]);
 
   const kpiTitleClassName = "text-base font-semibold leading-tight text-foreground uppercase tracking-wide";
   const kpiTitleWrapperClassName = "p-0 rounded-none bg-transparent";
@@ -182,9 +166,21 @@ export default function Index() {
   const distanceTrendValue = percentageChange(kmThisMonth, kmPrevMonth);
   const distanceTrendPositive = distanceTrendValue >= 0;
 
-  const aiQuotaText = aiQuotaLoading ? "…" : aiUsedThisMonth == null ? `—/${aiLimit}` : `${aiUsedThisMonth}/${aiLimit}`;
+  // AI Quota display - show ∞ when bypass is enabled
+  // AI Quota display - when bypass=1 (testing mode), show count without limit
+  const aiQuotaText = aiQuotaLoading 
+    ? "…" 
+    : aiUsedThisMonth == null 
+      ? `—/${aiLimitFromApi}` 
+      : aiBypassEnabled 
+        ? `${aiUsedThisMonth}` // Testing mode: just show count, no limit
+        : `${aiUsedThisMonth}/${aiLimitFromApi}`;
   const aiQuotaTextColor =
-    aiUsedThisMonth != null && aiUsedThisMonth >= aiLimit ? "text-amber-200" : "text-zinc-50";
+    aiBypassEnabled 
+      ? "text-emerald-300" // Green when in testing mode
+      : aiUsedThisMonth != null && aiUsedThisMonth >= aiLimitFromApi 
+        ? "text-amber-200" 
+        : "text-zinc-50";
   /* New Card Design Helpers */
   const StatusRow = ({ label, value, status = "neutral", icon: Icon }: { label: string, value: string, status?: "success" | "warning" | "destructive" | "neutral", icon?: any }) => (
     <div className={`flex items-center justify-between text-xs px-2 py-1.5 rounded border border-transparent ${
