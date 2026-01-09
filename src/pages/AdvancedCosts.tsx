@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, AlertCircle, ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus, Settings } from "lucide-react";
+import { ArrowLeft, AlertCircle, ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus, Settings, Wallet, Receipt, BarChart3, Fuel, Car, ParkingCircle, Package } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { useTrips } from "@/contexts/TripsContext";
@@ -9,6 +9,13 @@ import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useI18n } from "@/hooks/use-i18n";
 import { useCostAnalysis, type PeriodFilter } from "@/hooks/use-cost-analysis";
 import { cn } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function AdvancedCosts() {
   const navigate = useNavigate();
@@ -82,12 +89,6 @@ export default function AdvancedCosts() {
     return "text-muted-foreground";
   };
 
-  const getBalanceBgColor = (balance: number) => {
-    if (balance > 0) return "bg-green-500/10 border-green-500/30";
-    if (balance < 0) return "bg-red-500/10 border-red-500/30";
-    return "bg-muted/50 border-border";
-  };
-
   return (
     <MainLayout>
       <div className="max-w-[1400px] mx-auto space-y-6">
@@ -124,31 +125,34 @@ export default function AdvancedCosts() {
             </div>
           )}
 
-          {/* Period filter buttons */}
-          <div className="flex flex-wrap gap-2">
-            {periodOptions.map((option) => (
-              <Button
-                key={option.value}
-                variant={periodFilter === option.value ? "default" : "outline"}
-                size="sm"
-                onClick={() => setPeriodFilter(option.value)}
-                className="text-xs sm:text-sm"
-              >
-                {option.label}
-              </Button>
-            ))}
+          {/* Period filter dropdown */}
+          <div className="flex items-center gap-2">
+            <Select value={periodFilter} onValueChange={(v) => setPeriodFilter(v as PeriodFilter)}>
+              <SelectTrigger className="w-[200px] bg-secondary/50">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {periodOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
         {/* Main Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-fade-in animation-delay-100">
           {/* Reimbursement Card */}
-          <div className="glass-card p-5 border-l-4 border-l-blue-500">
+          <div className="glass-card p-5">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-2xl">💰</span>
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Wallet className="w-4 h-4 text-primary" />
+              </div>
               <p className="text-sm text-muted-foreground font-medium">{t("advancedCosts.reimbursement")}</p>
             </div>
-            <p className="text-2xl sm:text-3xl font-bold text-blue-600 dark:text-blue-400">
+            <p className="text-2xl sm:text-3xl font-bold">
               {currencyFormatter.format(summary.reimbursement)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
@@ -157,12 +161,14 @@ export default function AdvancedCosts() {
           </div>
 
           {/* Real Cost Card */}
-          <div className="glass-card p-5 border-l-4 border-l-orange-500">
+          <div className="glass-card p-5">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-2xl">💸</span>
+              <div className="p-2 rounded-lg bg-destructive/10">
+                <Receipt className="w-4 h-4 text-destructive" />
+              </div>
               <p className="text-sm text-muted-foreground font-medium">{t("advancedCosts.realCost")}</p>
             </div>
-            <p className="text-2xl sm:text-3xl font-bold text-orange-600 dark:text-orange-400">
+            <p className="text-2xl sm:text-3xl font-bold">
               {currencyFormatter.format(summary.realCost)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
@@ -171,9 +177,11 @@ export default function AdvancedCosts() {
           </div>
 
           {/* Balance Card */}
-          <div className={cn("glass-card p-5 border", getBalanceBgColor(summary.balance))}>
+          <div className={cn("glass-card p-5", summary.balance >= 0 ? "ring-1 ring-green-500/20" : "ring-1 ring-red-500/20")}>
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-2xl">📊</span>
+              <div className={cn("p-2 rounded-lg", summary.balance >= 0 ? "bg-green-500/10" : "bg-red-500/10")}>
+                <BarChart3 className={cn("w-4 h-4", getBalanceColor(summary.balance))} />
+              </div>
               <p className="text-sm text-muted-foreground font-medium">{t("advancedCosts.balance")}</p>
             </div>
             <div className="flex items-center gap-2">
@@ -194,20 +202,32 @@ export default function AdvancedCosts() {
         <div className="glass-card p-5 animate-fade-in animation-delay-150">
           <h3 className="font-semibold mb-4">{t("advancedCosts.costBreakdown")}</h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="text-center p-3 bg-blue-500/10 rounded-lg">
-              <p className="text-xs text-muted-foreground mb-1">⛽ {t("advancedCosts.breakdownFuelEnergy")}</p>
+            <div className="p-3 bg-secondary/50 rounded-lg">
+              <div className="flex items-center gap-2 mb-1">
+                <Fuel className="w-3.5 h-3.5 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">{t("advancedCosts.breakdownFuelEnergy")}</p>
+              </div>
               <p className="text-lg font-semibold">{currencyFormatter.format(summary.fuelCost)}</p>
             </div>
-            <div className="text-center p-3 bg-yellow-500/10 rounded-lg">
-              <p className="text-xs text-muted-foreground mb-1">🛣️ {t("advancedCosts.breakdownTolls")}</p>
+            <div className="p-3 bg-secondary/50 rounded-lg">
+              <div className="flex items-center gap-2 mb-1">
+                <Car className="w-3.5 h-3.5 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">{t("advancedCosts.breakdownTolls")}</p>
+              </div>
               <p className="text-lg font-semibold">{currencyFormatter.format(summary.tollsCost)}</p>
             </div>
-            <div className="text-center p-3 bg-purple-500/10 rounded-lg">
-              <p className="text-xs text-muted-foreground mb-1">🅿️ {t("advancedCosts.breakdownParking")}</p>
+            <div className="p-3 bg-secondary/50 rounded-lg">
+              <div className="flex items-center gap-2 mb-1">
+                <ParkingCircle className="w-3.5 h-3.5 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">{t("advancedCosts.breakdownParking")}</p>
+              </div>
               <p className="text-lg font-semibold">{currencyFormatter.format(summary.parkingCost)}</p>
             </div>
-            <div className="text-center p-3 bg-gray-500/10 rounded-lg">
-              <p className="text-xs text-muted-foreground mb-1">📦 {t("advancedCosts.breakdownOther")}</p>
+            <div className="p-3 bg-secondary/50 rounded-lg">
+              <div className="flex items-center gap-2 mb-1">
+                <Package className="w-3.5 h-3.5 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">{t("advancedCosts.breakdownOther")}</p>
+              </div>
               <p className="text-lg font-semibold">{currencyFormatter.format(summary.otherCost)}</p>
             </div>
           </div>
