@@ -272,6 +272,10 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   return {
+    build: {
+      // Enable source maps in production to help debug minified code errors
+      sourcemap: true,
+    },
     server: {
       host: "::",
       port: 8080,
