@@ -100,7 +100,7 @@ export function Sidebar({
         <Link
           to="/plans"
           className={cn(
-            "block w-full rounded-lg p-3 transition-colors",
+            "block w-full rounded-md p-3 transition-colors",
             "border border-purple-500/40 bg-purple-500/10 hover:bg-purple-500/15",
             collapsed && "p-2"
           )}
