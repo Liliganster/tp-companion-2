@@ -88,7 +88,10 @@ export default function Index() {
         return;
       }
 
-      setAiQuotaLoading(true);
+      // Only show loading state if we don't have data yet
+      if (aiUsedThisMonth === null) {
+        setAiQuotaLoading(true);
+      }
 
       try {
         const token = await getAccessToken();
@@ -142,10 +145,9 @@ export default function Index() {
     }
 
     void fetchAiQuota();
-    const id = setInterval(fetchAiQuota, 30_000);
+    
     return () => {
       cancelled = true;
-      clearInterval(id);
     };
   }, [user?.id, getAccessToken, limits.aiJobsPerMonth]);
 
