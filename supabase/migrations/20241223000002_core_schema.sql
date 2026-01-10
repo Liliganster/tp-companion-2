@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
     base_address TEXT,
     city TEXT,
     country TEXT,
-    plan_tier TEXT DEFAULT 'free', -- 'free', 'pro'
+    plan_tier TEXT DEFAULT 'basic', -- 'basic', 'pro'
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );

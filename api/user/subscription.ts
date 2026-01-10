@@ -5,18 +5,6 @@ import { PLAN_LIMITS, type PlanTier } from "./plans.js";
 
 export const config = { runtime: "nodejs" };
 
-interface UserSubscription {
-  id: string;
-  user_id: string;
-  plan_tier: PlanTier;
-  status: "active" | "cancelled" | "past_due" | "trialing";
-  started_at: string | null;
-  expires_at: string | null;
-  custom_limits: Record<string, number> | null;
-  price_cents: number | null;
-  currency: string;
-}
-
 interface PlanInfo {
   tier: PlanTier;
   status: string;
@@ -34,85 +22,42 @@ interface PlanInfo {
 }
 
 function getEffectiveLimits(
-  tier: PlanTier,
-  customLimits: Record<string, number> | null
+  tier: PlanTier
 ) {
   const baseLimits = PLAN_LIMITS[tier] || PLAN_LIMITS.basic;
-  
-  if (!customLimits) return baseLimits;
-  
-  return {
-    maxTrips: customLimits.maxTrips ?? baseLimits.maxTrips,
-    maxProjects: customLimits.maxProjects ?? baseLimits.maxProjects,
-    maxAiJobsPerMonth: customLimits.maxAiJobsPerMonth ?? baseLimits.maxAiJobsPerMonth,
-    maxStopsPerTrip: customLimits.maxStopsPerTrip ?? baseLimits.maxStopsPerTrip,
-    maxRouteTemplates: customLimits.maxRouteTemplates ?? baseLimits.maxRouteTemplates,
-  };
+
+  return baseLimits;
 }
 
-async function getSubscription(userId: string): Promise<UserSubscription | null> {
-  try {
-    const { data, error } = await supabaseAdmin
-      .from("user_subscriptions")
-      .select("*")
-      .eq("user_id", userId)
-      .single();
-
-    if (error) {
-      if (error.code === "PGRST116") {
-        // No rows found - this is OK, we'll create a default one
-        return null;
-      }
-      console.error("Error fetching subscription:", error);
-      throw error;
-    }
-
-    return data;
-  } catch (err) {
-    console.error("Error in getSubscription:", err);
-    throw err;
-  }
-}
-
-async function createDefaultSubscription(userId: string): Promise<UserSubscription> {
-  const { data, error } = await supabaseAdmin
-    .from("user_subscriptions")
-    .insert({
-      user_id: userId,
-      plan_tier: "basic",
-      status: "active",
-      started_at: new Date().toISOString(),
-    })
-    .select()
-    .single();
-
-  if (error) {
-    console.error("Error creating subscription:", error);
-    throw error;
-  }
-
-  return data;
+function normalizeTier(input: unknown): PlanTier {
+  const v = String(input ?? "").trim().toLowerCase();
+  if (v === "pro") return "pro";
+  if (v === "basic") return "basic";
+  if (v === "free") return "basic";
+  return "basic";
 }
 
 async function handleGet(userId: string, res: VercelResponse) {
-  let subscription = await getSubscription(userId);
+  const { data: profile, error } = await supabaseAdmin
+    .from("user_profiles")
+    .select("plan_tier")
+    .eq("id", userId)
+    .maybeSingle();
 
-  // Create default subscription if doesn't exist
-  if (!subscription) {
-    subscription = await createDefaultSubscription(userId);
+  if (error) {
+    console.error("Error fetching user_profiles plan_tier:", error);
   }
 
+  const tier = normalizeTier((profile as any)?.plan_tier);
+
   const planInfo: PlanInfo = {
-    tier: subscription.plan_tier as PlanTier,
-    status: subscription.status,
-    limits: getEffectiveLimits(
-      subscription.plan_tier as PlanTier,
-      subscription.custom_limits
-    ),
-    startedAt: subscription.started_at,
-    expiresAt: subscription.expires_at,
-    priceCents: subscription.price_cents,
-    currency: subscription.currency,
+    tier,
+    status: "active",
+    limits: getEffectiveLimits(tier),
+    startedAt: null,
+    expiresAt: null,
+    priceCents: tier === "pro" ? 1900 : 0,
+    currency: "EUR",
   };
 
   return sendJson(res, 200, planInfo);
@@ -121,10 +66,10 @@ async function handleGet(userId: string, res: VercelResponse) {
 // Admin endpoint to upgrade/downgrade users (requires service role or admin check)
 async function handlePost(
   userId: string,
-  body: { tier: PlanTier; customLimits?: Record<string, number> },
+  body: { tier: PlanTier },
   res: VercelResponse
 ) {
-  const { tier, customLimits } = body;
+  const { tier } = body;
 
   if (!["basic", "pro", "enterprise"].includes(tier)) {
     return sendJson(res, 400, { error: "Invalid plan tier" });
@@ -132,50 +77,32 @@ async function handlePost(
 
   console.log(`[Subscription] User ${userId} upgrading to ${tier}`);
 
-  const updateData: Record<string, any> = {
-    plan_tier: tier,
-    status: "active",
-  };
-
-  if (tier === "pro") {
-    updateData.price_cents = 1900; // 19€
-    updateData.started_at = new Date().toISOString();
-    // Pro subscription doesn't expire by default (until cancelled)
-    updateData.expires_at = null;
-  } else if (tier === "basic") {
-    updateData.price_cents = 0;
-    updateData.expires_at = null;
-  }
-
-  if (customLimits) {
-    updateData.custom_limits = customLimits;
-  }
+  // This endpoint now uses a single source of truth: user_profiles.plan_tier
+  // (custom limits are intentionally not supported in this simplified model).
 
   try {
-    const { data, error } = await supabaseAdmin
-      .from("user_subscriptions")
-      .upsert({
-        user_id: userId,
-        ...updateData,
-      })
-      .select()
-      .single();
+    const { error } = await supabaseAdmin
+      .from("user_profiles")
+      .upsert(
+        { id: userId, plan_tier: tier, updated_at: new Date().toISOString() },
+        { onConflict: "id" }
+      );
 
     if (error) {
-      console.error(`[Subscription] Error updating subscription for ${userId}:`, error);
-      return sendJson(res, 500, { error: "Failed to update subscription" });
+      console.error(`[Subscription] Error updating user_profiles for ${userId}:`, error);
+      return sendJson(res, 500, { error: "Failed to update user profile plan" });
     }
 
     console.log(`[Subscription] Successfully updated ${userId} to ${tier}`);
 
     const planInfo: PlanInfo = {
-      tier: data.plan_tier as PlanTier,
-      status: data.status,
-      limits: getEffectiveLimits(data.plan_tier as PlanTier, data.custom_limits),
-      startedAt: data.started_at,
-      expiresAt: data.expires_at,
-      priceCents: data.price_cents,
-      currency: data.currency,
+      tier,
+      status: "active",
+      limits: getEffectiveLimits(tier),
+      startedAt: null,
+      expiresAt: null,
+      priceCents: tier === "pro" ? 1900 : 0,
+      currency: "EUR",
     };
 
     return sendJson(res, 200, planInfo);

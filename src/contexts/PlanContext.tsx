@@ -15,6 +15,15 @@ interface SubscriptionData {
   currency: string;
 }
 
+function normalizePlanTier(input: unknown): PlanTier {
+  const v = String(input ?? "").trim().toLowerCase();
+  if (v === "pro") return "pro";
+  // historical/default values
+  if (v === "free") return "basic";
+  if (v === "basic") return "basic";
+  return DEFAULT_PLAN;
+}
+
 interface PlanContextValue {
   /** Current plan tier for the user */
   planTier: PlanTier;
@@ -48,36 +57,36 @@ export function PlanProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      console.log(`[PlanContext] Fetching subscription for user ${user.id}`);
-      
-      // First try to get from view (includes computed limits)
-      const { data, error } = await supabase
-        .from("user_subscriptions")
-        .select("*")
-        .eq("user_id", user.id)
-        .single();
+      // Preferred: a single column on user_profiles
+      const { data: profile, error: profileError } = await supabase
+        .from("user_profiles")
+        .select("plan_tier")
+        .eq("id", user.id)
+        .maybeSingle();
 
-      if (error && error.code !== "PGRST116") {
-        console.error("[PlanContext] Error fetching subscription:", error);
-      }
-
-      if (data) {
-        console.log(`[PlanContext] Loaded plan: ${data.plan_tier} for user ${user.id}`);
-        setSubscription(data as SubscriptionData);
-      } else {
-        // No subscription found, user gets default basic plan
-        // The API endpoint will create one when first accessed
-        console.log(`[PlanContext] No subscription found for ${user.id}, using default basic`);
+      if (!profileError && profile) {
         setSubscription({
-          plan_tier: "basic",
+          plan_tier: normalizePlanTier((profile as any).plan_tier),
           status: "active",
           started_at: null,
           expires_at: null,
           custom_limits: null,
-          price_cents: 0,
+          price_cents: null,
           currency: "EUR",
         });
+        return;
       }
+
+      // Default
+      setSubscription({
+        plan_tier: DEFAULT_PLAN,
+        status: "active",
+        started_at: null,
+        expires_at: null,
+        custom_limits: null,
+        price_cents: 0,
+        currency: "EUR",
+      });
     } catch (err) {
       console.error("[PlanContext] Failed to fetch subscription:", err);
     } finally {
@@ -101,12 +110,25 @@ export function PlanProvider({ children }: { children: ReactNode }) {
         {
           event: "*",
           schema: "public",
-          table: "user_subscriptions",
-          filter: `user_id=eq.${user.id}`,
+          table: "user_profiles",
+          filter: `id=eq.${user.id}`,
         },
         (payload) => {
-          if (payload.new) {
-            setSubscription(payload.new as SubscriptionData);
+          if (!payload.new) return;
+          const next = payload.new as any;
+          if (typeof next.plan_tier !== "undefined") {
+            setSubscription((prev) => ({
+              ...(prev ?? {
+                plan_tier: DEFAULT_PLAN,
+                status: "active",
+                started_at: null,
+                expires_at: null,
+                custom_limits: null,
+                price_cents: null,
+                currency: "EUR",
+              }),
+              plan_tier: normalizePlanTier(next.plan_tier),
+            }));
           }
         }
       )

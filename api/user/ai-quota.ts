@@ -33,33 +33,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ error: "Invalid token" });
     }
 
-    // Get user's plan tier from subscription table
-    const { data: subscription } = await supabaseAdmin
-      .from("user_subscriptions")
-      .select("plan_tier, custom_limits, status, expires_at")
-      .eq("user_id", user.id)
-      .single();
+    // Single source of truth: user_profiles.plan_tier
+    const { data: profile } = await supabaseAdmin
+      .from("user_profiles")
+      .select("plan_tier")
+      .eq("id", user.id)
+      .maybeSingle();
 
+    const rawTier = String((profile as any)?.plan_tier ?? "").trim().toLowerCase();
     let planTier: PlanTier = DEFAULT_PLAN;
-    let customLimits: Record<string, number> | null = null;
-
-    if (subscription && subscription.status === "active") {
-      // Check if subscription is expired
-      if (subscription.expires_at) {
-        const expiresAt = new Date(subscription.expires_at);
-        if (expiresAt >= new Date()) {
-          planTier = (subscription.plan_tier as PlanTier) || DEFAULT_PLAN;
-          customLimits = subscription.custom_limits as Record<string, number> | null;
-        }
-      } else {
-        // No expiration = unlimited active subscription
-        planTier = (subscription.plan_tier as PlanTier) || DEFAULT_PLAN;
-        customLimits = subscription.custom_limits as Record<string, number> | null;
-      }
-    }
+    if (rawTier === "pro") planTier = "pro";
+    if (rawTier === "basic" || rawTier === "free") planTier = DEFAULT_PLAN;
 
     const baseLimits = getPlanLimits(planTier);
-    const aiJobsLimit = customLimits?.maxAiJobsPerMonth ?? baseLimits.aiJobsPerMonth;
+    const aiJobsLimit = baseLimits.aiJobsPerMonth;
     
     // Check if bypass is enabled
     const bypassEnabled = envTruthy("BYPASS_AI_LIMITS");
