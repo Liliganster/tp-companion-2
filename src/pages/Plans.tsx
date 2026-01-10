@@ -146,17 +146,10 @@ export default function Plans() {
             </ul>
 
             <Button 
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-5 text-sm"
-              disabled={planTier === "pro" || upgrading || isLoading}
-              onClick={handleStripeCheckout}
+              className="w-full bg-zinc-600 hover:bg-zinc-600/80 text-white/50 font-medium py-5 text-sm cursor-not-allowed"
+              disabled={true}
             >
-              {upgrading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : planTier === "pro" ? (
-                t("plans.currentPlan")
-              ) : (
-                t("plans.upgradeButton")
-              )}
+              Coming Soon
             </Button>
           </div>
         </div>
@@ -169,11 +162,10 @@ export default function Plans() {
               </p>
               <Button 
                 variant="outline"
-                className="h-9 px-4 text-xs border-zinc-700/80 bg-zinc-950/20 hover:bg-zinc-800/60"
-                onClick={() => window.location.href = "mailto:enterprise@fahrtenbuch.pro?subject=Enterprise Plan Inquiry"}
+                className="h-9 px-4 text-xs border-zinc-700/80 bg-zinc-950/20 text-muted-foreground/50 cursor-not-allowed"
+                disabled={true}
               >
-                <Mail className="w-3 h-3 mr-2" />
-                {t("plans.contactSales")}
+                Coming Soon
               </Button>
             </div>
       </div>
