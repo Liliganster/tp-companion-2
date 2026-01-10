@@ -76,11 +76,11 @@ export function Sidebar({
       {/* Logo */}
       <div className="flex items-center justify-center h-16 px-4 border-b border-border/50">
         {!collapsed && <Link to="/" className="flex items-center gap-2">
-            <img src="/favicon-32x32.png" alt="Fahrtenbuch Pro" className="w-8 h-8" />
+            <img src="/favicon-32x32.png" alt="Fahrtenbuch Pro" className="w-10 h-10" />
             <span className="font-semibold text-lg text-foreground">Fahrtenbuch Pro</span>
           </Link>}
         {collapsed && <Link to="/" className="flex items-center justify-center w-full">
-            <img src="/favicon-32x32.png" alt="Fahrtenbuch Pro" className="w-8 h-8" />
+            <img src="/favicon-32x32.png" alt="Fahrtenbuch Pro" className="w-10 h-10" />
           </Link>}
       </div>
 
@@ -95,20 +95,19 @@ export function Sidebar({
       })}
       </nav>
 
-      {/* Bottom actions */}
-      <div className="px-3 py-4 border-t border-border/50 space-y-3">
-        {/* Plan Card - Estilo como la imagen */}
+      {/* Plans (not navigation, not bottom actions) */}
+      <div className="px-3 pb-4">
         <Link
           to="/plans"
           className={cn(
-            "block w-full rounded-lg p-3 transition-all",
-            "bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400",
+            "block w-full rounded-lg p-3 transition-colors",
+            "border border-purple-500/40 bg-purple-500/10 hover:bg-purple-500/15",
             collapsed && "p-2"
           )}
           title={collapsed ? t("nav.plans") : undefined}
         >
           <div className="flex items-center gap-2">
-            <Crown className="w-5 h-5 shrink-0 text-yellow-300" />
+            <Crown className="w-5 h-5 shrink-0 text-purple-300" />
             {!collapsed && (
               <div className="flex flex-col">
                 <span className="text-sm font-semibold text-white">
@@ -121,6 +120,10 @@ export function Sidebar({
             )}
           </div>
         </Link>
+      </div>
+
+      {/* Bottom actions */}
+      <div className="px-3 py-4 border-t border-border/50 space-y-3">
         <button onClick={onSettingsClick} className={cn("nav-item w-full", collapsed && "justify-center px-2")} title={collapsed ? t("nav.settings") : undefined}>
           <Settings className="w-5 h-5 shrink-0" />
           {!collapsed && <span>{t("nav.settings")}</span>}

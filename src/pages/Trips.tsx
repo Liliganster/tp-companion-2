@@ -33,7 +33,7 @@ export default function Trips() {
   const { getAccessToken } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const { canAddNonAITrip, checkStopsLimit, limits, tripCounts } = usePlanLimits();
+  const { canAddNonAITrip, checkStopsLimit, limits } = usePlanLimits();
 
   const { emissionsInput: localEmissionsInput, fuelFactorData: fuelFactor, gridData: atGrid, isLoading: isLoadingEmissionsData } = useEmissionsInput();
   
@@ -469,12 +469,6 @@ export default function Trips() {
             <h1 className="text-2xl sm:text-3xl font-bold">
               {t("trips.title")}
             </h1>
-            <Badge 
-              variant={canAddNonAITrip.allowed ? "secondary" : "destructive"} 
-              className="text-sm font-medium"
-            >
-              {tripCounts.total}/{limits.maxActiveTrips}
-            </Badge>
           </div>
           <p className="text-muted-foreground mt-1">
             {t("trips.subtitle")}

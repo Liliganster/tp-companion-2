@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { NotificationDropdown } from "@/components/dashboard/NotificationDropdown";
@@ -76,11 +76,13 @@ export default function Index() {
   const [aiBypassEnabled, setAiBypassEnabled] = useState(false);
   const [aiQuotaLoading, setAiQuotaLoading] = useState(false);
   const { getAccessToken } = useAuth();
+  const aiQuotaPollingDisabled = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
 
     async function fetchAiQuota() {
+      if (aiQuotaPollingDisabled.current) return;
       if (!user?.id) {
         setAiUsedThisMonth(null);
         return;
@@ -103,6 +105,22 @@ export default function Index() {
           throw new Error("Failed to fetch AI quota");
         }
 
+        const contentType = response.headers.get("content-type") ?? "";
+        if (!contentType.includes("application/json")) {
+          // In Vite dev, /api routes may not be served by the backend.
+          // Avoid spamming console with JSON parse errors.
+          if (import.meta.env.DEV) {
+            aiQuotaPollingDisabled.current = true;
+            if (!cancelled) {
+              setAiBypassEnabled(false);
+              setAiLimitFromApi(limits.aiJobsPerMonth);
+              setAiUsedThisMonth(null);
+            }
+            return;
+          }
+          throw new Error("AI quota endpoint did not return JSON");
+        }
+
         const data = await response.json();
         
         if (!cancelled) {
@@ -111,7 +129,12 @@ export default function Index() {
           setAiUsedThisMonth(data.used);
         }
       } catch (e) {
-        console.error("Error fetching AI quota:", e);
+        // If the backend isn't available in dev, don't keep retrying.
+        if (import.meta.env.DEV && e instanceof SyntaxError) {
+          aiQuotaPollingDisabled.current = true;
+        } else {
+          console.error("Error fetching AI quota:", e);
+        }
         if (!cancelled) setAiUsedThisMonth(null);
       } finally {
         if (!cancelled) setAiQuotaLoading(false);
@@ -124,7 +147,7 @@ export default function Index() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [user?.id, getAccessToken]);
+  }, [user?.id, getAccessToken, limits.aiJobsPerMonth]);
 
   const kpiTitleClassName = "text-base font-semibold leading-tight text-foreground uppercase tracking-wide";
   const kpiTitleWrapperClassName = "p-0 rounded-none bg-transparent";

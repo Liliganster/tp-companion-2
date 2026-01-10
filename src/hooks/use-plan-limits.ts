@@ -21,14 +21,10 @@ export function usePlanLimits() {
   const { projects } = useProjects();
   const { t } = useI18n();
 
-  // Log plan info when limits change
-  console.log(`[PlanLimits] Plan: ${planTier}, Max trips: ${limits.maxActiveTrips}, Max projects: ${limits.maxActiveProjects}, Max AI: ${limits.aiJobsPerMonth}`);
-
   // Count trips by source (AI vs non-AI)
   const tripCounts = useMemo(() => {
     const aiTrips = trips.filter((trip) => trip.callsheet_job_id).length;
     const nonAiTrips = trips.filter((trip) => !trip.callsheet_job_id).length;
-    console.log(`[PlanLimits] Trips: ${aiTrips} AI, ${nonAiTrips} non-AI, ${trips.length} total`);
     return {
       total: trips.length,
       ai: aiTrips,
@@ -39,7 +35,6 @@ export function usePlanLimits() {
   // Count active (non-archived) projects
   const activeProjectsCount = useMemo(() => {
     const count = projects.filter((p) => !p.archived).length;
-    console.log(`[PlanLimits] Active projects: ${count}/${limits.maxActiveProjects}`);
     return count;
   }, [projects, limits.maxActiveProjects]);
 

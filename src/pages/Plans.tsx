@@ -39,43 +39,43 @@ export default function Plans() {
   };
 
   const basicFeatures = [
-    { text: t("plans.features.unlimitedTrips"), included: true },
+    { text: t("plans.features.trips20"), included: true },
     { text: t("plans.features.projects3"), included: true },
     { text: t("plans.features.basicReports"), included: true },
     { text: t("plans.features.ai5"), included: true },
     { text: t("plans.features.csvExport"), included: true },
-    { text: t("plans.features.calendarSync"), included: false },
+    { text: t("plans.features.routeTemplates5"), included: true },
   ];
 
   const proFeatures = [
-    { text: t("plans.features.unlimitedTrips"), included: true },
-    { text: t("plans.features.unlimitedProjects"), included: true },
+    { text: t("plans.features.trips2000"), included: true },
+    { text: t("plans.features.projects30"), included: true },
     { text: t("plans.features.advancedReports"), included: true },
     { text: t("plans.features.ai60"), included: true },
     { text: t("plans.features.calendarSync"), included: true },
-    { text: t("plans.features.routeTemplates"), included: true },
+    { text: t("plans.features.routeTemplates50"), included: true },
     { text: t("plans.features.costAnalysis"), included: true },
     { text: t("plans.features.prioritySupport"), included: true },
   ];
 
   return (
-    <MainLayout>
-      <div className="max-w-6xl mx-auto h-[calc(100vh-4rem)] flex flex-col justify-center py-4 px-4">
+    <MainLayout backgroundVariant="plans">
+      <div className="mx-auto flex min-h-[calc(100dvh-4rem)] max-w-6xl flex-col justify-center px-4 py-10 lg:px-8 lg:-translate-y-16">
         {/* Header */}
-        <div className="text-center space-y-2 animate-fade-in mb-4">
+        <div className="text-center space-y-2 animate-fade-in mb-8">
           <div className="flex items-center justify-center gap-2">
             <Crown className="w-6 h-6 text-yellow-500" />
-            <h1 className="text-2xl sm:text-3xl font-bold">{t("plans.title")}</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold leading-tight">{t("plans.title")}</h1>
           </div>
           <p className="text-muted-foreground text-sm max-w-2xl mx-auto">
             {t("plans.subtitle")}
           </p>
         </div>
 
-        {/* Plans Grid - 2 columns */}
-        <div className="grid md:grid-cols-2 gap-4 animate-fade-in animation-delay-100 mb-4">
-          {/* Basic Plan */}
-          <div className="bg-zinc-900/50 backdrop-blur-sm p-5 rounded-md border border-zinc-800 flex flex-col hover:border-zinc-700 transition-colors">
+            {/* Plans Grid - 2 columns */}
+            <div className="grid gap-6 md:grid-cols-2 animate-fade-in animation-delay-100 mb-6">
+              {/* Basic Plan */}
+              <div className="bg-zinc-900/40 backdrop-blur-md p-6 rounded-lg border border-zinc-800/80 flex flex-col transition-colors hover:border-zinc-700/80">
             <div className="mb-4">
               <div className="flex items-center gap-2 mb-1">
                 <Zap className="w-4 h-4 text-blue-400" />
@@ -105,7 +105,7 @@ export default function Plans() {
 
             <Button 
               variant="outline" 
-              className="w-full py-4 rounded-md border-zinc-700 hover:bg-zinc-800 text-sm" 
+              className="w-full py-5 border-zinc-700/80 bg-zinc-950/20 hover:bg-zinc-800/60 text-sm disabled:opacity-100 disabled:bg-zinc-950/30 disabled:border-zinc-800/80 disabled:text-zinc-500" 
               disabled={planTier === "basic" || upgrading || isLoading}
             >
               {upgrading ? (
@@ -118,9 +118,9 @@ export default function Plans() {
             </Button>
           </div>
 
-          {/* Pro Plan */}
-          <div className="bg-zinc-900/50 backdrop-blur-sm p-5 rounded-md border-2 border-zinc-700 relative flex flex-col hover:border-zinc-600 transition-colors">
-            <Badge className="absolute -top-2 left-1/2 -translate-x-1/2 bg-yellow-500 text-black hover:bg-yellow-500 font-medium px-3 py-0.5 rounded-full text-xs">
+              {/* Pro Plan */}
+              <div className="bg-zinc-900/40 backdrop-blur-md p-6 rounded-lg border border-yellow-500/35 ring-1 ring-yellow-500/15 relative flex flex-col transition-colors hover:border-yellow-500/45">
+            <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-500 text-black hover:bg-yellow-500 font-medium px-3 py-1 rounded-full text-xs shadow-sm">
               {t("plans.mostPopular")}
             </Badge>
             
@@ -146,7 +146,7 @@ export default function Plans() {
             </ul>
 
             <Button 
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-4 rounded-md text-sm"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-5 text-sm"
               disabled={planTier === "pro" || upgrading || isLoading}
               onClick={handleStripeCheckout}
             >
@@ -161,22 +161,21 @@ export default function Plans() {
           </div>
         </div>
 
-        {/* Enterprise CTA Banner */}
-        <div className="bg-zinc-900/50 backdrop-blur-sm p-4 rounded-md border border-zinc-800 text-center animate-fade-in animation-delay-200">
-          <h3 className="text-sm font-semibold mb-1">{t("plans.needMore")}</h3>
-          <p className="text-muted-foreground text-xs mb-2 max-w-xl mx-auto">
-            {t("plans.enterpriseContact")}
-          </p>
-          <Button 
-            variant="outline"
-            size="sm"
-            className="text-xs py-2"
-            onClick={() => window.location.href = "mailto:enterprise@fahrtenbuch.pro?subject=Enterprise Plan Inquiry"}
-          >
-            <Mail className="w-3 h-3 mr-1" />
-            {t("plans.contactSales")}
-          </Button>
-        </div>
+            {/* Enterprise CTA Banner */}
+            <div className="bg-zinc-900/35 backdrop-blur-md px-6 py-8 rounded-lg border border-zinc-800/80 text-center animate-fade-in animation-delay-200">
+              <h3 className="text-sm font-semibold mb-2">{t("plans.needMore")}</h3>
+              <p className="text-muted-foreground text-xs mb-4 max-w-xl mx-auto">
+                {t("plans.enterpriseContact")}
+              </p>
+              <Button 
+                variant="outline"
+                className="h-9 px-4 text-xs border-zinc-700/80 bg-zinc-950/20 hover:bg-zinc-800/60"
+                onClick={() => window.location.href = "mailto:enterprise@fahrtenbuch.pro?subject=Enterprise Plan Inquiry"}
+              >
+                <Mail className="w-3 h-3 mr-2" />
+                {t("plans.contactSales")}
+              </Button>
+            </div>
       </div>
     </MainLayout>
   );

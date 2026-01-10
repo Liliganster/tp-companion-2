@@ -91,7 +91,7 @@ export function KPICard({
       <div>
         {!hideTitle && <p className="text-sm text-muted-foreground mb-1">{title}</p>}
         {leading}
-        <p
+        <div
           className={cn(
             "text-2xl font-bold",
             useGradientValue && "gradient-text",
@@ -99,7 +99,7 @@ export function KPICard({
           )}
         >
           {value}
-        </p>
+        </div>
         {subtitle && (
           <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
         )}
