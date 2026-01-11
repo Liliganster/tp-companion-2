@@ -28,23 +28,26 @@ import {
   Settings2,
   Download,
   Sprout,
-  Fuel,
-  Gauge,
-  TreePine,
   Info,
   Save,
-  Flame,
   Loader2,
   FileSpreadsheet,
   FileText,
   File as FileIcon,
   ChevronsDown,
+  Search,
+  Clock,
+  Filter,
+  ArrowUpNarrowWide,
+  ArrowDownWideNarrow,
+  Calendar,
+  Layers,
+  Users,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { useNavigate } from "react-router-dom";
-import { cn } from "@/lib/utils";
 import { useI18n } from "@/hooks/use-i18n";
 import { useTrips } from "@/contexts/TripsContext";
 import { useProjects } from "@/contexts/ProjectsContext";
@@ -65,8 +68,11 @@ type EmissionsResult = {
   efficiency: number;
   distanceKm: number;
   trips: number;
+  passengers: number;
   fuelLiters?: number;  // For gasoline/diesel
   kwhUsed?: number;      // For EV
+  earliestDateMs?: number | null;
+  latestDateMs?: number | null;
 };
 
 function downloadTextFile(content: string, fileName: string, mimeType: string) {
@@ -122,6 +128,10 @@ function getRange(now: Date, timeRange: string): { start: Date; end: Date; prevS
     start.setDate(start.getDate() - 90);
     prevEnd.setDate(prevEnd.getDate() - 90);
     prevStart.setDate(prevStart.getDate() - 180);
+  } else if (timeRange === "6months") {
+    start.setDate(start.getDate() - 180);
+    prevEnd.setDate(prevEnd.getDate() - 180);
+    prevStart.setDate(prevStart.getDate() - 360);
   } else if (timeRange === "year") {
     start.setFullYear(start.getFullYear(), 0, 1);
     start.setHours(0, 0, 0, 0);
@@ -160,48 +170,48 @@ function getTrendLabel(current: number, previous: number): EmissionsResult["tren
 }
 
 const ADV_EMISSIONS_CONFIG_KEY = "advancedEmissions:config:v2";
+const ITEMS_PER_PAGE = 5;
 
 function loadAdvancedEmissionsConfig(): {
   isConfigured: boolean;
   viewMode: string;
   sortBy: string;
+  sortDirection: "asc" | "desc";
   timeRange: string;
   fuelEfficiency: string;
 } {
   try {
     if (typeof window === "undefined") {
-      return { isConfigured: false, viewMode: "projects", sortBy: "co2", timeRange: "all", fuelEfficiency: "0" };
+      return { isConfigured: false, viewMode: "projects", sortBy: "co2", sortDirection: "desc", timeRange: "all", fuelEfficiency: "0" };
     }
     const raw = window.localStorage.getItem(ADV_EMISSIONS_CONFIG_KEY);
     if (!raw) {
-      return { isConfigured: false, viewMode: "projects", sortBy: "co2", timeRange: "all", fuelEfficiency: "0" };
+      return { isConfigured: false, viewMode: "projects", sortBy: "co2", sortDirection: "desc", timeRange: "all", fuelEfficiency: "0" };
     }
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") {
-      return { isConfigured: false, viewMode: "projects", sortBy: "co2", timeRange: "all", fuelEfficiency: "0" };
+      return { isConfigured: false, viewMode: "projects", sortBy: "co2", sortDirection: "desc", timeRange: "all", fuelEfficiency: "0" };
     }
 
     return {
       isConfigured: Boolean((parsed as any).isConfigured),
       viewMode: typeof (parsed as any).viewMode === "string" ? (parsed as any).viewMode : "projects",
       sortBy: typeof (parsed as any).sortBy === "string" ? (parsed as any).sortBy : "co2",
+      sortDirection: (parsed as any).sortDirection === "asc" ? "asc" : "desc",
       timeRange: typeof (parsed as any).timeRange === "string" ? (parsed as any).timeRange : "all",
       fuelEfficiency: typeof (parsed as any).fuelEfficiency === "string" ? (parsed as any).fuelEfficiency : "0",
     };
   } catch {
-    return { isConfigured: false, viewMode: "projects", sortBy: "co2", timeRange: "all", fuelEfficiency: "0" };
+    return { isConfigured: false, viewMode: "projects", sortBy: "co2", sortDirection: "desc", timeRange: "all", fuelEfficiency: "0" };
   }
 }
 
 export default function AdvancedEmissions() {
   const navigate = useNavigate();
-  const { t, tf } = useI18n();
+  const { t, tf, locale } = useI18n();
   const { trips } = useTrips();
   const { projects } = useProjects();
   const { profile } = useUserProfile();
-
-  // Pagination state - show 5 results initially
-  const ITEMS_PER_PAGE = 5;
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
 
   const { emissionsInput: baseEmissionsInput, fuelFactorData: fuelFactor, gridData: atGrid, isLoading: isLoadingEmissionsData } = useEmissionsInput();
@@ -243,20 +253,20 @@ export default function AdvancedEmissions() {
     [t],
   );
 
-  const getRatingColor = (rating: EmissionsResult["rating"]) => {
-    switch (rating) {
-      case "muy-baja":
-      case "baja":
-        return "bg-emerald-500/20 text-emerald-500";
-      case "moderada":
-        return "bg-yellow-500/20 text-yellow-500";
-      case "alta":
-      case "muy-alta":
-        return "bg-destructive/20 text-destructive";
-      default:
-        return "bg-secondary/40 text-muted-foreground";
-    }
-  };
+  const numberFormatter0 = useMemo(
+    () => new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }),
+    [locale],
+  );
+
+  const kgFormatter = useMemo(
+    () => new Intl.NumberFormat(locale, { minimumFractionDigits: 0, maximumFractionDigits: 1 }),
+    [locale],
+  );
+
+  const efficiencyFormatter = useMemo(
+    () => new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    [locale],
+  );
 
   const fallbackTripName = t("advancedEmissions.fallbackTripName");
   const fallbackProjectName = t("advancedEmissions.fallbackProjectName");
@@ -267,16 +277,17 @@ export default function AdvancedEmissions() {
   // Configuration state
   const [viewMode, setViewMode] = useState(() => loadAdvancedEmissionsConfig().viewMode);
   const [sortBy, setSortBy] = useState(() => loadAdvancedEmissionsConfig().sortBy);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">(() => loadAdvancedEmissionsConfig().sortDirection);
   const [timeRange, setTimeRange] = useState(() => loadAdvancedEmissionsConfig().timeRange);
   const [fuelEfficiency, setFuelEfficiency] = useState(() => loadAdvancedEmissionsConfig().fuelEfficiency);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Reset pagination when filters change
   useEffect(() => {
     setVisibleCount(ITEMS_PER_PAGE);
-  }, [viewMode, sortBy, timeRange, selectedProjectId]);
+  }, [searchTerm, sortBy, sortDirection, timeRange, viewMode]);
 
-  // Clean up old localStorage key on mount & validate selectedProjectId
+  // Clean up old localStorage key on mount
   useEffect(() => {
     try {
       if (typeof window === "undefined") return;
@@ -284,15 +295,7 @@ export default function AdvancedEmissions() {
     } catch {
       // Ignore localStorage errors (e.g., private browsing)
     }
-
-    // Validate selectedProjectId
-    if (selectedProjectId && selectedProjectId !== "all") {
-      const exists = projects.some(p => p.id === selectedProjectId);
-      if (!exists) {
-        setSelectedProjectId(null);
-      }
-    }
-  }, [selectedProjectId, projects]);
+  }, []);
 
 
   useEffect(() => {
@@ -300,12 +303,12 @@ export default function AdvancedEmissions() {
       if (typeof window === "undefined") return;
       window.localStorage.setItem(
         ADV_EMISSIONS_CONFIG_KEY,
-        JSON.stringify({ isConfigured, viewMode, sortBy, timeRange, fuelEfficiency })
+        JSON.stringify({ isConfigured, viewMode, sortBy, sortDirection, timeRange, fuelEfficiency })
       );
     } catch {
       // ignore
     }
-  }, [fuelEfficiency, isConfigured, sortBy, timeRange, viewMode]);
+  }, [fuelEfficiency, isConfigured, sortBy, sortDirection, timeRange, viewMode]);
 
   // Validate fuel efficiency input and show warning
   useEffect(() => {
@@ -351,11 +354,13 @@ export default function AdvancedEmissions() {
 
     const projectNameById = new Map(projects.map((p) => [p.id, p.name] as const));
 
-    const sumTripCo2 = (distanceKm: number) => {
+    const sumTripCo2 = (distanceKm: number, fuelLiters?: number | null, evKwhUsed?: number | null) => {
       // CO2 ranking calculations use the modal value (analysisFuelRate) if available
       // This allows "what if" scenarios without affecting trips/projects views
       const res = calculateTripEmissions({
         distanceKm,
+        fuelLiters,
+        evKwhUsed,
         ...baseEmissionsInput,
         fuelLPer100Km: shouldUseAnalysisFuelRate ? analysisFuelRate : baseEmissionsInput.fuelLPer100Km,
       });
@@ -381,30 +386,42 @@ export default function AdvancedEmissions() {
       co2Kg: number;
       distanceKm: number;
       trips: number;
+      passengers: number;
+      earliestDateMs: number | null;
+      latestDateMs: number | null;
     };
 
     const aggregate = (source: typeof trips) => {
       const map = new Map<string, Agg>();
       for (const tr of source) {
         const distance = Number.isFinite(Number(tr.distance)) ? Number(tr.distance) : 0;
-        const co2 = sumTripCo2(distance);
+        const co2 = sumTripCo2(distance, tr.fuelLiters, tr.evKwhUsed);
+        const passengers = Math.max(0, Math.floor(Number.isFinite(Number(tr.passengers)) ? Number(tr.passengers) : 0));
+        const dt = parseTripDate(tr.date);
+        const dtMs = dt ? dt.getTime() : null;
 
         if (viewMode === "all") {
           const key = tr.id;
           const name = tr.project || fallbackTripName;
-          const cur = map.get(key) ?? { id: key, name, co2Kg: 0, distanceKm: 0, trips: 0 };
+          const cur = map.get(key) ?? { id: key, name, co2Kg: 0, distanceKm: 0, trips: 0, passengers: 0, earliestDateMs: null, latestDateMs: null };
           cur.co2Kg += co2;
           cur.distanceKm += distance;
           cur.trips += 1;
+          cur.passengers += passengers;
+          if (dtMs != null && (cur.earliestDateMs == null || dtMs < cur.earliestDateMs)) cur.earliestDateMs = dtMs;
+          if (dtMs != null && (cur.latestDateMs == null || dtMs > cur.latestDateMs)) cur.latestDateMs = dtMs;
           map.set(key, cur);
         } else {
           const key = tr.projectId || (tr.project || "unknown").trim().toLowerCase();
           const resolvedName = tr.projectId ? (projectNameById.get(tr.projectId) ?? tr.project) : tr.project;
           const name = resolvedName || fallbackProjectName;
-          const cur = map.get(key) ?? { id: String(key), name, co2Kg: 0, distanceKm: 0, trips: 0 };
+          const cur = map.get(key) ?? { id: String(key), name, co2Kg: 0, distanceKm: 0, trips: 0, passengers: 0, earliestDateMs: null, latestDateMs: null };
           cur.co2Kg += co2;
           cur.distanceKm += distance;
           cur.trips += 1;
+          cur.passengers += passengers;
+          if (dtMs != null && (cur.earliestDateMs == null || dtMs < cur.earliestDateMs)) cur.earliestDateMs = dtMs;
+          if (dtMs != null && (cur.latestDateMs == null || dtMs > cur.latestDateMs)) cur.latestDateMs = dtMs;
           map.set(key, cur);
         }
       }
@@ -434,51 +451,88 @@ export default function AdvancedEmissions() {
         efficiency: clampRound(efficiency, 2),
         distanceKm: clampRound(a.distanceKm, 0),
         trips: a.trips,
+        passengers: a.passengers,
         fuelLiters: clampRound(fuelLiters, 1),
         kwhUsed: clampRound(kwhUsed, 1),
+        earliestDateMs: a.earliestDateMs,
+        latestDateMs: a.latestDateMs,
       };
     });
 
+    const compare = (aVal: number, bVal: number) => (sortDirection === "asc" ? aVal - bVal : bVal - aVal);
+
     const sorted = [...results].sort((a, b) => {
-      if (sortBy === "distance") return b.distanceKm - a.distanceKm;
-      if (sortBy === "efficiency") return b.efficiency - a.efficiency;
-      return b.co2Kg - a.co2Kg;
+      if (sortBy === "distance") return compare(a.distanceKm, b.distanceKm);
+      if (sortBy === "efficiency") return compare(a.efficiency, b.efficiency);
+      return compare(a.co2Kg, b.co2Kg);
     });
 
     sorted.forEach((r, idx) => {
       r.rank = idx + 1;
     });
     
-    // Filter by selected project if in projects view
-    const filtered = selectedProjectId && viewMode === "projects"
-      ? sorted.filter(r => r.id === selectedProjectId)
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    const filtered = normalizedSearch
+      ? sorted.filter((r) => r.name.toLowerCase().includes(normalizedSearch))
       : sorted;
 
-    // Recalculate totals based on filter
-    const displayResults = filtered;
-    const filteredTotalCo2 = displayResults.reduce((acc, r) => acc + r.co2Kg, 0);
-    const filteredTotalDistance = displayResults.reduce((acc, r) => acc + r.distanceKm, 0);
-    const filteredAvgEfficiency = filteredTotalDistance > 0 ? filteredTotalCo2 / filteredTotalDistance : 0;
-    const filteredLiters = analysisFuelRate > 0 ? (filteredTotalDistance * analysisFuelRate) / 100 : 0;
-    const filteredTreesNeeded = calculateTreesNeeded(filteredTotalCo2, 20);
+    // Totals are based on the full (time-range) dataset, not the search filter.
+    const rawTotalCo2 = curAgg.reduce((acc, a) => acc + a.co2Kg, 0);
+    const rawTotalDistance = curAgg.reduce((acc, a) => acc + a.distanceKm, 0);
+    const avgEfficiency = rawTotalDistance > 0 ? rawTotalCo2 / rawTotalDistance : 0;
+    const fuelLiters = analysisFuelRate > 0 ? (rawTotalDistance * analysisFuelRate) / 100 : 0;
+    const evKwhRate = profile.fuelType === "ev" ? (parseLocaleNumber(profile.evKwhPer100Km) ?? 0) : 0;
+    const totalKwhUsed = evKwhRate > 0 ? (rawTotalDistance * evKwhRate) / 100 : 0;
+    const treesNeeded = calculateTreesNeeded(rawTotalCo2, 20);
     
     return {
       results: sorted,
-      filtered: displayResults,
-      totalCo2: clampRound(filteredTotalCo2, 1),
-      avgEfficiency: clampRound(filteredAvgEfficiency, 2),
-      fuelLiters: clampRound(filteredLiters, 1),
-      treesNeeded: filteredTreesNeeded,
+      filtered,
+      totalCo2: clampRound(rawTotalCo2, 1),
+      avgEfficiency: clampRound(avgEfficiency, 2),
+      fuelLiters: clampRound(fuelLiters, 1),
+      totalKwhUsed: clampRound(totalKwhUsed, 1),
+      totalDistanceKm: clampRound(rawTotalDistance, 0),
+      treesNeeded,
     };
-  }, [fallbackProjectName, fallbackTripName, fuelEfficiency, fuelFactor?.kgCo2ePerLiter, fuelFactor?.kgCo2ePerKm, gridKgCo2PerKwh, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType, projects, sortBy, timeRange, trips, viewMode, selectedProjectId, isConfigured]);
+  }, [baseEmissionsInput, fallbackProjectName, fallbackTripName, fuelEfficiency, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType, projects, sortBy, sortDirection, timeRange, trips, viewMode, searchTerm]);
+
+  const maxCo2Kg = useMemo(
+    () => computed.filtered.reduce((max, r) => Math.max(max, r.co2Kg), 0),
+    [computed.filtered],
+  );
 
   const handleSaveConfig = () => {
     setIsConfigured(true);
     setConfigModalOpen(false);
   };
 
+  const toggleSortDirection = () => {
+    setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+  };
+
+  const resetFilters = () => {
+    setSearchTerm("");
+    setTimeRange("all");
+  };
+
+  const trendIndicator = (trend: EmissionsResult["trend"]) => {
+    if (trend === "improving") {
+      return { arrow: "↓", className: "text-emerald-400" };
+    }
+    if (trend === "worsening") {
+      return { arrow: "↑", className: "text-red-400" };
+    }
+    return { arrow: "→", className: "text-yellow-400" };
+  };
+
+  const treeWord = computed.treesNeeded === 1
+    ? t("advancedEmissions.treeSingular")
+    : t("advancedEmissions.treePlural");
+
   const getExportData = () => {
-    const rows = computed.results ?? [];
+    const rows = computed.filtered ?? [];
     return rows.map(r => ({
       Rank: r.rank,
       Name: r.name,
@@ -486,6 +540,7 @@ export default function AdvancedEmissions() {
       "Efficiency (kg/km)": r.efficiency,
       "Distance (km)": r.distanceKm,
       Trips: r.trips,
+      Passengers: r.passengers,
       Rating: ratingLabel(r.rating),
       Trend: trendLabel(r.trend),
     }));
@@ -507,7 +562,7 @@ export default function AdvancedEmissions() {
       ...data.map(row => Object.values(row).map(escape).join(","))
     ];
 
-    const fileBase = `advanced-emissions-${timeRange}-${viewMode}-${sortBy}`;
+    const fileBase = `advanced-emissions-${timeRange}-${viewMode}-${sortBy}-${sortDirection}`;
     downloadTextFile(lines.join("\n"), `${fileBase}.csv`, "text/csv;charset=utf-8");
   };
 
@@ -519,12 +574,12 @@ export default function AdvancedEmissions() {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Emissions");
     
-    const fileBase = `advanced-emissions-${timeRange}-${viewMode}-${sortBy}`;
+    const fileBase = `advanced-emissions-${timeRange}-${viewMode}-${sortBy}-${sortDirection}`;
     XLSX.writeFile(workbook, `${fileBase}.xlsx`);
   };
 
   const handleExportPdf = () => {
-    const rows = computed.results ?? [];
+    const rows = computed.filtered ?? [];
     if (rows.length === 0) return;
 
     const doc = new jsPDF();
@@ -556,29 +611,32 @@ export default function AdvancedEmissions() {
       startY: 44,
     });
 
-    const fileBase = `advanced-emissions-${timeRange}-${viewMode}-${sortBy}`;
+    const fileBase = `advanced-emissions-${timeRange}-${viewMode}-${sortBy}-${sortDirection}`;
     doc.save(`${fileBase}.pdf`);
   };
 
   return (
     <MainLayout>
-      <div className="max-w-[1800px] mx-auto space-y-6">
+      <div className="mx-auto w-full max-w-[1800px] flex flex-col gap-6">
         {/* Header */}
-        <div className="flex items-center justify-between animate-fade-in">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/advanced")}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between animate-fade-in shrink-0">
+          <div className="flex min-w-0 items-start gap-3">
+            <Button variant="ghost" size="icon" onClick={() => navigate("/advanced")} className="shrink-0">
               <ArrowLeft className="w-5 h-5" />
             </Button>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold">{t("advancedEmissions.pageTitle")}</h1>
-              <p className="text-muted-foreground mt-1">
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold leading-tight tracking-tight">
+                {t("advancedEmissions.pageTitle")}
+              </h1>
+              <p className="text-muted-foreground mt-1 text-xs sm:text-sm leading-snug sm:leading-normal">
                 {t("advancedEmissions.pageSubtitle")}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center justify-end gap-2 sm:gap-3 w-full sm:w-auto">
             <Button
               variant="outline"
+              size="sm"
               type="button"
               onClick={() => setConfigModalOpen(true)}
               className="gap-2"
@@ -589,7 +647,7 @@ export default function AdvancedEmissions() {
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button className="gap-2 bg-primary hover:bg-primary/90" type="button">
+                <Button size="sm" className="gap-2 bg-primary hover:bg-primary/90" type="button">
                   <Download className="w-4 h-4" />
                   {t("advancedEmissions.export")}
                 </Button>
@@ -613,173 +671,262 @@ export default function AdvancedEmissions() {
         </div>
 
         {/* Content based on configuration state */}
-        {!isConfigured ? (
-          /* Empty/Welcome State */
-          <div className="flex flex-col items-center justify-center py-24 animate-fade-in">
-            <div className="mb-6">
-              <Sprout className="w-20 h-20 text-success" />
+        <div>
+          {!isConfigured ? (
+            /* Empty/Welcome State */
+            <div className="flex flex-col items-center justify-center py-24 animate-fade-in">
+              <div className="mb-6">
+                <Sprout className="w-20 h-20 text-success" />
+              </div>
+              <h2 className="text-xl font-semibold mb-4">{t("advancedEmissions.welcomeTitle")}</h2>
+              <p className="text-muted-foreground text-center max-w-lg mb-8">
+                {t("advancedEmissions.welcomeBody")}
+              </p>
             </div>
-            <h2 className="text-xl font-semibold mb-4">{t("advancedEmissions.welcomeTitle")}</h2>
-            <p className="text-muted-foreground text-center max-w-lg mb-8">
-              {t("advancedEmissions.welcomeBody")}
-            </p>
-
-          </div>
-        ) : isLoadingEmissionsData ? (
-          <div className="flex flex-col items-center justify-center py-24 animate-fade-in">
-            <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
-            <p className="text-muted-foreground">Cargando datos de emisiones...</p>
-          </div>
-        ) : (
-          /* Results State */
-          <div className="space-y-6 animate-fade-in">
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="glass-card p-5">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-muted-foreground">{t("advancedEmissions.totalEmissions")}</span>
-                  <Flame className="w-5 h-5 text-destructive" />
-                </div>
-                <p className="text-2xl font-bold text-destructive">{computed.totalCo2} kg</p>
-              </div>
-
-              <div className="glass-card p-5">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-muted-foreground">{t("advancedEmissions.avgEfficiency")}</span>
-                  <Gauge className="w-5 h-5 text-primary" />
-                </div>
-                <p className="text-2xl font-bold text-primary">{computed.avgEfficiency} kg/km</p>
-              </div>
-
-              <div className="glass-card p-5">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-muted-foreground">{t("advancedEmissions.fuelConsumption")}</span>
-                  <Fuel className="w-5 h-5 text-cyan-400" />
-                </div>
-                <p className="text-2xl font-bold text-cyan-400">{computed.fuelLiters} L</p>
-              </div>
-
-              <div className="glass-card p-5">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-muted-foreground">{t("advancedEmissions.treesNeeded")}</span>
-                  <TreePine className="w-5 h-5 text-success" />
-                </div>
-                <p className="text-2xl font-bold text-success">{computed.treesNeeded}</p>
-              </div>
+          ) : isLoadingEmissionsData ? (
+            <div className="flex flex-col items-center justify-center h-full animate-fade-in">
+              <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+              <p className="text-muted-foreground">Cargando datos de emisiones...</p>
             </div>
-
-            {/* Results List */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between gap-4">
-                <h3 className="text-sm font-medium text-muted-foreground">
-                  {tf("advancedEmissions.resultsTitle", { count: computed.filtered.length })}
-                </h3>
-                {viewMode === "projects" && computed.results.length > 0 && (
-                  <Select value={selectedProjectId || "all"} onValueChange={(value) => setSelectedProjectId(value === "all" ? null : value)}>
-                    <SelectTrigger className="w-48">
-                      <SelectValue placeholder="Filtrar por proyecto..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{t("advancedEmissions.allProjects")}</SelectItem>
-                      {computed.results.map((r) => (
-                        <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-
-              {computed.filtered.length === 0 ? (
-                <div className="glass-card p-8 text-center">
-                  <h4 className="font-semibold">{t("advancedEmissions.noResultsTitle")}</h4>
-                  <p className="text-sm text-muted-foreground mt-2">{t("advancedEmissions.noResultsBody")}</p>
-                  <div className="mt-4 flex justify-center">
-                    <Button variant="outline" type="button" className="gap-2" onClick={() => setConfigModalOpen(true)}>
-                      <Settings2 className="w-4 h-4" />
-                      {t("advancedEmissions.configureButton")}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {computed.filtered.slice(0, visibleCount).map((result) => (
-                  <div key={result.id} className="glass-card p-5">
-                    <div className="flex items-start gap-4">
-                      {/* Rank Badge */}
-                      <div className="flex items-center justify-center w-12 h-12 rounded-full bg-amber-500/20 text-amber-500 font-bold">
-                        #{result.rank}
-                      </div>
-
-                      {/* Content */}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-4">
-                          <h4 className="font-semibold">{result.name}</h4>
-                          <span className={cn("px-2 py-0.5 text-xs rounded-full", getRatingColor(result.rating))}>
-                            {ratingLabel(result.rating)}
-                          </span>
-                          <span className={cn(
-                            "px-2 py-0.5 text-xs rounded-full flex items-center gap-1",
-                            result.trend === "improving"
-                              ? "bg-success/20 text-success"
-                              : result.trend === "worsening"
-                                ? "bg-destructive/20 text-destructive"
-                                : "bg-secondary/40 text-muted-foreground"
-                          )}>
-                            {result.trend === "improving" ? "↓" : result.trend === "worsening" ? "↑" : "→"} {trendLabel(result.trend)}
-                          </span>
-                        </div>
-
-                        {/* Stats Grid */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-                          <div>
-                            <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.metricCo2Kg")}</p>
-                            <p className="text-lg font-semibold">{result.co2Kg}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.metricEfficiency")}</p>
-                            <p className="text-lg font-semibold">{result.efficiency}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.metricDistance")}</p>
-                            <p className="text-lg font-semibold">{result.distanceKm}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.metricTrips")}</p>
-                            <p className="text-lg font-semibold">{result.trips}</p>
-                          </div>
-                          {profile.fuelType !== "ev" && result.fuelLiters !== undefined && (
-                            <div>
-                              <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.fuelConsumption")}</p>
-                              <p className="text-lg font-semibold">{result.fuelLiters} L</p>
-                            </div>
-                          )}
-                          {profile.fuelType === "ev" && result.kwhUsed !== undefined && (
-                            <div>
-                              <p className="text-xs text-muted-foreground mb-1">{t("advancedEmissions.electricConsumption")}</p>
-                              <p className="text-lg font-semibold">{result.kwhUsed} kWh</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
+          ) : (
+            /* Results State */
+            <div className="flex flex-col gap-6 animate-fade-in">
+              {/* 1) Total + compensation */}
+              <div className="grid gap-6 lg:grid-cols-2">
+                <section className="relative overflow-hidden p-6 sm:p-8 glass-card h-full">
+                  <div className="absolute top-0 right-0 w-40 h-40 bg-primary/20 blur-[80px] rounded-full" />
+                  <div className="absolute bottom-0 left-0 w-40 h-40 bg-emerald-500/10 blur-[80px] rounded-full" />
+                  <div className="relative z-10 text-center">
+                    <p className="text-primary text-[10px] font-black uppercase tracking-[0.3em] mb-4">
+                      {t("advancedEmissions.totalFootprintTitle")}
+                    </p>
+                    <div className="flex flex-col items-center leading-none">
+                      <h2 className="text-6xl sm:text-7xl font-black tracking-tighter">
+                        {kgFormatter.format(computed.totalCo2)}
+                      </h2>
+                      <span className="text-base sm:text-lg text-muted-foreground font-light mt-2 tracking-widest uppercase">
+                        {t("advancedEmissions.totalFootprintUnit")}
+                      </span>
                     </div>
                   </div>
-                  ))}
-                  
-                  {/* Load More Button */}
-                  {computed.filtered.length > visibleCount && (
-                    <button
-                      onClick={() => setVisibleCount(prev => prev + ITEMS_PER_PAGE)}
-                      className="w-full flex items-center justify-center gap-2 text-sm text-primary hover:text-primary/80 font-medium py-3 rounded-md hover:bg-muted/50 transition-colors glass-card"
-                    >
-                      <ChevronsDown className="w-4 h-4" />
-                      {t("trips.loadMore")} ({computed.filtered.length - visibleCount} {t("advancedCosts.remaining")})
-                    </button>
+                </section>
+
+                <section className="relative overflow-hidden p-6 sm:p-8 glass-card h-full">
+                  <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/20 blur-[80px] rounded-full" />
+                  <div className="absolute bottom-0 left-0 w-40 h-40 bg-primary/10 blur-[80px] rounded-full" />
+                  <div className="relative z-10 text-center">
+                    <p className="text-emerald-400 text-[10px] font-black uppercase tracking-[0.3em] mb-4">
+                      {t("advancedEmissions.compensationTitle")}
+                    </p>
+                    <div className="flex flex-col items-center leading-none">
+                      <h2 className="text-6xl sm:text-7xl font-black tracking-tighter">
+                        {numberFormatter0.format(computed.treesNeeded)}
+                      </h2>
+                      <span className="text-base sm:text-lg text-muted-foreground font-light mt-2 tracking-widest uppercase">
+                        {treeWord}
+                      </span>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+            {/* 3) Analysis controls */}
+            <section className="space-y-3 shrink-0">
+              <div className="flex flex-col lg:flex-row gap-3">
+                <div className="relative flex-1 group">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" size={16} />
+                  <Input
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder={t("advancedEmissions.searchPlaceholder")}
+                    className="h-[46px] pl-11 bg-secondary/50 border-border/70 focus-visible:ring-0 focus-visible:border-primary/50"
+                  />
+                </div>
+
+                <div className="relative group lg:w-60">
+                  <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" size={16} />
+                  <Select value={timeRange} onValueChange={setTimeRange}>
+                    <SelectTrigger className="h-[46px] pl-11 bg-secondary/50 border-border/70 uppercase text-[10px] font-bold tracking-wider">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t("advancedEmissions.allTime")}</SelectItem>
+                      <SelectItem value="7days">{t("advancedEmissions.last7Days")}</SelectItem>
+                      <SelectItem value="30days">{t("advancedEmissions.last30Days")}</SelectItem>
+                      <SelectItem value="90days">{t("advancedEmissions.last90Days")}</SelectItem>
+                      <SelectItem value="6months">{t("advancedEmissions.last6Months")}</SelectItem>
+                      <SelectItem value="year">{t("advancedEmissions.thisYear")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="relative group lg:w-60">
+                  <Layers className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" size={16} />
+                  <Select value={viewMode} onValueChange={setViewMode}>
+                    <SelectTrigger className="h-[46px] pl-11 bg-secondary/50 border-border/70 uppercase text-[10px] font-bold tracking-wider">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="projects">{t("advancedEmissions.viewModeProjectsOnly")}</SelectItem>
+                      <SelectItem value="all">{t("advancedEmissions.viewModeAllTrips")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </section>
+
+            {/* 4) Breakdown */}
+            <section className="glass-card overflow-hidden shadow-xl flex flex-col min-h-0 flex-1">
+              <div className="p-6 border-b border-border/70 bg-secondary/20 flex justify-between items-center">
+                <h3 className="text-foreground font-bold text-sm tracking-tight flex items-center gap-2">
+                  <Filter size={16} className="text-primary" />
+                  {viewMode === "all" ? t("advancedEmissions.breakdownTitleTrips") : t("advancedEmissions.breakdownTitle")}
+                </h3>
+
+                <Button
+                  variant="outline"
+                  size="icon"
+                  type="button"
+                  onClick={toggleSortDirection}
+                  aria-label={sortDirection === "asc" ? t("advancedEmissions.sortDirectionAsc") : t("advancedEmissions.sortDirectionDesc")}
+                  title={sortDirection === "asc" ? t("advancedEmissions.sortDirectionAsc") : t("advancedEmissions.sortDirectionDesc")}
+                  className="bg-background/40"
+                >
+                  {sortDirection === "asc" ? (
+                    <ArrowUpNarrowWide className="w-4 h-4 text-primary" />
+                  ) : (
+                    <ArrowDownWideNarrow className="w-4 h-4 text-primary" />
                   )}
-                </>
-              )}
+                </Button>
+              </div>
+
+              <div className="p-4 space-y-2">
+                {computed.results.length === 0 ? (
+                  <div className="p-12 text-center">
+                    <h4 className="font-semibold">{t("advancedEmissions.noResultsTitle")}</h4>
+                    <p className="text-sm text-muted-foreground mt-2">{t("advancedEmissions.noResultsBody")}</p>
+                    <div className="mt-4 flex justify-center">
+                      <Button variant="outline" type="button" className="gap-2" onClick={() => setConfigModalOpen(true)}>
+                        <Settings2 className="w-4 h-4" />
+                        {t("advancedEmissions.configureButton")}
+                      </Button>
+                    </div>
+                  </div>
+                ) : computed.filtered.length === 0 ? (
+                  <div className="p-16 text-center">
+                    <Search size={32} className="text-muted-foreground/30 mx-auto mb-4" />
+                    <p className="text-muted-foreground text-xs font-bold uppercase tracking-widest">
+                      {t("advancedEmissions.noFilterResultsTitle")}
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-2">{t("advancedEmissions.noFilterResultsBody")}</p>
+                    <button
+                      onClick={resetFilters}
+                      className="mt-4 text-[10px] text-primary font-black uppercase hover:text-primary/80 transition-colors underline decoration-2 underline-offset-4"
+                    >
+                      {t("advancedEmissions.resetFilters")}
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {computed.filtered.slice(0, visibleCount).map((result, idx) => (
+                      <div
+                        key={result.id}
+                        className="flex items-center gap-4 p-4 hover:bg-secondary/30 rounded-md transition-all group relative overflow-hidden"
+                      >
+                        <div className="w-8 h-8 rounded-[5px] bg-secondary/60 flex items-center justify-center font-black text-[10px] text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                          {idx + 1}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between mb-3 items-center">
+                            <div className="min-w-0">
+                              <h4 className="text-foreground font-bold text-sm truncate group-hover:translate-x-1 transition-transform">
+                                {result.name}
+                              </h4>
+                              <div className="flex items-center gap-3 mt-1.5">
+                                {(() => {
+                                  const ms = result.latestDateMs;
+                                  const startMs = result.earliestDateMs;
+                                  if (!ms && !startMs) return null;
+
+                                  const formatShort = (value: number) =>
+                                    new Date(value).toLocaleDateString(locale, { day: "2-digit", month: "short" });
+
+                                  const formatShortWithYear = (value: number) =>
+                                    new Date(value).toLocaleDateString(locale, { day: "2-digit", month: "short", year: "numeric" });
+
+                                  let label: string;
+                                  if (viewMode === "projects" && startMs && ms) {
+                                    const start = new Date(startMs);
+                                    const end = new Date(ms);
+                                    label = start.getFullYear() === end.getFullYear()
+                                      ? `${formatShort(startMs)} - ${formatShort(ms)}`
+                                      : `${formatShortWithYear(startMs)} - ${formatShortWithYear(ms)}`;
+                                  } else {
+                                    label = formatShort(ms ?? startMs!);
+                                  }
+
+                                  return (
+                                    <span className="text-[9px] text-muted-foreground flex items-center gap-1 bg-secondary/40 px-2 py-0.5 rounded-[3px]">
+                                      <Calendar size={10} className="text-primary/70" /> {label}
+                                    </span>
+                                  );
+                                })()}
+                                <span className="text-[9px] text-muted-foreground flex items-center gap-1 font-medium">
+                                  <Layers size={10} /> {result.trips} {t("advancedEmissions.tripsLabel")}
+                                </span>
+                                <span className="text-[9px] text-muted-foreground flex items-center gap-1 font-medium">
+                                  <Users size={10} /> {result.passengers} {t("trips.passengers")}
+                                </span>
+                                {(() => {
+                                  const { arrow, className } = trendIndicator(result.trend);
+                                  return (
+                                    <span className={`text-[9px] flex items-center gap-1 font-bold ${className}`}>
+                                      <span className="font-black leading-none">{arrow}</span>
+                                      {efficiencyFormatter.format(result.efficiency)} kg/km
+                                    </span>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+
+                            <div className="text-right shrink-0">
+                              <div className="text-foreground font-black text-sm tracking-tight">
+                                {kgFormatter.format(result.co2Kg)}{" "}
+                                <span className="text-[10px] text-muted-foreground font-normal">kg</span>
+                              </div>
+                              <div className="text-[8px] text-primary font-black mt-1 uppercase tracking-tighter">
+                                {t("advancedEmissions.co2TotalLabel")}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="w-full bg-secondary/40 h-1.5 rounded-full overflow-hidden p-[1px]">
+                            <div
+                              className="h-full rounded-full bg-blue-500 transition-all duration-700 ease-out shadow-[0_0_12px_rgba(59,130,246,0.35)]"
+                              style={{ width: `${maxCo2Kg > 0 ? Math.max(3, Math.min(100, (result.co2Kg / maxCo2Kg) * 100)) : 0}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    {computed.filtered.length > visibleCount && (
+                      <button
+                        onClick={() => setVisibleCount((prev) => prev + ITEMS_PER_PAGE)}
+                        className="w-full flex items-center justify-center gap-2 text-sm text-primary hover:text-primary/80 font-medium py-3 rounded-md hover:bg-muted/50 transition-colors"
+                      >
+                        <ChevronsDown className="w-4 h-4" />
+                        {t("trips.loadMore")} ({computed.filtered.length - visibleCount} {t("advancedCosts.remaining")})
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            </section>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Configuration Modal */}
@@ -791,23 +938,7 @@ export default function AdvancedEmissions() {
           </DialogHeader>
 
           <div className="grid gap-6 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              {/* View Mode */}
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground uppercase tracking-wide">
-                  {t("advancedEmissions.viewMode")}
-                </Label>
-                <Select value={viewMode} onValueChange={setViewMode}>
-                  <SelectTrigger className="bg-secondary/50">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="projects">{t("advancedEmissions.viewModeProjectsOnly")}</SelectItem>
-                    <SelectItem value="all">{t("advancedEmissions.viewModeAllTrips")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
+            <div className="grid gap-4 sm:grid-cols-2">
               {/* Sort By */}
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground uppercase tracking-wide">
@@ -825,30 +956,6 @@ export default function AdvancedEmissions() {
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   {t("advancedEmissions.sortByHelp")}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              {/* Time Range */}
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground uppercase tracking-wide">
-                  {t("advancedEmissions.timeRange")}
-                </Label>
-                <Select value={timeRange} onValueChange={setTimeRange}>
-                  <SelectTrigger className="bg-secondary/50">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{t("advancedEmissions.allTime")}</SelectItem>
-                    <SelectItem value="7days">{t("advancedEmissions.last7Days")}</SelectItem>
-                    <SelectItem value="30days">{t("advancedEmissions.last30Days")}</SelectItem>
-                    <SelectItem value="90days">{t("advancedEmissions.last90Days")}</SelectItem>
-                    <SelectItem value="year">{t("advancedEmissions.thisYear")}</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  {t("advancedEmissions.selectPeriodHelp")}
                 </p>
               </div>
 

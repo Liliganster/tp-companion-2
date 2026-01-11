@@ -20,7 +20,9 @@ export type TripEmissionsInput = {
   fuelLPer100Km?: number | null;
   fuelKgCo2ePerLiter?: number | null;
   fuelKgCo2ePerKm?: number | null;  // Alternative: distance-based emission factor
+  fuelLiters?: number | null;       // Real fuel consumed for the trip (ICE)
   evKwhPer100Km?: number | null;
+  evKwhUsed?: number | null;        // Real kWh used for the trip (EV)
   gridKgCo2PerKwh?: number | null;
 };
 
@@ -57,12 +59,13 @@ export function calculateTripEmissions(input: TripEmissionsInput): TripEmissions
       }
     }
     
-    // Always need consumption for fuel-based calculation
-    if (!Number.isFinite(fuelLPer100Km) || fuelLPer100Km <= 0) {
+    // App rule: CO₂ depends on distance + vehicle consumption settings (L/100km) + emissions factor (kg/L).
+    // Per-trip liters are intentionally ignored.
+    const liters = Number.isFinite(fuelLPer100Km) && fuelLPer100Km > 0 ? (distanceKm * fuelLPer100Km) / 100 : null;
+
+    if (!Number.isFinite(liters) || (liters ?? 0) <= 0) {
       return { co2Kg: calculateCO2KgFromKm(distanceKm), method: "fallback_km" };
     }
-    
-    const liters = (distanceKm * fuelLPer100Km) / 100;
     
     // For gasoline: use kgCo2ePerLiter explicitly.
     // The API now returns a volume-based factor (Well-to-Wheel) for Austria.
@@ -103,10 +106,17 @@ export function calculateTripEmissions(input: TripEmissionsInput): TripEmissions
     }
     
     const gridKg = input.gridKgCo2PerKwh == null ? DEFAULT_GRID_KG_CO2_PER_KWH_FALLBACK : Number(input.gridKgCo2PerKwh);
-    if (Number.isFinite(evKwhPer100Km) && evKwhPer100Km > 0 && Number.isFinite(gridKg) && gridKg > 0) {
-      const kwh = (distanceKm * evKwhPer100Km) / 100;
-      const co2Kg = kwh * gridKg;
-      return { co2Kg: Math.round(co2Kg * 10) / 10, method: "ev", kwh: Math.round(kwh * 10) / 10 };
+    if (!Number.isFinite(gridKg) || gridKg <= 0) {
+      return { co2Kg: calculateCO2KgFromKm(distanceKm), method: "fallback_km" };
+    }
+
+    // App rule: CO₂ depends on distance + vehicle consumption settings (kWh/100km) + grid factor (kg/kWh).
+    // Per-trip kWh is intentionally ignored.
+    const kwh = Number.isFinite(evKwhPer100Km) && evKwhPer100Km > 0 ? (distanceKm * evKwhPer100Km) / 100 : null;
+
+    if (Number.isFinite(kwh) && (kwh ?? 0) > 0) {
+      const co2Kg = (kwh as number) * gridKg;
+      return { co2Kg: Math.round(co2Kg * 10) / 10, method: "ev", kwh: Math.round((kwh as number) * 10) / 10 };
     }
   }
 

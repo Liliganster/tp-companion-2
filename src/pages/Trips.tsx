@@ -42,7 +42,8 @@ export default function Trips() {
   // We alias it to `localEmissionsInput` to match the previous variable name if needed, or just `emissionsInput`.
   const emissionsInput = localEmissionsInput;
 
-  const calculateCO2 = (distance: number) => calculateTripEmissions({ distanceKm: distance, ...emissionsInput }).co2Kg;
+  const calculateCO2 = (distance: number, fuelLiters?: number | null, evKwhUsed?: number | null) =>
+    calculateTripEmissions({ distanceKm: distance, fuelLiters, evKwhUsed, ...emissionsInput }).co2Kg;
 
   const TRIPS_FILTERS_KEY = "filters:trips:v1";
   const loadTripsFilters = () => {
@@ -312,6 +313,8 @@ export default function Trips() {
     passengers: number;
     invoice?: string;
     distance: number;
+    fuelLiters?: number | null;
+    evKwhUsed?: number | null;
     ratePerKmOverride?: number | null;
     specialOrigin?: "base" | "continue" | "return";
     callsheet_job_id?: string;
@@ -362,7 +365,9 @@ export default function Trips() {
       passengers: data.passengers,
       invoice: trimmedInvoice,
       distance: data.distance,
-      co2: calculateCO2(data.distance),
+      fuelLiters: data.fuelLiters,
+      evKwhUsed: data.evKwhUsed,
+      co2: calculateCO2(data.distance, data.fuelLiters, data.evKwhUsed),
       ratePerKmOverride: data.ratePerKmOverride ?? null,
       specialOrigin: data.specialOrigin ?? "base",
       callsheet_job_id: data.callsheet_job_id,
@@ -590,7 +595,7 @@ export default function Trips() {
                   <div className="flex justify-between md:flex-col md:gap-0.5">
                     <span className="text-muted-foreground text-center">CO₂:</span>
                     <span className="text-emerald-500 font-medium text-center">
-                      {isLoadingEmissionsData ? <Loader2 className="w-3 h-3 animate-spin inline" /> : `${calculateCO2(trip.distance)} kg`}
+                      {isLoadingEmissionsData ? <Loader2 className="w-3 h-3 animate-spin inline" /> : `${calculateCO2(trip.distance, trip.fuelLiters, trip.evKwhUsed)} kg`}
                     </span>
                   </div>
                   <div className="flex justify-between md:flex-col md:gap-0.5">
@@ -770,7 +775,7 @@ export default function Trips() {
                   </span>
                 </TableCell>
                 <TableCell className="text-right text-emerald-500 whitespace-nowrap">
-                  {isLoadingEmissionsData ? <Loader2 className="w-3 h-3 animate-spin inline" /> : `${calculateCO2(trip.distance)} kg`}
+                  {isLoadingEmissionsData ? <Loader2 className="w-3 h-3 animate-spin inline" /> : `${calculateCO2(trip.distance, trip.fuelLiters, trip.evKwhUsed)} kg`}
                 </TableCell>
                 <TableCell className="text-right whitespace-nowrap">{formatTripReceiptCell(trip)}</TableCell>
                 <TableCell className="text-right text-muted-foreground hidden lg:table-cell">{trip.passengers || "-"}</TableCell>

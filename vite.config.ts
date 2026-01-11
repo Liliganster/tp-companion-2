@@ -130,8 +130,8 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
   const ESTIMATE_URL = "https://api.climatiq.io/data/v1/estimate";
   const DEFAULT_DATA_VERSION = "^21";
   
-  // Diesel: EU region with volume (liters)
-  // Gasoline: AT region with distance (km)
+  // Diesel and Gasoline: use volume (liters) so the app consumes `kgCo2ePerLiter`
+  // consistently with the production backend (`api/climatiq/fuel-factor.ts`).
   const FUEL_CONFIG: Record<string, {
     activityId: string;
     region: string;
@@ -139,10 +139,10 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
     fallbackValue: number;
   }> = {
     gasoline: {
-      activityId: "passenger_vehicle-vehicle_type_car-fuel_source_gasoline-engine_size_na-vehicle_age_na-vehicle_weight_na",
-      region: "AT",
-      paramType: "distance",
-      fallbackValue: 0.258,
+      activityId: "fuel-type_motor_gasoline-fuel_use_na",
+      region: "EU",
+      paramType: "volume",
+      fallbackValue: 2.31,
     },
     diesel: {
       activityId: "fuel-type_diesel-fuel_use_na",
@@ -157,6 +157,12 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify(payload));
   };
+
+  // Dev-only in-memory cache to avoid calling Climatiq on every page refresh.
+  // This complements React Query (which is in-memory per page load) and keeps
+  // dev behavior closer to production where we persist results in Supabase.
+  const devCache = new Map<string, { payload: any; expiresAt: number }>();
+  const DEV_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
   return {
     name: "climatiq-proxy",
@@ -179,10 +185,19 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
         if (!fuelType) return send(res, 400, { error: "invalid_fuel_type" });
         
         const config = FUEL_CONFIG[fuelType];
+        const cacheKey = String(fuelType);
+
+        const cached = devCache.get(cacheKey);
+        if (cached && cached.expiresAt > Date.now()) {
+          return send(res, 200, {
+            ...cached.payload,
+            method: "cache",
+          });
+        }
 
         // If no API key, return fallback data
         if (!apiKey) {
-          return send(res, 200, {
+          const payload = {
             fuelType,
             ...(config.paramType === "volume" 
               ? { kgCo2ePerLiter: config.fallbackValue }
@@ -196,7 +211,9 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
             cachedTtlSeconds: 2592000,
             method: "fallback",
             fallback: true,
-          });
+          };
+          devCache.set(cacheKey, { payload, expiresAt: Date.now() + DEV_CACHE_TTL_MS });
+          return send(res, 200, payload);
         }
 
         // Call Climatiq API with fuel-type specific parameters
@@ -239,7 +256,7 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
             return send(res, 502, { error: "climatiq_error", message: "Invalid co2e payload" });
           }
 
-          return send(res, 200, {
+          const payload = {
             fuelType,
             ...(config.paramType === "volume" 
               ? { kgCo2ePerLiter: co2e }
@@ -255,7 +272,9 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
             fallback: false,
             request: requestBody,
             upstream: { ok: upstream.ok, status: upstream.status, data },
-          });
+          };
+          devCache.set(cacheKey, { payload, expiresAt: Date.now() + DEV_CACHE_TTL_MS });
+          return send(res, 200, payload);
         } catch (err: any) {
           return send(res, 502, {
             error: "climatiq_error",

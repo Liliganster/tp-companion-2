@@ -158,6 +158,8 @@ interface TripData {
   purpose?: string;
   passengers?: number;
   distance?: number;
+  fuelLiters?: number | null;
+  evKwhUsed?: number | null;
   ratePerKmOverride?: number | null;
   specialOrigin?: "base" | "continue" | "return";
   // Per-trip expenses
@@ -175,7 +177,7 @@ interface AddTripModalProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   previousDestination?: string;
-  onSave?: (trip: Required<Pick<TripData, "id" | "date" | "route" | "project" | "purpose" | "passengers" | "distance">> & Pick<TripData, "ratePerKmOverride" | "specialOrigin" | "projectId" | "tollAmount" | "parkingAmount" | "otherExpenses" | "fuelAmount" | "documents">) => void;
+  onSave?: (trip: Required<Pick<TripData, "id" | "date" | "route" | "project" | "purpose" | "passengers" | "distance">> & Pick<TripData, "fuelLiters" | "evKwhUsed" | "ratePerKmOverride" | "specialOrigin" | "projectId" | "tollAmount" | "parkingAmount" | "otherExpenses" | "fuelAmount" | "documents">) => void;
 }
 
 export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previousDestination, onSave }: AddTripModalProps) {

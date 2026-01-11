@@ -121,10 +121,7 @@ export default async function handler(req: any, res: any) {
   
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !supabaseKey) {
-    return sendJson(res, 500, { error: "Missing Supabase configuration" });
-  }
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
   const now = new Date();
   const cacheKey = `${user.id}:${fuelType}`;
@@ -135,7 +132,7 @@ export default async function handler(req: any, res: any) {
   
   if (inMemory && inMemory.expiresAt > now.getTime()) {
     cachedData = inMemory.data;
-  } else {
+  } else if (supabase) {
     // 2. Check persistent cache (Supabase)
     const { data, error } = await supabase
       .from("climatiq_cache")
@@ -327,9 +324,9 @@ export default async function handler(req: any, res: any) {
     updated_at: new Date().toISOString(),
   };
 
-  await supabase
-    .from("climatiq_cache")
-    .upsert(cacheEntry, { onConflict: "user_id,fuel_type" });
+  if (supabase) {
+    await supabase.from("climatiq_cache").upsert(cacheEntry, { onConflict: "user_id,fuel_type" });
+  }
 
   // Update in-memory cache
   serverCache.set(cacheKey, {

@@ -286,7 +286,12 @@ export default function Projects() {
       if (!matchesYear) continue;
 
       const distance = Number.isFinite(trip.distance) ? trip.distance : 0;
-      const co2 = calculateTripEmissions({ distanceKm: distance, ...emissionsInput }).co2Kg;
+      const co2 = calculateTripEmissions({
+        distanceKm: distance,
+        fuelLiters: trip.fuelLiters,
+        evKwhUsed: trip.evKwhUsed,
+        ...emissionsInput,
+      }).co2Kg;
 
       const current = map.get(key) ?? {
         trips: 0,

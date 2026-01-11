@@ -129,9 +129,16 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   // Standardized emissions input
   const { emissionsInput, isLoading: isLoadingEmissionsData } = useEmissionsInput();
 
-  const calculateCO2 = useCallback((distance: number) => {
-    return calculateTripEmissions({ distanceKm: distance, ...emissionsInput }).co2Kg;
-  }, [emissionsInput]);
+  const calculateCO2 = useCallback(
+    (trip: { distance: number; fuelLiters?: number | null; evKwhUsed?: number | null }) =>
+      calculateTripEmissions({
+        distanceKm: trip.distance,
+        fuelLiters: trip.fuelLiters,
+        evKwhUsed: trip.evKwhUsed,
+        ...emissionsInput,
+      }).co2Kg,
+    [emissionsInput],
+  );
 
   const realProjectCo2 = useMemo(() => {
     if (!project) return 0;
@@ -139,7 +146,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       t.projectId === project.id || 
       (!t.projectId && t.project === project.name)
     );
-    return projectTrips.reduce((acc, t) => acc + calculateCO2(t.distance), 0);
+    return projectTrips.reduce((acc, t) => acc + calculateCO2(t), 0);
   }, [project, trips, calculateCO2]);
 
   const hasTripForJob = useCallback(

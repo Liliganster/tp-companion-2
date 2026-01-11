@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { cascadeDeleteProjectById, cascadeDeleteTripById } from "@/lib/cascadeDelete";
 import { calculateTripEmissions } from "@/lib/emissions";
 import { useUserProfile } from "@/contexts/UserProfileContext";
-import { parseLocaleNumber } from "@/lib/number";
 import { useEmissionsInput } from "@/hooks/use-emissions-input";
 import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
 import { useClimatiqFuelFactor } from "@/hooks/use-climatiq";
@@ -27,6 +26,8 @@ export type Trip = {
   clientName?: string; // Metadata from template/input (stored in documents)
   co2: number;
   distance: number;
+  fuelLiters?: number | null;
+  evKwhUsed?: number | null;
   ratePerKmOverride?: number | null;
   specialOrigin?: "base" | "continue" | "return";
   callsheet_job_id?: string; // Reference to callsheet_job (project document)
@@ -139,6 +140,8 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         parkingAmount: t.parking_amount ?? null,
         otherExpenses: t.other_expenses ?? null,
         fuelAmount: t.fuel_amount ?? null,
+        fuelLiters: Number.isFinite(Number(t.fuel_liters)) ? Number(t.fuel_liters) : null,
+        evKwhUsed: Number.isFinite(Number(t.ev_kwh_used)) ? Number(t.ev_kwh_used) : null,
         documents: (t.documents || []).filter((d: any) => d.kind !== "client_meta"),
       }));
 
@@ -152,7 +155,10 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     // Always recalculate CO2 using current API data (Climatiq/Electricity Maps)
     // Never trust stored values - APIs dictate the calculation
     return base.map((t) => {
-      const computed = calculateTripEmissions({ distanceKm: t.distance, ...emissionsInput }).co2Kg;
+      const computed = calculateTripEmissions({
+        distanceKm: t.distance,
+        ...emissionsInput,
+      }).co2Kg;
       return {
         ...t,
         co2: computed,
@@ -175,7 +181,10 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
     const updates = base
       .map((t) => {
-        const next = calculateTripEmissions({ distanceKm: t.distance, ...emissionsInput }).co2Kg;
+        const next = calculateTripEmissions({
+          distanceKm: t.distance,
+          ...emissionsInput,
+        }).co2Kg;
         const prev = Number(t.co2);
         const prevValid = Number.isFinite(prev) && prev > 0;
         if (!prevValid || Math.abs(prev - next) > 0.1) return { id: t.id, co2: next };
@@ -214,6 +223,8 @@ export function TripsProvider({ children }: { children: ReactNode }) {
                 ? {
                     ...t,
                     fuelAmount: next.fuel_amount ?? null,
+                    fuelLiters: Number.isFinite(Number(next.fuel_liters)) ? Number(next.fuel_liters) : null,
+                    evKwhUsed: Number.isFinite(Number(next.ev_kwh_used)) ? Number(next.ev_kwh_used) : null,
                     documents: (next.documents || []).filter((d: any) => d.kind !== "client_meta"),
                     clientName: (() => {
                         const docs = next.documents || [];
@@ -266,7 +277,10 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
     const normalizedTrip: Trip = {
       ...trip,
-      co2: calculateTripEmissions({ distanceKm: trip.distance, ...emissionsInput }).co2Kg,
+      co2: calculateTripEmissions({
+        distanceKm: trip.distance,
+        ...emissionsInput,
+      }).co2Kg,
     };
 
     const callsheetJobId = String(normalizedTrip.callsheet_job_id ?? "").trim();
@@ -370,9 +384,12 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     ) as Partial<Trip>;
 
     const nextPatch: Partial<Trip> = { ...safePatch };
-    // Always recalculate CO2 if distance changes, using current API data
+
+    // App rule: CO₂ depends only on distance + vehicle consumption settings + external factor.
+    // It must not depend on fuelAmount.
     if (safePatch.distance !== undefined) {
-      nextPatch.co2 = calculateTripEmissions({ distanceKm: safePatch.distance, ...emissionsInput }).co2Kg;
+      const distanceKm = Number(safePatch.distance);
+      nextPatch.co2 = calculateTripEmissions({ distanceKm, ...emissionsInput }).co2Kg;
     }
 
     const cachedProjects = (queryClient.getQueryData(["projects", user.id]) ?? []) as Array<any>;
@@ -422,12 +439,21 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    if (nextPatch.date !== undefined || nextPatch.distance !== undefined || nextPatch.passengers !== undefined || nextPatch.projectId !== undefined) {
+    if (
+      nextPatch.date !== undefined ||
+      nextPatch.distance !== undefined ||
+      nextPatch.passengers !== undefined ||
+      nextPatch.projectId !== undefined ||
+      nextPatch.fuelLiters !== undefined ||
+      nextPatch.evKwhUsed !== undefined
+    ) {
       const candidate = {
         id,
         date: nextPatch.date ?? "1970-01-01",
         distance: nextPatch.distance !== undefined ? Number(nextPatch.distance) : 1,
         passengers: nextPatch.passengers !== undefined ? Number(nextPatch.passengers) : 0,
+        fuelLiters: nextPatch.fuelLiters == null ? undefined : Number(nextPatch.fuelLiters),
+        evKwhUsed: nextPatch.evKwhUsed == null ? undefined : Number(nextPatch.evKwhUsed),
         purpose: nextPatch.purpose,
         projectId: nextPatch.projectId ?? null,
       };

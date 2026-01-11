@@ -48,12 +48,12 @@ function sumKm(trips: Array<{ distance: number }>): number {
 }
 
 function sumCo2(
-  trips: Array<{ co2?: number; distance: number }>,
+  trips: Array<{ co2?: number; distance: number; fuelLiters?: number | null; evKwhUsed?: number | null }>,
   emissionsInput: Omit<TripEmissionsInput, "distanceKm">,
 ): number {
   return trips.reduce((acc, t) => {
     // Always recalculate to reflect current profile settings
-    return acc + calculateTripEmissions({ distanceKm: t.distance, ...emissionsInput }).co2Kg;
+    return acc + calculateTripEmissions({ distanceKm: t.distance, fuelLiters: t.fuelLiters, evKwhUsed: t.evKwhUsed, ...emissionsInput }).co2Kg;
   }, 0);
 }
 

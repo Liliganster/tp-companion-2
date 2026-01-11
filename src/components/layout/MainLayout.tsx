@@ -29,12 +29,12 @@ export function MainLayout({ children, backgroundVariant = "default" }: MainLayo
         )}
       </div>
 
-      <div className="relative z-10 flex min-h-screen">
+      <div className="relative z-10 flex min-h-screen lg:h-screen">
         <Sidebar onSettingsClick={() => setSettingsOpen(true)} />
         <MobileHeader onSettingsClick={() => setSettingsOpen(true)} />
         
-        <main className="flex-1 lg:pl-0 pt-16 lg:pt-0 overflow-x-hidden">
-          <div className="p-4 lg:p-8 min-h-screen">
+        <main className="flex-1 lg:pl-0 pt-16 lg:pt-0 overflow-x-hidden lg:h-screen lg:overflow-hidden">
+          <div className="p-4 lg:p-8 min-h-screen lg:min-h-0 lg:h-full lg:overflow-y-auto">
             {children}
           </div>
         </main>

@@ -104,14 +104,14 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl p-0 overflow-hidden">
-        <DialogHeader className="p-4 pb-0">
+      <DialogContent className="w-[95vw] sm:w-full sm:max-w-4xl h-[90vh] md:h-auto max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
+        <DialogHeader className="p-4 pb-0 shrink-0">
           <DialogTitle>{t("tripDetail.title")}</DialogTitle>
           <DialogDescription className="sr-only">{t("tripDetail.title")}</DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col md:flex-row h-[600px]">
-          <div className="w-full md:w-80 p-4 space-y-4 overflow-y-auto border-r border-border/50 bg-secondary/20">
+        <div className="flex flex-col md:flex-row flex-1 md:h-[600px] min-h-0">
+          <div className="w-full md:w-80 max-h-[45%] md:max-h-none p-4 space-y-4 overflow-y-auto border-b md:border-b-0 md:border-r border-border/50 bg-secondary/20 min-h-0">
             <div>
               <Label className="text-xs uppercase tracking-wide text-muted-foreground">{t("tripDetail.date")}</Label>
               <p className="font-semibold">{formattedDate}</p>
@@ -217,15 +217,15 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
             )}
           </div>
 
-          <div className="flex-1 flex flex-col">
-            <Tabs defaultValue="document" className="flex-1 flex flex-col">
-              <div className="flex-1 relative">
+          <div className="flex-1 flex flex-col min-h-0">
+            <Tabs defaultValue="document" className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 relative min-h-0">
                 <TabsContent value="map" className="absolute inset-0 m-0">
                   <TripGoogleMap route={liveTrip.route} open={open} />
                 </TabsContent>
 
                 <TabsContent value="document" className="absolute inset-0 m-0 bg-secondary/20">
-                  <div className="w-full h-full p-6 overflow-auto">
+                  <div className="w-full h-full p-4 sm:p-6 overflow-auto">
                     {previewUrl ? (
                       <div className="flex flex-col h-full">
                         <div className="flex-1 bg-background rounded border border-border/50 overflow-hidden">

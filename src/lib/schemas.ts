@@ -9,6 +9,8 @@ export const TripInputSchema = z.object({
   date: dateIsoSchema,
   distance: z.number().finite().min(0).max(10_000),
   passengers: z.number().int().min(0).max(99).optional(),
+  fuelLiters: z.number().finite().min(0).max(10_000).optional(),
+  evKwhUsed: z.number().finite().min(0).max(10_000).optional(),
   purpose: z.string().max(500).optional(),
   projectId: z.string().uuid().nullable().optional(),
 });
