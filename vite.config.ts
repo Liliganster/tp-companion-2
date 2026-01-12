@@ -7,6 +7,7 @@ import { componentTagger } from "lovable-tagger";
 
 function googleApiProxy(serverKey: string | undefined): Plugin {
   const GOOGLE_BASE = "https://maps.googleapis.com/maps/api";
+  const HANDLED_PREFIXES = ["/api/google/directions", "/api/google/geocode", "/api/google/places-autocomplete"];
 
   const readBody = async (req: any) => {
     const chunks: Buffer[] = [];
@@ -37,7 +38,11 @@ function googleApiProxy(serverKey: string | undefined): Plugin {
     apply: "serve",
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
-        if (!req.url?.startsWith("/api/google/")) return next();
+        const url = req.url ?? "";
+        if (!url.startsWith("/api/google/")) return next();
+        // Only handle the endpoints implemented in this dev middleware.
+        // Everything else (OAuth, Calendar, Drive, etc.) should be handled by Vercel functions.
+        if (!HANDLED_PREFIXES.some((prefix) => url.startsWith(prefix))) return next();
         if (req.method !== "POST") {
           res.statusCode = 405;
           res.setHeader("Allow", "POST");
@@ -286,6 +291,86 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
   };
 }
 
+function vercelDevApiProxy(targetOrigin: string | undefined): Plugin {
+  const sendJson = (res: any, statusCode: number, payload: unknown) => {
+    res.statusCode = statusCode;
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify(payload));
+  };
+
+  const readRawBody = async (req: any): Promise<Buffer | undefined> => {
+    if (req.method === "GET" || req.method === "HEAD") return undefined;
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(Buffer.from(chunk));
+    if (!chunks.length) return undefined;
+    return Buffer.concat(chunks);
+  };
+
+  const shouldProxy = (url: string) =>
+    url.startsWith("/api/google/oauth") ||
+    url.startsWith("/api/google/calendar") ||
+    url.startsWith("/api/google/drive") ||
+    url.startsWith("/api/google/place-details");
+
+  return {
+    name: "vercel-dev-api-proxy",
+    apply: "serve",
+    configureServer(server) {
+      if (!targetOrigin) return;
+
+      let baseUrl: URL;
+      try {
+        baseUrl = new URL(targetOrigin);
+      } catch {
+        throw new Error(`Invalid VERCEL_DEV_API_ORIGIN: ${targetOrigin}`);
+      }
+
+      server.middlewares.use(async (req, res, next) => {
+        const url = req.url ?? "";
+        if (!shouldProxy(url)) return next();
+
+        const upstreamUrl = new URL(url, baseUrl);
+        const headers: Record<string, string> = {};
+
+        for (const [key, value] of Object.entries(req.headers ?? {})) {
+          if (value == null) continue;
+          const normalized = Array.isArray(value) ? value.join(",") : String(value);
+          headers[key] = normalized;
+        }
+
+        delete headers.host;
+        delete headers.connection;
+        delete headers["content-length"];
+
+        try {
+          const body = await readRawBody(req);
+          const upstream = await fetch(upstreamUrl, {
+            method: req.method,
+            headers,
+            body,
+            redirect: "manual",
+          });
+
+          res.statusCode = upstream.status;
+          upstream.headers.forEach((value, key) => {
+            if (key.toLowerCase() === "transfer-encoding") return;
+            res.setHeader(key, value);
+          });
+
+          const buf = Buffer.from(await upstream.arrayBuffer());
+          res.end(buf);
+        } catch (err: any) {
+          return sendJson(res, 502, {
+            error: "vercel_dev_unreachable",
+            message: err?.message || "Failed to reach Vercel dev server",
+            target: targetOrigin,
+          });
+        }
+      });
+    },
+  };
+}
+
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -294,6 +379,8 @@ export default defineConfig(({ mode }) => {
     build: {
       // Enable source maps in production to help debug minified code errors
       sourcemap: true,
+      // This project intentionally bundles a lot of UI and reporting code; keep the build output clean.
+      chunkSizeWarningLimit: 1500,
     },
     server: {
       host: "::",
@@ -320,6 +407,7 @@ export default defineConfig(({ mode }) => {
       react(),
       mode === "development" && googleApiProxy(env.GOOGLE_MAPS_SERVER_KEY),
       mode === "development" && climatiqProxy(env.CLIMATIQ_API_KEY),
+      mode === "development" && vercelDevApiProxy(env.VERCEL_DEV_API_ORIGIN),
 
       mode === "development" && componentTagger(),
       VitePWA({
@@ -348,7 +436,7 @@ export default defineConfig(({ mode }) => {
           ]
         },
         devOptions: {
-           enabled: true
+           enabled: false
         },
         workbox: {
           // skipWaiting: false - We handle this manually via messageSkipWaiting() when user clicks update

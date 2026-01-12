@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useProjects } from "@/contexts/ProjectsContext";
+import { logger } from "@/lib/logger";
 
 interface ProjectInvoiceUploaderProps {
   onUploadComplete?: (jobIds: string[]) => void;
@@ -19,7 +20,7 @@ export function ProjectInvoiceUploader({ onUploadComplete, projectId }: ProjectI
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
 
-    console.log("ProjectInvoiceUploader: uploading files", { filesCount: files.length, projectId });
+    logger.debug("ProjectInvoiceUploader: uploading files", { filesCount: files.length, projectId });
 
     if (files.length > 20) {
       toast.error("Máximo 20 documentos por vez");
@@ -78,7 +79,7 @@ export function ProjectInvoiceUploader({ onUploadComplete, projectId }: ProjectI
           if (dbError) {
             // If UNIQUE constraint fails (duplicate storage_path), just warn and continue
             if (dbError.code === '23505') {
-              console.warn(`Document ${filePath} already exists, skipping`);
+              logger.debug(`Document ${filePath} already exists, skipping`);
               failCount += 1;
             } else {
               throw dbError;
@@ -87,7 +88,7 @@ export function ProjectInvoiceUploader({ onUploadComplete, projectId }: ProjectI
             successCount += 1;
           }
         } catch (err: any) {
-          console.error(err);
+          logger.warn("ProjectInvoiceUploader upload error", err);
           failCount += 1;
         }
       }
@@ -98,7 +99,7 @@ export function ProjectInvoiceUploader({ onUploadComplete, projectId }: ProjectI
       refreshProjects();
 
     } catch (err: any) {
-      console.error(err);
+      logger.warn("ProjectInvoiceUploader error", err);
       toast.error(formatSupabaseError(err, "Error al subir factura"));
     } finally {
       setUploading(false);

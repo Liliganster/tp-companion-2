@@ -55,14 +55,14 @@ export function Sidebar({
             className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-10 group"
           >
             {/* Línea vertical azul (estado normal) */}
-            <div className="w-1 h-8 bg-blue-500 rounded-full group-hover:opacity-0 transition-opacity" />
+            <div className="w-1 h-8 bg-white/25 rounded-full group-hover:opacity-0 transition-opacity" />
             {/* Flecha (estado hover) */}
             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center shadow-sm">
+              <div className="w-5 h-5 rounded-full bg-white/10 border border-white/10 flex items-center justify-center shadow-sm">
                 {collapsed ? (
-                  <ChevronRight className="w-3 h-3 text-primary-foreground" />
+                  <ChevronRight className="w-3 h-3 text-foreground" />
                 ) : (
-                  <ChevronLeft className="w-3 h-3 text-primary-foreground" />
+                  <ChevronLeft className="w-3 h-3 text-foreground" />
                 )}
               </div>
             </div>
@@ -77,7 +77,9 @@ export function Sidebar({
       <div className="flex items-center justify-center h-16 px-4 border-b border-border/50">
         {!collapsed && <Link to="/" className="flex items-center gap-2">
             <img src="/favicon-32x32.png" alt="Fahrtenbuch Pro" className="w-10 h-10" />
-            <span className="font-semibold text-lg text-foreground">Fahrtenbuch Pro</span>
+            <span className="whitespace-nowrap text-[18px] font-black leading-none tracking-tight text-white">
+              Fahrtenbuch <span className="text-blue-500">Pro</span>
+            </span>
           </Link>}
         {collapsed && <Link to="/" className="flex items-center justify-center w-full">
             <img src="/favicon-32x32.png" alt="Fahrtenbuch Pro" className="w-10 h-10" />
@@ -100,20 +102,20 @@ export function Sidebar({
         <Link
           to="/plans"
           className={cn(
-            "block w-full rounded-md p-3 transition-colors",
-            "border border-purple-500/40 bg-purple-500/10 hover:bg-purple-500/15",
+            "block w-full rounded-lg p-3 transition-colors",
+            "border border-white/10 bg-white/5 hover:bg-white/10",
             collapsed && "p-2"
           )}
           title={collapsed ? t("nav.plans") : undefined}
         >
           <div className="flex items-center gap-2">
-            <Crown className="w-5 h-5 shrink-0 text-purple-300" />
+            <Crown className="w-5 h-5 shrink-0 text-muted-foreground" />
             {!collapsed && (
               <div className="flex flex-col">
-                <span className="text-sm font-semibold text-white">
+                <span className="text-sm font-semibold text-foreground">
                   {planTier === "pro" ? "Pro Plan" : t("plans.sidebar.free")}
                 </span>
-                <span className="text-xs text-purple-200">
+                <span className="text-xs text-muted-foreground">
                   {planTier === "pro" ? t("plans.sidebar.manage") : t("plans.sidebar.upgrade")}
                 </span>
               </div>

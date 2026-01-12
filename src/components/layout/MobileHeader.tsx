@@ -48,7 +48,9 @@ export function MobileHeader({
       <div className="flex items-center justify-between h-full px-4">
         <Link to="/" className="flex items-center gap-2">
           <img src="/favicon-32x32.png" alt="Fahrtenbuch Pro" className="w-8 h-8" />
-          <span className="font-semibold text-lg text-foreground">Fahrtenbuch Pro</span>
+          <span className="whitespace-nowrap text-[18px] font-black leading-none tracking-tight text-white">
+            Fahrtenbuch <span className="text-blue-500">Pro</span>
+          </span>
         </Link>
 
         <Sheet open={open} onOpenChange={setOpen}>

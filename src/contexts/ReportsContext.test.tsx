@@ -33,6 +33,10 @@ vi.mock("./AuthContext", () => ({
   useAuth: () => ({ user: { id: "user-1" } }),
 }));
 
+vi.mock("./PlanContext", () => ({
+  usePlan: () => ({ planTier: "basic" }),
+}));
+
 import { ReportsProvider, useReports } from "./ReportsContext";
 
 function CaptureReports({ out }: { out: { current: ReturnType<typeof useReports> | null } }) {
@@ -42,6 +46,7 @@ function CaptureReports({ out }: { out: { current: ReturnType<typeof useReports>
 
 describe("ReportsContext", () => {
   it("addReport persists and updates context list", async () => {
+    localStorage.clear();
     const out: { current: ReturnType<typeof useReports> | null } = { current: null };
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
@@ -71,6 +76,9 @@ describe("ReportsContext", () => {
 
     await waitFor(() => expect(out.current!.reports.length).toBe(1));
     expect(saved.id).toBeTruthy();
-    expect(mocks.insert).toHaveBeenCalledTimes(1);
+    expect(mocks.insert).toHaveBeenCalledTimes(0);
+
+    const raw = localStorage.getItem("fbp.localfirst:v1:reports:user-1");
+    expect(raw).toBeTruthy();
   });
 });

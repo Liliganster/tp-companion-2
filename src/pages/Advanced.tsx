@@ -19,8 +19,8 @@ const advancedSections: Array<{
     titleKey: "advanced.routesTitle",
     descriptionKey: "advanced.routesBody",
     icon: Route,
-    color: "text-primary",
-    bgColor: "bg-primary/10",
+    color: "text-foreground",
+    bgColor: "bg-white/5",
     path: "/advanced/routes",
   },
   {
@@ -28,8 +28,8 @@ const advancedSections: Array<{
     titleKey: "advanced.costsTitle",
     descriptionKey: "advanced.costsBody",
     icon: BarChart3,
-    color: "text-yellow-400",
-    bgColor: "bg-accent/10",
+    color: "text-foreground",
+    bgColor: "bg-white/5",
     path: "/advanced/costs",
   },
   {
@@ -37,8 +37,8 @@ const advancedSections: Array<{
     titleKey: "advanced.emissionsTitle",
     descriptionKey: "advanced.emissionsBody",
     icon: Leaf,
-    color: "text-success",
-    bgColor: "bg-success/10",
+    color: "text-foreground",
+    bgColor: "bg-white/5",
     path: "/advanced/emissions",
   },
 ];
@@ -59,9 +59,9 @@ export default function Advanced() {
 
   return (
     <MainLayout>
-      <div className="max-w-[1800px] mx-auto space-y-6">
+      <div className="page-container">
         {/* Header */}
-        <div className="animate-fade-in">
+        <div className="glass-panel p-6 md:p-8 animate-fade-in">
           <h1 className="text-2xl sm:text-3xl font-bold">{t("advanced.title")}</h1>
           <p className="text-muted-foreground mt-1">
             {t("advanced.subtitle")}
@@ -77,7 +77,7 @@ export default function Advanced() {
               className="glass-card p-6 text-left hover:bg-secondary/40 transition-all duration-200 group"
             >
               <div className="flex items-start justify-between mb-4">
-                <div className={`p-3 rounded-md ${section.bgColor} shadow-md ring-1 ring-inset ring-white/10`}>
+                <div className={`p-3 rounded-lg ${section.bgColor} shadow-md ring-1 ring-inset ring-white/10`}>
                   <section.icon className={`w-6 h-6 ${section.color} drop-shadow-sm`} />
                 </div>
                 <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-foreground group-hover:translate-x-1 transition-all" />

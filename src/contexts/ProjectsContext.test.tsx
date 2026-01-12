@@ -56,6 +56,26 @@ vi.mock("./AuthContext", () => ({
   useAuth: () => ({ user: { id: "user-1" } }),
 }));
 
+vi.mock("./PlanContext", () => ({
+  usePlan: () => ({ planTier: "basic" }),
+}));
+
+vi.mock("@/hooks/use-emissions-input", () => ({
+  useEmissionsInput: () => ({
+    emissionsInput: {
+      fuelType: "unknown",
+      fuelLPer100Km: 0,
+      fuelKgCo2ePerLiter: null,
+      fuelKgCo2ePerKm: null,
+      evKwhPer100Km: 0,
+      gridKgCo2PerKwh: null,
+    },
+    isLoading: false,
+    fuelFactorData: null,
+    gridData: null,
+  }),
+}));
+
 vi.mock("@/lib/cascadeDelete", () => ({
   cascadeDeleteProjectById: vi.fn().mockResolvedValue(undefined),
 }));
@@ -69,7 +89,7 @@ function CaptureProjects({ out }: { out: { current: ReturnType<typeof useProject
 
 describe("ProjectsContext", () => {
   beforeEach(() => {
-    localStorage.setItem("fbp.project_totals.available", "0"); // skip totals view calls in tests
+    localStorage.clear();
     mocks.insert.mockClear();
     mocks.from.mockClear();
   });
@@ -106,11 +126,8 @@ describe("ProjectsContext", () => {
     await out.current!.addProject(p);
     await waitFor(() => expect(out.current!.projects.length).toBe(1));
 
-    expect(mocks.insert).toHaveBeenCalledTimes(1);
-    expect(mocks.insert.mock.calls[0]?.[0]).toMatchObject({
-      id: "project-1",
-      user_id: "user-1",
-      name: "My Project",
-    });
+    expect(mocks.insert).toHaveBeenCalledTimes(0);
+    const raw = localStorage.getItem("fbp.localfirst:v1:projects:user-1");
+    expect(raw).toBeTruthy();
   });
 });

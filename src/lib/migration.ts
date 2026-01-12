@@ -3,6 +3,7 @@ import { Trip } from "@/contexts/TripsContext";
 import { Project } from "@/contexts/ProjectsContext";
 import { SavedReport } from "@/contexts/ReportsContext";
 import { UserProfile } from "@/contexts/UserProfileContext";
+import { logger } from "@/lib/logger";
 
 const KEYS = {
   PROFILE: "user-profile",
@@ -272,7 +273,7 @@ export async function checkAndMigrateData(userId: string): Promise<MigrationResu
     // Let's keep them for safety for now, just marked "migrated"
 
   } catch (error) {
-    console.error("Migration failed:", error);
+    logger.warn("Migration failed", error);
     return { ok: false, reason: "failed", error: (error as any)?.message ?? String(error) };
   }
 }

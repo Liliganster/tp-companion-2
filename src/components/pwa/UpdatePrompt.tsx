@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 type WorkboxInstance = import("workbox-window").Workbox;
 
@@ -11,6 +12,21 @@ export function UpdatePrompt() {
   const promptShownRef = useRef(false);
 
   useEffect(() => {
+    if (import.meta.env.PROD) return;
+    if (!("serviceWorker" in navigator)) return;
+    try {
+      const registrationsPromise = navigator.serviceWorker.getRegistrations?.();
+      if (!registrationsPromise) return;
+      registrationsPromise
+        .then((registrations) => Promise.all(registrations.map((r) => r.unregister())))
+        .catch(() => {});
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!import.meta.env.PROD) return;
     if (!("serviceWorker" in navigator)) return;
     if (registeredRef.current) return;
     registeredRef.current = true;
@@ -30,7 +46,7 @@ export function UpdatePrompt() {
         wb.addEventListener("installed", (event: any) => {
           if (cancelled) return;
           if (event?.isUpdate) {
-            console.log("[SW] New version installed, showing update prompt");
+            logger.debug("[SW] New version installed, showing update prompt");
             setNeedRefresh(true);
           }
         });
@@ -38,13 +54,13 @@ export function UpdatePrompt() {
         // Show update prompt when a new SW is waiting to activate
         wb.addEventListener("waiting", () => {
           if (cancelled) return;
-          console.log("[SW] New version waiting, showing update prompt");
+          logger.debug("[SW] New version waiting, showing update prompt");
           setNeedRefresh(true);
         });
 
         // Listen for controlling changes to auto-reload if SW takes control
         wb.addEventListener("controlling", () => {
-          console.log("[SW] New version took control, reloading...");
+          logger.debug("[SW] New version took control, reloading...");
           window.location.reload();
         });
 
@@ -54,11 +70,11 @@ export function UpdatePrompt() {
 
         // If a SW is already waiting (downloaded in background), show prompt immediately
         if (swRegistration?.waiting) {
-          console.log("[SW] Found waiting SW on load, showing update prompt");
+          logger.debug("[SW] Found waiting SW on load, showing update prompt");
           setNeedRefresh(true);
         }
       } catch (error) {
-        console.log("SW registration error", error);
+        logger.warn("SW registration error", error);
       }
     })();
 
@@ -68,6 +84,7 @@ export function UpdatePrompt() {
   }, []);
 
   useEffect(() => {
+    if (!import.meta.env.PROD) return;
     if (!registration) return;
 
     const updateNow = () => {
@@ -105,6 +122,7 @@ export function UpdatePrompt() {
   }, [registration]);
 
   useEffect(() => {
+    if (!import.meta.env.PROD) return;
     if (!needRefresh) return;
     if (promptShownRef.current) return;
     promptShownRef.current = true;

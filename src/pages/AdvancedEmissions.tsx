@@ -27,9 +27,7 @@ import {
   ArrowLeft,
   Settings2,
   Download,
-  Sprout,
   Info,
-  Save,
   Loader2,
   FileSpreadsheet,
   FileText,
@@ -52,25 +50,16 @@ import { useI18n } from "@/hooks/use-i18n";
 import { useTrips } from "@/contexts/TripsContext";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { calculateTreesNeeded, calculateTripEmissions } from "@/lib/emissions";
-import { toast } from "sonner";
-import { validateFuelConsumption, getConsumptionErrorData } from "@/lib/validation";
-import { useUserProfile } from "@/contexts/UserProfileContext";
-import { parseLocaleNumber } from "@/lib/number";
 import { useEmissionsInput } from "@/hooks/use-emissions-input";
 
 type EmissionsResult = {
   id: string;
   rank: number;
   name: string;
-  rating: "muy-baja" | "baja" | "moderada" | "alta" | "muy-alta";
-  trend: "stable" | "new" | "improving" | "worsening";
   co2Kg: number;
-  efficiency: number;
   distanceKm: number;
   trips: number;
   passengers: number;
-  fuelLiters?: number;  // For gasoline/diesel
-  kwhUsed?: number;      // For EV
   earliestDateMs?: number | null;
   latestDateMs?: number | null;
 };
@@ -149,109 +138,50 @@ function getRange(now: Date, timeRange: string): { start: Date; end: Date; prevS
   return { start, end, prevStart, prevEnd };
 }
 
-function getRatingFromEfficiencyKgPerKm(eff: number): EmissionsResult["rating"] {
-  // Categorías objetivas según nivel de emisiones (kg CO₂/km)
-  if (eff <= 0.12) return "muy-baja";  // Excelente: vehículos muy eficientes
-  if (eff <= 0.16) return "baja";      // Buena: vehículos eficientes
-  if (eff <= 0.22) return "moderada";  // Moderada: promedio
-  if (eff <= 0.30) return "alta";      // Alta: vehículos menos eficientes
-  return "muy-alta";                   // Muy alta: vehículos ineficientes
-}
-
-function getTrendLabel(current: number, previous: number): EmissionsResult["trend"] {
-  // Lower is better. Compare % change and bucket it.
-  if (!Number.isFinite(current) || !Number.isFinite(previous)) return "stable";
-  if (previous <= 0) return current > 0 ? "new" : "stable";
-
-  const deltaPct = ((current - previous) / previous) * 100;
-  if (deltaPct <= -5) return "improving";
-  if (deltaPct >= 5) return "worsening";
-  return "stable";
-}
-
-const ADV_EMISSIONS_CONFIG_KEY = "advancedEmissions:config:v2";
+const ADV_EMISSIONS_CONFIG_KEY = "advancedEmissions:config:v3";
 const ITEMS_PER_PAGE = 5;
 
 function loadAdvancedEmissionsConfig(): {
-  isConfigured: boolean;
   viewMode: string;
   sortBy: string;
   sortDirection: "asc" | "desc";
   timeRange: string;
-  fuelEfficiency: string;
 } {
   try {
     if (typeof window === "undefined") {
-      return { isConfigured: false, viewMode: "projects", sortBy: "co2", sortDirection: "desc", timeRange: "all", fuelEfficiency: "0" };
+      return { viewMode: "projects", sortBy: "co2", sortDirection: "desc", timeRange: "all" };
     }
     const raw = window.localStorage.getItem(ADV_EMISSIONS_CONFIG_KEY);
     if (!raw) {
-      return { isConfigured: false, viewMode: "projects", sortBy: "co2", sortDirection: "desc", timeRange: "all", fuelEfficiency: "0" };
+      return { viewMode: "projects", sortBy: "co2", sortDirection: "desc", timeRange: "all" };
     }
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") {
-      return { isConfigured: false, viewMode: "projects", sortBy: "co2", sortDirection: "desc", timeRange: "all", fuelEfficiency: "0" };
+      return { viewMode: "projects", sortBy: "co2", sortDirection: "desc", timeRange: "all" };
     }
 
+    const rawSortBy = typeof (parsed as any).sortBy === "string" ? (parsed as any).sortBy : "co2";
+    const sortBy = rawSortBy === "efficiency" ? "co2" : rawSortBy;
+
     return {
-      isConfigured: Boolean((parsed as any).isConfigured),
       viewMode: typeof (parsed as any).viewMode === "string" ? (parsed as any).viewMode : "projects",
-      sortBy: typeof (parsed as any).sortBy === "string" ? (parsed as any).sortBy : "co2",
+      sortBy,
       sortDirection: (parsed as any).sortDirection === "asc" ? "asc" : "desc",
       timeRange: typeof (parsed as any).timeRange === "string" ? (parsed as any).timeRange : "all",
-      fuelEfficiency: typeof (parsed as any).fuelEfficiency === "string" ? (parsed as any).fuelEfficiency : "0",
     };
   } catch {
-    return { isConfigured: false, viewMode: "projects", sortBy: "co2", sortDirection: "desc", timeRange: "all", fuelEfficiency: "0" };
+    return { viewMode: "projects", sortBy: "co2", sortDirection: "desc", timeRange: "all" };
   }
 }
 
 export default function AdvancedEmissions() {
   const navigate = useNavigate();
-  const { t, tf, locale } = useI18n();
+  const { t, locale } = useI18n();
   const { trips } = useTrips();
   const { projects } = useProjects();
-  const { profile } = useUserProfile();
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
 
-  const { emissionsInput: baseEmissionsInput, fuelFactorData: fuelFactor, gridData: atGrid, isLoading: isLoadingEmissionsData } = useEmissionsInput();
-  const gridKgCo2PerKwh = atGrid?.kgCo2PerKwh ?? null;
-
-  const ratingLabel = useMemo(
-    () => (rating: EmissionsResult["rating"]) => {
-      switch (rating) {
-        case "muy-baja":
-          return t("advancedEmissions.ratingVeryLow");
-        case "baja":
-          return t("advancedEmissions.ratingLow");
-        case "moderada":
-          return t("advancedEmissions.ratingModerate");
-        case "alta":
-          return t("advancedEmissions.ratingHigh");
-        case "muy-alta":
-          return t("advancedEmissions.ratingVeryHigh");
-        default:
-          return t("advancedEmissions.ratingModerate");
-      }
-    },
-    [t],
-  );
-
-  const trendLabel = useMemo(
-    () => (trend: EmissionsResult["trend"]) => {
-      switch (trend) {
-        case "improving":
-          return t("advancedEmissions.trendImproving");
-        case "worsening":
-          return t("advancedEmissions.trendWorsening");
-        case "new":
-          return t("advancedEmissions.trendNew");
-        default:
-          return t("advancedEmissions.trendStable");
-      }
-    },
-    [t],
-  );
+  const { emissionsInput: baseEmissionsInput, isLoading: isLoadingEmissionsData } = useEmissionsInput();
 
   const numberFormatter0 = useMemo(
     () => new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }),
@@ -263,15 +193,9 @@ export default function AdvancedEmissions() {
     [locale],
   );
 
-  const efficiencyFormatter = useMemo(
-    () => new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    [locale],
-  );
-
   const fallbackTripName = t("advancedEmissions.fallbackTripName");
   const fallbackProjectName = t("advancedEmissions.fallbackProjectName");
 
-  const [isConfigured, setIsConfigured] = useState(() => loadAdvancedEmissionsConfig().isConfigured);
   const [configModalOpen, setConfigModalOpen] = useState(false);
 
   // Configuration state
@@ -279,7 +203,6 @@ export default function AdvancedEmissions() {
   const [sortBy, setSortBy] = useState(() => loadAdvancedEmissionsConfig().sortBy);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">(() => loadAdvancedEmissionsConfig().sortDirection);
   const [timeRange, setTimeRange] = useState(() => loadAdvancedEmissionsConfig().timeRange);
-  const [fuelEfficiency, setFuelEfficiency] = useState(() => loadAdvancedEmissionsConfig().fuelEfficiency);
   const [searchTerm, setSearchTerm] = useState("");
 
   // Reset pagination when filters change
@@ -292,6 +215,7 @@ export default function AdvancedEmissions() {
     try {
       if (typeof window === "undefined") return;
       window.localStorage.removeItem("advancedEmissions:config:v1");
+      window.localStorage.removeItem("advancedEmissions:config:v2");
     } catch {
       // Ignore localStorage errors (e.g., private browsing)
     }
@@ -303,81 +227,32 @@ export default function AdvancedEmissions() {
       if (typeof window === "undefined") return;
       window.localStorage.setItem(
         ADV_EMISSIONS_CONFIG_KEY,
-        JSON.stringify({ isConfigured, viewMode, sortBy, sortDirection, timeRange, fuelEfficiency })
+        JSON.stringify({ viewMode, sortBy, sortDirection, timeRange })
       );
     } catch {
       // ignore
     }
-  }, [fuelEfficiency, isConfigured, sortBy, sortDirection, timeRange, viewMode]);
-
-  // Validate fuel efficiency input and show warning
-  useEffect(() => {
-    if (!isConfigured) return;
-    if (profile.fuelType !== "gasoline" && profile.fuelType !== "diesel") return;
-    
-    const fuelLPer100Km = Number.parseFloat(String(fuelEfficiency).replace(",", "."));
-    if (!Number.isFinite(fuelLPer100Km) || fuelLPer100Km <= 0) return;
-    
-    const result = validateFuelConsumption(fuelLPer100Km);
-    if (!result.valid) {
-      const errorData = getConsumptionErrorData(result, false);
-      if (errorData) {
-        const msg = errorData.type === "excessive"
-          ? tf("validation.excessive", { value: errorData.value, unit: errorData.unit, max: errorData.max })
-          : tf("validation.tooLow", { value: errorData.value, unit: errorData.unit, min: errorData.min });
-        toast.warning(msg, {
-          id: "fuel-efficiency-warning",
-          duration: 4000,
-        });
-      }
-    }
-  }, [fuelEfficiency, isConfigured, profile.fuelType, tf]);
+  }, [sortBy, sortDirection, timeRange, viewMode]);
 
   const computed = useMemo(() => {
     const now = new Date();
-    const { start, end, prevStart, prevEnd } = getRange(now, timeRange);
-    const fuelLPer100Km = Number.parseFloat(String(fuelEfficiency).replace(",", "."));
-    const modalFuelRate = Number.isFinite(fuelLPer100Km) && fuelLPer100Km > 0 ? fuelLPer100Km : 0;
-    const profileFuelRate = parseLocaleNumber(profile.fuelLPer100Km);
-
-    // Priority: Modal value > Settings value
-    // The modal value ONLY affects CO2 ranking calculations, not trips or projects views
-    // If user sets a value in modal, use it. Otherwise, use settings default.
-    const analysisFuelRate = modalFuelRate > 0 
-        ? modalFuelRate 
-        : Number.isFinite(profileFuelRate) && Number(profileFuelRate) > 0 
-          ? Number(profileFuelRate) 
-          : 0;
-
-    const shouldUseAnalysisFuelRate =
-      (profile.fuelType === "gasoline" || profile.fuelType === "diesel") && analysisFuelRate > 0;
+    const { start, end } = getRange(now, timeRange);
 
     const projectNameById = new Map(projects.map((p) => [p.id, p.name] as const));
 
-    const sumTripCo2 = (distanceKm: number, fuelLiters?: number | null, evKwhUsed?: number | null) => {
-      // CO2 ranking calculations use the modal value (analysisFuelRate) if available
-      // This allows "what if" scenarios without affecting trips/projects views
-      const res = calculateTripEmissions({
+    const sumTripCo2 = (distanceKm: number, fuelLiters?: number | null, evKwhUsed?: number | null) =>
+      calculateTripEmissions({
         distanceKm,
         fuelLiters,
         evKwhUsed,
         ...baseEmissionsInput,
-        fuelLPer100Km: shouldUseAnalysisFuelRate ? analysisFuelRate : baseEmissionsInput.fuelLPer100Km,
-      });
-      return res.co2Kg;
-    };
+      }).co2Kg;
 
     const inRange = (d: Date) => d >= start && d <= end;
-    const inPrevRange = (d: Date) => d >= prevStart && d <= prevEnd;
 
     const currentTrips = trips.filter((tr) => {
       const dt = parseTripDate(tr.date);
       return dt ? inRange(dt) : false;
-    });
-
-    const prevTrips = trips.filter((tr) => {
-      const dt = parseTripDate(tr.date);
-      return dt ? inPrevRange(dt) : false;
     });
 
     type Agg = {
@@ -429,41 +304,23 @@ export default function AdvancedEmissions() {
     };
 
     const curAgg = aggregate(currentTrips);
-    const prevAgg = aggregate(prevTrips);
-    const prevById = new Map(prevAgg.map((a) => [a.id, a] as const));
 
-    const results: EmissionsResult[] = curAgg.map((a) => {
-      const efficiency = a.distanceKm > 0 ? a.co2Kg / a.distanceKm : 0;
-      const prev = prevById.get(a.id);
-      const prevEff = prev && prev.distanceKm > 0 ? prev.co2Kg / prev.distanceKm : 0;
-
-      // Calculate fuel/electricity consumption
-      const fuelLiters = analysisFuelRate > 0 ? (a.distanceKm * analysisFuelRate) / 100 : 0;
-      const kwhUsed = profile.fuelType === "ev" && profile.evKwhPer100Km ? (a.distanceKm * parseLocaleNumber(profile.evKwhPer100Km)) / 100 : 0;
-      
-      return {
-        id: a.id,
-        rank: 0,
-        name: a.name,
-        rating: getRatingFromEfficiencyKgPerKm(efficiency),
-        trend: getTrendLabel(efficiency, prevEff),
-        co2Kg: clampRound(a.co2Kg, 1),
-        efficiency: clampRound(efficiency, 2),
-        distanceKm: clampRound(a.distanceKm, 0),
-        trips: a.trips,
-        passengers: a.passengers,
-        fuelLiters: clampRound(fuelLiters, 1),
-        kwhUsed: clampRound(kwhUsed, 1),
-        earliestDateMs: a.earliestDateMs,
-        latestDateMs: a.latestDateMs,
-      };
-    });
+    const results: EmissionsResult[] = curAgg.map((a) => ({
+      id: a.id,
+      rank: 0,
+      name: a.name,
+      co2Kg: clampRound(a.co2Kg, 1),
+      distanceKm: clampRound(a.distanceKm, 0),
+      trips: a.trips,
+      passengers: a.passengers,
+      earliestDateMs: a.earliestDateMs,
+      latestDateMs: a.latestDateMs,
+    }));
 
     const compare = (aVal: number, bVal: number) => (sortDirection === "asc" ? aVal - bVal : bVal - aVal);
 
     const sorted = [...results].sort((a, b) => {
       if (sortBy === "distance") return compare(a.distanceKm, b.distanceKm);
-      if (sortBy === "efficiency") return compare(a.efficiency, b.efficiency);
       return compare(a.co2Kg, b.co2Kg);
     });
 
@@ -480,33 +337,21 @@ export default function AdvancedEmissions() {
     // Totals are based on the full (time-range) dataset, not the search filter.
     const rawTotalCo2 = curAgg.reduce((acc, a) => acc + a.co2Kg, 0);
     const rawTotalDistance = curAgg.reduce((acc, a) => acc + a.distanceKm, 0);
-    const avgEfficiency = rawTotalDistance > 0 ? rawTotalCo2 / rawTotalDistance : 0;
-    const fuelLiters = analysisFuelRate > 0 ? (rawTotalDistance * analysisFuelRate) / 100 : 0;
-    const evKwhRate = profile.fuelType === "ev" ? (parseLocaleNumber(profile.evKwhPer100Km) ?? 0) : 0;
-    const totalKwhUsed = evKwhRate > 0 ? (rawTotalDistance * evKwhRate) / 100 : 0;
     const treesNeeded = calculateTreesNeeded(rawTotalCo2, 20);
     
     return {
       results: sorted,
       filtered,
       totalCo2: clampRound(rawTotalCo2, 1),
-      avgEfficiency: clampRound(avgEfficiency, 2),
-      fuelLiters: clampRound(fuelLiters, 1),
-      totalKwhUsed: clampRound(totalKwhUsed, 1),
       totalDistanceKm: clampRound(rawTotalDistance, 0),
       treesNeeded,
     };
-  }, [baseEmissionsInput, fallbackProjectName, fallbackTripName, fuelEfficiency, profile.evKwhPer100Km, profile.fuelLPer100Km, profile.fuelType, projects, sortBy, sortDirection, timeRange, trips, viewMode, searchTerm]);
+  }, [baseEmissionsInput, fallbackProjectName, fallbackTripName, projects, sortBy, sortDirection, timeRange, trips, viewMode, searchTerm]);
 
   const maxCo2Kg = useMemo(
     () => computed.filtered.reduce((max, r) => Math.max(max, r.co2Kg), 0),
     [computed.filtered],
   );
-
-  const handleSaveConfig = () => {
-    setIsConfigured(true);
-    setConfigModalOpen(false);
-  };
 
   const toggleSortDirection = () => {
     setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
@@ -515,16 +360,6 @@ export default function AdvancedEmissions() {
   const resetFilters = () => {
     setSearchTerm("");
     setTimeRange("all");
-  };
-
-  const trendIndicator = (trend: EmissionsResult["trend"]) => {
-    if (trend === "improving") {
-      return { arrow: "↓", className: "text-emerald-400" };
-    }
-    if (trend === "worsening") {
-      return { arrow: "↑", className: "text-red-400" };
-    }
-    return { arrow: "→", className: "text-yellow-400" };
   };
 
   const treeWord = computed.treesNeeded === 1
@@ -537,12 +372,9 @@ export default function AdvancedEmissions() {
       Rank: r.rank,
       Name: r.name,
       "CO2 (kg)": r.co2Kg,
-      "Efficiency (kg/km)": r.efficiency,
       "Distance (km)": r.distanceKm,
       Trips: r.trips,
       Passengers: r.passengers,
-      Rating: ratingLabel(r.rating),
-      Trend: trendLabel(r.trend),
     }));
   };
 
@@ -592,17 +424,15 @@ export default function AdvancedEmissions() {
     doc.text(`${t("advancedEmissions.timeRange")}: ${timeRange}`, 14, 30);
     doc.text(`Total CO2: ${computed.totalCo2} kg`, 14, 36);
 
-    const tableHeaders = [
-      ["Rank", "Name", "CO2 (kg)", "Eff (kg/km)", "Dist (km)", "Rating"]
-    ];
+    const tableHeaders = [["Rank", "Name", "CO2 (kg)", "Dist (km)", "Trips", "Passengers"]];
 
     const tableData = rows.map(r => [
       r.rank,
       r.name,
       r.co2Kg,
-      r.efficiency,
       r.distanceKm,
-      ratingLabel(r.rating)
+      r.trips,
+      r.passengers,
     ]);
 
     autoTable(doc, {
@@ -617,9 +447,9 @@ export default function AdvancedEmissions() {
 
   return (
     <MainLayout>
-      <div className="mx-auto w-full max-w-[1800px] flex flex-col gap-6">
+      <div className="page-container flex flex-col">
         {/* Header */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between animate-fade-in shrink-0">
+        <div className="glass-panel p-6 md:p-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between animate-fade-in">
           <div className="flex min-w-0 items-start gap-3">
             <Button variant="ghost" size="icon" onClick={() => navigate("/advanced")} className="shrink-0">
               <ArrowLeft className="w-5 h-5" />
@@ -654,11 +484,11 @@ export default function AdvancedEmissions() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={handleExportExcel} className="gap-2 cursor-pointer">
-                  <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                  <FileSpreadsheet className="w-4 h-4 text-muted-foreground" />
                   <span>Excel (.xlsx)</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleExportPdf} className="gap-2 cursor-pointer">
-                  <FileText className="w-4 h-4 text-red-500" />
+                  <FileText className="w-4 h-4 text-muted-foreground" />
                   <span>PDF (.pdf)</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleExportCsv} className="gap-2 cursor-pointer">
@@ -670,20 +500,8 @@ export default function AdvancedEmissions() {
           </div>
         </div>
 
-        {/* Content based on configuration state */}
         <div>
-          {!isConfigured ? (
-            /* Empty/Welcome State */
-            <div className="flex flex-col items-center justify-center py-24 animate-fade-in">
-              <div className="mb-6">
-                <Sprout className="w-20 h-20 text-success" />
-              </div>
-              <h2 className="text-xl font-semibold mb-4">{t("advancedEmissions.welcomeTitle")}</h2>
-              <p className="text-muted-foreground text-center max-w-lg mb-8">
-                {t("advancedEmissions.welcomeBody")}
-              </p>
-            </div>
-          ) : isLoadingEmissionsData ? (
+          {isLoadingEmissionsData ? (
             <div className="flex flex-col items-center justify-center h-full animate-fade-in">
               <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
               <p className="text-muted-foreground">Cargando datos de emisiones...</p>
@@ -695,7 +513,7 @@ export default function AdvancedEmissions() {
               <div className="grid gap-6 lg:grid-cols-2">
                 <section className="relative overflow-hidden p-6 sm:p-8 glass-card h-full">
                   <div className="absolute top-0 right-0 w-40 h-40 bg-primary/20 blur-[80px] rounded-full" />
-                  <div className="absolute bottom-0 left-0 w-40 h-40 bg-emerald-500/10 blur-[80px] rounded-full" />
+                  <div className="absolute bottom-0 left-0 w-40 h-40 bg-white/5 blur-[80px] rounded-full" />
                   <div className="relative z-10 text-center">
                     <p className="text-primary text-[10px] font-black uppercase tracking-[0.3em] mb-4">
                       {t("advancedEmissions.totalFootprintTitle")}
@@ -712,10 +530,10 @@ export default function AdvancedEmissions() {
                 </section>
 
                 <section className="relative overflow-hidden p-6 sm:p-8 glass-card h-full">
-                  <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/20 blur-[80px] rounded-full" />
+                  <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 blur-[80px] rounded-full" />
                   <div className="absolute bottom-0 left-0 w-40 h-40 bg-primary/10 blur-[80px] rounded-full" />
                   <div className="relative z-10 text-center">
-                    <p className="text-emerald-400 text-[10px] font-black uppercase tracking-[0.3em] mb-4">
+                    <p className="text-foreground text-[10px] font-black uppercase tracking-[0.3em] mb-4">
                       {t("advancedEmissions.compensationTitle")}
                     </p>
                     <div className="flex flex-col items-center leading-none">
@@ -878,15 +696,6 @@ export default function AdvancedEmissions() {
                                 <span className="text-[9px] text-muted-foreground flex items-center gap-1 font-medium">
                                   <Users size={10} /> {result.passengers} {t("trips.passengers")}
                                 </span>
-                                {(() => {
-                                  const { arrow, className } = trendIndicator(result.trend);
-                                  return (
-                                    <span className={`text-[9px] flex items-center gap-1 font-bold ${className}`}>
-                                      <span className="font-black leading-none">{arrow}</span>
-                                      {efficiencyFormatter.format(result.efficiency)} kg/km
-                                    </span>
-                                  );
-                                })()}
                               </div>
                             </div>
 
@@ -901,9 +710,9 @@ export default function AdvancedEmissions() {
                             </div>
                           </div>
 
-                          <div className="w-full bg-secondary/40 h-1.5 rounded-full overflow-hidden p-[1px]">
-                            <div
-                              className="h-full rounded-full bg-blue-500 transition-all duration-700 ease-out shadow-[0_0_12px_rgba(59,130,246,0.35)]"
+                            <div className="w-full bg-secondary/40 h-1.5 rounded-full overflow-hidden p-[1px]">
+                              <div
+                              className="h-full rounded-full bg-white/30 transition-all duration-700 ease-out"
                               style={{ width: `${maxCo2Kg > 0 ? Math.max(3, Math.min(100, (result.co2Kg / maxCo2Kg) * 100)) : 0}%` }}
                             />
                           </div>
@@ -948,38 +757,16 @@ export default function AdvancedEmissions() {
                   <SelectTrigger className="bg-secondary/50">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="co2">{t("advancedEmissions.sortByCo2")}</SelectItem>
-                    <SelectItem value="efficiency">{t("advancedEmissions.sortByEfficiency")}</SelectItem>
-                    <SelectItem value="distance">{t("advancedEmissions.sortByDistance")}</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  {t("advancedEmissions.sortByHelp")}
-                </p>
-              </div>
-
-              {/* Fuel Efficiency */}
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground uppercase tracking-wide">
-                  {t("advancedEmissions.fuelEfficiency")}
-                </Label>
-                <div className="relative">
-                  <Input
-                    type="number"
-                    value={fuelEfficiency}
-                    onChange={(e) => setFuelEfficiency(e.target.value)}
-                    className="bg-secondary/50 pr-16"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                    L/100km
-                  </span>
+                    <SelectContent>
+                      <SelectItem value="co2">{t("advancedEmissions.sortByCo2")}</SelectItem>
+                      <SelectItem value="distance">{t("advancedEmissions.sortByDistance")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {t("advancedEmissions.sortByHelp")}
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {t("advancedEmissions.fuelEfficiencyHelp")}
-                </p>
               </div>
-            </div>
 
             {/* Info Box */}
             <div className="p-4 rounded-lg bg-secondary/30 border border-border/50">
@@ -998,10 +785,6 @@ export default function AdvancedEmissions() {
           <div className="flex justify-end gap-3">
             <Button variant="outline" onClick={() => setConfigModalOpen(false)}>
               {t("advancedEmissions.cancel")}
-            </Button>
-            <Button variant="save" onClick={handleSaveConfig} className="gap-2">
-              <Save className="w-4 h-4" />
-              {t("advancedEmissions.save")}
             </Button>
           </div>
         </DialogContent>

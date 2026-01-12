@@ -31,6 +31,7 @@ import { useNavigate } from "react-router-dom";
 import { uuidv4 } from "@/lib/utils";
 import { Trip } from "@/contexts/TripsContext";
 import { usePlanLimits } from "@/hooks/use-plan-limits";
+import { logger } from "@/lib/logger";
 
 interface CalendarEvent {
   id: string;
@@ -167,7 +168,7 @@ export default function CalendarPage() {
       const destination = route[route.length - 1];
       const waypoints = route.slice(1, -1); // Paradas intermedias
       
-      console.log("Calculating distance with:", { origin, destination, waypoints });
+      logger.debug("Calculating distance with:", { origin, destination, waypoints });
       
       const response = await fetch("/api/google/directions", {
         method: "POST",
@@ -184,10 +185,10 @@ export default function CalendarPage() {
       });
       
       const data: any = await response.json().catch(() => null);
-      console.log("Distance API response:", data);
+      logger.debug("Distance API response:", data);
       
       if (!response.ok || !data?.totalDistanceMeters) {
-        console.error("Distance calculation failed:", response.status, data);
+        logger.warn("Distance calculation failed", { status: response.status, data });
         return 0;
       }
       
@@ -195,7 +196,7 @@ export default function CalendarPage() {
       const distanceKm = Math.round(data.totalDistanceMeters / 1000);
       return distanceKm;
     } catch (error) {
-      console.error("Error calculating distance:", error);
+      logger.warn("Error calculating distance", error);
       return 0;
     }
   };
@@ -326,7 +327,7 @@ export default function CalendarPage() {
         navigate("/trips");
       }
     } catch (error) {
-      console.error("Error importing event as trip:", error);
+      logger.warn("Error importing event as trip", error);
       toast.error(t("calendar.importError"));
     } finally {
       setImporting(false);
@@ -680,9 +681,9 @@ export default function CalendarPage() {
 
   return (
     <MainLayout>
-      <div className="max-w-[1800px] mx-auto space-y-6">
+      <div className="page-container">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
+        <div className="glass-panel p-6 md:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6 animate-fade-in">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold">
               {t("calendar.title")}

@@ -55,6 +55,10 @@ vi.mock("./AuthContext", () => ({
   useAuth: () => ({ user: { id: "user-1" } }),
 }));
 
+vi.mock("./PlanContext", () => ({
+  usePlan: () => ({ planTier: "basic" }),
+}));
+
 vi.mock("@/contexts/UserProfileContext", () => ({
   useUserProfile: () => ({
     profile: {
@@ -75,6 +79,7 @@ function CaptureTrips({ out }: { out: { current: ReturnType<typeof useTrips> | n
 
 describe("TripsContext", () => {
   beforeEach(() => {
+    localStorage.clear();
     mocks.insert.mockClear();
     mocks.from.mockClear();
     mocks.orderTrips.mockReset();
@@ -132,12 +137,13 @@ describe("TripsContext", () => {
     expect(ok).toBe(true);
 
     await waitFor(() => expect(out.current!.trips.length).toBe(1));
-    expect(mocks.insert).toHaveBeenCalledTimes(1);
-    expect(mocks.insert.mock.calls[0]?.[0]).toMatchObject({
-      id: "trip-1",
-      user_id: "user-1",
-      project_id: "11111111-1111-1111-1111-111111111111",
-      distance_km: 10,
-    });
+    expect(mocks.insert).toHaveBeenCalledTimes(0);
+
+    const raw = localStorage.getItem("fbp.localfirst:v1:trips:user-1");
+    expect(raw).toBeTruthy();
+    const parsed = JSON.parse(raw as string) as { v: number; ts: number; data: Trip[] };
+    expect(parsed.v).toBe(1);
+    expect(Array.isArray(parsed.data)).toBe(true);
+    expect(parsed.data[0]?.id).toBe("trip-1");
   });
 });

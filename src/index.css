@@ -7,16 +7,16 @@
 @layer base {
   :root {
     /* Professional dark theme - minimal colors */
-    --background: 220 16% 8%;
+    --background: 222 18% 6%;
     --foreground: 220 10% 92%;
 
-    --card: 220 16% 10%;
+    --card: 222 18% 9%;
     --card-foreground: 220 10% 92%;
 
-    --popover: 220 16% 12%;
+    --popover: 222 18% 10%;
     --popover-foreground: 220 10% 92%;
 
-    --primary: 220 10% 92%;
+    --primary: 0 0% 96%;
     --primary-foreground: 220 16% 8%;
 
     --secondary: 220 14% 14%;
@@ -28,36 +28,40 @@
     --accent: 220 14% 18%;
     --accent-foreground: 220 10% 92%;
 
-    --destructive: 0 62% 55%;
-    --destructive-foreground: 220 10% 98%;
+    /* Keep UI monochrome (delete-account stays red via explicit classes) */
+    --destructive: 0 0% 55%;
+    --destructive-foreground: 0 0% 10%;
 
     --border: 220 14% 18%;
     --input: 220 14% 16%;
     --ring: 220 10% 70%;
 
-    --radius: 0.375rem;
+    /* Base radius for the whole app (Tailwind `rounded-lg` via shadcn) */
+    --radius: 6px;
 
-    /* Subtle glass tokens */
-    --glass-bg: 220 16% 11% / 0.8;
-    --glass-border: 220 10% 92% / 0.06;
-    --glass-blur: 12px;
-    --glass-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.25);
+    /* Subtle glass tokens (landing-like) */
+    --glass-bg: 220 18% 12% / 0.72;
+    --glass-bg-2: 220 18% 9% / 0.66;
+    --glass-border: 220 10% 92% / 0.10;
+    --glass-blur: 18px;
+    --glass-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
     --app-bg-blur: 0px;
-    --app-bg-image: none;
-    --app-bg-image-opacity: 0.55;
+    --app-bg-image: radial-gradient(80% 60% at 50% 0%, rgba(255, 255, 255, 0.06), transparent 60%),
+      radial-gradient(50% 50% at 30% 75%, rgba(255, 255, 255, 0.05), transparent 60%);
+    --app-bg-image-opacity: 0.8;
 
     /* No gradients - solid colors only */
     --gradient-primary: none;
     --gradient-surface: none;
     --gradient-glow: none;
 
-    /* Action button colors */
-    --action-add: 210 80% 50%;
-    --action-add-foreground: 0 0% 100%;
-    --action-save: 210 80% 50%;
-    --action-save-foreground: 0 0% 100%;
-    --action-upload: 142 60% 42%;
-    --action-upload-foreground: 0 0% 100%;
+    /* Action button colors (monochrome) */
+    --action-add: 0 0% 92%;
+    --action-add-foreground: 0 0% 10%;
+    --action-save: 0 0% 92%;
+    --action-save-foreground: 0 0% 10%;
+    --action-upload: 0 0% 92%;
+    --action-upload-foreground: 0 0% 10%;
 
     /* Sidebar */
     --sidebar-background: 220 16% 9%;
@@ -69,17 +73,17 @@
     --sidebar-border: 220 14% 16%;
     --sidebar-ring: 220 10% 70%;
 
-    /* Chart colors - monochrome with one accent */
+    /* Chart colors - monochrome */
     --chart-1: 220 10% 85%;
-    --chart-2: 220 10% 65%;
-    --chart-3: 220 10% 45%;
-    --chart-4: 142 50% 45%;
+    --chart-2: 220 10% 70%;
+    --chart-3: 220 10% 55%;
+    --chart-4: 220 10% 45%;
     --chart-5: 220 10% 35%;
 
-    /* Status colors - muted */
-    --success: 142 50% 45%;
-    --warning: 38 70% 50%;
-    --info: 210 60% 55%;
+    /* Status colors - monochrome */
+    --success: 220 10% 75%;
+    --warning: 220 10% 75%;
+    --info: 220 10% 75%;
   }
 
   .light {
@@ -104,14 +108,15 @@
     --accent: 220 14% 88%;
     --accent-foreground: 220 16% 12%;
 
-    --destructive: 0 62% 55%;
-    --destructive-foreground: 220 10% 98%;
+    --destructive: 0 0% 55%;
+    --destructive-foreground: 0 0% 10%;
 
     --border: 220 14% 88%;
     --input: 220 14% 88%;
     --ring: 220 16% 30%;
 
     --glass-bg: 0 0% 100% / 0.85;
+    --glass-bg-2: 0 0% 100% / 0.75;
     --glass-border: 220 16% 12% / 0.06;
     --glass-blur: 12px;
     --glass-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.08);
@@ -120,12 +125,12 @@
     --gradient-surface: none;
     --gradient-glow: none;
 
-    --action-add: 210 80% 50%;
-    --action-add-foreground: 0 0% 100%;
-    --action-save: 210 80% 50%;
-    --action-save-foreground: 0 0% 100%;
-    --action-upload: 142 60% 42%;
-    --action-upload-foreground: 0 0% 100%;
+    --action-add: 220 14% 18%;
+    --action-add-foreground: 220 16% 12%;
+    --action-save: 220 14% 18%;
+    --action-save-foreground: 220 16% 12%;
+    --action-upload: 220 14% 18%;
+    --action-upload-foreground: 220 16% 12%;
 
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 220 16% 12%;
@@ -148,11 +153,58 @@
     font-family: 'Inter', system-ui, sans-serif;
     overflow-x: hidden;
   }
+
+  h1 {
+    @apply text-3xl md:text-4xl font-semibold leading-tight tracking-tight;
+  }
+
+  h2 {
+    @apply text-2xl md:text-3xl font-semibold leading-tight;
+  }
 }
 
 @layer components {
+  .fb-surface {
+    @apply rounded-[6px] border border-white/10 bg-white/[0.03] shadow-sm;
+  }
+
+  .fb-surface-lg {
+    @apply rounded-[6px] border border-white/10 bg-white/[0.03] shadow-sm;
+  }
+
+  .fb-field {
+    @apply w-full rounded-[5px] border px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+    background-color: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.10);
+  }
+
+  .light .fb-field {
+    background-color: rgba(0, 0, 0, 0.03);
+    border-color: rgba(0, 0, 0, 0.08);
+  }
+
+  .fb-eyebrow {
+    @apply text-xs font-semibold tracking-wider text-white/60;
+  }
+
+  .fb-muted {
+    @apply text-white/70;
+  }
+
+  .fb-pill {
+    @apply inline-flex items-center rounded-[6px] border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/80;
+  }
+
+  .fb-row {
+    @apply flex items-center justify-between rounded-[6px] border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white/75;
+  }
+
+  .fb-link {
+    @apply text-sm text-white/70 hover:text-white;
+  }
+
   .glass {
-    background: hsl(var(--glass-bg));
+    background: rgba(255, 255, 255, 0.03);
     backdrop-filter: blur(var(--glass-blur));
     -webkit-backdrop-filter: blur(var(--glass-blur));
     border: 1px solid hsl(var(--glass-border));
@@ -160,7 +212,15 @@
   }
 
   .glass-card {
-    @apply glass rounded-md;
+    @apply glass rounded-[6px];
+  }
+
+  .glass-panel {
+    @apply glass rounded-[6px];
+  }
+
+  .page-container {
+    @apply mx-auto w-full max-w-[1600px] space-y-8;
   }
 
   .app-background-effects {
@@ -177,10 +237,7 @@
   }
 
   .gradient-text {
-    background: var(--gradient-primary);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: hsl(var(--foreground));
   }
 
   .gradient-border {
@@ -209,12 +266,12 @@
   }
 
   .nav-item {
-    @apply flex items-center gap-3 px-4 py-2.5 rounded-md transition-all duration-200;
-    @apply text-muted-foreground hover:text-foreground hover:bg-secondary;
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-[5px] transition-colors duration-200;
+    @apply text-muted-foreground hover:text-foreground hover:bg-white/5;
   }
 
   .nav-item-active {
-    @apply bg-secondary text-foreground border border-border;
+    @apply bg-white/5 text-foreground border border-white/10;
   }
 }
 

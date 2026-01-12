@@ -4,6 +4,7 @@ import { formatSupabaseError } from "@/lib/supabaseErrors";
 import { Button } from "@/components/ui/button";
 import { Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 interface CallsheetUploaderProps {
   onJobCreated?: (jobId: string) => void;
@@ -19,7 +20,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
 
-    console.log("CallsheetUploader: uploading files", { filesCount: files.length, projectId, tripId });
+    logger.debug("CallsheetUploader: uploading files", { filesCount: files.length, projectId, tripId });
 
     if (files.length > 20) {
       toast.error("Máximo 20 documentos por vez");
@@ -113,7 +114,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
           if (updateError) {
             // If UNIQUE constraint fails (duplicate storage_path), log but continue
             if (updateError.code === '23505') {
-              console.warn(`Storage path ${filePath} already exists, skipping update`);
+              logger.debug(`Storage path ${filePath} already exists, skipping update`);
               failCount += 1;
             } else {
               throw updateError;
@@ -124,7 +125,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
             onJobCreated?.(job.id);
           }
         } catch (err: any) {
-          console.error(err);
+          logger.warn("CallsheetUploader upload error", err);
           failCount += 1;
           if (createdJobId) {
             try {
@@ -164,7 +165,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
            }).then(async (res) => {
              if (res.ok) return;
              const errorText = await res.text().catch(() => "");
-             console.warn("[CallsheetUploader] trigger-worker failed", { status: res.status, errorText });
+             logger.warn("[CallsheetUploader] trigger-worker failed", { status: res.status, errorText });
            });
          } catch {
            // ignore: cron/manual trigger can still process later
@@ -172,7 +173,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
        }
 
     } catch (err: any) {
-      console.error(err);
+      logger.warn("CallsheetUploader error", err);
       toast.error(formatSupabaseError(err, "Error al subir callsheet"));
     } finally {
       setUploading(false);

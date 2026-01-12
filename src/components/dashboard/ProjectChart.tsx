@@ -77,7 +77,7 @@ export function ProjectChart() {
             <Bar 
               dataKey="km" 
               radius={[4, 4, 0, 0]} 
-              fill="hsl(210, 100%, 50%)"
+              fill="hsl(var(--muted-foreground))"
             />
           </BarChart>
         </ResponsiveContainer>

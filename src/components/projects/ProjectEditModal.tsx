@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/hooks/use-i18n";
 import { Project } from "@/contexts/ProjectsContext";
 import { Loader2 } from "lucide-react";
+import { logger } from "@/lib/logger";
 
 interface ProjectEditModalProps {
   open: boolean;
@@ -90,7 +91,7 @@ export function ProjectEditModal({
       });
       onOpenChange(false);
     } catch (e) {
-      console.error(e);
+      logger.warn("ProjectEditModal save error", e);
     } finally {
       setLoading(false);
     }

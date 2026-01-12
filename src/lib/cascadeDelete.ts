@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { logger } from "@/lib/logger";
 
 type AnyRow = Record<string, any>;
 
@@ -42,13 +43,13 @@ async function bestEffortRemoveFromBucket(
   if (!error) return;
 
   // If bulk remove fails, try one by one. We don't want a storage hiccup to block deletes.
-  console.warn(`[cascadeDelete] Storage bulk remove failed for ${bucket}:`, error);
+  logger.warn(`[cascadeDelete] Storage bulk remove failed for ${bucket}:`, error);
 
   await Promise.all(
     paths.map(async (p) => {
       const { error: singleError } = await supabase.storage.from(bucket).remove([p]);
       if (singleError) {
-        console.warn(`[cascadeDelete] Storage remove failed for ${bucket} path=${p}:`, singleError);
+        logger.warn(`[cascadeDelete] Storage remove failed for ${bucket} path=${p}:`, singleError);
       }
     }),
   );
@@ -71,7 +72,7 @@ async function removeTripIdFromReports(supabase: SupabaseClient, tripId: string)
     // Some deployments may not have the optional trip_ids column yet.
     // In that case, skip report cleanup instead of blocking deletes.
     if (isMissingColumnOrSchema(error)) {
-      console.warn("[cascadeDelete] reports.trip_ids missing; skipping report cleanup");
+      logger.warn("[cascadeDelete] reports.trip_ids missing; skipping report cleanup");
       return;
     }
     throw error;
@@ -250,7 +251,7 @@ export async function cascadeDeleteTripById(supabase: SupabaseClient, tripId: st
       if (deleteDocsError && !isMissingColumnOrSchema(deleteDocsError)) throw deleteDocsError;
     } catch (err) {
       if (!isMissingColumnOrSchema(err)) throw err;
-      console.warn("[cascadeDelete] project_documents missing; skipping trip project document cleanup");
+      logger.warn("[cascadeDelete] project_documents missing; skipping trip project document cleanup");
     }
   }
 
@@ -267,7 +268,7 @@ export async function cascadeDeleteTripById(supabase: SupabaseClient, tripId: st
 
     if (countError) {
       if (!isMissingColumnOrSchema(countError)) {
-        console.warn("[cascadeDelete] Could not check remaining trips for project:", countError);
+        logger.warn("[cascadeDelete] Could not check remaining trips for project:", countError);
       }
     } else if (count === 0) {
       // Project has no more trips, delete it (but avoid recursion by using direct delete logic)
@@ -284,7 +285,7 @@ async function deleteOrphanProject(supabase: SupabaseClient, projectId: string) 
     .eq("project_id", projectId);
 
   if (jobsFetchError && !isMissingColumnOrSchema(jobsFetchError)) {
-    console.warn("[cascadeDelete] Error fetching callsheet jobs for orphan project:", jobsFetchError);
+    logger.warn("[cascadeDelete] Error fetching callsheet jobs for orphan project:", jobsFetchError);
   }
 
   const jobStoragePaths = uniqStrings((jobs ?? []).map((j: AnyRow) => j.storage_path));
@@ -295,7 +296,7 @@ async function deleteOrphanProject(supabase: SupabaseClient, projectId: string) 
   if ((jobs ?? []).length > 0) {
     const { error: deleteJobsError } = await supabase.from("callsheet_jobs").delete().eq("project_id", projectId);
     if (deleteJobsError && !isMissingColumnOrSchema(deleteJobsError)) {
-      console.warn("[cascadeDelete] Error deleting callsheet jobs for orphan project:", deleteJobsError);
+      logger.warn("[cascadeDelete] Error deleting callsheet jobs for orphan project:", deleteJobsError);
     }
   }
 
@@ -306,14 +307,14 @@ async function deleteOrphanProject(supabase: SupabaseClient, projectId: string) 
     .eq("project_id", projectId);
 
   if (invoiceJobsFetchError && !isMissingColumnOrSchema(invoiceJobsFetchError)) {
-    console.warn("[cascadeDelete] Error fetching invoice jobs for orphan project:", invoiceJobsFetchError);
+    logger.warn("[cascadeDelete] Error fetching invoice jobs for orphan project:", invoiceJobsFetchError);
   }
 
   for (const job of invoiceJobs ?? []) {
     try {
       await cascadeDeleteInvoiceJobById(supabase, (job as AnyRow).id);
     } catch (e) {
-      console.warn("[cascadeDelete] Error deleting invoice job for orphan project:", e);
+      logger.warn("[cascadeDelete] Error deleting invoice job for orphan project:", e);
     }
   }
 
@@ -324,7 +325,7 @@ async function deleteOrphanProject(supabase: SupabaseClient, projectId: string) 
     .eq("project_id", projectId);
 
   if (projectDocsFetchError && !isMissingColumnOrSchema(projectDocsFetchError)) {
-    console.warn("[cascadeDelete] Error fetching project documents for orphan project:", projectDocsFetchError);
+    logger.warn("[cascadeDelete] Error fetching project documents for orphan project:", projectDocsFetchError);
   }
 
   const projectDocPaths = uniqStrings((projectDocs ?? []).map((d: AnyRow) => d.storage_path));
@@ -338,14 +339,14 @@ async function deleteOrphanProject(supabase: SupabaseClient, projectId: string) 
       .delete()
       .eq("project_id", projectId);
     if (deleteProjectDocsError && !isMissingColumnOrSchema(deleteProjectDocsError)) {
-      console.warn("[cascadeDelete] Error deleting project documents for orphan project:", deleteProjectDocsError);
+      logger.warn("[cascadeDelete] Error deleting project documents for orphan project:", deleteProjectDocsError);
     }
   }
 
   // Finally delete the project
   const { error: deleteProjectError } = await supabase.from("projects").delete().eq("id", projectId);
   if (deleteProjectError) {
-    console.warn("[cascadeDelete] Error deleting orphan project:", deleteProjectError);
+    logger.warn("[cascadeDelete] Error deleting orphan project:", deleteProjectError);
   }
 }
 
@@ -391,7 +392,7 @@ export async function cascadeDeleteInvoiceJobById(supabase: SupabaseClient, jobI
     if (deleteDocsError && !isMissingColumnOrSchema(deleteDocsError)) throw deleteDocsError;
   } catch (err) {
     if (!isMissingColumnOrSchema(err)) throw err;
-    console.warn("[cascadeDelete] project_documents.invoice_job_id missing; skipping invoice doc delete");
+    logger.warn("[cascadeDelete] project_documents.invoice_job_id missing; skipping invoice doc delete");
   }
 
   // If this invoice is linked to a trip, clear trip invoice fields and remove attached doc entries.
@@ -439,7 +440,7 @@ export async function cascadeDeleteProjectById(supabase: SupabaseClient, project
 
   if (tripsFetchError) {
     if (isMissingColumnOrSchema(tripsFetchError)) {
-      console.warn("[cascadeDelete] trips.project_id missing; skipping trip deletion for project");
+      logger.warn("[cascadeDelete] trips.project_id missing; skipping trip deletion for project");
     } else {
       throw tripsFetchError;
     }
@@ -459,7 +460,7 @@ export async function cascadeDeleteProjectById(supabase: SupabaseClient, project
 
   if (jobsFetchError) {
     if (isMissingColumnOrSchema(jobsFetchError)) {
-      console.warn("[cascadeDelete] callsheet_jobs.project_id missing; skipping callsheet job cleanup for project");
+      logger.warn("[cascadeDelete] callsheet_jobs.project_id missing; skipping callsheet job cleanup for project");
     } else {
       throw jobsFetchError;
     }
@@ -474,7 +475,7 @@ export async function cascadeDeleteProjectById(supabase: SupabaseClient, project
     const { error: deleteJobsError } = await supabase.from("callsheet_jobs").delete().eq("project_id", projectId);
     if (deleteJobsError) {
       if (isMissingColumnOrSchema(deleteJobsError)) {
-        console.warn("[cascadeDelete] callsheet_jobs.project_id missing; skipping callsheet job delete for project");
+        logger.warn("[cascadeDelete] callsheet_jobs.project_id missing; skipping callsheet job delete for project");
       } else {
         throw deleteJobsError;
       }
@@ -489,7 +490,7 @@ export async function cascadeDeleteProjectById(supabase: SupabaseClient, project
 
   if (docsFetchError) {
     if (isMissingColumnOrSchema(docsFetchError)) {
-      console.warn("[cascadeDelete] project_documents.project_id missing; skipping project document cleanup");
+      logger.warn("[cascadeDelete] project_documents.project_id missing; skipping project document cleanup");
     } else {
       throw docsFetchError;
     }
@@ -504,7 +505,7 @@ export async function cascadeDeleteProjectById(supabase: SupabaseClient, project
     const { error: deleteDocsError } = await supabase.from("project_documents").delete().eq("project_id", projectId);
     if (deleteDocsError) {
       if (isMissingColumnOrSchema(deleteDocsError)) {
-        console.warn("[cascadeDelete] project_documents.project_id missing; skipping project document delete");
+        logger.warn("[cascadeDelete] project_documents.project_id missing; skipping project document delete");
       } else {
         throw deleteDocsError;
       }

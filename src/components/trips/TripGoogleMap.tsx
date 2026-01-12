@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MapPin, Loader2 } from "lucide-react";
 import { useI18n } from "@/hooks/use-i18n";
 import { useUserProfile } from "@/contexts/UserProfileContext";
+import { logger } from "@/lib/logger";
 
 function TripGoogleMapLoaded({ route, open, browserKey }: { route: string[]; open: boolean; browserKey: string }) {
   const { t, locale } = useI18n();
@@ -111,7 +112,7 @@ function TripGoogleMapLoaded({ route, open, browserKey }: { route: string[]; ope
     };
 
     script.onerror = () => {
-      console.error('Error loading Google Maps script');
+      logger.warn("Error loading Google Maps script");
       setLoadError(t("tripDetail.mapLoadError"));
     };
 
@@ -131,7 +132,7 @@ function TripGoogleMapLoaded({ route, open, browserKey }: { route: string[]; ope
     const initMap = async () => {
       try {
         if (!window.google?.maps) {
-          console.error('Google Maps not available after script load');
+          logger.warn("Google Maps not available after script load");
           setLoadError(t("tripDetail.mapLoadError"));
           return;
         }
@@ -149,7 +150,7 @@ function TripGoogleMapLoaded({ route, open, browserKey }: { route: string[]; ope
           setMapReady(true);
         }
       } catch (error) {
-        console.error("Error creating map:", error);
+        logger.warn("Error creating map", error);
         if (mounted) {
           setLoadError(t("tripDetail.mapLoadError"));
         }
@@ -230,12 +231,12 @@ function TripGoogleMapLoaded({ route, open, browserKey }: { route: string[]; ope
             // Renderizar la ruta
             directionsRenderer.setDirections(result);
           } else {
-            console.error("Directions request failed:", status);
+            logger.warn("Directions request failed", status);
             setRequestError(t("tripDetail.mapNoRoute"));
           }
         });
       } catch (error) {
-        console.error("Error rendering route:", error);
+        logger.warn("Error rendering route", error);
         if (mounted) {
           setRequestError(t("tripDetail.mapLoadError"));
         }

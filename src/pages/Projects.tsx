@@ -600,9 +600,9 @@ export default function Projects() {
 
   return (
     <MainLayout>
-      <div className="max-w-[1800px] mx-auto space-y-6">
+      <div className="page-container">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
+        <div className="glass-panel p-6 md:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6 animate-fade-in">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold">
               {t("projects.title")}
@@ -640,7 +640,7 @@ export default function Projects() {
         </div>
 
         {/* Filters */}
-        <div className="glass-card p-4 animate-fade-in animation-delay-100">
+        <div className="glass-card p-5 animate-fade-in animation-delay-100">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

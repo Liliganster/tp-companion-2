@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
 import { isOffline, readOfflineCache, readOfflineCacheEntry, writeOfflineCache } from "@/lib/offlineCache";
+import { logger } from "@/lib/logger";
 
 export type ClimatiqFuelFactor = {
   fuelType: "gasoline" | "diesel";
@@ -24,12 +25,15 @@ export function useClimatiqFuelFactor(fuelType: ClimatiqFuelFactor["fuelType"] |
   const enabled = Boolean(user) && Boolean(fuelType) && (opts?.enabled ?? true);
 
   // Use React Query cache with 30 day stale time to match backend cache
+  // Note: timers in JS are limited to ~24.8 days (2^31-1 ms). Keep below that to avoid overflow in some runtimes.
+  const SAFE_CACHE_MS = 2147483647;
+  const CACHE_MS = Math.min(30 * 24 * 60 * 60 * 1000, SAFE_CACHE_MS);
   
   return useQuery({
     queryKey: ["climatiq", "fuelFactor", fuelType] as const,
     enabled,
-    staleTime: 30 * 24 * 60 * 60 * 1000, // 30 days in milliseconds
-    gcTime: 30 * 24 * 60 * 60 * 1000, // Keep in cache for 30 days
+    staleTime: CACHE_MS,
+    gcTime: CACHE_MS,
     retry: 1,
     refetchOnWindowFocus: false,
     queryFn: async (): Promise<ClimatiqFuelFactor | null> => {
@@ -67,10 +71,10 @@ export function useClimatiqFuelFactor(fuelType: ClimatiqFuelFactor["fuelType"] |
           apiPayload: data,
         };
 
-        console.log(`[useClimatiqFuelFactor] Fetched data for ${fuelType}`);
+        logger.debug(`[useClimatiqFuelFactor] Fetched data for ${fuelType}`);
         return payload;
       } catch (error) {
-        console.error(`[useClimatiqFuelFactor] Error:`, error);
+        logger.debug(`[useClimatiqFuelFactor] Error`, error);
         return null;
       }
     },

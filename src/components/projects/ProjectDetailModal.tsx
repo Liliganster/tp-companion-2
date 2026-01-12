@@ -22,6 +22,7 @@ import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimizati
 import { uuidv4 } from "@/lib/utils";
 
 import { cancelCallsheetJobs, cancelInvoiceJobs } from "@/lib/aiJobCancellation";
+import { logger } from "@/lib/logger";
 
 const DEBUG = import.meta.env.DEV;
 
@@ -88,7 +89,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   // Debug: verificar que project.id se pasa correctamente
   useEffect(() => {
     if (open && project) {
-      if (DEBUG) console.log("ProjectDetailModal opened with project:", { id: project.id, name: project.name });
+      if (DEBUG) logger.debug("ProjectDetailModal opened with project:", { id: project.id, name: project.name });
     }
   }, [open, project]);
 
@@ -172,18 +173,18 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
       const storagePath = (job.storage_path ?? "").trim();
       if (!storagePath) {
-          console.warn("[Materialize] Job missing storage path:", job.id);
+          logger.warn("[Materialize] Job missing storage path", job.id);
           return null;
       }
 
       // Avoid duplicates if the trip already exists
       if (hasTripForJob(job.id, storagePath)) {
-        if (DEBUG) console.log("[Materialize] Trip already exists for job:", job.id);
+        if (DEBUG) logger.debug("[Materialize] Trip already exists for job:", job.id);
         processedJobsRef.current.add(job.id);
         return null;
       }
 
-      if (DEBUG) console.log("[Materialize] Processing job:", job.id);
+      if (DEBUG) logger.debug("[Materialize] Processing job:", job.id);
       inFlightJobsRef.current.add(job.id);
 
       try {
@@ -193,16 +194,16 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         ]);
 
         if (resultError) {
-             console.error("[Materialize] Error fetching results:", resultError);
+             logger.warn("[Materialize] Error fetching results", resultError);
              return;
         }
         if (locsError) {
-             console.error("[Materialize] Error fetching locations:", locsError);
+             logger.warn("[Materialize] Error fetching locations", locsError);
              return;
         }
         
         if (!result) {
-            console.warn("[Materialize] No result found for DONE job:", job.id, "- marking as failed");
+            logger.warn("[Materialize] No result found for DONE job", { jobId: job.id });
             // Job is marked as "done" but has no extraction results - this is an error state
             // Mark it as failed so user can see it and re-process
             await supabase
@@ -216,11 +217,11 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             return;
         }
 
-        if (DEBUG) console.log("[Materialize] Extracted result:", result);
+        if (DEBUG) logger.debug("[Materialize] Extracted result:", result);
 
         const extractedProject = (result?.project_value ?? "").trim();
         if (extractedProject && normalizeProjectName(extractedProject) !== normalizeProjectName(project.name)) {
-          console.warn("[Materialize] Project mismatch:", extractedProject, "vs", project.name);
+          logger.warn("[Materialize] Project mismatch", { extractedProject, expected: project.name });
           const reason = `Project mismatch: AI extracted "${extractedProject}" but file is in project "${project.name}"`;
           toast.warning(t("projectDetail.toastProjectMismatch"));
           // Best-effort persist a review hint without blocking trip creation.
@@ -232,7 +233,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
         const date = (result?.date_value ?? "").toString().trim();
         if (!date) {
-          console.warn("[Materialize] Missing date value");
+          logger.warn("[Materialize] Missing date value");
           const reason = "Missing date_value in extracted result";
           toast.warning(t("projectDetail.toastMissingDate"));
           await supabase
@@ -249,7 +250,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           .filter(Boolean);
 
         if (rawLocations.length === 0) {
-          console.warn("[Materialize] Missing locations");
+          logger.warn("[Materialize] Missing locations");
           const reason = "Missing locations in extracted result";
           toast.warning(t("projectDetail.toastMissingLocations"));
           await supabase
@@ -260,7 +261,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           return;
         }
         
-        if (DEBUG) console.log("[Materialize] Optimizing locations:", rawLocations);
+        if (DEBUG) logger.debug("[Materialize] Optimizing locations:", rawLocations);
         const token = await getAccessToken();
         const { locations: normalizedLocs, distanceKm } = await optimizeCallsheetLocationsAndDistance({
           profile,
@@ -316,7 +317,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         }
 
       } catch (e: any) {
-        console.error(e);
+        logger.warn("ProjectDetailModal error", e);
         if (autoSave) {
           toast.error(tf("projectDetail.toastTripCreatedFromAiError", { message: e?.message ?? String(e) }));
         }
@@ -362,7 +363,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             .from("callsheet_jobs")
             .select("id, storage_path, created_at, status, needs_review_reason")
             .in("id", tripJobIdsForProject);
-          if (error) console.warn("Error fetching callsheet jobs referenced by trips:", error);
+          if (error) logger.warn("Error fetching callsheet jobs referenced by trips", error);
           tripJobs = (data ?? []) as any[];
         }
             
@@ -389,8 +390,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           resultsError = null;
         }
 
-        if (jobsError) console.error("Error fetching project jobs:", jobsError);
-        if (resultsError) console.error("Error fetching project results:", resultsError);
+        if (jobsError) logger.warn("Error fetching project jobs", jobsError);
+        if (resultsError) logger.warn("Error fetching project results", resultsError);
 
         const allDocs: ProjectDocument[] = [];
         const seenIds = new Set<string>();
@@ -581,7 +582,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             .eq("project_id", project.id);
 
           if (docsError) {
-            console.error("Error fetching project documents:", docsError);
+            logger.warn("Error fetching project documents", docsError);
             return;
           }
 
@@ -600,7 +601,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
               .in("id", invoiceJobIds);
 
             if (jobsError) {
-              console.warn("Error fetching invoice jobs:", jobsError);
+              logger.warn("Error fetching invoice jobs", jobsError);
             } else {
               for (const j of (jobs ?? []) as any[]) invoiceJobsById.set(String(j.id), j);
             }
@@ -611,7 +612,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
               .in("job_id", invoiceJobIds);
 
             if (resultsError) {
-              console.warn("Error fetching invoice results:", resultsError);
+              logger.warn("Error fetching invoice results", resultsError);
             } else {
               for (const r of (results ?? []) as any[]) invoiceResultsByJobId.set(String(r.job_id), r);
             }
@@ -889,21 +890,21 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         );
         
         if (!hasPending && !hasInvoicePending && interval) {
-          if (DEBUG) console.log("[Polling] No pending jobs, stopping polling");
+          if (DEBUG) logger.debug("[Polling] No pending jobs, stopping polling");
           clearInterval(interval);
           interval = null;
         }
       } catch (err) {
         // Ignore abort errors
         if (err instanceof Error && err.name === 'AbortError') {
-          if (DEBUG) console.log("[Polling] Aborted");
+          if (DEBUG) logger.debug("[Polling] Aborted");
           if (interval) {
             clearInterval(interval);
             interval = null;
           }
           return;
         }
-        console.error("[Polling] Error:", err);
+        logger.warn("[Polling] Error", err);
       }
     };
 
@@ -911,7 +912,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     void tick();
 
     return () => {
-      if (DEBUG) console.log("[Polling] Cleanup: stopping interval");
+      if (DEBUG) logger.debug("[Polling] Cleanup: stopping interval");
       if (interval) {
         clearInterval(interval);
         interval = null;
@@ -1009,7 +1010,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             .from("trips")
             .delete()
             .eq("id", tripToDelete.id);
-          if (tripError) console.error("Error eliminando viaje anterior:", tripError);
+          if (tripError) logger.warn("Error eliminando viaje anterior", tripError);
         }
 
         // 2. Eliminar resultados de extracción anteriores
@@ -1017,14 +1018,14 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           .from("callsheet_results")
           .delete()
           .eq("job_id", doc.id);
-        if (resultsError) console.error("Error eliminando resultados:", resultsError);
+        if (resultsError) logger.warn("Error eliminando resultados", resultsError);
 
         // 3. Eliminar ubicaciones anteriores
         const { error: locsError } = await supabase
           .from("callsheet_locations")
           .delete()
           .eq("job_id", doc.id);
-        if (locsError) console.error("Error eliminando ubicaciones:", locsError);
+        if (locsError) logger.warn("Error eliminando ubicaciones", locsError);
 
         // 4. Marcar el job para re-procesamiento
         processedJobsRef.current.delete(doc.id);
@@ -1059,10 +1060,10 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
           if (!res.ok) {
             const msg = await res.text().catch(() => "");
-            console.warn("[ProjectDetailModal] trigger-worker failed", { status: res.status, msg });
+            logger.warn("[ProjectDetailModal] trigger-worker failed", { status: res.status, msg });
           }
         } catch (err) {
-          console.warn("[ProjectDetailModal] trigger-worker error", err);
+          logger.warn("[ProjectDetailModal] trigger-worker error", err);
         }
       })();
     } catch (e: any) {
@@ -1162,7 +1163,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           .from("invoice_results")
           .delete()
           .eq("job_id", doc.invoice_job_id);
-        if (resultsError) console.error("Error eliminando resultados:", resultsError);
+        if (resultsError) logger.warn("Error eliminando resultados", resultsError);
       }
 
       // Queue the job
@@ -1497,17 +1498,17 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                         ) : null}
                         {sheet.status === 'needs_review' ? (
-                          <span title={sheet.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-full cursor-help bg-orange-500/20 text-orange-500">
+                          <span title={sheet.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-full cursor-help bg-white/10 text-muted-foreground border border-white/10">
                             {t("projectDetail.review")}
                           </span>
                         ) : null}
                         {sheet.status === 'out_of_quota' ? (
-                          <span title={sheet.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-full cursor-help bg-red-500/20 text-red-500">
+                          <span title={sheet.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-full cursor-help bg-white/10 text-muted-foreground border border-white/10">
                             {t("projectDetail.outOfQuota")}
                           </span>
                         ) : null}
                         {sheet.status === 'failed' ? (
-                          <span title={sheet.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-full cursor-help bg-red-500/20 text-red-500">
+                          <span title={sheet.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-full cursor-help bg-white/10 text-muted-foreground border border-white/10">
                             Error
                           </span>
                         ) : null}
@@ -1518,7 +1519,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-8 w-8 text-yellow-500 hover:text-yellow-400" 
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground" 
                             onClick={() => handleExtract(sheet)} 
                             title={sheet.status === 'done' ? t("projectDetail.reprocessWithAi") : t("projectDetail.extractDataWithAi")}
                           >

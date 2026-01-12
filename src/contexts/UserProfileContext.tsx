@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "./AuthContext";
 import { toast } from "sonner";
 import { isOffline, readOfflineCache, writeOfflineCache } from "@/lib/offlineCache";
+import { logger } from "@/lib/logger";
 
 export type UserProfile = {
   fullName: string;
@@ -109,7 +110,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
           .maybeSingle();
 
         if (error) {
-          console.error("Error fetching profile:", error);
+          logger.warn("Error fetching profile", error);
           if (!isOffline()) toast.error("Error loading profile: " + error.message);
           // Keep the current (possibly cached) profile instead of resetting to defaults.
           return;
@@ -169,7 +170,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
           }
         }
       } catch (err) {
-        console.error("Profile fetch failed:", err);
+        logger.warn("Profile fetch failed", err);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -221,7 +222,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
       try {
         const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) {
-          console.error("Error getting session for profile save:", sessionError);
+          logger.warn("Error getting session for profile save", sessionError);
           return false;
         }
 
@@ -239,13 +240,13 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
 
         if (!response.ok) {
           const text = await response.text().catch(() => "");
-          console.error("Profile save API failed:", response.status, text);
+          logger.warn("Profile save API failed", { status: response.status, text });
           return false;
         }
 
         return true;
       } catch (err) {
-        console.error("Profile save API failed:", err);
+        logger.warn("Profile save API failed", err);
         return false;
       }
     };
@@ -261,7 +262,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
       .select("id");
 
     if (updateError) {
-      console.error("Error saving profile (update):", updateError);
+      logger.warn("Error saving profile (update)", updateError);
       const ok = await saveViaApi();
       if (ok) {
         toast.success(options?.successText ?? "Perfil guardado", { id: toastId });
@@ -285,7 +286,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
         .select("id");
 
       if (insertError) {
-        console.error("Error saving profile (insert):", insertError);
+        logger.warn("Error saving profile (insert)", insertError);
         const ok2 = await saveViaApi();
         if (ok2) {
           toast.success(options?.successText ?? "Perfil guardado", { id: toastId });

@@ -18,6 +18,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEmissionsInput } from "@/hooks/use-emissions-input";
 import { usePlan } from "@/contexts/PlanContext";
 import { usePlanLimits } from "@/hooks/use-plan-limits";
+import { logger } from "@/lib/logger";
 
 function parseTripDate(value: string): Date | null {
   if (!value) return null;
@@ -136,7 +137,7 @@ export default function Index() {
         if (import.meta.env.DEV && e instanceof SyntaxError) {
           aiQuotaPollingDisabled.current = true;
         } else {
-          console.error("Error fetching AI quota:", e);
+          logger.warn("Error fetching AI quota", e);
         }
         if (!cancelled) setAiUsedThisMonth(null);
       } finally {
@@ -186,7 +187,7 @@ export default function Index() {
     const co2TrendValue = percentageChange(co2ThisMonth, co2PrevMonth);
     const co2TrendPositive = co2TrendValue >= 0;
     const Co2TrendIcon = co2TrendPositive ? ArrowUp : ArrowDown;
-    const co2TrendColor = co2TrendPositive ? "text-success" : "text-destructive";
+    const co2TrendColor = "text-muted-foreground";
 
   const distanceTrendValue = percentageChange(kmThisMonth, kmPrevMonth);
   const distanceTrendPositive = distanceTrendValue >= 0;
@@ -200,20 +201,10 @@ export default function Index() {
       : aiBypassEnabled 
         ? `${aiUsedThisMonth}` // Testing mode: just show count, no limit
         : `${aiUsedThisMonth}/${aiLimitFromApi}`;
-  const aiQuotaTextColor =
-    aiBypassEnabled 
-      ? "text-emerald-300" // Green when in testing mode
-      : aiUsedThisMonth != null && aiUsedThisMonth >= aiLimitFromApi 
-        ? "text-amber-200" 
-        : "text-zinc-50";
+  const aiQuotaTextColor = "text-zinc-50";
   /* New Card Design Helpers */
   const StatusRow = ({ label, value, status = "neutral", icon: Icon }: { label: string, value: string, status?: "success" | "warning" | "destructive" | "neutral", icon?: any }) => (
-    <div className={`flex items-center justify-between text-xs px-2 py-1.5 rounded border border-transparent ${
-      status === "success" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
-      status === "warning" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
-      status === "destructive" ? "bg-red-500/10 text-red-400 border-red-500/20" :
-      "bg-white/5 text-zinc-300 border-white/10"
-    }`}>
+    <div className="flex items-center justify-between text-xs px-2 py-1.5 rounded-lg border border-white/10 bg-white/5 text-zinc-300">
       <span className="font-medium">{label}</span>
       <div className="flex items-center gap-1.5">
         {Icon && <Icon className="w-3 h-3" />}
@@ -223,13 +214,13 @@ export default function Index() {
   );
 
   return <MainLayout>
-      <div className="max-w-[1800px] mx-auto space-y-6">
+      <div className="page-container">
         {/* Header */}
-        <div className="glass-card p-5 animate-fade-in rounded">
+        <div className="glass-panel p-6 md:p-8 animate-fade-in">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div>
-                <h1 className="text-2xl sm:text-3xl font-bold text-zinc-50">
+                <h1 className="text-zinc-50 text-2xl sm:text-3xl md:text-[31px] font-semibold leading-tight tracking-tight">
                   {t("dashboard.welcomeBackPrefix")} <span className="text-white">{profile.fullName}</span>
                 </h1>
                 <p className="text-muted-foreground mt-1">
@@ -239,13 +230,13 @@ export default function Index() {
             </div>
             <div className="flex items-center gap-4">
               {/* Trips Quota */}
-              <div className={`flex items-center gap-2 px-3 py-2 border rounded border-inherit ${tripsQuotaFull ? 'bg-red-900/50' : 'bg-[#0d4731]'}`}>
-                <Car className="w-4 h-4 text-[#fcfcfc]" />
-                <span className={`text-sm font-medium tabular-nums ${tripsQuotaFull ? 'text-red-300' : 'text-emerald-300'}`}>{tripCounts.total}/{limits.maxActiveTrips}</span>
+              <div className="flex items-center gap-2 px-4 py-2.5 border rounded-lg border-white/10 bg-white/5">
+                <Car className="w-4 h-4 text-white/80" />
+                <span className="text-sm font-medium tabular-nums text-zinc-50">{tripCounts.total}/{limits.maxActiveTrips}</span>
               </div>
               {/* AI Quota */}
-              <div className="flex items-center gap-2 px-3 py-2 border rounded border-inherit bg-[#311084]">
-                <Sparkles className="w-4 h-4 text-[#fcfcfc]" />
+              <div className="flex items-center gap-2 px-4 py-2.5 border rounded-lg border-white/10 bg-white/5">
+                <Sparkles className="w-4 h-4 text-white/80" />
                 <span className={`text-sm font-medium tabular-nums ${aiQuotaTextColor}`}>{aiQuotaText}</span>
               </div>
               {/* Warnings Bell */}
@@ -279,7 +270,7 @@ export default function Index() {
             hideTitle
             variant="primary"
             valueGradient={false}
-            action={<Link to="/trips" className="text-xs text-primary hover:underline mt-2 inline-block">{t("dashboard.viewTrips")}</Link>}
+            action={<Link to="/trips" className="fb-link text-xs mt-2 inline-block">{t("dashboard.viewTrips")}</Link>}
           />
           
           <KPICard
@@ -290,7 +281,7 @@ export default function Index() {
             hideTitle
             variant="accent"
             valueClassName="text-white"
-            action={<Link to="/projects" className="text-xs text-primary hover:underline">{t("dashboard.viewProjects")}</Link>}
+            action={<Link to="/projects" className="fb-link text-xs">{t("dashboard.viewProjects")}</Link>}
           />
 
           <KPICard
@@ -299,11 +290,7 @@ export default function Index() {
             iconWrapperClassName={kpiTitleWrapperClassName}
             hideTitle
             headerRight={
-              <div className={`text-6xl font-black tracking-tighter ml-4 ${
-                co2Rating === "A" ? "text-emerald-500" :
-                co2Rating === "B" ? "text-emerald-400" :
-                co2Rating === "C" ? "text-amber-500" : "text-red-500"
-              }`}>
+              <div className="text-6xl font-black tracking-tighter ml-4 text-zinc-50">
                 {co2Rating}
               </div>
             }

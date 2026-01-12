@@ -20,7 +20,7 @@ export function NetworkStatusBanner() {
   return (
     <div className="fixed bottom-4 left-1/2 z-50 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2">
       <div className="flex items-center gap-2 rounded-lg border border-border bg-card/95 px-3 py-2 shadow-lg backdrop-blur">
-        <WifiOff className="h-4 w-4 text-amber-400" />
+        <WifiOff className="h-4 w-4 text-muted-foreground" />
         <div className="text-xs text-muted-foreground">
           Sin conexión. La app puede mostrar datos guardados, pero no podrás sincronizar cambios hasta recuperar internet.
         </div>
@@ -28,4 +28,3 @@ export function NetworkStatusBanner() {
     </div>
   );
 }
-

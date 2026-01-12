@@ -21,6 +21,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 import { cancelCallsheetJobs } from "@/lib/aiJobCancellation";
 import { usePlanLimits } from "@/hooks/use-plan-limits";
+import { logger } from "@/lib/logger";
 
 interface SavedTrip {
   id: string;
@@ -28,6 +29,7 @@ interface SavedTrip {
   route: string[];
   project: string;
   projectId?: string;
+  producer?: string;
   purpose: string;
   passengers: number;
   invoice?: string;
@@ -322,18 +324,23 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     return text.replace(/^\uFEFF/, "");
   };
 
-  const resolveProjectIdByName = async (projectNameRaw: string, sourceLabel: string): Promise<string | undefined> => {
+  const resolveProjectIdByName = async (
+    projectNameRaw: string,
+    producerRaw: string | undefined,
+    sourceLabel: string,
+  ): Promise<string | undefined> => {
     const trimmed = String(projectNameRaw ?? "").trim();
     if (!trimmed) return undefined;
 
     const existing = projects.find((p) => p.name.trim().toLowerCase() === trimmed.toLowerCase());
     if (existing) return existing.id;
 
+    const producer = String(producerRaw ?? "").trim();
     const newProjectId = uuidv4();
     await addProject({
       id: newProjectId,
       name: trimmed,
-      producer: "",
+      producer,
       description: `Created from CSV import: ${sourceLabel}`,
       ratePerKm: 0.30,
       starred: false,
@@ -395,6 +402,14 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     const iDestination = idx("destination");
 
     const iReason = idx("reason");
+    const iProducer = (() => {
+      const keys = ["producer", "productora", "empresa", "cliente", "company", "client"];
+      for (const k of keys) {
+        const i = idx(k);
+        if (i >= 0) return i;
+      }
+      return -1;
+    })();
     const iDistance = (() => {
       const a = idx("distance");
       if (a >= 0) return a;
@@ -410,10 +425,26 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       };
     }
 
-    const reserved = new Set(["date", "projectname", "origin", "destination", "reason", "distance", "km"]);
+    const reserved = new Set([
+      "date",
+      "projectname",
+      "origin",
+      "destination",
+      "reason",
+      "distance",
+      "km",
+      "producer",
+      "productora",
+      "empresa",
+      "cliente",
+      "company",
+      "client",
+    ]);
 
     const errors: string[] = [];
     const tripsOut: SavedTrip[] = [];
+    const left = Math.min(iOrigin, iDestination);
+    const right = Math.max(iOrigin, iDestination);
 
     for (let rowIdx = 1; rowIdx < lines.length; rowIdx++) {
       const rowRaw = lines[rowIdx];
@@ -443,12 +474,13 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       }
 
       const stops: string[] = [];
-      for (let i = 0; i < headers.length; i++) {
+      for (let i = left + 1; i < right; i++) {
         if (reserved.has(headers[i])) continue;
         const v = String(cols[i] ?? "").trim();
         if (v) stops.push(v);
       }
 
+      const producer = iProducer >= 0 ? get(iProducer) : "";
       const routeValues = [origin, ...stops, destination].filter((x) => String(x ?? "").trim().length > 0);
 
       let distanceKm = 0;
@@ -463,6 +495,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         date: dateIso,
         route: routeValues,
         project: projectName,
+        producer,
         purpose: reason,
         passengers: 0,
         distance: distanceKm,
@@ -508,7 +541,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       // sequential to avoid rate limits and keep ordering
       for (const trip of parsedTrips) {
         try {
-          const projectId = await resolveProjectIdByName(trip.project, sourceLabel);
+          const projectId = await resolveProjectIdByName(trip.project, trip.producer, sourceLabel);
 
           let distance = trip.distance;
           if (!Number.isFinite(distance) || distance <= 0) {
@@ -519,7 +552,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
           onSave({ ...trip, projectId, distance });
           ok += 1;
         } catch (e) {
-          console.error(e);
+          logger.warn("Bulk upload error", e);
           failed += 1;
         }
       }
@@ -542,7 +575,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       setCsvText(text);
       toast.success(t("bulk.toastCsvLoaded"));
     } catch (err) {
-      console.error(err);
+      logger.warn("Bulk upload error", err);
       toast.error(t("bulk.errorCsvRead"));
     } finally {
       e.target.value = "";
@@ -830,7 +863,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
           metaById[job.id] = { fileName: file.name, mimeType: file.type, storagePath: filePath };
           successCount += 1;
         } catch (err) {
-          console.error(err);
+          logger.warn("Bulk upload error", err);
           failCount += 1;
           if (createdJobId) {
             try {
@@ -898,7 +931,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       }
 
     } catch (err: any) {
-      console.error(err);
+      logger.warn("Bulk upload error", err);
       toast.error(err.message || t("bulk.errorUploadDoc"));
     }
     finally {
@@ -953,7 +986,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         });
       })
       .catch((e) => {
-        console.error("Optimization failed", e);
+        logger.warn("Optimization failed", e);
         setReviewByJobId((prev) => {
           const cur = prev[jobId];
           if (!cur) return prev;
@@ -1057,7 +1090,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         // Move to review as soon as there are no pending jobs.
         if (aiStep === "processing" && (!hasPending || doneIds.length > 0)) setAiStep("review");
       } catch (e) {
-        console.error("Polling error", e);
+        logger.warn("Polling error", e);
       }
     };
 
@@ -1202,7 +1235,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       if (ok) setSavedByJobId((prev) => ({ ...prev, [jobId]: true }));
       return ok;
     } catch (e) {
-      console.error(e);
+      logger.warn("Bulk upload error", e);
       toast.error(t("bulk.errorSaveTrip"));
       return false;
     } finally {
@@ -1234,7 +1267,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const renderJobStatusBadge = (status: JobStatus, saved: boolean) => {
     if (saved) {
       return (
-        <Badge variant="outline" className="border-green-500/40 text-green-500">
+        <Badge variant="outline" className="border-white/15 text-foreground">
           {t("bulk.statusSaved")}
         </Badge>
       );
@@ -1243,7 +1276,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     switch (status) {
       case "done":
         return (
-          <Badge variant="outline" className="border-green-500/40 text-green-500">
+          <Badge variant="outline" className="border-white/15 text-foreground">
             {t("bulk.statusReady")}
           </Badge>
         );
@@ -1253,16 +1286,16 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       case "created":
         return <Badge variant="secondary">{t("bulk.statusQueued")}</Badge>;
       case "failed":
-        return <Badge variant="destructive">{t("bulk.statusFailed")}</Badge>;
+        return <Badge variant="outline" className="bg-white/5 border-white/15 text-foreground">{t("bulk.statusFailed")}</Badge>;
       case "needs_review":
         return (
-          <Badge variant="outline" className="border-orange-500/40 text-orange-500">
+          <Badge variant="outline" className="border-white/15 text-muted-foreground">
             {t("bulk.statusNeedsReview")}
           </Badge>
         );
       case "out_of_quota":
         return (
-          <Badge variant="destructive" className="bg-red-500/20 border-red-500/40 text-red-500">
+          <Badge variant="outline" className="bg-white/5 border-white/15 text-muted-foreground">
             {t("bulk.statusOutOfQuota")}
           </Badge>
         );
@@ -1585,7 +1618,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
               <>
                 {/*
                  <div className="space-y-6 animate-fade-in">
-                    <div className="flex items-center gap-2 text-green-500 mb-4">
+                    <div className="flex items-center gap-2 text-foreground mb-4">
                         <CheckCircle className="w-5 h-5" />
                         <span className="font-medium">Datos extraídos exitosamente</span>
                     </div>
@@ -1637,7 +1670,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                         <Label>Ubicaciones / Ruta ({reviewLocations.length})</Label>
                         
                         <div className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1.5">
-                           <MapPin className="w-3 h-3 text-green-500" />
+                           <MapPin className="w-3 h-3 text-muted-foreground" />
                            <span className="font-semibold">Origen:</span> {profile.baseAddress || "No definido"}
                         </div>
 
@@ -1656,7 +1689,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                         </Card>
 
                         <div className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5">
-                           <MapPin className="w-3 h-3 text-red-500" />
+                           <MapPin className="w-3 h-3 text-muted-foreground" />
                            <span className="font-semibold">Destino:</span> {profile.baseAddress || "No definido"}
                         </div>
                     </div>
@@ -1675,7 +1708,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
                 <div className="space-y-4 animate-fade-in">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-2 text-green-500">
+                    <div className="flex items-center gap-2 text-foreground">
                       <CheckCircle className="w-5 h-5" />
                       <div>
                         <p className="font-medium">{t("bulk.aiParallelReviewTitle")}</p>
@@ -1782,7 +1815,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                                   <Label>{tf("bulk.locationsRouteLabel", { count: review.locations.length })}</Label>
 
                                   <div className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1.5">
-                                    <MapPin className="w-3 h-3 text-green-500" />
+                                    <MapPin className="w-3 h-3 text-muted-foreground" />
                                     <span className="font-semibold">{t("bulk.originLabel")}:</span>{" "}
                                     {profile.baseAddress || t("bulk.notSet")}
                                   </div>
@@ -1805,7 +1838,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                                   </Card>
 
                                   <div className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5">
-                                    <MapPin className="w-3 h-3 text-red-500" />
+                                    <MapPin className="w-3 h-3 text-muted-foreground" />
                                     <span className="font-semibold">{t("bulk.destinationLabel")}:</span>{" "}
                                     {profile.baseAddress || t("bulk.notSet")}
                                   </div>
@@ -1850,11 +1883,11 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                             {showFailed && (
                               <>
                                 {job.status === "out_of_quota" ? (
-                                  <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-3 space-y-2">
-                                    <p className="text-sm font-semibold text-red-600 dark:text-red-400">
+                                  <div className="rounded-lg bg-white/5 border border-white/15 p-3 space-y-2">
+                                    <p className="text-sm font-semibold text-foreground">
                                       {t("bulk.outOfQuotaTitle")}
                                     </p>
-                                    <p className="text-xs text-red-600/80 dark:text-red-400/80">
+                                    <p className="text-xs text-muted-foreground">
                                       {t("bulk.outOfQuotaMessage")}
                                     </p>
                                     <Button

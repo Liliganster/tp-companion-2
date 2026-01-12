@@ -7,6 +7,7 @@ import { usePlan } from "@/contexts/PlanContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { useState } from "react";
+import { logger } from "@/lib/logger";
 
 // Payment Link de Stripe - créalo en https://dashboard.stripe.com/payment-links
 // Después de crearlo, copia el URL y pégalo aquí
@@ -20,12 +21,12 @@ export default function Plans() {
 
   const handleStripeCheckout = () => {
     if (!session?.access_token || !user?.id) {
-      toast.error("Por favor inicia sesión");
+      toast.error(t("auth.pleaseSignIn"));
       return;
     }
 
     setUpgrading(true);
-    console.log("[Plans] Redirecting to Stripe Payment Link...");
+    logger.debug("[Plans] Redirecting to Stripe Payment Link...");
     
     // Agregar client_reference_id para identificar al usuario en el webhook
     const paymentUrl = new URL(STRIPE_PAYMENT_LINK);
@@ -64,7 +65,7 @@ export default function Plans() {
         {/* Header */}
         <div className="text-center space-y-2 animate-fade-in mb-8">
           <div className="flex items-center justify-center gap-2">
-            <Crown className="w-6 h-6 text-yellow-500" />
+            <Crown className="w-6 h-6 text-muted-foreground" />
             <h1 className="text-2xl sm:text-3xl font-bold leading-tight">{t("plans.title")}</h1>
           </div>
           <p className="text-muted-foreground text-sm max-w-2xl mx-auto">
@@ -76,9 +77,9 @@ export default function Plans() {
             <div className="grid gap-6 md:grid-cols-2 animate-fade-in animation-delay-100 mb-6">
               {/* Basic Plan */}
               <div className="bg-zinc-900/40 backdrop-blur-md p-6 rounded-lg border border-zinc-800/80 flex flex-col transition-colors hover:border-zinc-700/80">
-            <div className="mb-4">
+              <div className="mb-4">
               <div className="flex items-center gap-2 mb-1">
-                <Zap className="w-4 h-4 text-blue-400" />
+                <Zap className="w-4 h-4 text-muted-foreground" />
                 <h2 className="text-lg font-semibold">{t("plans.basic.name")}</h2>
               </div>
               <div className="flex items-baseline gap-1 mb-1">
@@ -92,7 +93,7 @@ export default function Plans() {
               {basicFeatures.map((feature, idx) => (
                 <li key={idx} className="flex items-start gap-2">
                   {feature.included ? (
-                    <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                    <Check className="w-4 h-4 text-foreground shrink-0 mt-0.5" />
                   ) : (
                     <X className="w-4 h-4 text-muted-foreground/50 shrink-0 mt-0.5" />
                   )}
@@ -119,14 +120,14 @@ export default function Plans() {
           </div>
 
               {/* Pro Plan */}
-              <div className="bg-zinc-900/40 backdrop-blur-md p-6 rounded-lg border border-yellow-500/35 ring-1 ring-yellow-500/15 relative flex flex-col transition-colors hover:border-yellow-500/45">
-            <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-500 text-black hover:bg-yellow-500 font-medium px-3 py-1 rounded-full text-xs shadow-sm">
+              <div className="bg-zinc-900/40 backdrop-blur-md p-6 rounded-lg border border-white/15 ring-1 ring-white/10 relative flex flex-col transition-colors hover:border-white/20">
+            <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white text-zinc-950 hover:bg-white font-medium px-3 py-1 rounded-full text-xs shadow-sm">
               {t("plans.mostPopular")}
             </Badge>
             
             <div className="mb-4">
               <div className="flex items-center gap-2 mb-1">
-                <Crown className="w-4 h-4 text-yellow-500" />
+                <Crown className="w-4 h-4 text-muted-foreground" />
                 <h2 className="text-lg font-semibold">{t("plans.pro.name")}</h2>
               </div>
               <div className="flex items-baseline gap-1 mb-1">
@@ -139,7 +140,7 @@ export default function Plans() {
             <ul className="space-y-2 flex-1 mb-4">
               {proFeatures.map((feature, idx) => (
                 <li key={idx} className="flex items-start gap-2">
-                  <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                  <Check className="w-4 h-4 text-foreground shrink-0 mt-0.5" />
                   <span className="text-sm">{feature.text}</span>
                 </li>
               ))}
@@ -149,7 +150,7 @@ export default function Plans() {
               className="w-full bg-zinc-600 hover:bg-zinc-600/80 text-white/50 font-medium py-5 text-sm cursor-not-allowed"
               disabled={true}
             >
-              Coming Soon
+              {t("common.comingSoon")}
             </Button>
           </div>
         </div>
@@ -165,7 +166,7 @@ export default function Plans() {
                 className="h-9 px-4 text-xs border-zinc-700/80 bg-zinc-950/20 text-muted-foreground/50 cursor-not-allowed"
                 disabled={true}
               >
-                Coming Soon
+                {t("common.comingSoon")}
               </Button>
             </div>
       </div>

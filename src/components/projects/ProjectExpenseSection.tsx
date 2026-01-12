@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ExpenseScanButton, ReceiptDocument } from "@/components/expenses/ExpenseScanButton";
 import { formatLocaleNumber, parseLocaleNumber } from "@/lib/number";
 import { uuidv4 } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 
 interface ProjectExpense {
   id: string;
@@ -44,7 +45,7 @@ export function ProjectExpenseSection({ projectId, onExpenseChange }: ProjectExp
         .eq("project_id", projectId);
 
       if (error) {
-        console.error("Error loading project expenses:", error);
+        logger.warn("Error loading project expenses", error);
         return;
       }
 
@@ -57,7 +58,7 @@ export function ProjectExpenseSection({ projectId, onExpenseChange }: ProjectExp
         updatedAt: e.updated_at,
       })));
     } catch (err) {
-      console.error("Error loading project expenses:", err);
+      logger.warn("Error loading project expenses", err);
     } finally {
       setLoading(false);
     }
@@ -127,7 +128,7 @@ export function ProjectExpenseSection({ projectId, onExpenseChange }: ProjectExp
       await loadExpenses();
       onExpenseChange?.();
     } catch (err) {
-      console.error("Error saving project expense:", err);
+      logger.warn("Error saving project expense", err);
       toast.error(t("projectExpenses.saveError"));
     }
   }, [expenses, loadExpenses, onExpenseChange, projectId, t]);

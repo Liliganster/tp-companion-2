@@ -1,13 +1,14 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useI18n } from "@/hooks/use-i18n";
+import { logger } from "@/lib/logger";
 
 export default function NotFound() {
   const location = useLocation();
   const { t } = useI18n();
 
   useEffect(() => {
-    console.error("404 Error: User attempted to access non-existent route:", location.pathname);
+    logger.warn("404 route not found", { path: location.pathname });
   }, [location.pathname]);
 
   return (

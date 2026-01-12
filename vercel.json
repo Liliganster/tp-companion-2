@@ -21,7 +21,7 @@
       "destination": "/api/$1"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/((?!api/|assets/|sw\\.js$|workbox-.*\\.js$|manifest\\.webmanifest$|favicon\\.ico$|logo\\.svg$).*)",
       "destination": "/index.html"
     }
   ],

@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
+import { logger } from "@/lib/logger";
 
 const CALLSHEET_CANCELABLE_STATUSES = ["created", "queued", "processing", "failed"] as const;
 const INVOICE_CANCELABLE_STATUSES = ["created", "queued", "processing", "failed"] as const;
@@ -38,7 +39,7 @@ async function updateWithFallback<T extends Record<string, any>>(args: {
     .in("status", [...statuses]);
 
   if (fallback.error) {
-    console.warn(`[aiJobCancellation] Failed to cancel jobs in ${table}`, { attempt: attempt.error, fallback: fallback.error });
+    logger.warn(`[aiJobCancellation] Failed to cancel jobs in ${table}`, { attempt: attempt.error, fallback: fallback.error });
   }
 }
 
@@ -81,4 +82,3 @@ export async function cancelInvoiceJobs(jobIds: string[]) {
     },
   });
 }
-

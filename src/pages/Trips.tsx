@@ -466,9 +466,9 @@ export default function Trips() {
   const isAllSelected = visibleTrips.length > 0 && selectedIds.size === visibleTrips.length;
   const isSomeSelected = selectedIds.size > 0;
   return <MainLayout>
-    <div className="max-w-[1800px] mx-auto space-y-6">
+    <div className="page-container">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
+      <div className="glass-panel p-6 md:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6 animate-fade-in">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl sm:text-3xl font-bold">
@@ -499,7 +499,7 @@ export default function Trips() {
       </div>
 
       {/* Filters */}
-      <div className="glass-card p-4 animate-fade-in animation-delay-100">
+      <div className="glass-card p-5 animate-fade-in animation-delay-100">
         <div className="flex flex-col sm:flex-row sm:justify-end gap-3">
           <Select value={selectedProject} onValueChange={setSelectedProject}>
             <SelectTrigger className="w-full sm:w-48 bg-secondary/50">
@@ -594,19 +594,19 @@ export default function Trips() {
                   </div>
                   <div className="flex justify-between md:flex-col md:gap-0.5">
                     <span className="text-muted-foreground text-center">CO₂:</span>
-                    <span className="text-emerald-500 font-medium text-center">
+                    <span className="text-foreground font-medium text-center">
                       {isLoadingEmissionsData ? <Loader2 className="w-3 h-3 animate-spin inline" /> : `${calculateCO2(trip.distance, trip.fuelLiters, trip.evKwhUsed)} kg`}
                     </span>
                   </div>
                   <div className="flex justify-between md:flex-col md:gap-0.5">
                     <span className="text-muted-foreground text-center">{t("trips.expenses")}:</span>
-                    <span className="text-orange-500 font-medium text-center">
+                    <span className="text-foreground font-medium text-center">
                       {calculateTripExpenses(trip) > 0 ? `${calculateTripExpenses(trip).toFixed(2)} €` : "-"}
                     </span>
                   </div>
                   <div className="flex justify-between md:flex-col md:gap-0.5">
                     <span className="text-muted-foreground text-center">{t("trips.reimbursement")}:</span>
-                    <span className="text-primary font-medium text-center">{calculateTripReimbursement(trip).toFixed(2)} €</span>
+                    <span className="text-foreground font-medium text-center">{calculateTripReimbursement(trip).toFixed(2)} €</span>
                   </div>
                 </div>
               </div>
@@ -671,7 +671,7 @@ export default function Trips() {
         {hasMoreTrips && (
           <button
             onClick={() => setVisibleTripsCount(prev => prev + TRIPS_PER_PAGE)}
-            className="w-full flex items-center justify-center gap-2 text-sm text-primary hover:text-primary/80 font-medium py-3 rounded-md hover:bg-muted/50 transition-colors glass-card"
+            className="w-full flex items-center justify-center gap-2 text-sm text-primary hover:text-primary/80 font-semibold py-3 rounded-lg transition-colors glass-card"
           >
             <ChevronsDown className="w-4 h-4" />
             {t("trips.loadMore")} ({remainingTripsCount} {t("advancedCosts.remaining")})
@@ -774,15 +774,15 @@ export default function Trips() {
                     {trip.project}
                   </span>
                 </TableCell>
-                <TableCell className="text-right text-emerald-500 whitespace-nowrap">
+                <TableCell className="text-right text-foreground whitespace-nowrap">
                   {isLoadingEmissionsData ? <Loader2 className="w-3 h-3 animate-spin inline" /> : `${calculateCO2(trip.distance, trip.fuelLiters, trip.evKwhUsed)} kg`}
                 </TableCell>
                 <TableCell className="text-right whitespace-nowrap">{formatTripReceiptCell(trip)}</TableCell>
                 <TableCell className="text-right text-muted-foreground hidden lg:table-cell">{trip.passengers || "-"}</TableCell>
-                <TableCell className="text-right text-orange-500 whitespace-nowrap">
+                <TableCell className="text-right text-foreground whitespace-nowrap">
                   {calculateTripExpenses(trip) > 0 ? `${calculateTripExpenses(trip).toFixed(2)} €` : "-"}
                 </TableCell>
-                <TableCell className="text-right text-primary font-medium whitespace-nowrap">{calculateTripReimbursement(trip).toFixed(2)} €</TableCell>
+                <TableCell className="text-right text-foreground font-medium whitespace-nowrap">{calculateTripReimbursement(trip).toFixed(2)} €</TableCell>
                 <TableCell className="text-right font-semibold whitespace-nowrap">{trip.distance} km</TableCell>
                 <TableCell>
                   <DropdownMenu>

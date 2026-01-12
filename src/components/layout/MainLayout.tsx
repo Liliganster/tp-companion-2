@@ -16,15 +16,14 @@ export function MainLayout({ children, backgroundVariant = "default" }: MainLayo
       {/* Background gradient effects */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none app-background-effects z-0">
         <div className="absolute inset-0 app-background-image" />
-        <div className="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-radial from-primary/5 via-transparent to-transparent" />
-        <div className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-radial from-accent/5 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/0 via-black/5 to-black/25" />
 
         {backgroundVariant === "plans" && (
           <>
-            <div className="absolute inset-0 bg-gradient-to-br from-zinc-950/60 via-zinc-950/60 to-purple-950/35" />
-            <div className="absolute -top-32 left-1/2 h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-yellow-500/5 blur-3xl" />
-            <div className="absolute -bottom-40 right-[-10%] h-[520px] w-[520px] rounded-full bg-blue-500/10 blur-3xl" />
-            <div className="absolute -bottom-40 left-[-10%] h-[520px] w-[520px] rounded-full bg-purple-500/10 blur-3xl" />
+            <div className="absolute inset-0 bg-gradient-to-br from-zinc-950/70 via-zinc-950/60 to-zinc-900/20" />
+            <div className="absolute -top-32 left-1/2 h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-white/5 blur-3xl" />
+            <div className="absolute -bottom-40 right-[-10%] h-[520px] w-[520px] rounded-full bg-white/5 blur-3xl" />
+            <div className="absolute -bottom-40 left-[-10%] h-[520px] w-[520px] rounded-full bg-white/5 blur-3xl" />
           </>
         )}
       </div>

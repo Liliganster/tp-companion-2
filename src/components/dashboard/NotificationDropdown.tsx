@@ -37,7 +37,7 @@ export function NotificationDropdown() {
             </span>}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 p-0 bg-card border-border">
+      <DropdownMenuContent align="end" className="w-80 p-0">
         <div className="p-3 border-b border-border">
           <h3 className="font-semibold text-sm">{t("dashboard.warnings")}</h3>
         </div>

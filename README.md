@@ -98,6 +98,32 @@ SUPABASE_URL=...
 SUPABASE_SERVICE_ROLE_KEY=...
 ```
 
+### Local dev: Calendar/Drive OAuth
+
+In production, `/api/google/*` is served by Vercel functions (folder `api/`). In local dev, `npm run dev` only starts Vite, so the OAuth/Calendar/Drive endpoints are not available unless you run them too.
+
+This repo supports a dev proxy for those endpoints:
+
+1. Start the Vercel functions locally (separate terminal):
+
+```sh
+npx vercel dev --listen 3000
+```
+
+2. Add this to your `.env.local`:
+
+```sh
+VERCEL_DEV_API_ORIGIN=http://localhost:3000
+```
+
+3. Start Vite:
+
+```sh
+npm run dev
+```
+
+Now `http://localhost:8080/api/google/oauth/*` and `http://localhost:8080/api/google/calendar/*` will be proxied to the local Vercel dev server.
+
 ### Security note
 
 For interactive maps, the **Maps JavaScript API key must be sent to the browser**. The recommended approach is:

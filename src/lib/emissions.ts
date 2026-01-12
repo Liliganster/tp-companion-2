@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger";
+
 export function calculateCO2KgFromKm(distanceKm: number): number {
   const km = Number(distanceKm);
   if (!Number.isFinite(km) || km <= 0) return 0;
@@ -51,11 +53,11 @@ export function calculateTripEmissions(input: TripEmissionsInput): TripEmissions
     // Validation warnings (UI forms should prevent saving invalid values)
     if (fuelLPer100Km !== null && Number.isFinite(fuelLPer100Km)) {
       if (fuelLPer100Km < 3 && fuelLPer100Km > 0) {
-        console.warn(`⚠️ Consumo anormalmente bajo: ${fuelLPer100Km} L/100km (mínimo realista: 3 L/100km)`);
+        logger.warn(`⚠️ Consumo anormalmente bajo: ${fuelLPer100Km} L/100km (mínimo realista: 3 L/100km)`);
       }
       
       if (fuelLPer100Km > 50) {
-        console.warn(`⚠️ Consumo excesivo: ${fuelLPer100Km} L/100km (máximo realista: 50 L/100km)`);
+        logger.warn(`⚠️ Consumo excesivo: ${fuelLPer100Km} L/100km (máximo realista: 50 L/100km)`);
       }
     }
     
@@ -97,11 +99,11 @@ export function calculateTripEmissions(input: TripEmissionsInput): TripEmissions
     // Validation warnings (UI forms should prevent saving invalid values)
     if (evKwhPer100Km !== null && Number.isFinite(evKwhPer100Km)) {
       if (evKwhPer100Km < 10 && evKwhPer100Km > 0) {
-        console.warn(`⚠️ Consumo EV anormalmente bajo: ${evKwhPer100Km} kWh/100km (mínimo realista: 10 kWh/100km)`);
+        logger.warn(`⚠️ Consumo EV anormalmente bajo: ${evKwhPer100Km} kWh/100km (mínimo realista: 10 kWh/100km)`);
       }
       
       if (evKwhPer100Km > 35) {
-        console.warn(`⚠️ Consumo EV excesivo: ${evKwhPer100Km} kWh/100km (máximo realista: 35 kWh/100km)`);
+        logger.warn(`⚠️ Consumo EV excesivo: ${evKwhPer100Km} kWh/100km (máximo realista: 35 kWh/100km)`);
       }
     }
     

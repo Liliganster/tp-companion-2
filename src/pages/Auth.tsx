@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import tripHeaderImage from "@/assets/trip-modal-header.jpg";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Link } from "react-router-dom";
+import { logger } from "@/lib/logger";
 
 export default function Auth() {
   const { t } = useI18n();
@@ -77,7 +78,7 @@ export default function Auth() {
         description: "Revisa tu bandeja de entrada para restablecer la contraseña.",
       });
     } catch (err: any) {
-      console.error("Password reset error:", err);
+      logger.warn("Password reset error", err);
       toast({
         title: "No se pudo enviar",
         description: err?.message ?? "Unexpected error",

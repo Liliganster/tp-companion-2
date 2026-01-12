@@ -648,15 +648,15 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   </div>
 
                   {/* Delete Account */}
-                  <div className="mt-8 p-4 rounded-lg border border-destructive/30 bg-destructive/5">
+                  <div className="mt-8 p-4 rounded-lg border border-red-500/30 bg-red-500/10">
                     <div className="flex items-start gap-3">
-                      <Trash2 className="w-5 h-5 text-destructive mt-0.5 shrink-0" />
+                      <Trash2 className="w-5 h-5 text-red-300 mt-0.5 shrink-0" />
                       <div className="flex-1">
-                        <h3 className="font-medium text-destructive">{t("settings.deleteAccountTitle")}</h3>
+                        <h3 className="font-medium text-red-200">{t("settings.deleteAccountTitle")}</h3>
                         <p className="text-sm text-muted-foreground mt-1 mb-4">
                           {t("settings.deleteAccountBody")}
                         </p>
-                        <Button variant="destructive" size="sm" onClick={deleteAccount}>
+                        <Button className="bg-red-600 text-white hover:bg-red-600/90" size="sm" onClick={deleteAccount}>
                           <Trash2 className="w-4 h-4 mr-2" />
                           {t("settings.deleteAccountButton")}
                         </Button>
@@ -676,8 +676,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         <h3 className="font-medium">Gemini AI (Default)</h3>
                         <p className="text-sm text-muted-foreground">{t("settings.apisGeminiBody")}</p>
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-success">
-                        <div className="w-2 h-2 rounded-full bg-success" />
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <div className="w-2 h-2 rounded-full bg-muted-foreground" />
                         {t("settings.apisActive")}
                       </div>
                     </div>
@@ -704,7 +704,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         <p className="text-sm text-muted-foreground">{t("settings.apisGoogleCalendarBody")}</p>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className={cn("text-xs", googleStatus.connected ? "text-success" : "text-muted-foreground")}>
+                        <span className="text-xs text-muted-foreground">
                           {googleStatus.connected ? (googleStatus.email ?? t("settings.apisActive")) : t("settings.apisConnect")}
                         </span>
                         <Button
@@ -744,11 +744,11 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         className={cn(
                           "p-4 rounded-lg border transition-colors text-left flex items-start gap-3",
                           theme === "light"
-                            ? "bg-primary/10 border-primary/50"
-                            : "bg-secondary/50 border-border/50 hover:border-primary/30"
+                            ? "bg-secondary/50 border-border/70"
+                            : "bg-secondary/30 border-border/50 hover:border-border/70"
                         )}
                       >
-                        <Sun className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" />
+                        <Sun className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
                         <div>
                           <h4 className="font-medium text-sm">
                             {t("settings.themeLight")} {theme === "light" && `(${t("settings.current")})`}
@@ -765,7 +765,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                             : "bg-secondary/50 border-border/50 hover:border-primary/30"
                         )}
                       >
-                        <Moon className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+                        <Moon className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
                         <div>
                           <h4 className="font-medium text-sm">
                             {t("settings.themeDark")} {theme === "dark" && `(${t("settings.current")})`}

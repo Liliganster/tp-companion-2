@@ -46,19 +46,14 @@ export function KPICard({
   return (
     <div
       className={cn(
-        "relative glass-card p-5 animate-fade-in hover:scale-[1.02] transition-transform duration-300",
-        variant === "primary" && "border-primary/30 bg-primary/5",
-        variant === "accent" && "border-accent/30 bg-accent/5",
+        "relative glass-card p-5 animate-fade-in transition-colors duration-200 hover:bg-white/[0.05]",
         className
       )}
     >
       <div className="flex items-start justify-between mb-3">
         <div
           className={cn(
-            "p-2.5 rounded-lg",
-            variant === "default" && "bg-secondary",
-            variant === "primary" && "bg-primary/20",
-            variant === "accent" && "bg-accent/20",
+            "p-2.5 rounded-xl border border-white/10 bg-white/[0.03]",
             iconWrapperClassName
           )}
         >
@@ -69,10 +64,7 @@ export function KPICard({
         ) : trend ? (
           <div
             className={cn(
-              "flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full",
-              isPositive
-                ? "bg-success/20 text-success"
-                : "bg-destructive/20 text-destructive"
+              "flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full border border-white/10 bg-white/5 text-white/80"
             )}
           >
             {isPositive ? (
@@ -82,7 +74,7 @@ export function KPICard({
             )}
             <span>{Math.abs(trend.value)}%</span>
             {trendLabelPlacement === "pill" && (
-              <span className="text-muted-foreground">{trend.label}</span>
+              <span className="text-white/60">{trend.label}</span>
             )}
           </div>
         ) : null}

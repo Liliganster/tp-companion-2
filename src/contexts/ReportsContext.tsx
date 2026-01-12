@@ -2,6 +2,9 @@ import { createContext, ReactNode, useCallback, useContext, useMemo } from "reac
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "./AuthContext";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { usePlan } from "./PlanContext";
+import { getLocalFirstKey, readLocalFirst, writeLocalFirst } from "@/lib/localFirstStore";
+import { logger } from "@/lib/logger";
 
 export type SavedReport = {
   id: string;
@@ -39,17 +42,23 @@ const ReportsContext = createContext<ReportsContextValue | null>(null);
 
 export function ReportsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { planTier } = usePlan();
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ["reports", user?.id ?? "anon"] as const, [user?.id]);
+  const localReportsKey = useMemo(() => getLocalFirstKey("reports", user?.id), [user?.id]);
+  const isLocalFirst = planTier === "basic";
 
   const reportsQuery = useQuery({
     queryKey,
-    enabled: Boolean(user && supabase),
+    enabled: isLocalFirst || Boolean(user && supabase),
     queryFn: async (): Promise<SavedReport[]> => {
+      if (isLocalFirst) {
+        return readLocalFirst<SavedReport[]>(localReportsKey) ?? [];
+      }
       if (!user || !supabase) return [];
       const { data, error } = await supabase.from("reports").select("*").order("created_at", { ascending: false });
       if (error) {
-        console.error("Error fetching reports:", error);
+        logger.warn("Error fetching reports", error);
         return [];
       }
       return (data ?? []).map((r: any) => ({
@@ -73,6 +82,31 @@ export function ReportsProvider({ children }: { children: ReactNode }) {
   const reports = reportsQuery.data ?? [];
 
   const addReport = useCallback<ReportsContextValue["addReport"]>(async (report) => {
+    if (isLocalFirst) {
+      const nextReport: SavedReport = {
+        id: report.id ?? safeId(),
+        createdAt: report.createdAt ?? new Date().toISOString(),
+        month: report.month,
+        year: report.year,
+        project: report.project,
+        tripIds: report.tripIds,
+        startDate: report.startDate,
+        endDate: report.endDate,
+        totalDistanceKm: report.totalDistanceKm,
+        tripsCount: report.tripsCount,
+        driver: report.driver,
+        address: report.address,
+        licensePlate: report.licensePlate,
+        reportType: report.reportType,
+      };
+
+      const prev = (queryClient.getQueryData<SavedReport[]>(queryKey) ?? []) as SavedReport[];
+      const next = [nextReport, ...prev];
+      queryClient.setQueryData<SavedReport[]>(queryKey, next);
+      writeLocalFirst(localReportsKey, next);
+      return nextReport;
+    }
+
     if (!user || !supabase) {
         // Fallback or error? For now just return local object but won't save
         return { ...report, id: "temp", createdAt: new Date().toISOString() } as SavedReport;
@@ -115,14 +149,22 @@ export function ReportsProvider({ children }: { children: ReactNode }) {
     });
 
     if (error) {
-        console.error("Error saving report:", error);
+        logger.warn("Error saving report", error);
         queryClient.setQueryData<SavedReport[]>(queryKey, (cur) => (cur ?? []).filter((r) => r.id !== nextReport.id));
     }
 
     return nextReport;
-  }, [queryClient, queryKey, user]);
+  }, [isLocalFirst, localReportsKey, queryClient, queryKey, user]);
 
   const deleteReport = useCallback(async (id: string) => {
+    if (isLocalFirst) {
+      const prev = (queryClient.getQueryData<SavedReport[]>(queryKey) ?? []) as SavedReport[];
+      const next = prev.filter((r) => r.id !== id);
+      queryClient.setQueryData<SavedReport[]>(queryKey, next);
+      writeLocalFirst(localReportsKey, next);
+      return;
+    }
+
     if (!user || !supabase) return;
     
     queryClient.setQueryData<SavedReport[]>(
@@ -132,19 +174,25 @@ export function ReportsProvider({ children }: { children: ReactNode }) {
     
     const { error } = await supabase.from("reports").delete().eq("id", id);
     if (error) {
-        console.error("Error deleting report:", error);
+        logger.warn("Error deleting report", error);
         void queryClient.invalidateQueries({ queryKey });
     }
-  }, [queryClient, queryKey, user]);
+  }, [isLocalFirst, localReportsKey, queryClient, queryKey, user]);
 
   const clearReports = useCallback(async () => {
+    if (isLocalFirst) {
+      queryClient.setQueryData<SavedReport[]>(queryKey, []);
+      writeLocalFirst(localReportsKey, []);
+      return;
+    }
+
     if (!user || !supabase) return;
 
     queryClient.setQueryData<SavedReport[]>(queryKey, []);
     const { error } = await supabase.from("reports").delete().eq("user_id", user.id);
-    if (error) console.error("Error clearing reports:", error);
+    if (error) logger.warn("Error clearing reports", error);
 
-  }, [queryClient, queryKey, user]);
+  }, [isLocalFirst, localReportsKey, queryClient, queryKey, user]);
 
   const value = useMemo<ReportsContextValue>(() => ({ reports, addReport, deleteReport, clearReports }), [reports, addReport, deleteReport, clearReports]);
 

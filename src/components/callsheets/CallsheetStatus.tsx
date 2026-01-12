@@ -68,7 +68,7 @@ export function CallsheetStatus({ jobId }: CallsheetStatusProps) {
   }, [jobId]);
 
   if (loading && !status) return <div className="p-4"><Loader2 className="animate-spin" /> Cargando estado...</div>;
-  if (error) return <div className="text-red-500 p-4">Error: {error}</div>;
+  if (error) return <div className="text-foreground p-4">Error: {error}</div>;
 
     const isProcessing = status?.status === "created" || status?.status === "queued" || status?.status === "processing";
 

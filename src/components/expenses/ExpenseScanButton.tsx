@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { useI18n } from "@/hooks/use-i18n";
 import { cn, uuidv4 } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 
 export type ExpenseType = "toll" | "parking" | "fuel" | "other";
 
@@ -157,7 +158,7 @@ export function ExpenseScanButton({
       toast.success(t("expenseScan.receiptDeleted"));
       onReceiptDeleted?.(receipt.id);
     } catch (err) {
-      console.error("Delete error:", err);
+      logger.warn("Delete error", err);
       toast.error(t("expenseScan.deleteError"));
     } finally {
       setDeletingReceiptId(null);
@@ -228,7 +229,7 @@ export function ExpenseScanButton({
       setImagePreview(rotatedUrl);
       setRotation(newRotation);
     } catch (err) {
-      console.error("Rotation error:", err);
+      logger.warn("Rotation error", err);
     }
   }, [imagePreview, rotation]);
 
@@ -311,7 +312,7 @@ export function ExpenseScanButton({
       
       setExtractionResult(result);
     } catch (err: any) {
-      console.error("Processing error:", err);
+      logger.warn("Processing error", err);
       setExtractionError(err.message || t("expenseScan.error"));
     } finally {
       setIsProcessing(false);
@@ -372,7 +373,7 @@ export function ExpenseScanButton({
         size="icon"
         className={cn(
           "h-10 w-10 shrink-0 relative",
-          receiptCount > 0 && "border-green-500/50 text-green-500",
+          receiptCount > 0 && "border-white/25 text-foreground",
           className
         )}
         disabled={disabled}
@@ -384,7 +385,7 @@ export function ExpenseScanButton({
       >
         {receiptCount > 0 ? <FileText className="w-5 h-5" /> : <Camera className="w-5 h-5" />}
         {receiptCount > 0 && (
-          <span className="absolute -top-1 -right-1 bg-green-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-medium">
+          <span className="absolute -top-1 -right-1 bg-white text-zinc-950 text-xs rounded-full w-4 h-4 flex items-center justify-center font-medium">
             {receiptCount}
           </span>
         )}
@@ -413,7 +414,7 @@ export function ExpenseScanButton({
                       className="flex items-center justify-between gap-2 p-2 bg-secondary/30 rounded-lg"
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <FileText className="w-4 h-4 text-green-500 shrink-0" />
+                        <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
                         <span className="text-sm truncate">
                           {receipt.amount != null ? `${receipt.amount.toFixed(2)} €` : receipt.name || t("expenseScan.receipt")}
                         </span>
@@ -556,7 +557,7 @@ export function ExpenseScanButton({
             {/* Extraction Result */}
             {extractionResult && (
               <div className="bg-secondary/30 rounded-lg p-4 space-y-3">
-                <div className="flex items-center gap-2 text-green-500">
+                <div className="flex items-center gap-2 text-foreground">
                   <Check className="w-5 h-5" />
                   <span className="font-medium">{t("expenseScan.dataExtracted")}</span>
                 </div>

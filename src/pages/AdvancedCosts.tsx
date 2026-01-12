@@ -123,16 +123,15 @@ export default function AdvancedCosts() {
   };
 
   const getBalanceColor = (balance: number) => {
-    if (balance > 0) return "text-green-600 dark:text-green-400";
-    if (balance < 0) return "text-red-600 dark:text-red-400";
+    if (balance !== 0) return "text-foreground";
     return "text-muted-foreground";
   };
 
   return (
     <MainLayout>
-      <div className="max-w-[1400px] mx-auto space-y-6">
+      <div className="page-container">
         {/* Header */}
-        <div className="flex flex-col gap-4 animate-fade-in">
+        <div className="glass-panel p-6 md:p-8 flex flex-col gap-4 animate-fade-in">
           <div className="flex items-start gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate("/advanced")} className="shrink-0 mt-1">
               <ArrowLeft className="w-5 h-5" />
@@ -216,9 +215,9 @@ export default function AdvancedCosts() {
           </div>
 
           {/* Balance Card */}
-          <div className={cn("glass-card p-5", summary.balance >= 0 ? "ring-1 ring-green-500/20" : "ring-1 ring-red-500/20")}>
+          <div className={cn("glass-card p-5", "ring-1 ring-white/10")}>
             <div className="flex items-center gap-2 mb-2">
-              <div className={cn("p-2 rounded-lg", summary.balance >= 0 ? "bg-green-500/10" : "bg-red-500/10")}>
+              <div className="p-2 rounded-lg bg-white/5">
                 <BarChart3 className={cn("w-4 h-4", getBalanceColor(summary.balance))} />
               </div>
               <p className="text-sm text-muted-foreground font-medium">{t("advancedCosts.balance")}</p>
@@ -333,19 +332,19 @@ export default function AdvancedCosts() {
                           <td className="py-3 px-2 text-right text-muted-foreground">
                             {distanceFormatter.format(project.distance)}
                           </td>
-                          <td className="py-3 px-2 text-right text-orange-600 dark:text-orange-400">
+                          <td className="py-3 px-2 text-right text-foreground">
                             {currencyFormatter.format(project.realCost)}
                           </td>
-                          <td className="py-3 px-2 text-right text-blue-600 dark:text-blue-400">
+                          <td className="py-3 px-2 text-right text-foreground">
                             {currencyFormatter.format(project.reimbursement)}
                           </td>
                           <td className={cn("py-3 px-2 text-right font-semibold", getBalanceColor(project.balance))}>
                             <div className="flex items-center justify-end gap-1">
                               {project.balance >= 0 ? "+" : ""}{currencyFormatter.format(project.balance)}
                               {project.isProfitable ? (
-                                <span className="text-green-500">●</span>
+                                <span className="text-muted-foreground">●</span>
                               ) : (
-                                <span className="text-red-500">●</span>
+                                <span className="text-muted-foreground">●</span>
                               )}
                             </div>
                           </td>
@@ -379,13 +378,13 @@ export default function AdvancedCosts() {
                                   <td className="py-2 px-2 text-right text-muted-foreground text-xs">
                                     {distanceFormatter.format(tripDistance)}
                                   </td>
-                                  <td className="py-2 px-2 text-right text-orange-600/70 dark:text-orange-400/70 text-xs">
+                                  <td className="py-2 px-2 text-right text-muted-foreground text-xs">
                                     {currencyFormatter.format(tripCost)}
                                   </td>
-                                  <td className="py-2 px-2 text-right text-blue-600/70 dark:text-blue-400/70 text-xs">
+                                  <td className="py-2 px-2 text-right text-muted-foreground text-xs">
                                     {currencyFormatter.format(tripReimb)}
                                   </td>
-                                  <td className={cn("py-2 px-2 text-right text-xs", tripBalance >= 0 ? "text-green-600/70 dark:text-green-400/70" : "text-red-600/70 dark:text-red-400/70")}>
+                                  <td className={cn("py-2 px-2 text-right text-xs", getBalanceColor(tripBalance))}>
                                     {tripBalance >= 0 ? "+" : ""}{currencyFormatter.format(tripBalance)}
                                   </td>
                                 </tr>
@@ -421,10 +420,10 @@ export default function AdvancedCosts() {
                     <td className="py-3 px-2 text-right">
                       {distanceFormatter.format(summary.totalDistance)} km
                     </td>
-                    <td className="py-3 px-2 text-right text-orange-600 dark:text-orange-400">
+                    <td className="py-3 px-2 text-right text-foreground">
                       {currencyFormatter.format(summary.realCost)}
                     </td>
-                    <td className="py-3 px-2 text-right text-blue-600 dark:text-blue-400">
+                    <td className="py-3 px-2 text-right text-foreground">
                       {currencyFormatter.format(summary.reimbursement)}
                     </td>
                     <td className={cn("py-3 px-2 text-right", getBalanceColor(summary.balance))}>

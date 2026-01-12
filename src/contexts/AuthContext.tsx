@@ -2,6 +2,7 @@ import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, 
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 import { setSentryUser } from "@/lib/sentryClient";
+import { logger } from "@/lib/logger";
 
 type AuthContextValue = {
   session: Session | null;
@@ -77,10 +78,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
     if (error) {
-      console.error("[AuthContext] Sign up error:", error);
+      logger.warn("[AuthContext] Sign up error", error);
       throw error;
     }
-    console.log("[AuthContext] Sign up successful. Data:", data);
+    logger.debug("[AuthContext] Sign up successful", data);
   }, []);
 
   const signInWithGoogle = useCallback(async () => {

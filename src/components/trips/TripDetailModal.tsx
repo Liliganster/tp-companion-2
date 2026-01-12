@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { parseLocaleNumber } from "@/lib/number";
+import { logger } from "@/lib/logger";
 
 interface TripDetailModalProps {
   trip: Trip | null;
@@ -76,7 +77,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
         setPreviewUrl(url);
         setPreviewDocName(doc.name);
       } catch (e) {
-        console.error("Preview error:", e);
+        logger.warn("Preview error", e);
         toast({ title: t("tripDetail.errorTitle"), description: t("tripDetail.previewLoadFailed"), variant: "destructive" });
       }
       return;
@@ -187,7 +188,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
                     {liveTrip.tollAmount != null && liveTrip.tollAmount > 0 && (
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2">
-                          <Receipt className="w-4 h-4 text-yellow-500" />
+                          <Receipt className="w-4 h-4 text-muted-foreground" />
                           <span className="text-muted-foreground">{t("tripModal.toll")}</span>
                         </div>
                         <span className="font-medium">{liveTrip.tollAmount.toFixed(2)} €</span>
@@ -196,7 +197,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
                     {liveTrip.parkingAmount != null && liveTrip.parkingAmount > 0 && (
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2">
-                          <ParkingCircle className="w-4 h-4 text-purple-500" />
+                          <ParkingCircle className="w-4 h-4 text-muted-foreground" />
                           <span className="text-muted-foreground">{t("tripModal.parking")}</span>
                         </div>
                         <span className="font-medium">{liveTrip.parkingAmount.toFixed(2)} €</span>
@@ -205,7 +206,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
                     {liveTrip.otherExpenses != null && liveTrip.otherExpenses > 0 && (
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2">
-                          <Banknote className="w-4 h-4 text-green-500" />
+                          <Banknote className="w-4 h-4 text-muted-foreground" />
                           <span className="text-muted-foreground">{t("tripModal.otherExpenses")}</span>
                         </div>
                         <span className="font-medium">{liveTrip.otherExpenses.toFixed(2)} €</span>

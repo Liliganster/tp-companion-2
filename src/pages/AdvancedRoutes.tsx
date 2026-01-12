@@ -29,6 +29,8 @@ import { toast } from "sonner";
 import { AddressAutocompleteInput } from "@/components/google/AddressAutocompleteInput";
 import { getCountryCode } from "@/lib/country-mapping";
 import { usePlan } from "@/contexts/PlanContext";
+import { getLocalFirstKey, readLocalFirst, writeLocalFirst } from "@/lib/localFirstStore";
+import { logger } from "@/lib/logger";
 
 interface RouteTemplate {
   id: string;
@@ -63,7 +65,9 @@ export default function AdvancedRoutes() {
   const { t } = useI18n();
   const { user, getAccessToken } = useAuth();
   const { profile } = useUserProfile();
-  const { limits } = usePlan();
+  const { limits, planTier } = usePlan();
+  const isLocalFirst = planTier === "basic";
+  const localKey = useMemo(() => getLocalFirstKey("route_templates", user?.id), [user?.id]);
   const googleRegion = useMemo(() => getCountryCode(profile.country), [profile.country]);
   const baseLocation = useMemo(() => {
     const parts = [profile.baseAddress, profile.city, profile.country].map((p) => String(p ?? "").trim()).filter(Boolean);
@@ -215,6 +219,13 @@ export default function AdvancedRoutes() {
     let mounted = true;
 
     async function load() {
+      if (isLocalFirst) {
+        const stored = readLocalFirst<RouteTemplate[]>(localKey) ?? [];
+        if (!mounted) return;
+        setTemplates(stored);
+        return;
+      }
+
       if (!supabase || !user) {
         setTemplates([]);
         return;
@@ -232,7 +243,7 @@ export default function AdvancedRoutes() {
         if (!mounted) return;
         setTemplates(rows.map(mapDbToUi));
       } catch (err: any) {
-        console.error("Failed to load route templates:", err);
+        logger.warn("Failed to load route templates", err);
         toast.error(String(err?.message ?? t("advancedRoutes.toastLoadError")));
       } finally {
         if (mounted) setLoading(false);
@@ -243,7 +254,7 @@ export default function AdvancedRoutes() {
     return () => {
       mounted = false;
     };
-  }, [t, user]);
+  }, [isLocalFirst, localKey, t, user]);
 
   const categories = [
     { id: "all", label: t("advancedRoutes.categoryAll") },
@@ -303,11 +314,6 @@ export default function AdvancedRoutes() {
   };
 
   const handleSaveTemplate = async () => {
-    if (!supabase || !user) {
-      toast.error(t("advancedRoutes.toastLoginRequired"));
-      return;
-    }
-
     const name = formData.name.trim();
     if (!name) {
       toast.error(t("advancedRoutes.toastNameRequired"));
@@ -324,6 +330,42 @@ export default function AdvancedRoutes() {
 
     setLoading(true);
     try {
+      if (isLocalFirst) {
+        if (!editingTemplateId && templates.length >= limits.maxRouteTemplates) {
+          toast.error(t("limits.maxTemplatesReached"));
+          setLoading(false);
+          return;
+        }
+
+        const nextTemplate: RouteTemplate = {
+          id: editingTemplateId ?? crypto.randomUUID(),
+          name,
+          category: formData.category,
+          startLocation: startLocation || "",
+          waypoints,
+          endLocation: endLocation || "",
+          distance: Number.isFinite(Number(formData.distance)) ? Number(formData.distance) : 0,
+          estimatedTime: Number.isFinite(Number(formData.estimatedTime)) ? Number(formData.estimatedTime) : 0,
+          description: formData.description || "",
+          uses: editingTemplateId ? (templates.find((t) => t.id === editingTemplateId)?.uses ?? 0) : 0,
+        };
+
+        const nextList = editingTemplateId
+          ? templates.map((t) => (t.id === editingTemplateId ? { ...t, ...nextTemplate } : t))
+          : [nextTemplate, ...templates];
+
+        setTemplates(nextList);
+        writeLocalFirst(localKey, nextList);
+        closeModal();
+        toast.success(editingTemplateId ? t("advancedRoutes.toastUpdated") : t("advancedRoutes.toastCreated"));
+        return;
+      }
+
+      if (!supabase || !user) {
+        toast.error(t("advancedRoutes.toastLoginRequired"));
+        return;
+      }
+
       if (editingTemplateId) {
         const payload = {
           name,
@@ -386,7 +428,7 @@ export default function AdvancedRoutes() {
         toast.success(t("advancedRoutes.toastCreated"));
       }
     } catch (err: any) {
-      console.error("Failed to save route template:", err);
+      logger.warn("Failed to save route template", err);
       toast.error(String(err?.message ?? t("advancedRoutes.toastSaveFailed")));
     } finally {
       setLoading(false);
@@ -394,6 +436,14 @@ export default function AdvancedRoutes() {
   };
 
   const bumpUses = async (template: RouteTemplate) => {
+    if (isLocalFirst) {
+      const nextUses = (Number(template.uses) || 0) + 1;
+      const next = templates.map((t) => (t.id === template.id ? { ...t, uses: nextUses } : t));
+      setTemplates(next);
+      writeLocalFirst(localKey, next);
+      return;
+    }
+
     if (!supabase || !user) return;
     const nextUses = (Number(template.uses) || 0) + 1;
     setTemplates((prev) => prev.map((t) => (t.id === template.id ? { ...t, uses: nextUses } : t)));
@@ -402,7 +452,7 @@ export default function AdvancedRoutes() {
       .update({ uses: nextUses, updated_at: new Date().toISOString() })
       .eq("id", template.id);
     if (error) {
-      console.error("Failed to update uses:", error);
+      logger.warn("Failed to update uses", error);
       toast.error(t("advancedRoutes.toastUsesUpdateFailed"));
       setTemplates((prev) => prev.map((t) => (t.id === template.id ? { ...t, uses: template.uses } : t)));
     }
@@ -434,9 +484,9 @@ export default function AdvancedRoutes() {
 
   return (
     <MainLayout>
-      <div className="max-w-[1800px] mx-auto space-y-6">
+      <div className="page-container">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 animate-fade-in">
+        <div className="glass-panel p-6 md:p-8 flex flex-col sm:flex-row sm:items-start justify-between gap-6 animate-fade-in">
           <div className="flex items-start gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate("/advanced")} className="shrink-0 mt-1">
               <ArrowLeft className="w-5 h-5" />

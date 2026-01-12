@@ -1,4 +1,6 @@
-const SUPABASE_URL = process.env.SUPABASE_URL;
+// Prefer server-only SUPABASE_URL; fall back to VITE_SUPABASE_URL to avoid misconfig mismatches
+// (Vercel env vars are shared across build/runtime, so VITE_* may exist server-side too).
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 export type SupabaseUser = {

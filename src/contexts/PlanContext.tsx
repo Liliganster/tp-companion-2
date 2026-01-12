@@ -2,6 +2,7 @@ import { createContext, ReactNode, useContext, useMemo, useState, useEffect, use
 import { useAuth } from "./AuthContext";
 import { PlanTier, PlanLimits, getPlanLimits, DEFAULT_PLAN } from "@/lib/plans";
 import { supabase } from "@/lib/supabaseClient";
+import { logger } from "@/lib/logger";
 
 export type { PlanTier, PlanLimits };
 
@@ -88,7 +89,7 @@ export function PlanProvider({ children }: { children: ReactNode }) {
         currency: "EUR",
       });
     } catch (err) {
-      console.error("[PlanContext] Failed to fetch subscription:", err);
+      logger.warn("[PlanContext] Failed to fetch subscription", err);
     } finally {
       setIsLoading(false);
     }
@@ -177,42 +178,27 @@ export function PlanProvider({ children }: { children: ReactNode }) {
     };
   }, [limits]);
 
-  // Upgrade to a plan tier via API
+  // Upgrade flow: redirect to Stripe Payment Link (plan tier is set by webhook).
   const upgradeToPlan = useCallback(async (tier: PlanTier): Promise<boolean> => {
-    if (!session?.access_token) {
-      console.error("[PlanContext] No session token available");
+    if (typeof window === "undefined") return false;
+    if (!user?.id) return false;
+
+    // Only Pro is purchasable right now.
+    if (tier !== "pro") return false;
+
+    const paymentLink = (import.meta.env.VITE_STRIPE_PAYMENT_LINK as string | undefined) ?? "";
+    if (!paymentLink || paymentLink.includes("test_XXXXXX")) {
+      logger.warn("[PlanContext] Missing/placeholder VITE_STRIPE_PAYMENT_LINK");
       return false;
     }
 
-    try {
-      console.log(`[PlanContext] Starting upgrade to ${tier}`);
-      
-      const res = await fetch("/api/user/subscription", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ tier }),
-      });
+    const url = new URL(paymentLink);
+    url.searchParams.set("client_reference_id", user.id);
+    if (user.email) url.searchParams.set("prefilled_email", user.email);
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error(`[PlanContext] Failed to upgrade plan:`, errorText);
-        return false;
-      }
-
-      const data = await res.json();
-      console.log(`[PlanContext] Upgrade successful, new tier: ${data.tier}`);
-      
-      // Refresh subscription data
-      await fetchSubscription();
-      return true;
-    } catch (err) {
-      console.error("[PlanContext] Error during upgrade:", err);
-      return false;
-    }
-  }, [session?.access_token, fetchSubscription]);
+    window.location.href = url.toString();
+    return true;
+  }, [user?.email, user?.id]);
 
   const value: PlanContextValue = {
     planTier,
