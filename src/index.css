@@ -126,11 +126,11 @@
     --gradient-glow: none;
 
     --action-add: 220 14% 18%;
-    --action-add-foreground: 220 16% 12%;
+    --action-add-foreground: 220 20% 97%;
     --action-save: 220 14% 18%;
-    --action-save-foreground: 220 16% 12%;
+    --action-save-foreground: 220 20% 97%;
     --action-upload: 220 14% 18%;
-    --action-upload-foreground: 220 16% 12%;
+    --action-upload-foreground: 220 20% 97%;
 
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 220 16% 12%;
@@ -165,11 +165,11 @@
 
 @layer components {
   .fb-surface {
-    @apply rounded-[6px] border border-white/10 bg-white/[0.03] shadow-sm;
+    @apply rounded-[6px] border border-border bg-card/60 shadow-sm;
   }
 
   .fb-surface-lg {
-    @apply rounded-[6px] border border-white/10 bg-white/[0.03] shadow-sm;
+    @apply rounded-[6px] border border-border bg-card/60 shadow-sm;
   }
 
   .fb-field {
@@ -184,27 +184,27 @@
   }
 
   .fb-eyebrow {
-    @apply text-xs font-semibold tracking-wider text-white/60;
+    @apply text-xs font-semibold tracking-wider text-muted-foreground;
   }
 
   .fb-muted {
-    @apply text-white/70;
+    @apply text-muted-foreground;
   }
 
   .fb-pill {
-    @apply inline-flex items-center rounded-[6px] border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/80;
+    @apply inline-flex items-center rounded-[6px] border border-border bg-muted px-3 py-1 text-xs text-muted-foreground;
   }
 
   .fb-row {
-    @apply flex items-center justify-between rounded-[6px] border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white/75;
+    @apply flex items-center justify-between rounded-[6px] border border-border bg-card/60 px-3 py-2 text-sm text-foreground;
   }
 
   .fb-link {
-    @apply text-sm text-white/70 hover:text-white;
+    @apply text-sm text-muted-foreground hover:text-foreground;
   }
 
   .glass {
-    background: rgba(255, 255, 255, 0.03);
+    background: hsl(var(--glass-bg));
     backdrop-filter: blur(var(--glass-blur));
     -webkit-backdrop-filter: blur(var(--glass-blur));
     border: 1px solid hsl(var(--glass-border));
@@ -267,11 +267,11 @@
 
   .nav-item {
     @apply flex items-center gap-3 px-4 py-2.5 rounded-[5px] transition-colors duration-200;
-    @apply text-muted-foreground hover:text-foreground hover:bg-white/5;
+    @apply text-muted-foreground hover:text-foreground hover:bg-accent;
   }
 
   .nav-item-active {
-    @apply bg-white/5 text-foreground border border-white/10;
+    @apply bg-accent text-foreground border border-border;
   }
 }
 

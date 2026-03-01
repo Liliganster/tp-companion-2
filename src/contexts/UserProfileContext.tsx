@@ -24,6 +24,10 @@ export type UserProfile = {
   electricityPricePerKwh: string; // electric
   maintenanceEurPerKm: string;
   otherEurPerKm: string;
+
+  openrouterEnabled: boolean;
+  openrouterApiKey: string;
+  openrouterModel: string;
 };
 
 // Default profile for new users or offline fallback
@@ -46,6 +50,10 @@ const DEFAULT_PROFILE: UserProfile = {
   electricityPricePerKwh: "",
   maintenanceEurPerKm: "",
   otherEurPerKm: "",
+
+  openrouterEnabled: false,
+  openrouterApiKey: "",
+  openrouterModel: "",
 };
 
 type UserProfileContextValue = {
@@ -140,6 +148,10 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
               electricityPricePerKwh: (data as any).electricity_price_per_kwh == null ? "" : String((data as any).electricity_price_per_kwh).replace(".", ","),
               maintenanceEurPerKm: (data as any).maintenance_eur_per_km == null ? "" : String((data as any).maintenance_eur_per_km).replace(".", ","),
               otherEurPerKm: (data as any).other_eur_per_km == null ? "" : String((data as any).other_eur_per_km).replace(".", ","),
+
+              openrouterEnabled: Boolean((data as any).openrouter_enabled),
+              openrouterApiKey: (data as any).openrouter_api_key || "",
+              openrouterModel: (data as any).openrouter_model || "",
             });
             if (offlineCacheKey) {
               writeOfflineCache(offlineCacheKey, {
@@ -161,6 +173,10 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
                 electricityPricePerKwh: (data as any).electricity_price_per_kwh == null ? "" : String((data as any).electricity_price_per_kwh).replace(".", ","),
                 maintenanceEurPerKm: (data as any).maintenance_eur_per_km == null ? "" : String((data as any).maintenance_eur_per_km).replace(".", ","),
                 otherEurPerKm: (data as any).other_eur_per_km == null ? "" : String((data as any).other_eur_per_km).replace(".", ","),
+
+                openrouterEnabled: Boolean((data as any).openrouter_enabled),
+                openrouterApiKey: (data as any).openrouter_api_key || "",
+                openrouterModel: (data as any).openrouter_model || "",
               });
             }
           } else if (!cachedProfile) {
@@ -185,6 +201,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
     nextProfile: UserProfile,
     options?: { toastId?: string; loadingText?: string; successText?: string },
   ): Promise<boolean> => {
+    const previousProfile = profile;
     if (offlineCacheKey) writeOfflineCache(offlineCacheKey, nextProfile);
     if (!supabase || !user) {
       setProfile(nextProfile);
@@ -212,10 +229,18 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
       electricity_price_per_kwh: parseProfileNumber(nextProfile.electricityPricePerKwh),
       maintenance_eur_per_km: parseProfileNumber(nextProfile.maintenanceEurPerKm),
       other_eur_per_km: parseProfileNumber(nextProfile.otherEurPerKm),
+      openrouter_enabled: nextProfile.openrouterEnabled,
+      openrouter_api_key: nextProfile.openrouterApiKey || null,
+      openrouter_model: nextProfile.openrouterModel || null,
       updated_at: new Date().toISOString()
     };
 
     setProfile(nextProfile); // Optimistic update
+
+    const rollbackProfile = () => {
+      setProfile(previousProfile);
+      if (offlineCacheKey) writeOfflineCache(offlineCacheKey, previousProfile);
+    };
 
     const toastId = options?.toastId ?? "profile-save";
     const saveViaApi = async (): Promise<boolean> => {
@@ -269,6 +294,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
         return true;
       }
 
+      rollbackProfile();
       toast.error("No se pudo guardar: " + updateError.message, { id: toastId });
       return false;
     }
@@ -293,6 +319,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
           return true;
         }
 
+        rollbackProfile();
         toast.error("No se pudo guardar: " + insertError.message, { id: toastId });
         return false;
       }
@@ -300,7 +327,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
 
     toast.success(options?.successText ?? "Perfil guardado", { id: toastId });
     return true;
-  }, [offlineCacheKey, user]);
+  }, [offlineCacheKey, profile, user]);
 
   const updateProfile = useCallback(async (patch: Partial<UserProfile>) => {
     setProfile(prev => {

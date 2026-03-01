@@ -41,6 +41,8 @@ import { useNavigate } from "react-router-dom";
 import { formatLocaleNumber, parseLocaleNumber } from "@/lib/number";
 import { DEFAULT_GRID_KG_CO2_PER_KWH_FALLBACK } from "@/lib/emissions";
 import { validateFuelConsumption, validateEvConsumption, getConsumptionErrorData } from "@/lib/validation";
+import { useOpenRouterModels } from "@/hooks/use-openrouter-models";
+import { supabase } from "@/lib/supabaseClient";
 
 interface SettingsModalProps {
   open: boolean;
@@ -93,10 +95,78 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     { enabled: open && (profileData.fuelType === "gasoline" || profileData.fuelType === "diesel") }
   );
 
+  const { data: openRouterModels, isLoading: modelsLoading } = useOpenRouterModels(
+    profileData.openrouterApiKey,
+    open && profileData.openrouterEnabled
+  );
+  const geminiActive = !profileData.openrouterEnabled;
+  const [lastAiUsage, setLastAiUsage] = useState<{
+    loading: boolean;
+    provider: string | null;
+    model: string | null;
+    vendor: string | null;
+    createdAt: string | null;
+  }>({
+    loading: false,
+    provider: null,
+    model: null,
+    vendor: null,
+    createdAt: null,
+  });
+
   useEffect(() => {
     if (!open) return;
     setProfileData(profile);
   }, [open, profile]);
+
+  const lastAiProviderLabel =
+    lastAiUsage.provider === "openrouter"
+      ? "OpenRouter"
+      : lastAiUsage.provider === "gemini"
+        ? "Gemini"
+        : null;
+  const lastAiUsageDateLabel = lastAiUsage.createdAt
+    ? new Date(lastAiUsage.createdAt).toLocaleString(locale)
+    : null;
+
+  useEffect(() => {
+    if (!open || activeTab !== "apis" || !user) return;
+
+    let cancelled = false;
+    setLastAiUsage((prev) => ({ ...prev, loading: true }));
+
+    void supabase
+      .from("ai_extraction_logs")
+      .select("ai_provider, ai_model, ai_vendor, created_at")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          setLastAiUsage({
+            loading: false,
+            provider: null,
+            model: null,
+            vendor: null,
+            createdAt: null,
+          });
+          return;
+        }
+
+        setLastAiUsage({
+          loading: false,
+          provider: typeof (data as any)?.ai_provider === "string" ? (data as any).ai_provider : null,
+          model: typeof (data as any)?.ai_model === "string" ? (data as any).ai_model : null,
+          vendor: typeof (data as any)?.ai_vendor === "string" ? (data as any).ai_vendor : null,
+          createdAt: typeof (data as any)?.created_at === "string" ? (data as any).created_at : null,
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, open, user]);
 
   // Personalization state
   const [theme, setTheme] = useState<"light" | "dark">(appearance.theme);
@@ -248,7 +318,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // Validate consumption ranges before saving
     if (profileData.fuelType === "ev") {
       const evValue = parseLocaleNumber(profileData.evKwhPer100Km);
@@ -286,11 +356,12 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
       }
     }
 
-    void saveProfile(profileData, {
+    const saved = await saveProfile(profileData, {
       toastId: "settings-save",
       loadingText: t("settings.toastSaving"),
       successText: t("settings.toastSaved"),
     });
+    if (!saved) return;
     saveAppearance(draftAppearance);
     onOpenChange(false);
   };
@@ -677,7 +748,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         <p className="text-sm text-muted-foreground">{t("settings.apisGeminiBody")}</p>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <div className="w-2 h-2 rounded-full bg-muted-foreground" />
+                        <div className={cn("w-2 h-2 rounded-full", geminiActive ? "bg-green-500" : "bg-muted-foreground/40")} />
                         {t("settings.apisActive")}
                       </div>
                     </div>
@@ -689,12 +760,90 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         <h3 className="font-medium">{t("settings.apisOpenRouterTitle")}</h3>
                         <p className="text-sm text-muted-foreground">{t("settings.apisOpenRouterBody")}</p>
                       </div>
-                      <Switch />
+                      <Switch 
+                        className="data-[state=checked]:bg-green-500 data-[state=checked]:hover:bg-green-500/90"
+                        checked={profileData.openrouterEnabled}
+                        onCheckedChange={(checked) => setProfileData({ ...profileData, openrouterEnabled: checked })}
+                      />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="openrouter">{t("settings.apisApiKey")}</Label>
-                      <Input id="openrouter" type="password" placeholder="sk-..." className="bg-secondary/50" />
-                    </div>
+                    {profileData.openrouterEnabled && (
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="openrouter-key">{t("settings.apisApiKey")}</Label>
+                          <Input 
+                            id="openrouter-key" 
+                            type="password" 
+                            placeholder="sk-or-v1-..." 
+                            className="bg-secondary/50"
+                            value={profileData.openrouterApiKey}
+                            onChange={(e) => setProfileData({ ...profileData, openrouterApiKey: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="openrouter-model">Modelo de OpenRouter</Label>
+                          <Select 
+                            value={profileData.openrouterModel || "google/gemini-2.5-flash"}
+                            onValueChange={(value) => setProfileData({ ...profileData, openrouterModel: value })}
+                          >
+                            <SelectTrigger id="openrouter-model" className="bg-secondary/50">
+                              <SelectValue placeholder="Selecciona un modelo" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {modelsLoading ? (
+                                <SelectItem value="loading" disabled>Cargando modelos...</SelectItem>
+                              ) : openRouterModels && openRouterModels.length > 0 ? (
+                                openRouterModels.map(model => (
+                                  <SelectItem key={model.id} value={model.id}>
+                                    {model.name} ({model.id.split('/')[0]})
+                                  </SelectItem>
+                                ))
+                              ) : (
+                                <>
+                                  <SelectItem value="google/gemini-2.5-flash">Google: Gemini 2.5 Flash</SelectItem>
+                                  <SelectItem value="anthropic/claude-3.5-sonnet">Anthropic: Claude 3.5 Sonnet</SelectItem>
+                                  <SelectItem value="openai/gpt-4o">OpenAI: GPT-4o</SelectItem>
+                                </>
+                              )}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Estos modelos están certificados para el reconocimiento de imágenes/PDFs.
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="glass-card p-4 space-y-2">
+                    <h3 className="font-medium">Ultima extraccion IA</h3>
+                    {lastAiUsage.loading ? (
+                      <p className="text-sm text-muted-foreground">Comprobando proveedor usado...</p>
+                    ) : lastAiProviderLabel ? (
+                      <div className="space-y-1 text-sm text-muted-foreground">
+                        <p>
+                          Proveedor: <span className="text-foreground">{lastAiProviderLabel}</span>
+                        </p>
+                        {lastAiUsage.model ? (
+                          <p>
+                            Modelo: <span className="text-foreground">{lastAiUsage.model}</span>
+                          </p>
+                        ) : null}
+                        {lastAiUsage.vendor && lastAiUsage.provider === "openrouter" ? (
+                          <p>
+                            Vendor real: <span className="text-foreground">{lastAiUsage.vendor}</span>
+                          </p>
+                        ) : null}
+                        {lastAiUsageDateLabel ? (
+                          <p>
+                            Fecha: <span className="text-foreground">{lastAiUsageDateLabel}</span>
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Todavia no hay una extraccion registrada con proveedor visible.
+                      </p>
+                    )}
                   </div>
 
                   <div className="glass-card p-4 space-y-3">

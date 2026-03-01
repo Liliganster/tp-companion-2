@@ -3,6 +3,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from "recharts";
 import {
   Dialog,
   DialogContent,
@@ -176,9 +177,17 @@ function loadAdvancedEmissionsConfig(): {
 
 export default function AdvancedEmissions() {
   const navigate = useNavigate();
-  const { t, locale } = useI18n();
+  const { t, tf, locale } = useI18n();
   const { trips } = useTrips();
   const { projects } = useProjects();
+  const [configModalOpen, setConfigModalOpen] = useState(false);
+
+  // Configuration state
+  const [viewMode, setViewMode] = useState(() => loadAdvancedEmissionsConfig().viewMode);
+  const [sortBy, setSortBy] = useState(() => loadAdvancedEmissionsConfig().sortBy);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">(() => loadAdvancedEmissionsConfig().sortDirection);
+  const [timeRange, setTimeRange] = useState(() => loadAdvancedEmissionsConfig().timeRange);
+  const [searchTerm, setSearchTerm] = useState("");
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
 
   const { emissionsInput: baseEmissionsInput, isLoading: isLoadingEmissionsData } = useEmissionsInput();
@@ -196,14 +205,57 @@ export default function AdvancedEmissions() {
   const fallbackTripName = t("advancedEmissions.fallbackTripName");
   const fallbackProjectName = t("advancedEmissions.fallbackProjectName");
 
-  const [configModalOpen, setConfigModalOpen] = useState(false);
+  const trendData = useMemo(() => {
+    const now = new Date();
+    const { start, end } = getRange(now, timeRange);
 
-  // Configuration state
-  const [viewMode, setViewMode] = useState(() => loadAdvancedEmissionsConfig().viewMode);
-  const [sortBy, setSortBy] = useState(() => loadAdvancedEmissionsConfig().sortBy);
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">(() => loadAdvancedEmissionsConfig().sortDirection);
-  const [timeRange, setTimeRange] = useState(() => loadAdvancedEmissionsConfig().timeRange);
-  const [searchTerm, setSearchTerm] = useState("");
+    const windowEnd = end;
+    const windowStart = new Date(windowEnd);
+    windowStart.setDate(windowStart.getDate() - 28);
+    if (windowStart < start) windowStart.setTime(start.getTime());
+
+    const msInWeek = 7 * 24 * 60 * 60 * 1000;
+
+    const buckets = Array.from({ length: 4 }, (_, idx) => ({
+      label: tf("advancedEmissions.trendChartWeek", { week: idx + 1 }),
+      real: 0,
+      projected: 0,
+    }));
+
+    const sumTripCo2 = (distanceKm: number, fuelLiters?: number | null, evKwhUsed?: number | null) =>
+      calculateTripEmissions({
+        distanceKm,
+        fuelLiters,
+        evKwhUsed,
+        ...baseEmissionsInput,
+      }).co2Kg;
+
+    for (const tr of trips) {
+      const dt = parseTripDate(tr.date);
+      if (!dt) continue;
+      if (dt < windowStart || dt > windowEnd) continue;
+
+      const distance = Number.isFinite(Number(tr.distance)) ? Number(tr.distance) : 0;
+      const co2 = sumTripCo2(distance, tr.fuelLiters, tr.evKwhUsed);
+
+      const idx = Math.floor((dt.getTime() - windowStart.getTime()) / msInWeek);
+      if (idx < 0 || idx >= buckets.length) continue;
+      buckets[idx].real += co2;
+    }
+
+    // Simple projection: EMA to smooth the real series.
+    const alpha = 0.6;
+    let prev = 0;
+    buckets.forEach((bucket, idx) => {
+      const real = clampRound(bucket.real, 1);
+      const next = idx === 0 ? real : alpha * real + (1 - alpha) * prev;
+      prev = next;
+      bucket.real = real;
+      bucket.projected = clampRound(next, 1);
+    });
+
+    return buckets;
+  }, [baseEmissionsInput, tf, timeRange, trips]);
 
   // Reset pagination when filters change
   useEffect(() => {
@@ -646,6 +698,83 @@ export default function AdvancedEmissions() {
                   </div>
                 ) : (
                   <>
+                    <div className="rounded-xl border border-border/70 bg-card/60 p-4">
+                      <div className="flex items-center justify-between gap-3 mb-3">
+                        <h4 className="text-sm font-semibold text-foreground">
+                          {t("advancedEmissions.trendChartTitle")}
+                        </h4>
+                        <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          <span className="flex items-center gap-2">
+                            <span className="h-2 w-2 rounded-full bg-primary" />
+                            {t("advancedEmissions.trendChartProjected")}
+                          </span>
+                          <span className="flex items-center gap-2">
+                            <span className="h-2 w-2 rounded-full bg-muted-foreground" />
+                            {t("advancedEmissions.trendChartReal")}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="h-44">
+                        {trendData.some((d) => d.real > 0 || d.projected > 0) ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={trendData} margin={{ top: 8, right: 8, bottom: 0, left: -10 }}>
+                              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                              <XAxis
+                                dataKey="label"
+                                tickLine={false}
+                                axisLine={false}
+                                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                              />
+                              <YAxis
+                                tickLine={false}
+                                axisLine={false}
+                                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                              />
+                              <RechartsTooltip
+                                cursor={false}
+                                contentStyle={{
+                                  backgroundColor: "hsl(var(--card))",
+                                  border: "1px solid hsl(var(--border))",
+                                  borderRadius: "8px",
+                                  padding: "8px 12px",
+                                  color: "hsl(var(--foreground))",
+                                }}
+                                labelStyle={{ color: "hsl(var(--foreground))" }}
+                                formatter={(value: any, name: any) => {
+                                  const label =
+                                    name === "projected"
+                                      ? t("advancedEmissions.trendChartProjected")
+                                      : t("advancedEmissions.trendChartReal");
+                                  const n = Number(value);
+                                  return [`${kgFormatter.format(Number.isFinite(n) ? n : 0)} kg`, label];
+                                }}
+                              />
+                              <Line
+                                type="monotone"
+                                dataKey="projected"
+                                stroke="hsl(var(--primary))"
+                                strokeWidth={2}
+                                strokeDasharray="6 4"
+                                dot={false}
+                              />
+                              <Line
+                                type="monotone"
+                                dataKey="real"
+                                stroke="hsl(var(--muted-foreground))"
+                                strokeWidth={2.5}
+                                dot={false}
+                              />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+                            {t("advancedEmissions.trendChartNoData")}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
                     {computed.filtered.slice(0, visibleCount).map((result, idx) => (
                       <div
                         key={result.id}

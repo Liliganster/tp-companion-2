@@ -7,7 +7,12 @@ import { componentTagger } from "lovable-tagger";
 
 function googleApiProxy(serverKey: string | undefined): Plugin {
   const GOOGLE_BASE = "https://maps.googleapis.com/maps/api";
-  const HANDLED_PREFIXES = ["/api/google/directions", "/api/google/geocode", "/api/google/places-autocomplete"];
+  const HANDLED_PREFIXES = [
+    "/api/google/directions",
+    "/api/google/geocode",
+    "/api/google/places-autocomplete",
+    "/api/google/place-details",
+  ];
 
   const readBody = async (req: any) => {
     const chunks: Buffer[] = [];
@@ -123,6 +128,22 @@ function googleApiProxy(serverKey: string | undefined): Plugin {
             ? data.predictions.slice(0, 8).map((p: any) => ({ description: p?.description ?? "", placeId: p?.place_id ?? "" }))
             : [];
           return send(res, 200, { predictions });
+        }
+
+        if (req.url.startsWith("/api/google/place-details")) {
+          const placeId = body?.placeId;
+          if (typeof placeId !== "string" || !placeId.trim()) return send(res, 400, { error: "placeId is required" });
+
+          const params = new URLSearchParams({ place_id: placeId, fields: "formatted_address" });
+          if (language) params.set("language", language);
+          if (!withKey(params)) return send(res, 500, { error: "Missing GOOGLE_MAPS_SERVER_KEY" });
+
+          const response = await fetch(`${GOOGLE_BASE}/place/details/json?${params.toString()}`);
+          const data: any = await response.json().catch(() => null);
+          if (!response.ok || !data) return send(res, 502, { error: "Failed to contact Google Places API" });
+          if (data.status !== "OK") return send(res, 400, { error: data.status ?? "UNKNOWN", message: data.error_message });
+
+          return send(res, 200, { formattedAddress: data.result?.formatted_address ?? "" });
         }
 
         return next();
@@ -307,6 +328,8 @@ function vercelDevApiProxy(targetOrigin: string | undefined): Plugin {
   };
 
   const shouldProxy = (url: string) =>
+    url.startsWith("/api/callsheets/trigger-worker") ||
+    url.startsWith("/api/invoices/trigger-worker") ||
     url.startsWith("/api/google/oauth") ||
     url.startsWith("/api/google/calendar") ||
     url.startsWith("/api/google/drive") ||

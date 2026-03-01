@@ -20,6 +20,9 @@ const BodySchema = z.object({
   electricity_price_per_kwh: z.coerce.number().nullable().optional(),
   maintenance_eur_per_km: z.coerce.number().nullable().optional(),
   other_eur_per_km: z.coerce.number().nullable().optional(),
+  openrouter_enabled: z.boolean().nullable().optional(),
+  openrouter_api_key: z.string().trim().nullable().optional(),
+  openrouter_model: z.string().trim().nullable().optional(),
 });
 
 export default async function handler(req: any, res: any) {

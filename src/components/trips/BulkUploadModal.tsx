@@ -16,7 +16,7 @@ import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { useTrips } from "@/contexts/TripsContext";
 import { uuidv4 } from "@/lib/utils";
-import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
+import { buildBaseRouteAddress, optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
 import { useAuth } from "@/contexts/AuthContext";
 
 import { cancelCallsheetJobs } from "@/lib/aiJobCancellation";
@@ -172,6 +172,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const savedByJobIdRef = useRef<Record<string, boolean>>({});
   const activeJobIdsRef = useRef<string[]>([]);
   const cancelRequestedRef = useRef(false);
+  const aiAbortControllerRef = useRef<AbortController | null>(null);
   const triggerWorkerAbortRef = useRef<AbortController | null>(null);
   const dragDepthRef = useRef(0);
   
@@ -191,8 +192,21 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       return;
     }
 
+    cancelRequestedRef.current = true;
+    aiAbortControllerRef.current?.abort();
+    aiAbortControllerRef.current = null;
+    triggerWorkerAbortRef.current?.abort();
+    triggerWorkerAbortRef.current = null;
     resetAiState();
   }, [open]);
+
+  useEffect(() => {
+    return () => {
+      cancelRequestedRef.current = true;
+      aiAbortControllerRef.current?.abort();
+      triggerWorkerAbortRef.current?.abort();
+    };
+  }, []);
 
   const resetAiState = () => {
     setAiStep("upload");
@@ -206,10 +220,16 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     setReviewByJobId({});
     setSavingByJobId({});
     setSavedByJobId({});
+    activeJobIdsRef.current = [];
+    optimizeChainRef.current = Promise.resolve();
+    triggerWorkerAbortRef.current = null;
     jobResultsLoadingRef.current.clear();
     failureToastShownRef.current.clear();
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
+
+  const isAiCancelled = (signal?: AbortSignal | null) =>
+    cancelRequestedRef.current || Boolean(signal?.aborted);
 
   useEffect(() => {
     reviewByJobIdRef.current = reviewByJobId;
@@ -728,9 +748,13 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     try {
       cancelRequestedRef.current = false;
       activeJobIdsRef.current = [];
+      aiAbortControllerRef.current?.abort();
+      aiAbortControllerRef.current = new AbortController();
+      const aiSignal = aiAbortControllerRef.current.signal;
 
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError || !user) throw new Error(t("bulk.errorNotAuthenticated"));
+      if (isAiCancelled(aiSignal)) return;
 
       setJobStateById({});
       setReviewByJobId({});
@@ -745,8 +769,8 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       let failCount = 0;
       let reusedCount = 0;
 
-      for (const file of selectedFiles) {
-        if (cancelRequestedRef.current) break;
+      const processSelectedFile = async (file: File) => {
+        if (isAiCancelled(aiSignal)) return;
         let createdJobId: string | null = null;
         try {
           // Avoid duplicates: if the same file was already uploaded previously (user closed modal / re-tried),
@@ -761,6 +785,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
             .limit(5);
 
           const { data: existingRows, error: existingError } = await existingQuery;
+          if (isAiCancelled(aiSignal)) return;
           if (!existingError && Array.isArray(existingRows) && existingRows.length > 0) {
             const candidates = existingRows
               .map((r: any) => ({
@@ -816,16 +841,17 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                     .from("callsheet_jobs")
                     .update({ status: "queued", needs_review_reason: null })
                     .eq("id", best.id);
+                  if (isAiCancelled(aiSignal)) return;
                 } catch {
                   // ignore
                 }
               }
 
-              continue;
+              return;
             }
           }
 
-          if (cancelRequestedRef.current) break;
+          if (isAiCancelled(aiSignal)) return;
 
           // 1. Create Job
           const { data: job, error: jobError } = await supabase
@@ -842,14 +868,14 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
           createdJobId = job.id;
           activeJobIdsRef.current.push(job.id);
 
-          if (cancelRequestedRef.current) break;
+          if (isAiCancelled(aiSignal)) return;
 
           // 2. Upload File
           const filePath = `${user.id}/${job.id}/${file.name}`;
           const { error: uploadError } = await supabase.storage.from("callsheets").upload(filePath, file);
           if (uploadError) throw uploadError;
 
-          if (cancelRequestedRef.current) break;
+          if (isAiCancelled(aiSignal)) return;
 
           // 3. Queue Job
           const { error: updateError } = await supabase
@@ -857,9 +883,9 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
             .update({ storage_path: filePath, status: "queued" })
             .eq("id", job.id);
           if (updateError) throw updateError;
+          if (isAiCancelled(aiSignal)) return;
 
           createdJobIds.push(job.id);
-          activeJobIdsRef.current.push(job.id);
           metaById[job.id] = { fileName: file.name, mimeType: file.type, storagePath: filePath };
           successCount += 1;
         } catch (err) {
@@ -873,9 +899,16 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
             }
           }
         }
+      };
+
+      const uploadConcurrency = 3;
+      for (let index = 0; index < selectedFiles.length; index += uploadConcurrency) {
+        if (isAiCancelled(aiSignal)) break;
+        const batch = selectedFiles.slice(index, index + uploadConcurrency);
+        await Promise.allSettled(batch.map((file) => processSelectedFile(file)));
       }
 
-      if (cancelRequestedRef.current) {
+      if (isAiCancelled(aiSignal)) {
         void cancelCallsheetJobs(createdJobIds);
         return;
       }
@@ -912,8 +945,9 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       setProcessingDone(0);
       // Kick the worker once so users don't have to wait for cron.
       try {
-        if (cancelRequestedRef.current) return;
+        if (isAiCancelled(aiSignal)) return;
         const token = await getAccessToken();
+        if (isAiCancelled(aiSignal)) return;
         triggerWorkerAbortRef.current?.abort();
         const controller = new AbortController();
         triggerWorkerAbortRef.current = controller;
@@ -925,7 +959,10 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
             "Content-Type": "application/json",
           },
           signal: controller.signal,
-        }).catch(() => null);
+        }).catch((error) => {
+          if (error?.name === "AbortError") return null;
+          return null;
+        });
       } catch {
         // ignore: polling will still update if cron runs
       }
@@ -942,7 +979,11 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
       cancelRequestedRef.current = true;
+      aiAbortControllerRef.current?.abort();
+      aiAbortControllerRef.current = null;
       triggerWorkerAbortRef.current?.abort();
+      triggerWorkerAbortRef.current = null;
+      optimizeChainRef.current = Promise.resolve();
       void cancelCallsheetJobs([...jobIds, ...activeJobIdsRef.current]);
     }
 
@@ -950,9 +991,10 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   };
 
   // Multi-job: carga resultados para TODOS los documentos completados y los muestra en paralelo.
-  const enqueueOptimization = (jobId: string, rawLocations: string[]) => {
+  const enqueueOptimization = (jobId: string, rawLocations: string[], signal?: AbortSignal | null) => {
     optimizeChainRef.current = optimizeChainRef.current
       .then(async () => {
+        if (isAiCancelled(signal)) return;
         setReviewByJobId((prev) => {
           const cur = prev[jobId];
           if (!cur) return prev;
@@ -960,11 +1002,14 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         });
 
         const token = await getAccessToken();
+        if (isAiCancelled(signal)) return;
         const { locations: normalizedLocs, distanceKm } = await optimizeCallsheetLocationsAndDistance({
           profile,
           rawLocations,
           accessToken: token,
+          signal: signal ?? undefined,
         });
+        if (isAiCancelled(signal)) return;
 
         setReviewByJobId((prev) => {
           const cur = prev[jobId];
@@ -986,6 +1031,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         });
       })
       .catch((e) => {
+        if (isAiCancelled(signal) || e?.name === "AbortError") return;
         logger.warn("Optimization failed", e);
         setReviewByJobId((prev) => {
           const cur = prev[jobId];
@@ -995,7 +1041,8 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       });
   };
 
-  const loadJobResult = async (jobId: string) => {
+  const loadJobResult = async (jobId: string, signal?: AbortSignal | null) => {
+    if (isAiCancelled(signal)) return;
     if (jobResultsLoadingRef.current.has(jobId)) return;
     if (reviewByJobIdRef.current[jobId]) return;
     if (savedByJobIdRef.current[jobId]) return;
@@ -1006,6 +1053,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         supabase.from("callsheet_results").select("*").eq("job_id", jobId).maybeSingle(),
         supabase.from("callsheet_locations").select("*").eq("job_id", jobId),
       ]);
+      if (isAiCancelled(signal)) return;
 
       if (resultError || locsError || !result) return;
 
@@ -1030,7 +1078,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         };
       });
 
-      if (rawLocations.length > 0) enqueueOptimization(jobId, rawLocations);
+      if (rawLocations.length > 0) enqueueOptimization(jobId, rawLocations, signal);
     } finally {
       jobResultsLoadingRef.current.delete(jobId);
     }
@@ -1038,15 +1086,18 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
   // Poll job statuses y carga resultados según vayan llegando.
   useEffect(() => {
-    const active = (aiStep === "processing" || aiStep === "review") && jobIds.length > 0;
+    const aiSignal = aiAbortControllerRef.current?.signal;
+    const active = (aiStep === "processing" || aiStep === "review") && jobIds.length > 0 && !isAiCancelled(aiSignal);
     if (!active) return;
 
     const checkStatus = async () => {
       try {
+        if (isAiCancelled(aiSignal)) return;
         const { data: jobs, error: jobsError } = await supabase
           .from("callsheet_jobs")
           .select("id, status, needs_review_reason")
           .in("id", jobIds);
+        if (isAiCancelled(aiSignal)) return;
 
         if (jobsError || !jobs) return;
 
@@ -1085,7 +1136,10 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         }
 
         const pendingLoads = doneIds.filter((id) => !reviewByJobIdRef.current[id] && !savedByJobIdRef.current[id]);
-        if (pendingLoads.length > 0) await Promise.allSettled(pendingLoads.map((id) => loadJobResult(id)));
+        if (pendingLoads.length > 0) {
+          await Promise.allSettled(pendingLoads.map((id) => loadJobResult(id, aiSignal)));
+        }
+        if (isAiCancelled(aiSignal)) return;
 
         // Move to review as soon as there are no pending jobs.
         if (aiStep === "processing" && (!hasPending || doneIds.length > 0)) setAiStep("review");
@@ -1317,7 +1371,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     if (!currentMeta) return;
     
     // Use base address for Origin and Destination
-    const baseAddress = profile.baseAddress || "";
+    const baseAddress = buildBaseRouteAddress(profile);
     
     // Construct route: Origin -> [Extracted Stops] -> Destination
     // Only add base address if it exists, otherwise just use extracted locations (though strictly user wants base -> stops -> base)

@@ -6,6 +6,28 @@ type UserProfileLike = {
   country?: string | null;
 };
 
+export function buildBaseRouteAddress(profile: UserProfileLike): string {
+  const baseAddress = (profile.baseAddress ?? "").trim();
+  const city = (profile.city ?? "").trim();
+  const country = (profile.country ?? "").trim();
+
+  if (!baseAddress) return "";
+
+  const lowerBase = baseAddress.toLowerCase();
+  const parts = [baseAddress];
+
+  if (city && !lowerBase.includes(city.toLowerCase())) {
+    parts.push(city);
+  }
+
+  const joined = parts.join(", ");
+  if (country && !joined.toLowerCase().includes(country.toLowerCase())) {
+    parts.push(country);
+  }
+
+  return parts.join(", ");
+}
+
 export async function optimizeCallsheetLocationsAndDistance(args: {
   profile: UserProfileLike;
   rawLocations: string[];
@@ -39,7 +61,7 @@ export async function optimizeCallsheetLocationsAndDistance(args: {
     }
   }
 
-  const baseAddress = (profile.baseAddress ?? "").trim();
+  const baseAddress = buildBaseRouteAddress(profile);
   const city = (profile.city ?? "").trim();
   const country = (profile.country ?? "").trim();
 

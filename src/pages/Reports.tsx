@@ -375,7 +375,7 @@ export default function Reports() {
                 <button
                   type="button"
                   aria-label={t("reports.from")}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 text-white"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground"
                   onClick={() => openDatePicker(startDateRef)}
                 >
                   <Calendar className="w-4 h-4" />
@@ -396,7 +396,7 @@ export default function Reports() {
                 <button
                   type="button"
                   aria-label={t("reports.to")}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 text-white"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground"
                   onClick={() => openDatePicker(endDateRef)}
                 >
                   <Calendar className="w-4 h-4" />

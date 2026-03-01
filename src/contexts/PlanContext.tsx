@@ -178,27 +178,11 @@ export function PlanProvider({ children }: { children: ReactNode }) {
     };
   }, [limits]);
 
-  // Upgrade flow: redirect to Stripe Payment Link (plan tier is set by webhook).
+  // Upgrade flow: returns false as payment provider is removed
   const upgradeToPlan = useCallback(async (tier: PlanTier): Promise<boolean> => {
-    if (typeof window === "undefined") return false;
-    if (!user?.id) return false;
-
-    // Only Pro is purchasable right now.
-    if (tier !== "pro") return false;
-
-    const paymentLink = (import.meta.env.VITE_STRIPE_PAYMENT_LINK as string | undefined) ?? "";
-    if (!paymentLink || paymentLink.includes("test_XXXXXX")) {
-      logger.warn("[PlanContext] Missing/placeholder VITE_STRIPE_PAYMENT_LINK");
-      return false;
-    }
-
-    const url = new URL(paymentLink);
-    url.searchParams.set("client_reference_id", user.id);
-    if (user.email) url.searchParams.set("prefilled_email", user.email);
-
-    window.location.href = url.toString();
-    return true;
-  }, [user?.email, user?.id]);
+    logger.warn("[PlanContext] Cannot upgrade. Payment provider integrations are removed.");
+    return false;
+  }, []);
 
   const value: PlanContextValue = {
     planTier,

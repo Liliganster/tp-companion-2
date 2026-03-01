@@ -201,14 +201,14 @@ export default function Index() {
       : aiBypassEnabled 
         ? `${aiUsedThisMonth}` // Testing mode: just show count, no limit
         : `${aiUsedThisMonth}/${aiLimitFromApi}`;
-  const aiQuotaTextColor = "text-zinc-50";
+  const aiQuotaTextColor = "text-foreground";
   /* New Card Design Helpers */
   const StatusRow = ({ label, value, status = "neutral", icon: Icon }: { label: string, value: string, status?: "success" | "warning" | "destructive" | "neutral", icon?: any }) => (
-    <div className="flex items-center justify-between text-xs px-2 py-1.5 rounded-lg border border-white/10 bg-white/5 text-zinc-300">
+    <div className="flex items-center justify-between text-xs px-2 py-1.5 rounded-lg border border-border bg-muted text-muted-foreground">
       <span className="font-medium">{label}</span>
       <div className="flex items-center gap-1.5">
         {Icon && <Icon className="w-3 h-3" />}
-        <span className="font-bold tabular-nums text-white">{value}</span>
+        <span className="font-bold tabular-nums text-foreground">{value}</span>
       </div>
     </div>
   );
@@ -220,8 +220,8 @@ export default function Index() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div>
-                <h1 className="text-zinc-50 text-2xl sm:text-3xl md:text-[31px] font-semibold leading-tight tracking-tight">
-                  {t("dashboard.welcomeBackPrefix")} <span className="text-white">{profile.fullName}</span>
+                <h1 className="text-foreground text-2xl sm:text-3xl md:text-[31px] font-semibold leading-tight tracking-tight">
+                  {t("dashboard.welcomeBackPrefix")} <span className="text-foreground">{profile.fullName}</span>
                 </h1>
                 <p className="text-muted-foreground mt-1">
                   {t("dashboard.subtitle")}
@@ -230,13 +230,13 @@ export default function Index() {
             </div>
             <div className="flex items-center gap-4">
               {/* Trips Quota */}
-              <div className="flex items-center gap-2 px-4 py-2.5 border rounded-lg border-white/10 bg-white/5">
-                <Car className="w-4 h-4 text-white/80" />
-                <span className="text-sm font-medium tabular-nums text-zinc-50">{tripCounts.total}/{limits.maxActiveTrips}</span>
+              <div className="flex items-center gap-2 px-4 py-2.5 border rounded-lg border-border bg-muted">
+                <Car className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-medium tabular-nums text-foreground">{tripCounts.total}/{limits.maxActiveTrips}</span>
               </div>
               {/* AI Quota */}
-              <div className="flex items-center gap-2 px-4 py-2.5 border rounded-lg border-white/10 bg-white/5">
-                <Sparkles className="w-4 h-4 text-white/80" />
+              <div className="flex items-center gap-2 px-4 py-2.5 border rounded-lg border-border bg-muted">
+                <Sparkles className="w-4 h-4 text-muted-foreground" />
                 <span className={`text-sm font-medium tabular-nums ${aiQuotaTextColor}`}>{aiQuotaText}</span>
               </div>
               {/* Warnings Bell */}
@@ -250,7 +250,7 @@ export default function Index() {
           <KPICard
             title="DISTANCIA TOTAL"
             value={<div className="mt-1">
-              <div className="text-3xl font-bold text-white mb-3">{totalKm.toLocaleString(locale)} <span className="text-lg text-muted-foreground font-medium">km</span></div>
+              <div className="text-3xl font-bold text-foreground mb-3">{totalKm.toLocaleString(locale)} <span className="text-lg text-muted-foreground font-medium">km</span></div>
               <div className="grid gap-2">
                 <StatusRow 
                   label={t("dashboard.thisMonth")} 
@@ -280,7 +280,7 @@ export default function Index() {
             iconWrapperClassName={kpiTitleWrapperClassName}
             hideTitle
             variant="accent"
-            valueClassName="text-white"
+            valueClassName="text-foreground"
             action={<Link to="/projects" className="fb-link text-xs">{t("dashboard.viewProjects")}</Link>}
           />
 
@@ -290,7 +290,7 @@ export default function Index() {
             iconWrapperClassName={kpiTitleWrapperClassName}
             hideTitle
             headerRight={
-              <div className="text-6xl font-black tracking-tighter ml-4 text-zinc-50">
+              <div className="text-6xl font-black tracking-tighter ml-4 text-foreground">
                 {co2Rating}
               </div>
             }

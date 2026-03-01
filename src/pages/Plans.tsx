@@ -8,11 +8,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { useState } from "react";
 import { logger } from "@/lib/logger";
-
-// Payment Link de Stripe - créalo en https://dashboard.stripe.com/payment-links
-// Después de crearlo, copia el URL y pégalo aquí
-const STRIPE_PAYMENT_LINK = import.meta.env.VITE_STRIPE_PAYMENT_LINK || "https://buy.stripe.com/test_XXXXXX";
-
 export default function Plans() {
   const { t } = useI18n();
   const { planTier, isLoading } = usePlan();
@@ -20,23 +15,8 @@ export default function Plans() {
   const [upgrading, setUpgrading] = useState(false);
 
   const handleStripeCheckout = () => {
-    if (!session?.access_token || !user?.id) {
-      toast.error(t("auth.pleaseSignIn"));
-      return;
-    }
-
-    setUpgrading(true);
-    logger.debug("[Plans] Redirecting to Stripe Payment Link...");
-    
-    // Agregar client_reference_id para identificar al usuario en el webhook
-    const paymentUrl = new URL(STRIPE_PAYMENT_LINK);
-    paymentUrl.searchParams.set("client_reference_id", user.id);
-    if (user.email) {
-      paymentUrl.searchParams.set("prefilled_email", user.email);
-    }
-    
-    // Redirigir al Payment Link de Stripe
-    window.location.href = paymentUrl.toString();
+    // Feature not available (Stripe integrations removed)
+    toast.info(t("common.comingSoon") || "Coming Soon");
   };
 
   const basicFeatures = [
@@ -147,7 +127,7 @@ export default function Plans() {
             </ul>
 
             <Button 
-              className="w-full bg-zinc-600 hover:bg-zinc-600/80 text-white/50 font-medium py-5 text-sm cursor-not-allowed"
+              className="w-full bg-muted text-muted-foreground font-medium py-5 text-sm cursor-not-allowed"
               disabled={true}
             >
               {t("common.comingSoon")}

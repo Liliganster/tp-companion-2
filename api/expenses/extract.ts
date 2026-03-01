@@ -169,6 +169,22 @@ export default withApiObservability(async function handler(req: any, res: any, {
 
     log.info({ storagePath, expenseType, tripId, projectId }, "expense_extract_start");
 
+    // Fetch AI user settings
+    let userSettings = undefined;
+    const { data: userProfile } = await supabaseAdmin
+      .from("user_profiles")
+      .select("openrouter_enabled, openrouter_api_key, openrouter_model")
+      .eq("id", user.id)
+      .maybeSingle();
+      
+    if (userProfile?.openrouter_enabled && userProfile?.openrouter_api_key) {
+      userSettings = {
+        openrouterEnabled: userProfile.openrouter_enabled,
+        openrouterApiKey: userProfile.openrouter_api_key,
+        openrouterModel: userProfile.openrouter_model,
+      };
+    }
+
     // Download image from Supabase Storage
     const { data: fileData, error: downloadError } = await supabaseAdmin.storage
       .from("project_documents")
@@ -212,13 +228,38 @@ export default withApiObservability(async function handler(req: any, res: any, {
     // Build enhanced prompt with OCR text
     const prompt = buildPromptWithOCR(basePrompt, ocrText);
 
-    // Call Gemini Vision with image + OCR-enhanced prompt
-    const rawResponse = await generateContentFromPDF(
+    // Call AI provider with image/PDF + OCR-enhanced prompt
+    const selectedAiProvider = userSettings ? "openrouter" : "gemini";
+    const selectedAiModel = userSettings?.openrouterModel || "gemini-2.5-flash";
+    log.info(
+      {
+        storagePath,
+        expenseType,
+        aiProvider: selectedAiProvider,
+        aiModel: selectedAiModel,
+      },
+      "expense_extract_ai_start",
+    );
+
+    const aiResult = await generateContentFromPDF(
       "gemini-2.5-flash",
       prompt,
       buffer,
       mimeType,
-      schema
+      schema,
+      userSettings
+    );
+    const rawResponse = aiResult.text;
+
+    log.info(
+      {
+        storagePath,
+        expenseType,
+        aiProvider: aiResult.provider,
+        aiModel: aiResult.model,
+        aiVendor: aiResult.vendor,
+      },
+      "expense_extract_ai_provider",
     );
 
     log.info({ rawResponse: rawResponse.substring(0, 200) }, "expense_extract_raw");

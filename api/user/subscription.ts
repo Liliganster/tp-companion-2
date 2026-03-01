@@ -73,7 +73,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // IMPORTANT: do not allow users to self-upgrade by calling this endpoint.
-    // Plan tier should be updated by Stripe webhook (or a separate admin-only path).
+    // Plan tier is currently managed via database or other manual means (Stripe removed).
     res.setHeader("Allow", "GET");
     return sendJson(res, 405, { error: "Method not allowed" });
   } catch (error) {

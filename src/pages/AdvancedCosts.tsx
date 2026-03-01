@@ -190,7 +190,7 @@ export default function AdvancedCosts() {
               </div>
               <p className="text-sm text-muted-foreground font-medium">{t("advancedCosts.reimbursement")}</p>
             </div>
-            <p className="text-2xl sm:text-3xl font-bold">
+            <p className="text-2xl sm:text-3xl font-bold text-green-500">
               {currencyFormatter.format(summary.reimbursement)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
@@ -335,7 +335,7 @@ export default function AdvancedCosts() {
                           <td className="py-3 px-2 text-right text-foreground">
                             {currencyFormatter.format(project.realCost)}
                           </td>
-                          <td className="py-3 px-2 text-right text-foreground">
+                          <td className="py-3 px-2 text-right text-green-500">
                             {currencyFormatter.format(project.reimbursement)}
                           </td>
                           <td className={cn("py-3 px-2 text-right font-semibold", getBalanceColor(project.balance))}>
@@ -423,7 +423,7 @@ export default function AdvancedCosts() {
                     <td className="py-3 px-2 text-right text-foreground">
                       {currencyFormatter.format(summary.realCost)}
                     </td>
-                    <td className="py-3 px-2 text-right text-foreground">
+                    <td className="py-3 px-2 text-right text-green-500">
                       {currencyFormatter.format(summary.reimbursement)}
                     </td>
                     <td className={cn("py-3 px-2 text-right", getBalanceColor(summary.balance))}>

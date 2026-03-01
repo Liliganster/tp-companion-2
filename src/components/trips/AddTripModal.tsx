@@ -105,7 +105,7 @@ function SortableStop({ stop, onRemove, onChange, onDraftChange, canRemove, disa
       case "destination":
         return <Home className="w-4 h-4 shrink-0 text-muted-foreground" />;
       default:
-        return <MapPin className="w-4 h-4 shrink-0 text-white" />;
+        return <MapPin className="w-4 h-4 shrink-0 text-muted-foreground" />;
     }
   };
 

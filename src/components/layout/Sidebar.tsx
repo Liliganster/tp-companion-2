@@ -21,6 +21,8 @@ export function Sidebar({
   const { t } = useI18n();
   const { planTier } = usePlan();
   const profileInitial = getProfileInitial(profile.fullName);
+  const logoSrc = "/Pro%20(23%20x%204.9%20cm)%20(2).png";
+  const collapsedLogoSrc = "/Pro%20(1).png";
   const navigation = [{
     name: t("nav.dashboard"),
     href: "/",
@@ -46,7 +48,14 @@ export function Sidebar({
     href: "/advanced",
     icon: Sparkles
   }];
-  return <aside className={cn("hidden lg:flex flex-col sticky top-0 h-screen shrink-0 glass border-r border-border/50 transition-all duration-300 relative", collapsed ? "w-20" : "w-64")}>
+  return <aside
+      className={cn(
+        "hidden lg:flex flex-col sticky top-0 h-screen shrink-0 glass border-r border-border/50 transition-[width] will-change-[width] relative",
+        collapsed
+          ? "w-20 duration-500 ease-in-out"
+          : "w-64 duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
+      )}
+    >
       {/* Expand/Collapse Edge Indicator */}
       <Tooltip>
         <TooltipTrigger asChild>
@@ -75,15 +84,16 @@ export function Sidebar({
 
       {/* Logo */}
       <div className="flex items-center justify-center h-16 px-4 border-b border-border/50">
-        {!collapsed && <Link to="/" className="flex items-center gap-2">
-            <img src="/favicon-32x32.png" alt="Fahrtenbuch Pro" className="w-10 h-10" />
-            <span className="whitespace-nowrap text-[18px] font-black leading-none tracking-tight text-white">
-              Fahrtenbuch <span className="text-blue-500">Pro</span>
-            </span>
-          </Link>}
-        {collapsed && <Link to="/" className="flex items-center justify-center w-full">
-            <img src="/favicon-32x32.png" alt="Fahrtenbuch Pro" className="w-10 h-10" />
-          </Link>}
+        <Link to="/" className="flex items-center justify-center w-full" aria-label="Home">
+          <img
+            src={collapsed ? collapsedLogoSrc : logoSrc}
+            alt="Logo"
+            className={cn(
+              "object-contain",
+              collapsed ? "h-10 w-10" : "h-12 w-auto max-w-full"
+            )}
+          />
+        </Link>
       </div>
 
       {/* Navigation */}
@@ -108,7 +118,7 @@ export function Sidebar({
           )}
           title={collapsed ? t("nav.plans") : undefined}
         >
-          <div className="flex items-center gap-2">
+          <div className={cn("flex w-full items-center gap-2", collapsed && "justify-center gap-0")}>
             <Crown className="w-5 h-5 shrink-0 text-muted-foreground" />
             {!collapsed && (
               <div className="flex flex-col">
@@ -141,7 +151,7 @@ export function Sidebar({
             <span className="text-sm font-medium text-muted-foreground">{profileInitial}</span>
           </div>
           {!collapsed && <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium truncate text-white">{profile.fullName}</p>
+              <p className="text-sm font-medium truncate text-foreground">{profile.fullName}</p>
               <p className="text-xs text-muted-foreground">{profile.licensePlate}</p>
             </div>}
         </div>

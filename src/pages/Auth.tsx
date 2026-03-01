@@ -113,7 +113,7 @@ export default function Auth() {
         <div className="w-full max-w-md">
           <div className="glass-card p-8 animate-scale-in">
             <div className="text-center mb-6">
-              <h1 className="text-3xl font-semibold tracking-tight">Fahrtenbuch Pro</h1>
+              <h1 className="text-3xl font-extrabold" style={{ fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial' }}>Fahrtenbuch <span className="text-[#1d6fb8]">Pro</span></h1>
               <p className="mt-2 text-sm text-muted-foreground">{t("auth.tagline")}</p>
             </div>
 

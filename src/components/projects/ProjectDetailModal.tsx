@@ -18,7 +18,7 @@ import { parseLocaleNumber } from "@/lib/number";
 import { useTrips, type Trip } from "@/contexts/TripsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEmissionsInput } from "@/hooks/use-emissions-input";
-import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
+import { buildBaseRouteAddress, optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
 import { uuidv4 } from "@/lib/utils";
 
 import { cancelCallsheetJobs, cancelInvoiceJobs } from "@/lib/aiJobCancellation";
@@ -269,7 +269,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           accessToken: token,
         });
 
-        const base = (profile.baseAddress ?? "").trim();
+        const base = buildBaseRouteAddress(profile);
         const route = base ? [base, ...normalizedLocs, base] : normalizedLocs;
 
         const distance = typeof distanceKm === "number" ? distanceKm : 0;
@@ -1056,6 +1056,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
               Authorization: accessToken ? `Bearer ${accessToken}` : "",
               "Content-Type": "application/json",
             },
+            signal: abortControllerRef.current?.signal,
           });
 
           if (!res.ok) {
@@ -1063,6 +1064,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             logger.warn("[ProjectDetailModal] trigger-worker failed", { status: res.status, msg });
           }
         } catch (err) {
+          if ((err as any)?.name === "AbortError") return;
           logger.warn("[ProjectDetailModal] trigger-worker error", err);
         }
       })();
@@ -1103,6 +1105,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
+        signal: abortControllerRef.current?.signal,
       }).then(async (res) => {
         const data = await res.json().catch(() => ({} as any));
         if (!res.ok) {
@@ -1113,6 +1116,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         toast.success(tf("projectDetail.toastWorkerExecuted", { count: (data as any)?.processed || 0 }));
         setRefreshTrigger((p) => p + 1);
       }).catch((err) => {
+        if (err?.name === "AbortError") return;
         toast.error(tf("projectDetail.toastWorkerError", { message: err?.message ?? String(err) }));
       });
     } catch (e: any) {
@@ -1179,7 +1183,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ jobId: doc.invoice_job_id })
+        body: JSON.stringify({ jobId: doc.invoice_job_id }),
+        signal: abortControllerRef.current?.signal,
       });
 
       if (!res.ok) throw new Error('Error al encolar job');
@@ -1199,11 +1204,15 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             Authorization: `Bearer ${session.access_token}`,
             "Content-Type": "application/json",
           },
+          signal: abortControllerRef.current?.signal,
+        }).catch((err) => {
+          if (err?.name === "AbortError") return;
         });
       } catch {
         // ignore: cron/manual trigger can still process later
       }
     } catch (e: any) {
+      if (e?.name === "AbortError") return;
       toast.error(tf("projectDetail.toastExtractionStartError", { message: e.message }));
     }
   };

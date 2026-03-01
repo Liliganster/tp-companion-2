@@ -15,8 +15,8 @@ export default withApiObservability(async function handler(req: any, res: any, {
   const requireSecret = vercelEnv ? vercelEnv !== "development" : process.env.NODE_ENV === "production";
   const isVercelCron = Boolean(req.headers?.["x-vercel-cron"]);
   const manual = String(req.query?.manual ?? "").trim() === "1";
-  const maxJobs = manual ? 1 : 16; // Increased from 8 for 2x throughput
   const manualJobId = manual && typeof req.query?.jobId === "string" ? String(req.query.jobId).trim() : null;
+  const maxJobs = manual ? (manualJobId ? 1 : 4) : 16; // Keep single-job manual runs deterministic, but allow small manual batches.
   const manualUserId = manual && typeof req.query?.userId === "string" ? String(req.query.userId).trim() : null;
 
   const queryKey = typeof req.query?.key === "string" ? req.query.key : null;
@@ -274,6 +274,25 @@ export default withApiObservability(async function handler(req: any, res: any, {
           : 'image/jpeg';
 
         // C. Process with Gemini Vision
+
+        // Fetch AI user settings
+        let userSettings = undefined;
+        if (userId) {
+          const { data: userProfile } = await supabaseAdmin
+            .from("user_profiles")
+            .select("openrouter_enabled, openrouter_api_key, openrouter_model")
+            .eq("id", userId)
+            .maybeSingle();
+            
+          if (userProfile?.openrouter_enabled && userProfile?.openrouter_api_key) {
+            userSettings = {
+              openrouterEnabled: userProfile.openrouter_enabled,
+              openrouterApiKey: userProfile.openrouter_api_key,
+              openrouterModel: userProfile.openrouter_model,
+            };
+          }
+        }
+
         const { data: preAiJob } = await supabaseAdmin
           .from("invoice_jobs")
           .select("status")
@@ -286,26 +305,61 @@ export default withApiObservability(async function handler(req: any, res: any, {
           return;
         }
 
-        log.info({ jobId: job.id }, "invoice_gemini_call");
+        const selectedAiProvider = userSettings ? "openrouter" : "gemini";
+        const selectedAiModel = userSettings?.openrouterModel || "gemini-2.5-flash";
+        log.info(
+          {
+            jobId: job.id,
+            aiProvider: selectedAiProvider,
+            aiModel: selectedAiModel,
+          },
+          "invoice_ai_start",
+        );
+
         const systemInstruction = buildInvoiceExtractorPrompt("[INVOICE DOCUMENT ATTACHED]");
-        const geminiStartTime = Date.now();
-        const resultText = await generateContentFromPDF(
+        const aiStartTime = Date.now();
+        const aiResult = await generateContentFromPDF(
           "gemini-2.5-flash",
           systemInstruction,
           buffer,
           mimeType,
-          invoiceExtractionSchema
+          invoiceExtractionSchema,
+          userSettings
         );
-        const geminiDuration = Date.now() - geminiStartTime;
+        const aiDuration = Date.now() - aiStartTime;
+        const resultText = aiResult.text;
 
-        log.info({ jobId: job.id, length: resultText?.length || 0, durationMs: geminiDuration }, "invoice_gemini_response");
+        log.info(
+          {
+            jobId: job.id,
+            aiProvider: aiResult.provider,
+            aiModel: aiResult.model,
+            aiVendor: aiResult.vendor,
+          },
+          "invoice_ai_call",
+        );
+
+        log.info(
+          {
+            jobId: job.id,
+            aiProvider: aiResult.provider,
+            aiModel: aiResult.model,
+            aiVendor: aiResult.vendor,
+            length: resultText?.length || 0,
+            durationMs: aiDuration,
+          },
+          "invoice_ai_response",
+        );
 
         // Initialize extraction log data
         const extractionLogData: any = {
           user_id: String((job as any).user_id ?? ""),
           job_id: job.id,
           job_type: "invoice",
-          gemini_duration_ms: geminiDuration,
+          gemini_duration_ms: aiDuration,
+          ai_provider: aiResult.provider,
+          ai_model: aiResult.model,
+          ai_vendor: aiResult.vendor,
         };
 
         let extractedJson: any = null;

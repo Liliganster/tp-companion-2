@@ -671,7 +671,7 @@ export default function ReportView() {
                       <td className="py-3 sm:py-4 px-2 print:py-2 print:px-1 align-top text-right whitespace-nowrap">
                         {trip.distance.toFixed(1)}
                       </td>
-                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-1 align-top text-right font-semibold whitespace-nowrap">
+                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-1 align-top text-right font-semibold whitespace-nowrap text-green-500 print:text-black">
                         {trip.reimbursement.toFixed(2)} €
                       </td>
                     </tr>
@@ -686,7 +686,7 @@ export default function ReportView() {
                     <td className="py-3 px-2 text-right font-semibold whitespace-nowrap">
                       {t("reportView.totalShort")}: {totalDistance.toFixed(1)} km
                     </td>
-                    <td className="py-3 px-2 text-right font-semibold whitespace-nowrap text-foreground">
+                    <td className="py-3 px-2 text-right font-semibold whitespace-nowrap text-green-500 print:text-black">
                       {t("reportView.totalShort")}: {totalReimbursement.toFixed(2)} €
                     </td>
                   </tr>
