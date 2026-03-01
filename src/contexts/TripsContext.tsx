@@ -391,6 +391,8 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       };
 
       const prevTrips = (queryClient.getQueryData<Trip[]>(queryKey) ?? []) as Trip[];
+      const existingById = prevTrips.find((t) => String(t.id ?? "").trim() === String(normalizedTrip.id ?? "").trim());
+      if (existingById) return true;
       const callsheetJobId = String(normalizedTrip.callsheet_job_id ?? "").trim();
       if (callsheetJobId) {
         const cached = prevTrips.find((t) => String(t.callsheet_job_id ?? "").trim() === callsheetJobId);
@@ -440,6 +442,12 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
     const callsheetJobId = String(normalizedTrip.callsheet_job_id ?? "").trim();
     const prevTrips = (queryClient.getQueryData<Trip[]>(queryKey) ?? []) as Trip[];
+    const existingById = prevTrips.find((t) => String(t.id ?? "").trim() === String(normalizedTrip.id ?? "").trim());
+
+    if (existingById) {
+      queryClient.invalidateQueries({ queryKey }).catch(() => null);
+      return true;
+    }
 
     if (callsheetJobId) {
       const cached = prevTrips.find((t) => String(t.callsheet_job_id ?? "").trim() === callsheetJobId);
