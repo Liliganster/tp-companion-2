@@ -555,7 +555,7 @@ export default function Trips() {
                   </span>
                   {(tripWarnings.byId[trip.id]?.length ?? 0) > 0 && (
                     <span title={(tripWarnings.byId[trip.id] ?? []).map((w) => w.title).join("\n")}>
-                      <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
+                      <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-400" />
                     </span>
                   )}
                   {trip.specialOrigin === "continue" && (
@@ -752,7 +752,7 @@ export default function Trips() {
                     </span>
                     {(tripWarnings.byId[trip.id]?.length ?? 0) > 0 && (
                       <span title={(tripWarnings.byId[trip.id] ?? []).map((w) => w.title).join("\n")}>
-                        <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
+                        <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-400" />
                       </span>
                     )}
                     {trip.specialOrigin === "continue" && <Badge variant="secondary">{t("trips.continuation")}</Badge>}
