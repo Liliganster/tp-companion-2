@@ -34,6 +34,9 @@ export interface PlanLimits {
 
   // Reports
   maxSavedReportsPerMonth: number; // -1 = unlimited
+
+  // Callsheet batch upload
+  maxCallsheetsPerBatch: number; // Max PDFs per AI batch upload
 }
 
 export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
@@ -64,6 +67,9 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
 
     // Reports
     maxSavedReportsPerMonth: 1,
+
+    // Callsheet batch
+    maxCallsheetsPerBatch: 1,
   },
 
   pro: {
@@ -94,6 +100,9 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
 
     // Reports
     maxSavedReportsPerMonth: -1,
+
+    // Callsheet batch
+    maxCallsheetsPerBatch: 20,
   },
 };
 
