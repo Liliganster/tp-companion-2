@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -129,6 +130,7 @@ async function openGoogleDrivePicker(params: {
 }
 
 export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [csvText, setCsvText] = useState("");
   const [csvBusy, setCsvBusy] = useState(false);
@@ -182,7 +184,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const { profile } = useUserProfile();
   const { projects, addProject } = useProjects();
   const { trips } = useTrips();
-  const { checkCSVImportLimit, checkStopsLimit, canAddNonAITrip } = usePlanLimits();
+  const { checkCSVImportLimit, checkStopsLimit, canAddNonAITrip, limits } = usePlanLimits();
 
   // Reset state when modal closes or tab changes
   useEffect(() => {
@@ -706,6 +708,16 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       }
     }
 
+    if (nextFiles.length > limits.maxCallsheetsPerBatch) {
+      toast.error(t("bulk.batchLimitTitle"), {
+        description: t("bulk.batchLimitMessage"),
+        action: { label: t("bulk.outOfQuotaButton"), onClick: () => navigate("/plans") },
+        duration: 8000,
+      });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
     setSelectedFiles(nextFiles);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -755,6 +767,29 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError || !user) throw new Error(t("bulk.errorNotAuthenticated"));
       if (isAiCancelled(aiSignal)) return;
+
+      // Proactive quota check — avoids queuing jobs that will immediately fail
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const quotaRes = await fetch("/api/user/ai-quota", {
+          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+        });
+        if (quotaRes.ok) {
+          const quotaData = await quotaRes.json() as { remaining?: number; bypass?: boolean };
+          if (!quotaData.bypass && typeof quotaData.remaining === "number" && quotaData.remaining <= 0) {
+            toast.error(t("bulk.outOfQuotaTitle"), {
+              description: t("bulk.outOfQuotaMessage"),
+              action: { label: t("bulk.outOfQuotaButton"), onClick: () => navigate("/plans") },
+              duration: 8000,
+            });
+            setAiStep("upload");
+            setAiLoading(false);
+            return;
+          }
+        }
+      } catch {
+        // Quota check failed — proceed anyway, server will catch it
+      }
 
       setJobStateById({});
       setReviewByJobId({});
@@ -1127,7 +1162,14 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
           const status = String(j.status ?? "");
           if (status === "out_of_quota") {
-            toast.error(t("bulk.outOfQuotaTitle"), { description: t("bulk.outOfQuotaMessage") });
+            toast.error(t("bulk.outOfQuotaTitle"), {
+              description: t("bulk.outOfQuotaMessage"),
+              action: {
+                label: t("bulk.outOfQuotaButton"),
+                onClick: () => navigate("/plans"),
+              },
+              duration: 8000,
+            });
           } else {
             toast.error(t("bulk.errorProcessOneDoc"), {
               description: String(j.needs_review_reason ?? "").trim() || undefined,
@@ -1948,10 +1990,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                                       type="button"
                                       size="sm"
                                       className="w-full gap-1"
-                                      onClick={() => {
-                                        // Navegar a página de planes/suscripción
-                                        window.location.href = "/settings?tab=subscription";
-                                      }}
+                                      onClick={() => navigate("/plans")}
                                     >
                                       {t("bulk.outOfQuotaButton")}
                                     </Button>
