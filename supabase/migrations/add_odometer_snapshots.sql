@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS public.odometer_snapshots (
 -- Safe to run on an already-created table (idempotent)
 ALTER TABLE public.odometer_snapshots ADD COLUMN IF NOT EXISTS capture_token UUID;
 ALTER TABLE public.odometer_snapshots ADD COLUMN IF NOT EXISTS capture_expires_at TIMESTAMPTZ;
+ALTER TABLE public.odometer_snapshots ADD COLUMN IF NOT EXISTS user_correction_note TEXT;
 
 ALTER TABLE public.odometer_snapshots ENABLE ROW LEVEL SECURITY;
 

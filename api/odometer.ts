@@ -17,48 +17,34 @@ import { checkAiMonthlyQuota, recordAiUsage } from "./_utils/aiQuota.js";
 
 // ---------------------------------------------------------------------------
 // Odometer-specific AI prompt
-// This prompt is COMPLETELY DIFFERENT from invoice/expense extraction.
-// It must read a km counter reading, NOT a monetary amount.
-// Sources: dashboard photo, ITV/TÜV certificate, workshop receipt, insurance doc.
+// Source is ALWAYS the vehicle dashboard/instrument cluster.
 // ---------------------------------------------------------------------------
-const ODOMETER_PROMPT = `You are a specialist in reading vehicle odometer (km counter / Kilometerstand / cuentakilómetros) readings from images and official documents.
+const ODOMETER_PROMPT = `You are reading the odometer (km counter / Kilometerstand / cuentakilómetros) from a photo of a vehicle's dashboard or instrument cluster.
 
-YOUR ONLY TASK: Find and return the vehicle's total accumulated mileage in kilometers.
+YOUR ONLY TASK: Find and return the total accumulated mileage shown on the odometer display.
 
-Possible image types:
-- Dashboard/instrument cluster photo showing the odometer digits or display
-- ITV certificate (Inspección Técnica de Vehículos, Spain) — look for "Km recorridos", "Kilometraje"
-- TÜV certificate (Germany/Austria) — look for "Kilometerstand", "km-Stand"
-- Workshop/mechanic invoice (taller, Werkstatt) — look for "Km entrada", "Km:", odometer field
-- Insurance document — look for km declared at policy renewal or claim
-- Printed mileage report or service booklet page
-
-CRITICAL EXTRACTION RULES:
-1. Extract ONLY the cumulative total odometer reading (how many km the vehicle has traveled in its lifetime).
+CRITICAL RULES:
+1. Extract ONLY the main cumulative odometer reading (total km the vehicle has ever traveled).
 2. DO NOT extract or confuse with:
-   - Monetary amounts (anything with €, $, £ or similar currency symbols) — these are prices, NOT km
-   - Engine displacement (e.g., "1598 cc", "2.0 L")
-   - Vehicle model numbers (e.g., "316i", "Golf 2.0")
-   - VIN / chassis / serial numbers (usually 17 alphanumeric chars)
-   - Phone numbers or postal codes
-   - Reference/invoice numbers
-   - Partial trip distance meters ("Trip A", "Tageskilometer")
-3. Thousand separators vary by country — treat ALL of these as the same number:
-   "98.000"  → 98000 km  (Spanish/German dot-as-thousands)
-   "98,000"  → 98000 km  (English comma-as-thousands)
-   "98 000"  → 98000 km  (space separator)
-   "98000"   → 98000 km  (no separator)
-4. If the unit is MILES (mi), convert to km: km = miles × 1.60934. Return the result in km.
-5. Return an integer (no decimals). Odometer readings for cars are typically 5–6 digits (10000–999999).
-6. If you find multiple km-like numbers, pick the one that appears in the "Total km" or "Odometer" field context. If unclear, pick the largest plausible value.
-7. If you absolutely cannot find the odometer reading with at least low confidence, return null.
+   - Trip meters / partial counters ("Trip A", "Trip B", "Tageskilometer") — these reset and show small values like 12.5 or 340
+   - Speed (shown in much larger digits on the speedometer, e.g. 0–240)
+   - RPM / engine revs
+   - Fuel level numbers
+   - Clock / time display
+   - Monetary amounts (€, $)
+   - Engine displacement or model numbers
+3. The odometer is typically a row of 5–7 digits, often in its own small display area labeled "ODO", "km", or similar. Total values are typically between 10,000 and 999,999 km.
+4. Thousand separators vary — treat all of these as the same number:
+   "98.000" → 98000 km  (Spanish/German dot)
+   "98,000" → 98000 km  (English comma)
+   "98 000" → 98000 km  (space)
+   "98000"  → 98000 km  (none)
+5. If the unit shown is MILES, convert to km: km = miles × 1.60934. Return km.
+6. Return an integer (round, no decimals).
+7. If you cannot read the odometer with at least low confidence, return null.
 
-Return ONLY valid JSON matching this schema — nothing else:
-{
-  "reading_km": <integer km or null>,
-  "confidence": <"high" | "medium" | "low">,
-  "source_type": <"dashboard" | "itv" | "workshop" | "insurance" | "other" | null>
-}`;
+Return ONLY valid JSON — nothing else:
+{"reading_km": <integer or null>, "confidence": <"high"|"medium"|"low">}`;
 
 const ODOMETER_SCHEMA = {
   type: "object",
@@ -70,10 +56,6 @@ const ODOMETER_SCHEMA = {
     confidence: {
       type: "string",
       description: "Extraction confidence: high, medium, or low"
-    },
-    source_type: {
-      type: "string",
-      description: "Document type: dashboard, itv, workshop, insurance, other, or null"
     }
   },
   required: ["reading_km"]
@@ -220,7 +202,6 @@ const handleExtract = withApiObservability(async function handler(req: any, res:
     }
 
     const confidence = typeof parsed.confidence === "string" ? parsed.confidence : "low";
-    const sourceType = typeof parsed.source_type === "string" ? parsed.source_type : null;
 
     // If a snapshotId is provided, update extraction_status on the row
     if (snapshotId && typeof snapshotId === "string") {
@@ -237,8 +218,8 @@ const handleExtract = withApiObservability(async function handler(req: any, res:
     // Record AI usage (reuses 'expense' kind counter — one quota pool)
     await recordAiUsage(user.id, "expense", requestId);
 
-    log.info({ readingKm, confidence, sourceType }, "odometer_extract_success");
-    res.status(200).json({ reading_km: readingKm, confidence, source_type: sourceType });
+    log.info({ readingKm, confidence }, "odometer_extract_success");
+    res.status(200).json({ reading_km: readingKm, confidence });
   } catch (err: any) {
     log.error({ err }, "odometer_extract_error");
     captureServerException(err, { extra: { requestId } });

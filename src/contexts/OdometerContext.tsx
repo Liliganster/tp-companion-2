@@ -9,9 +9,10 @@ export type OdometerSnapshot = {
   snapshot_date: string; // YYYY-MM-DD
   reading_km: number;
   source: "itv" | "taller" | "seguro" | "manual" | string;
-  notes: string | null;
   image_storage_path: string | null;
-  extraction_status: "ai" | "manual" | "failed" | null;
+  extraction_status: "ai" | "manual" | "failed" | "user_edited" | null;
+  /** Free-text justification written by the user when correcting an AI value. */
+  user_correction_note: string | null;
   created_at: string;
 };
 
@@ -29,8 +30,8 @@ type OdometerContextValue = {
   loading: boolean;
   /** Insert a new snapshot. Returns the new row id, or null on failure. */
   addSnapshot: (data: Omit<OdometerSnapshot, "id" | "user_id" | "created_at">) => Promise<string | null>;
-  /** Update extraction_status and optionally reading_km after AI extraction. */
-  updateSnapshotExtraction: (id: string, readingKm: number | null, status: "ai" | "manual" | "failed") => Promise<void>;
+  /** Update extraction_status, optionally reading_km, and optionally a user correction note. */
+  updateSnapshotExtraction: (id: string, readingKm: number | null, status: "ai" | "manual" | "failed" | "user_edited", correctionNote?: string | null) => Promise<void>;
   /** Delete a snapshot and its associated photo from storage. */
   deleteSnapshot: (id: string) => Promise<void>;
   /**
@@ -96,11 +97,13 @@ export function OdometerProvider({ children }: { children: ReactNode }) {
   const updateSnapshotExtraction = useCallback(async (
     id: string,
     readingKm: number | null,
-    status: "ai" | "manual" | "failed"
+    status: "ai" | "manual" | "failed" | "user_edited",
+    correctionNote?: string | null
   ) => {
     if (!supabase) return;
     const patch: Record<string, unknown> = { extraction_status: status };
     if (readingKm !== null) patch.reading_km = readingKm;
+    if (correctionNote !== undefined) patch.user_correction_note = correctionNote;
     const { data } = await supabase
       .from("odometer_snapshots")
       .update(patch)

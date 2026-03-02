@@ -1,4 +1,4 @@
-import { useNavigate, useSearchParams } from "react-router-dom";
+﻿import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -499,7 +499,7 @@ export default function ReportView() {
           doc.setFontSize(6.5);
           doc.setTextColor(120, 120, 120);
           doc.text(
-            `${odometerRatio.startSnapshot.snapshot_date} → ${odometerRatio.endSnapshot.snapshot_date}  |  ${Number(odometerRatio.startSnapshot.reading_km).toFixed(0)} → ${Number(odometerRatio.endSnapshot.reading_km).toFixed(0)} km`,
+            `${odometerRatio.startSnapshot.snapshot_date} → ${odometerRatio.endSnapshot.snapshot_date}  |  ${Number(odometerRatio.startSnapshot.reading_km).toFixed(0)}${odometerRatio.startSnapshot.extraction_status === "user_edited" ? " (mod. manual)" : ""} → ${Number(odometerRatio.endSnapshot.reading_km).toFixed(0)}${odometerRatio.endSnapshot.extraction_status === "user_edited" ? " (mod. manual)" : ""} km`,
             margin + 6, cardY + 40
           );
           doc.setDrawColor(0, 0, 0);
@@ -705,7 +705,7 @@ export default function ReportView() {
           doc.setFontSize(6.5);
           doc.setTextColor(120, 120, 120);
           doc.text(
-            `${odometerRatio.startSnapshot.snapshot_date} → ${odometerRatio.endSnapshot.snapshot_date}  |  ${Number(odometerRatio.startSnapshot.reading_km).toFixed(0)} → ${Number(odometerRatio.endSnapshot.reading_km).toFixed(0)} km`,
+            `${odometerRatio.startSnapshot.snapshot_date} → ${odometerRatio.endSnapshot.snapshot_date}  |  ${Number(odometerRatio.startSnapshot.reading_km).toFixed(0)}${odometerRatio.startSnapshot.extraction_status === "user_edited" ? " (mod. manual)" : ""} → ${Number(odometerRatio.endSnapshot.reading_km).toFixed(0)}${odometerRatio.endSnapshot.extraction_status === "user_edited" ? " (mod. manual)" : ""} km`,
             margin + 6, cardY + 40
           );
           doc.setDrawColor(0, 0, 0);

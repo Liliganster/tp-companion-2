@@ -1,9 +1,8 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, Fragment } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Gauge, Trash2, Lock, Image as ImageIcon, Loader2, AlertCircle, Camera, X, QrCode } from "lucide-react";
+import { Gauge, Trash2, Lock, Image as ImageIcon, Loader2, AlertCircle, Camera, X, QrCode, Pencil } from "lucide-react";
 import { useOdometer, OdometerSnapshot } from "@/contexts/OdometerContext";
 import { usePlan } from "@/contexts/PlanContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -12,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { Textarea } from "@/components/ui/textarea";
 
 // ─── Thumbnail with signed URL loading ──────────────────────────────────────
 function OdometerThumbnail({ storagePath, alt }: { storagePath: string; alt: string }) {
@@ -60,16 +60,16 @@ function AddSnapshotForm({ onClose }: AddFormProps) {
   const { t } = useI18n();
   const { toast } = useToast();
   const { getAccessToken, user } = useAuth();
-  const { addSnapshot, updateSnapshotExtraction } = useOdometer();
+  const { addSnapshot, updateSnapshotExtraction, deleteSnapshot } = useOdometer();
 
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [readingKm, setReadingKm] = useState("");
-  const [source, setSource] = useState<"itv" | "taller" | "seguro" | "manual">("manual");
-  const [notes, setNotes] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [extracting, setExtracting] = useState(false);
+  // Fallback: shown only if AI fails to read the km
+  const [showFallback, setShowFallback] = useState(false);
+  const [fallbackKm, setFallbackKm] = useState("");
+  const [pendingSnapshotId, setPendingSnapshotId] = useState<string | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
@@ -85,29 +85,27 @@ function AddSnapshotForm({ onClose }: AddFormProps) {
       return;
     }
     setFile(f);
+    setShowFallback(false);
+    setFallbackKm("");
     const reader = new FileReader();
     reader.onload = () => setFilePreview(reader.result as string);
     reader.readAsDataURL(f);
   };
 
   const handleSave = async () => {
-    const km = parseFloat(readingKm.replace(",", "."));
-    if (!date || isNaN(km) || km <= 0) {
-      toast({ title: t("odometer.toastSaveError"), variant: "destructive" });
-      return;
-    }
-    if (!user?.id || !supabase) return;
-
+    if (!file || !user?.id || !supabase) return;
     setSaving(true);
     try {
-      // 1. Create snapshot row first (so we have an id for AI extraction)
+      const today = new Date().toISOString().slice(0, 10);
+
+      // 1. Create draft row — date = today, source = dashboard, km = 0 (AI fills it)
       const snapshotId = await addSnapshot({
-        snapshot_date: date,
-        reading_km: km,
-        source,
-        notes: notes || null,
+        snapshot_date: today,
+        reading_km: 0,
+        source: "dashboard",
         image_storage_path: null,
         extraction_status: "manual",
+        user_correction_note: null,
       });
 
       if (!snapshotId) {
@@ -115,141 +113,93 @@ function AddSnapshotForm({ onClose }: AddFormProps) {
         return;
       }
 
-      // 2. If photo provided: upload to Supabase Storage
-      let storagePath: string | null = null;
-      if (file && supabase) {
-        const ext = file.name.split(".").pop() ?? "jpg";
-        const path = `${user.id}/${snapshotId}.${ext}`;
-        const { error: uploadError } = await supabase.storage
-          .from("odometer-images")
-          .upload(path, file, { upsert: true });
+      // 2. Upload photo to Supabase Storage
+      const ext = file.name.split(".").pop() ?? "jpg";
+      const path = `${user.id}/${snapshotId}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("odometer-images")
+        .upload(path, file, { upsert: true });
 
-        if (!uploadError) {
-          storagePath = path;
-          // Update the row with the storage path
-          await supabase
-            .from("odometer_snapshots")
-            .update({ image_storage_path: path })
-            .eq("id", snapshotId);
-        }
+      if (uploadError) {
+        await deleteSnapshot(snapshotId);
+        toast({ title: t("odometer.toastSaveError"), variant: "destructive" });
+        return;
       }
 
-      // 3. If photo uploaded: call AI extraction endpoint
-      if (storagePath) {
-        setExtracting(true);
-        try {
-          const token = await getAccessToken();
-          if (token) {
-            const response = await fetch("/api/odometer/extract", {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ storagePath, snapshotId }),
-            });
-            const data = await response.json().catch(() => null);
-            if (response.ok && data?.reading_km != null) {
-              // Update the km field with AI-extracted value
-              await updateSnapshotExtraction(snapshotId, data.reading_km, "ai");
-            } else if (response.status === 403) {
-              // Pro check is handled by showing the locked view; no need to error here
-            } else {
-              // AI failed — extraction_status already set to 'failed' by server
-              toast({ title: t("odometer.toastExtractError"), variant: "destructive" });
-            }
+      await supabase
+        .from("odometer_snapshots")
+        .update({ image_storage_path: path })
+        .eq("id", snapshotId);
+
+      // 3. AI extraction
+      setExtracting(true);
+      try {
+        const token = await getAccessToken();
+        if (token) {
+          const response = await fetch("/api/odometer/extract", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ storagePath: path, snapshotId }),
+          });
+          const data = await response.json().catch(() => null);
+          if (response.ok && data?.reading_km != null) {
+            await updateSnapshotExtraction(snapshotId, data.reading_km, "ai");
+            toast({ title: t("odometer.toastAdded") });
+            onClose();
+          } else {
+            // AI couldn't read the km — show manual fallback
+            setPendingSnapshotId(snapshotId);
+            setShowFallback(true);
           }
-        } catch {
-          toast({ title: t("odometer.toastExtractError"), variant: "destructive" });
-        } finally {
-          setExtracting(false);
         }
+      } catch {
+        setPendingSnapshotId(snapshotId);
+        setShowFallback(true);
+      } finally {
+        setExtracting(false);
       }
-
-      toast({ title: t("odometer.toastAdded") });
-      onClose();
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleFallbackSave = async () => {
+    const km = parseFloat(fallbackKm.replace(",", "."));
+    if (!pendingSnapshotId || isNaN(km) || km <= 0) return;
+    await updateSnapshotExtraction(pendingSnapshotId, km, "manual");
+    toast({ title: t("odometer.toastAdded") });
+    onClose();
   };
 
   return (
     <div className="glass-card p-4 space-y-4 border border-primary/20">
       <h3 className="font-medium text-sm">{t("odometer.dialogTitle")}</h3>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs">{t("odometer.date")}</Label>
-          <Input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="bg-secondary/50 text-sm h-8"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <Label className="text-xs">{t("odometer.readingKm")}</Label>
-          <Input
-            inputMode="numeric"
-            placeholder="ej. 98000"
-            value={readingKm}
-            onChange={(e) => setReadingKm(e.target.value)}
-            className="bg-secondary/50 text-sm h-8"
-          />
-        </div>
-      </div>
-
-      <div className="space-y-1">
-        <Label className="text-xs">{t("odometer.source")}</Label>
-        <Select value={source} onValueChange={(v) => setSource(v as typeof source)}>
-          <SelectTrigger className="bg-secondary/50 h-8 text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="itv">{t("odometer.sourceItv")}</SelectItem>
-            <SelectItem value="taller">{t("odometer.sourceTaller")}</SelectItem>
-            <SelectItem value="seguro">{t("odometer.sourceSeguro")}</SelectItem>
-            <SelectItem value="manual">{t("odometer.sourceManual")}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-1">
-        <Label className="text-xs">{t("odometer.notes")}</Label>
-        <Input
-          placeholder="…"
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          className="bg-secondary/50 text-sm h-8"
-        />
-      </div>
-
       {/* Photo upload */}
-      <div className="space-y-1">
-        <Label className="text-xs">{t("odometer.photo")}</Label>
-      <div
+      <div className="space-y-2">
+        <div
           className={cn(
-            "flex items-center gap-2 border border-dashed rounded-lg p-2 cursor-pointer hover:border-primary/50 transition-colors text-xs text-muted-foreground",
-            filePreview && "border-primary/40"
+            "flex flex-col items-center justify-center gap-2 border border-dashed rounded-lg p-4 cursor-pointer hover:border-primary/50 transition-colors text-xs text-muted-foreground min-h-[80px]",
+            filePreview && "border-primary/40 cursor-default"
           )}
-          onClick={() => galleryInputRef.current?.click()}
+          onClick={() => !filePreview && galleryInputRef.current?.click()}
         >
           {filePreview ? (
-            <img src={filePreview} alt="preview" className="w-14 h-14 object-cover rounded" />
+            <img src={filePreview} alt="preview" className="max-h-48 rounded object-contain" />
           ) : (
-            <ImageIcon className="w-5 h-5 shrink-0 opacity-50" />
+            <>
+              <ImageIcon className="w-7 h-7 opacity-40" />
+              <span className="text-center">{t("expenseScan.dragDropText")}</span>
+            </>
           )}
-          <span>{filePreview ? file?.name : t("expenseScan.dragDropText")}</span>
         </div>
 
-        {/* Direct camera button (opens back camera on mobile without gallery) */}
         {!filePreview && (
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="gap-1.5 text-xs"
+            className="w-full gap-1.5 text-xs"
             onClick={() => cameraInputRef.current?.click()}
           >
             <Camera className="w-3.5 h-3.5" />
@@ -257,43 +207,66 @@ function AddSnapshotForm({ onClose }: AddFormProps) {
           </Button>
         )}
 
-        {/* Camera input (direct, no gallery — mobile only) */}
-        <input
-          ref={cameraInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-          onChange={handleFileChange}
-        />
-        {/* Gallery / file picker */}
-        <input
-          ref={galleryInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleFileChange}
-        />
         {filePreview && (
-          <p className="text-[10px] text-muted-foreground">
-            {t("odometer.extractingAi").replace("…", "")} — {t("odometer.extractedByAi")}
-          </p>
+          <button
+            type="button"
+            className="text-[10px] text-muted-foreground underline underline-offset-2"
+            onClick={() => { setFile(null); setFilePreview(null); setShowFallback(false); setFallbackKm(""); }}
+          >
+            {t("odometer.captureOr")}
+          </button>
         )}
+
+        <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
+        <input ref={galleryInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
       </div>
 
-      <div className="flex gap-2 justify-end pt-1">
-        <Button variant="outline" size="sm" onClick={onClose} disabled={saving || extracting}>
-          {t("settings.cancel")}
-        </Button>
-        <Button
-          size="sm"
-          onClick={handleSave}
-          disabled={saving || extracting || !date || !readingKm}
-        >
-          {(saving || extracting) && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
-          {extracting ? t("odometer.extractingAi") : t("odometer.dialogSave")}
-        </Button>
-      </div>
+      {/* AI extracting indicator */}
+      {extracting && (
+        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+          <Loader2 className="w-3 h-3 animate-spin" />
+          {t("odometer.extractingAi")}
+        </p>
+      )}
+
+      {/* Fallback: AI couldn't read km automatically */}
+      {showFallback && !extracting && (
+        <div className="space-y-2">
+          <p className="text-xs text-amber-500 flex items-center gap-1">
+            <AlertCircle className="w-3 h-3" />
+            {t("odometer.toastExtractError")}
+          </p>
+          <div className="flex gap-2">
+            <Input
+              inputMode="numeric"
+              placeholder="ej. 98000"
+              value={fallbackKm}
+              onChange={(e) => setFallbackKm(e.target.value)}
+              className="bg-secondary/50 text-sm h-8"
+            />
+            <Button size="sm" onClick={handleFallbackSave} disabled={!fallbackKm}>
+              {t("odometer.dialogSave")}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Actions */}
+      {!showFallback && (
+        <div className="flex gap-2 justify-end pt-1">
+          <Button variant="outline" size="sm" onClick={onClose} disabled={saving || extracting}>
+            {t("settings.cancel")}
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={saving || extracting || !file}
+          >
+            {(saving || extracting) && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
+            {extracting ? t("odometer.extractingAi") : t("odometer.dialogSave")}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -370,10 +343,20 @@ export function OdometerSettingsSection() {
   const { toast } = useToast();
   const { planTier } = usePlan();
   const navigate = useNavigate();
-  const { snapshots, loading, deleteSnapshot, refresh } = useOdometer();
+  const { snapshots, loading, deleteSnapshot, refresh, updateSnapshotExtraction } = useOdometer();
   const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [year, setYear] = useState(new Date().getFullYear());
+  const [editState, setEditState] = useState<{ id: string; km: string; note: string } | null>(null);
+
+  const handleEditSave = async () => {
+    if (!editState) return;
+    const km = parseFloat(editState.km.replace(",", "."));
+    if (isNaN(km) || km <= 0) return;
+    await updateSnapshotExtraction(editState.id, km, "user_edited", editState.note.trim() || null);
+    toast({ title: t("odometer.toastCorrected") });
+    setEditState(null);
+  };
 
   // QR mobile capture state
   type QrState = "idle" | "generating" | "waiting" | "success" | "error";
@@ -485,21 +468,19 @@ export function OdometerSettingsSection() {
     toast({ title: t("odometer.toastDeleted") });
   };
 
-  const sourceLabel = (s: string) => {
-    const map: Record<string, string> = {
-      itv: t("odometer.sourceItv"),
-      taller: t("odometer.sourceTaller"),
-      seguro: t("odometer.sourceSeguro"),
-      manual: t("odometer.sourceManual"),
-    };
-    return map[s] ?? s;
-  };
-
   const extractionBadge = (snap: OdometerSnapshot) => {
     if (snap.extraction_status === "ai") {
       return (
         <span className="text-[10px] bg-primary/10 text-primary px-1 rounded">
           {t("odometer.extractedByAi")}
+        </span>
+      );
+    }
+    if (snap.extraction_status === "user_edited") {
+      return (
+        <span className="inline-flex items-center gap-0.5 text-[10px] bg-amber-500/10 text-amber-600 px-1 rounded">
+          <Pencil className="w-2 h-2" />
+          {t("odometer.userEdited")}
         </span>
       );
     }
@@ -633,44 +614,108 @@ export function OdometerSettingsSection() {
               <tr className="border-b border-border text-muted-foreground text-left">
                 <th className="py-2 pr-3 font-medium">{t("odometer.date")}</th>
                 <th className="py-2 pr-3 font-medium">{t("odometer.readingKm")}</th>
-                <th className="py-2 pr-3 font-medium">{t("odometer.source")}</th>
                 <th className="py-2 pr-3 font-medium">{t("odometer.photo")}</th>
                 <th className="py-2 font-medium"></th>
               </tr>
             </thead>
             <tbody>
-              {snapshots.map((snap) => (
-                <tr key={snap.id} className="border-b border-border/50 hover:bg-secondary/30">
-                  <td className="py-2 pr-3 tabular-nums">{snap.snapshot_date}</td>
-                  <td className="py-2 pr-3">
-                    <span className="font-medium tabular-nums">
-                      {Number(snap.reading_km).toLocaleString()} km
-                    </span>{" "}
-                    {extractionBadge(snap)}
-                  </td>
-                  <td className="py-2 pr-3 text-muted-foreground">{sourceLabel(snap.source)}</td>
-                  <td className="py-2 pr-3">
-                    {snap.image_storage_path ? (
-                      <OdometerThumbnail
-                        storagePath={snap.image_storage_path}
-                        alt={t("odometer.thumbnailAlt")}
-                      />
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
+              {snapshots.map((snap) => {
+                const isEditing = editState?.id === snap.id;
+                return (
+                  <Fragment key={snap.id}>
+                    <tr className="border-b border-border/50 hover:bg-secondary/30">
+                      <td className="py-2 pr-3 tabular-nums">{snap.snapshot_date}</td>
+                      <td className="py-2 pr-3">
+                        {isEditing ? (
+                          <Input
+                            inputMode="numeric"
+                            value={editState.km}
+                            onChange={(e) => setEditState((s) => s ? { ...s, km: e.target.value } : s)}
+                            className="bg-secondary/50 text-xs h-7 w-28"
+                            autoFocus
+                          />
+                        ) : (
+                          <>
+                            <span className="font-medium tabular-nums">
+                              {Number(snap.reading_km).toLocaleString()} km
+                            </span>{" "}
+                            {extractionBadge(snap)}
+                          </>
+                        )}
+                      </td>
+                      <td className="py-2 pr-3">
+                        {snap.image_storage_path ? (
+                          <OdometerThumbnail
+                            storagePath={snap.image_storage_path}
+                            alt={t("odometer.thumbnailAlt")}
+                          />
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="py-2">
+                        {isEditing ? (
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              className="h-6 text-[10px] px-2"
+                              onClick={handleEditSave}
+                              disabled={!editState.note.trim() || !editState.km}
+                            >
+                              OK
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-6 text-[10px] px-2"
+                              onClick={() => setEditState(null)}
+                            >
+                              {t("settings.cancel")}
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setEditState({ id: snap.id, km: String(snap.reading_km), note: "" })}
+                              className="text-muted-foreground hover:text-primary transition-colors"
+                              title={t("odometer.editKmLabel")}
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(snap.id)}
+                              className="text-muted-foreground hover:text-destructive transition-colors"
+                              title={t("odometer.deleteConfirm")}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                    {isEditing && (
+                      <tr className="border-b border-amber-500/20 bg-amber-500/5">
+                        <td colSpan={4} className="pb-3 pt-1 px-2">
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-amber-600 font-medium">
+                              {t("odometer.correctionNoteLabel")} *
+                            </p>
+                            <Textarea
+                              rows={2}
+                              placeholder={t("odometer.correctionNotePlaceholder")}
+                              value={editState.note}
+                              onChange={(e) => setEditState((s) => s ? { ...s, note: e.target.value } : s)}
+                              className="text-xs bg-secondary/50 min-h-0 resize-none"
+                            />
+                          </div>
+                        </td>
+                      </tr>
                     )}
-                  </td>
-                  <td className="py-2">
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(snap.id)}
-                      className="text-muted-foreground hover:text-destructive transition-colors"
-                      title={t("odometer.deleteConfirm")}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
