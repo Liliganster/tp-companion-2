@@ -58,11 +58,8 @@ export function UpdatePrompt() {
           setNeedRefresh(true);
         });
 
-        // Listen for controlling changes to auto-reload if SW takes control
-        wb.addEventListener("controlling", () => {
-          logger.debug("[SW] New version took control, reloading...");
-          window.location.reload();
-        });
+        // Note: we do NOT auto-reload on "controlling" to avoid reloading other open tabs.
+        // Only the tab that explicitly clicks "Actualizar" reloads (handled in the toast onClick).
 
         const swRegistration = await wb.register();
         if (cancelled) return;

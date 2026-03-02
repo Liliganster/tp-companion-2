@@ -464,8 +464,9 @@ export default defineConfig(({ mode }) => {
         workbox: {
           // skipWaiting: false - We handle this manually via messageSkipWaiting() when user clicks update
           skipWaiting: false,
-          // clientsClaim: true - New SW takes control of all clients immediately after activation
-          clientsClaim: true,
+          // clientsClaim: false - New SW only controls tabs opened AFTER activation, not existing ones
+          // This prevents other open tabs from reloading when one tab triggers an update
+          clientsClaim: false,
           cleanupOutdatedCaches: true,
         }
       }),
