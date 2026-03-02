@@ -12,8 +12,9 @@ const envSchema = z.object({
   VITE_SUPABASE_URL: z.string().url(),
   VITE_SUPABASE_ANON_KEY: z.string().min(20),
 
-  // AI workers (server-side)
-  GEMINI_API_KEY: z.string().min(20),
+  // AI workers (server-side) — at least one of Gemini or OpenRouter must be configured
+  // at runtime; we make both optional here so the build never blocks.
+  GEMINI_API_KEY: optionalString(z.string().min(20)),
 
   // Server-side Supabase admin access (Vercel functions)
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
