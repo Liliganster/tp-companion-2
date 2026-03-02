@@ -381,7 +381,7 @@ export default function AdvancedCosts() {
                                   <td className="py-2 px-2 text-right text-muted-foreground text-xs">
                                     {currencyFormatter.format(tripCost)}
                                   </td>
-                                  <td className="py-2 px-2 text-right text-muted-foreground text-xs">
+                                  <td className="py-2 px-2 text-right text-green-500 text-xs">
                                     {currencyFormatter.format(tripReimb)}
                                   </td>
                                   <td className={cn("py-2 px-2 text-right text-xs", getBalanceColor(tripBalance))}>

@@ -6,14 +6,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Download, Printer, ArrowLeft, FileSpreadsheet, FileText, FileDown, Save } from "lucide-react";
+import { Download, Printer, ArrowLeft, FileSpreadsheet, FileText, FileDown, Save, Archive } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTrips } from "@/contexts/TripsContext";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { useUserProfile } from "@/contexts/UserProfileContext";
-import { useReports } from "@/contexts/ReportsContext";
+import { useReports, type SavedReport } from "@/contexts/ReportsContext";
 import { usePlan } from "@/contexts/PlanContext";
 import { useI18n } from "@/hooks/use-i18n";
+import { buildProjectZip } from "@/hooks/use-project-export";
 
 interface ReportTrip {
   date: string;
@@ -563,6 +564,178 @@ export default function ReportView() {
     })();
   };
 
+  const handleExportZip = () => {
+    if (planTier !== "pro") {
+      toast({ title: t("reportView.exportZipProOnly") });
+      return;
+    }
+    if (filteredTrips.length === 0) {
+      toast({ title: t("reportView.exportZipEmpty") });
+      return;
+    }
+
+    toast({
+      title: t("reportView.exportZipPreparing"),
+      description: t("reportView.toastExportingBody"),
+    });
+
+    (async () => {
+      try {
+        // 1. Generate PDF blob in-memory
+        const { jsPDF } = await import("jspdf");
+        const autoTableModule = await import("jspdf-autotable");
+        const autoTable = autoTableModule.default;
+
+        const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const margin = 40;
+        const headerBottomY = 120;
+        const availableWidth = pageWidth - margin * 2;
+
+        const drawLabelValueLeft = (x: number, y: number, label: string, value: string) => {
+          const labelText = `${label}: `;
+          doc.setFont("helvetica", "bold");
+          doc.text(labelText, x, y);
+          const labelWidth = doc.getTextWidth(labelText);
+          doc.setFont("helvetica", "normal");
+          doc.text(value, x + labelWidth, y, { maxWidth: pageWidth / 2 - margin - (x + labelWidth) });
+        };
+
+        const drawLabelValueRight = (rightEdge: number, y: number, label: string, value: string) => {
+          const labelText = `${label}: `;
+          doc.setFont("helvetica", "normal");
+          const valueWidth = doc.getTextWidth(value);
+          doc.setFont("helvetica", "bold");
+          const labelWidth = doc.getTextWidth(labelText);
+          const minStartX = pageWidth / 2 + 20;
+          const startX = Math.max(minStartX, rightEdge - (labelWidth + valueWidth));
+          doc.text(labelText, startX, y);
+          doc.setFont("helvetica", "normal");
+          doc.text(value, startX + labelWidth, y, { maxWidth: rightEdge - (startX + labelWidth) });
+        };
+
+        doc.setTextColor(0, 0, 0);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(14);
+        doc.text(t("reportView.reportTitle"), pageWidth / 2, 44, { align: "center" });
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.text(`${t("reportView.periodLabel")}: ${period}`, pageWidth / 2, 64, { align: "center" });
+
+        const leftX = margin;
+        const rightEdge = pageWidth - margin;
+        const metaY1 = 82;
+        const metaY2 = 96;
+        const metaY3 = 110;
+
+        drawLabelValueLeft(leftX, metaY1, t("reportView.driverLabel"), driver);
+        drawLabelValueLeft(leftX, metaY2, t("reportView.licensePlateLabel"), licensePlate);
+        drawLabelValueLeft(leftX, metaY3, t("reportView.addressLabel"), address);
+        drawLabelValueRight(rightEdge, metaY1, t("reportView.projectLabel"), projectLabel);
+        drawLabelValueRight(rightEdge, metaY2, t("reportView.passengerSurchargeLabel"), `${profile.passengerSurcharge || "0"} €`);
+        drawLabelValueRight(rightEdge, metaY3, t("reportView.ratePerKmLabel"), `${profile.ratePerKm || "0"} €`);
+
+        doc.setDrawColor(0, 0, 0);
+        doc.setLineWidth(0.5);
+        doc.line(margin, headerBottomY, pageWidth - margin, headerBottomY);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+
+        const computeColumnWidths = () => {
+          const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+          const pad = 10;
+          const min = [50, 70, 80, 180, 45, 55, 55];
+          const max = [65, 100, 140, 300, 55, 75, 75];
+          const desired = pdfHeaders.map((header, colIndex) => {
+            let maxTextWidth = doc.getTextWidth(String(header));
+            for (const row of pdfRows) {
+              const raw = row[colIndex] ?? "";
+              const text = colIndex === 3 ? String(raw).slice(0, 80) : String(raw);
+              maxTextWidth = Math.max(maxTextWidth, doc.getTextWidth(text));
+            }
+            return clamp(maxTextWidth + pad, min[colIndex] ?? 50, max[colIndex] ?? 80);
+          });
+          let widths = desired.slice();
+          const sum = () => widths.reduce((acc, w) => acc + w, 0);
+          if (sum() > availableWidth) {
+            const reducible = [3, 2, 1, 0, 5, 6];
+            for (let iteration = 0; iteration < 4 && sum() > availableWidth; iteration++) {
+              const overflow = sum() - availableWidth;
+              const totalSlack = reducible.reduce((acc, i) => acc + Math.max(0, widths[i] - min[i]), 0);
+              if (totalSlack <= 0) break;
+              for (const i of reducible) {
+                const slack = Math.max(0, widths[i] - min[i]);
+                if (!slack) continue;
+                const reduce = Math.min(slack, overflow * (slack / totalSlack));
+                widths[i] -= reduce;
+              }
+            }
+          } else if (sum() < availableWidth) {
+            const extra = availableWidth - sum();
+            widths[3] = Math.min(max[3], widths[3] + extra);
+          }
+          widths = widths.map((w) => Math.floor(w));
+          return widths;
+        };
+
+        const columnWidths = computeColumnWidths();
+        autoTable(doc, {
+          head: [pdfHeaders],
+          body: pdfRows,
+          foot: [[
+            { content: "", colSpan: 4, styles: { fillColor: [255, 255, 255] } },
+            { content: "", styles: { halign: "center", fillColor: [255, 255, 255] } },
+            { content: `${t("reportView.totalShort")}: ${totalDistance.toFixed(1)} km`, styles: { halign: "right", fontStyle: "bold" } },
+            { content: `${t("reportView.totalShort")}: ${totalReimbursement.toFixed(2)} €`, styles: { halign: "right", fontStyle: "bold" } },
+          ]],
+          startY: headerBottomY + 18,
+          theme: "grid",
+          styles: { fontSize: 7, cellPadding: 2.5, textColor: 0, lineColor: [165, 165, 165], lineWidth: 0.35 },
+          headStyles: { fillColor: [255, 255, 255], textColor: 0, fontStyle: "bold", fontSize: 7.5, lineColor: 0, lineWidth: 0.6 },
+          footStyles: { fillColor: [255, 255, 255], textColor: 0, fontSize: 7.5, lineColor: 0, lineWidth: 0.6 },
+          margin: { left: margin, right: margin },
+          columnStyles: {
+            0: { cellWidth: columnWidths[0] },
+            1: { cellWidth: columnWidths[1], overflow: "ellipsize" },
+            2: { cellWidth: columnWidths[2], overflow: "ellipsize" },
+            3: { cellWidth: columnWidths[3], overflow: "linebreak" },
+            4: { cellWidth: columnWidths[4], halign: "center" },
+            5: { cellWidth: columnWidths[5], halign: "right" },
+            6: { cellWidth: columnWidths[6], halign: "right" },
+          },
+        });
+
+        const pdfBlob = doc.output("blob");
+        const pdfFileName = `${fileBase}.pdf`;
+
+        // 2. Build ZIP
+        const zipBlob = await buildProjectZip({
+          reportBlob: pdfBlob,
+          reportFileName: pdfFileName,
+          trips: filteredTrips,
+        });
+
+        // 3. Trigger download
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${fileBase}_con_documentacion.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+
+        toast({ title: t("reportView.exportZipDone") });
+      } catch {
+        toast({
+          title: t("reportView.exportZipError"),
+          description: t("reportView.toastExportErrorBody"),
+          variant: "destructive",
+        });
+      }
+    })();
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -593,6 +766,19 @@ export default function ReportView() {
                 <DropdownMenuItem onClick={() => handleExport("csv")}>
                   <FileDown className="w-4 h-4 mr-2" />
                   {t("reportView.exportCsv")}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleExportZip}
+                  disabled={planTier !== "pro"}
+                  className={planTier !== "pro" ? "opacity-50" : ""}
+                >
+                  <Archive className="w-4 h-4 mr-2" />
+                  <span className="flex-1">{t("reportView.exportZip")}</span>
+                  {planTier !== "pro" && (
+                    <span className="ml-2 text-[10px] font-bold bg-primary/20 text-primary px-1.5 py-0.5 rounded">
+                      PRO
+                    </span>
+                  )}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
