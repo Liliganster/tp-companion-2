@@ -1,7 +1,9 @@
 import { createContext, ReactNode, useCallback, useContext, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "./AuthContext";
+import { usePlan } from "./PlanContext";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 
 export type SavedReport = {
@@ -40,6 +42,7 @@ const ReportsContext = createContext<ReportsContextValue | null>(null);
 
 export function ReportsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { planTier, limits } = usePlan();
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ["reports", user?.id ?? "anon"] as const, [user?.id]);
 
@@ -77,6 +80,20 @@ export function ReportsProvider({ children }: { children: ReactNode }) {
     if (!user || !supabase) {
         // Fallback or error? For now just return local object but won't save
         return { ...report, id: "temp", createdAt: new Date().toISOString() } as SavedReport;
+    }
+
+    // Enforce monthly report limit for Basic plan
+    if (limits.maxSavedReportsPerMonth !== -1) {
+      const now = new Date();
+      const cached = queryClient.getQueryData<SavedReport[]>(queryKey) ?? [];
+      const reportsThisMonth = cached.filter(r => {
+        const d = new Date(r.createdAt);
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      });
+      if (reportsThisMonth.length >= limits.maxSavedReportsPerMonth) {
+        toast.error("Límite alcanzado: solo 1 informe por mes en el plan Basic. Mejora a Pro para informes ilimitados.");
+        throw new Error("limits.maxReportsPerMonthReached");
+      }
     }
 
     const nextReport: SavedReport = {
@@ -121,7 +138,7 @@ export function ReportsProvider({ children }: { children: ReactNode }) {
     }
 
     return nextReport;
-  }, [queryClient, queryKey, user]);
+  }, [limits, queryClient, queryKey, user]);
 
   const deleteReport = useCallback(async (id: string) => {
     if (!user || !supabase) return;

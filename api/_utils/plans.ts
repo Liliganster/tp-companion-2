@@ -31,6 +31,9 @@ export interface PlanLimits {
   maxTripsPerCSVImport: number;
   maxTripsPerCalendarImport: number;
   maxTripsPerDriveImport: number;
+
+  // Reports
+  maxSavedReportsPerMonth: number; // -1 = unlimited
 }
 
 export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
@@ -47,22 +50,28 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     maxTripsPerCSVImport: 20,
     maxTripsPerCalendarImport: 20,
     maxTripsPerDriveImport: 20,
+
+    // Reports
+    maxSavedReportsPerMonth: 1,
   },
 
   pro: {
     // Pro plan - full features for power users
-    maxActiveTrips: 2000,
-    maxActiveTripsAI: 2000,
-    maxActiveTripsNonAI: 2000,
+    maxActiveTrips: 200,
+    maxActiveTripsAI: 200,
+    maxActiveTripsNonAI: 200,
     maxStopsPerTrip: 25,          // Google Directions Advanced SKU limit
     aiJobsPerMonth: 60,
     allowedAITypes: ["callsheet", "invoice", "expense"],
     maxActiveProjects: 30,
     maxRouteTemplates: 50,
     maxDistanceCalculationsPerMonth: 1000,
-    maxTripsPerCSVImport: 2000,
-    maxTripsPerCalendarImport: 2000,
-    maxTripsPerDriveImport: 2000,
+    maxTripsPerCSVImport: 200,
+    maxTripsPerCalendarImport: 200,
+    maxTripsPerDriveImport: 200,
+
+    // Reports
+    maxSavedReportsPerMonth: -1,
   },
 };
 

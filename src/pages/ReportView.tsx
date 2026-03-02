@@ -12,6 +12,7 @@ import { useTrips } from "@/contexts/TripsContext";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useReports } from "@/contexts/ReportsContext";
+import { usePlan } from "@/contexts/PlanContext";
 import { useI18n } from "@/hooks/use-i18n";
 
 interface ReportTrip {
@@ -96,6 +97,7 @@ export default function ReportView() {
   const { trips: allTrips } = useTrips();
   const { projects } = useProjects();
   const { reports, addReport } = useReports();
+  const { planTier, limits } = usePlan();
   const reportId = searchParams.get("reportId");
   const savedReport = reportId ? reports.find((r) => r.id === reportId) : undefined;
 
@@ -337,30 +339,49 @@ export default function ReportView() {
       endDateToSave = toDateOnlyLocal(maxTime);
     }
 
-    const next = await addReport({
-      month: selectedMonth || "",
-      year: selectedYear || "",
-      project: effectiveProject,
-      tripIds: filteredTrips.map((t) => t.id),
-      startDate: startDateToSave,
-      endDate: endDateToSave,
-      totalDistanceKm: totalDistance,
-      tripsCount: filteredTrips.length,
-      driver,
-      address,
-      licensePlate,
-      reportType,
-    });
+    let savedNext: SavedReport | null = null;
+    try {
+      savedNext = await addReport({
+        month: selectedMonth || "",
+        year: selectedYear || "",
+        project: effectiveProject,
+        tripIds: filteredTrips.map((t) => t.id),
+        startDate: startDateToSave,
+        endDate: endDateToSave,
+        totalDistanceKm: totalDistance,
+        tripsCount: filteredTrips.length,
+        driver,
+        address,
+        licensePlate,
+        reportType,
+      });
+    } catch {
+      // addReport already shows the error toast (e.g. monthly limit reached)
+      return;
+    }
 
     toast({
       title: t("reportView.toastSavedTitle"),
       description: t("reportView.toastSavedBody"),
     });
 
-    navigate(`/reports/view?reportId=${encodeURIComponent(next.id)}`, { replace: true });
+    navigate(`/reports/view?reportId=${encodeURIComponent(savedNext.id)}`, { replace: true });
   };
 
   const handleExport = (format: "excel" | "pdf" | "csv") => {
+    // Basic plan: block export of unsaved reports if monthly limit already used
+    if (!savedReport && limits.maxSavedReportsPerMonth !== -1) {
+      const now = new Date();
+      const reportsThisMonth = reports.filter(r => {
+        const d = new Date(r.createdAt);
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      });
+      if (reportsThisMonth.length >= limits.maxSavedReportsPerMonth) {
+        toast({ title: t("limits.maxReportsPerMonthReached") });
+        return;
+      }
+    }
+
     const formatNames = {
       excel: "Excel",
       pdf: "PDF",

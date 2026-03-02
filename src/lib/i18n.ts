@@ -351,8 +351,8 @@ const es = {
   "limits.planBasic": "Plan Basic",
   "limits.planPro": "Plan Pro",
   "limits.maxTemplatesReached": "Has alcanzado el límite de plantillas de ruta. Elimina algunas o mejora tu plan.",
-
-  "tripDetail.title": "Detalles del viaje",
+  "limits.maxReportsPerMonthReached": "Has alcanzado el límite de 1 informe por mes del plan Basic. Mejora a Pro para informes ilimitados.",
+  "plans.features.trips200": "200 viajes activos",
   "tripDetail.date": "Fecha",
   "tripDetail.project": "Proyecto",
   "tripDetail.driver": "Conductor",
@@ -939,6 +939,10 @@ const es = {
   "plans.features.dedicatedSupport": "Soporte dedicado",
   "plans.features.sla": "SLA garantizado",
   "plans.features.customIntegrations": "Integraciones personalizadas",
+  "plans.features.reports1": "1 informe guardado",
+  "plans.features.reportsUnlimited": "Informes ilimitados",
+  "plans.features.callsheet1": "1 callsheet a la vez",
+  "plans.features.callsheetBulk20": "Hasta 20 callsheets en batch",
   "plans.upgradeButton": "Actualizar a Pro",
 
 } as const;
@@ -1276,6 +1280,8 @@ const en: Record<I18nKey, string> = {
   "limits.planBasic": "Basic Plan",
   "limits.planPro": "Pro Plan",
   "limits.maxTemplatesReached": "You've reached the route templates limit. Delete some or upgrade your plan.",
+  "limits.maxReportsPerMonthReached": "You've reached the 1 report/month limit on the Basic plan. Upgrade to Pro for unlimited reports.",
+  "plans.features.trips200": "200 active trips",
 
   // Plans page
   "nav.plans": "Plans",
@@ -1328,6 +1334,10 @@ const en: Record<I18nKey, string> = {
   "plans.features.dedicatedSupport": "Dedicated support",
   "plans.features.sla": "Guaranteed SLA",
   "plans.features.customIntegrations": "Custom integrations",
+  "plans.features.reports1": "1 saved report",
+  "plans.features.reportsUnlimited": "Unlimited reports",
+  "plans.features.callsheet1": "1 callsheet at a time",
+  "plans.features.callsheetBulk20": "Up to 20 callsheets in bulk",
   "plans.upgradeButton": "Upgrade to Pro",
 
   "tripDetail.title": "Trip details",
@@ -2198,6 +2208,8 @@ const de: Record<I18nKey, string> = {
   "limits.planBasic": "Basic Plan",
   "limits.planPro": "Pro Plan",
   "limits.maxTemplatesReached": "Du hast das Limit für Routenvorlagen erreicht. Lösche einige oder upgrade deinen Plan.",
+  "limits.maxReportsPerMonthReached": "Du hast das Limit von 1 Bericht pro Monat im Basic-Plan erreicht. Upgrade auf Pro für unbegrenzte Berichte.",
+  "plans.features.trips200": "200 aktive Fahrten",
 
   // Plans page
   "nav.plans": "Pläne",
@@ -2250,6 +2262,10 @@ const de: Record<I18nKey, string> = {
   "plans.features.dedicatedSupport": "Dedizierter Support",
   "plans.features.sla": "Garantiertes SLA",
   "plans.features.customIntegrations": "Individuelle Integrationen",
+  "plans.features.reports1": "1 gespeicherter Bericht",
+  "plans.features.reportsUnlimited": "Unbegrenzte Berichte",
+  "plans.features.callsheet1": "1 Callsheet auf einmal",
+  "plans.features.callsheetBulk20": "Bis zu 20 Callsheets im Batch",
   "plans.upgradeButton": "Auf Pro upgraden",
 
   "tripDetail.title": "Fahrt-Details",
