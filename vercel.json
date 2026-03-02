@@ -11,12 +11,6 @@
   ],
   "functions": {
     "api/**/*.ts": {
-      "maxDuration": 10
-    },
-    "api/worker.ts": {
-      "maxDuration": 60
-    },
-    "api/invoice-worker.ts": {
       "maxDuration": 60
     }
   },
