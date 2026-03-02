@@ -370,18 +370,21 @@ export function OdometerSettingsSection() {
   const [qrToken, setQrToken] = useState("");
   const [qrSnapshotId, setQrSnapshotId] = useState("");
 
-  // Poll every 3s for the draft snapshot gaining an image_storage_path
+  // Poll every 3s for the draft snapshot to finish AI extraction
   useEffect(() => {
     if (!qrSnapshotId || qrState !== "waiting" || !supabase) return;
     let cancelled = false;
     const interval = setInterval(async () => {
       const { data } = await supabase
         .from("odometer_snapshots")
-        .select("image_storage_path, reading_km")
+        .select("image_storage_path, reading_km, extraction_status")
         .eq("id", qrSnapshotId)
         .maybeSingle();
       if (cancelled) return;
-      if (data?.image_storage_path) {
+      
+      // Wait until AI has finished its attempt (so it's no longer "manual"), 
+      // or at least wait for image_storage_path AND a non-zero reading or a failed extraction
+      if (data && data.extraction_status !== "manual") {
         clearInterval(interval);
         setQrState("success");
         // Refresh context so the new snapshot appears in the table

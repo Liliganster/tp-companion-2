@@ -445,7 +445,11 @@ async function handleFinishCapture(req: any, res: any) {
     }
   } catch {
     // AI failed — snapshot already has image_storage_path, reading_km stays 0
-    // Desktop will show it as failed extraction, user can enter km manually
+    // We must update extraction_status to failed so the desktop stops polling
+    await supabaseAdmin
+      .from("odometer_snapshots")
+      .update({ extraction_status: "failed" })
+      .eq("id", snap.id);
   }
 
   res.status(200).json({ ok: true, reading_km: null });

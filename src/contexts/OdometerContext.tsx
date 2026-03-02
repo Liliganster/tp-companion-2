@@ -65,7 +65,7 @@ export function OdometerProvider({ children }: { children: ReactNode }) {
         .from("odometer_snapshots")
         .select("*")
         .eq("user_id", user.id)
-        .gt("reading_km", 0)   // excludes QR-flow draft rows (reading_km = 0)
+        .or("reading_km.gt.0,extraction_status.eq.failed") // excludes empty draft rows
         .order("snapshot_date", { ascending: true });
       if (!error && data) {
         setSnapshots(data as OdometerSnapshot[]);
