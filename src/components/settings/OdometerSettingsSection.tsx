@@ -76,7 +76,8 @@ function AddSnapshotForm({ onClose }: AddFormProps) {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    if (!f.type.startsWith("image/")) {
+    // Allow empty type — camera captures on many mobile browsers leave file.type blank
+    if (f.type && !f.type.startsWith("image/")) {
       toast({ title: t("expenseScan.invalidFileType"), variant: "destructive" });
       return;
     }

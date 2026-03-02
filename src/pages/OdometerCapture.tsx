@@ -97,7 +97,8 @@ export default function OdometerCapture() {
       });
       if (!finishRes.ok) {
         const err = await finishRes.json().catch(() => ({}));
-        if (finishRes.status === 404 || finishRes.status === 410) {
+        // Only 410 = truly expired. Any other error → show retry
+        if (finishRes.status === 410) {
           setState("expired");
           return;
         }
