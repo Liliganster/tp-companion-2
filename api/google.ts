@@ -555,7 +555,7 @@ async function handleDriveDownload(req: any, res: any) {
   if (!fileId) return sendJson(res, 400, { error: "fileId required" });
 
   function safeFilename(input: string) {
-    const cleaned = String(input ?? "document").replace(/[\r\n]/g, "").replace(/["]/g, "").replace(/[\\\/]/g, "_").trim();
+    const cleaned = String(input ?? "document").replace(/[\r\n]/g, "").replace(/["]/g, "").replace(/[/\\]/g, "_").trim();
     const n = cleaned || "document";
     return n.length > 150 ? n.slice(0, 150) : n;
   }
