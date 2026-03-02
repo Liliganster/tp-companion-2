@@ -206,7 +206,25 @@ Si después de los 5 pasos NO has encontrado nada claro:
 
 1. **COMPRENDE EL CONTEXTO**: Lee el documento completo. Las callsheets no están estandarizadas - entiende qué significa cada sección.
 
-2. **SOLO EL DÍA DE LA CALLSHEET**: Ignora locaciones de días futuros (Tomorrow, Next week, etc.). Solo extrae las del día principal.
+2. **SOLO EL DÍA DE LA CALLSHEET** ⚠️ MUY IMPORTANTE:
+   Muchas callsheets incluyen al final un bloque con el plan del día siguiente. **IGNORA POR COMPLETO todo lo que esté bajo esas secciones**.
+
+   ❌ **Secciones de día siguiente/futuro — ignorar todo su contenido**:
+   - `NEXT DAY` / `NEXT SHOOTING DAY` / `TOMORROW`
+   - `NÄCHSTER DREHTAG` / `MORGEN` / `FOLGETAG`
+   - `DÍA SIGUIENTE` / `PRÓXIMO DÍA DE RODAJE` / `MAÑANA`
+   - `ADVANCE SCHEDULE` / `PRODUCTION PLAN` / `UPCOMING`
+   - Cualquier bloque que muestre una fecha **distinta** a la fecha principal del documento
+
+   ✅ **Cómo identificar el día principal**:
+   - La fecha más prominente en el encabezado (más grande o en la parte superior)
+   - La sección con el mayor detalle de escenas, actores y horarios
+   - Si hay dos fechas en el documento, la primera en aparecer es la principal
+
+   ✅ **Ejemplos de ignorar**:
+   - "NEXT DAY — Drehort: Hauptstraße 10, 1040 Wien" → **IGNORAR**
+   - "Morgen: Mühlgasse 5, 1040 Wien" → **IGNORAR**
+   - Tabla de avance con fecha D+1 al final del PDF → **IGNORAR TODA LA TABLA**
 
 3. **SOLO DIRECCIONES FÍSICAS VÁLIDAS**: 
    - ✅ Extrae: Direcciones completas ("Kärntner Ring 16, 1010 Wien"), landmarks famosos ("Stephansdom", "Schloss Schönbrunn"), lugares conocidos con ciudad ("Hauptbahnhof, Wien")
@@ -222,6 +240,23 @@ Si después de los 5 pasos NO has encontrado nada claro:
    - ❌ NUNCA extraigas la dirección de la productora (Production Office, Studio HQ) como lugar de rodaje.
    - Si la dirección está junto al logo de la empresa o en el pie de página, ÍGNORALA.
    - Solo inclúyela SI explícitamente dice "FILMING LOCATION" o "SET" junto a ella.
+
+7. **EXCLUSIÓN CRÍTICA - UNIDADES SECUNDARIAS Y DRONES** ⚠️:
+   Las callsheets a menudo tienen secciones para unidades adicionales. **SOLO extrae la unidad PRINCIPAL**.
+   
+   ❌ **NUNCA extraigas** ubicaciones de estas secciones:
+   - Drones / Drohnen / Aerial Unit → locaciones de vuelo de dron, NO son donde filman actores
+   - 2nd Unit / B-Unit / Segunda Unidad / Zweite Einheit → equipo separado, dirección diferente
+   - Splinter Unit / C-Unit / Additional Unit → ídem
+   - Stunt Unit / Action Unit → ídem
+   - SFX Unit / VFX Unit → ídem
+   
+   **Cómo identificar estas secciones**: Busca encabezados como "DRONE UNIT", "2ND UNIT", "B-EINHEIT", "LUFTAUFNAHMEN", "DROHNEN", "AERIALS", "SEGUNDA UNIDAD". Todo lo que esté bajo ese encabezado hasta el siguiente se ignora.
+   
+   ✅ **SÍ extrae** únicamente de la sección de la unidad principal:
+   - "MAIN UNIT" / "1ST UNIT" / "PRIMERA UNIDAD" / "HAUPTEINHEIT"
+   - Si no hay etiqueta de unidad, asume que es la principal
+   - "Drehort 1", "Drehort 2" sin mención de drones/segunda unidad → extraer
 
 ### Formatos de dirección:
 
@@ -247,6 +282,67 @@ Si el call sheet tiene:
 **Si la dirección está incompleta**:
 - Si tiene contexto claro de ciudad: "Stephansplatz" → "Stephansplatz, Wien"
 - Si NO hay contexto: Extrae lo que hay
+
+---
+
+### ⚠️ FORMATOS NO ESTÁNDAR — REGLAS OBLIGATORIAS
+
+**1. Expande SIEMPRE las abreviaturas de vía** (muy común en callsheets españoles):
+- `C/` o `C.` → `Calle`  →  "C/ Gran Vía, 50" → "Calle Gran Vía 50, Madrid"
+- `Pza.` o `Pl.` o `Pz.` → `Plaza`  →  "Pza. España 1" → "Plaza España 1"
+- `Avda.` o `Av.` o `Avd.` → `Avenida`  →  "Avda. Diagonal, 543" → "Avenida Diagonal 543"
+- `Pº` o `Pso.` → `Paseo`  →  "Pº de la Castellana, 200" → "Paseo de la Castellana 200"
+- `Ctra.` → `Carretera`  →  "Ctra. M-30 km 4" → "Carretera M-30 km 4"
+- `P.I.` o `Pol. Ind.` o `Pol.` → `Polígono Industrial`
+- `Urb.` → `Urbanización`
+- `Blvr.` → `Boulevard`
+- **Alemán**: `Str.` → `Straße`, `Pl.` → `Platz`, `Gasse` ya completa
+
+**2. Formato de Bezirk vienés (MUY FRECUENTE en callsheets austríacos)** ⚠️:
+En Viena, el formato es `{NúmeroBezirk}. {NombreCalle} {NúmeroCasa}`.
+El número antes del punto es el DISTRITO (Bezirk), NO un número de lista.
+
+Regla de conversión → añade el código postal `1{Bezirk con 2 dígitos}0`:
+- `1. Stephansplatz 1` → `Stephansplatz 1, 1010 Wien`
+- `3. Erdbergstraße 200` → `Erdbergstraße 200, 1030 Wien`
+- `13. Erzbischofgasse 6C` → `Erzbischofgasse 6C, 1130 Wien`
+- `13. Erzbischofgasse 8` → `Erzbischofgasse 8, 1130 Wien`
+- `19. Grinzinger Allee 1` → `Grinzinger Allee 1, 1190 Wien`
+- `23. Brunner Str. 69` → `Brunner Straße 69, 1230 Wien`
+
+Si el documento es claramente vienés (aparece "Wien", "Bezirk", "Drehort" con este patrón), aplica esta conversión a TODAS las direcciones que encajen.
+
+**3. Direcciones en tablas**: Las callsheets suelen tener tablas con columnas separadas.
+Si ves una fila como:
+```
+Drehort | Hotel Imperial
+Adresse | Kärntner Ring 16, 1010 Wien
+```
+O en español:
+```
+Locación: Edificio Telefónica | Dirección: Gran Vía 28, 28013 Madrid
+```
+Lee AMBAS celdas. Si hay dirección, usa SOLO la dirección, no el nombre del lugar.
+
+**3. Solo nombre de barrio o zona**:
+- "Barrio de Salamanca, Madrid" → extraer tal cual
+- "Zona Retiro" → "Parque del Retiro, Madrid" si es obvio, o extraer como está
+- "Centro histórico de Córdoba" → extraer tal cual + añadir ciudad si falta
+
+**4. Coordenadas GPS en lugar de dirección**:
+- Si solo aparecen coordenadas: "40.4168, -3.7038" → incluir tal cual
+- Si hay coordenadas junto a una dirección, usar la dirección
+
+**5. Direcciones descriptivas o referenciales**:
+- "Junto al Mercado de San Miguel, Madrid" → extraer tal cual
+- "Frente a C/ Mayor 45, Madrid" → "Calle Mayor 45, Madrid (aprox.)"
+- "Exterior del Teatro Real, Plaza de Oriente, Madrid" → "Plaza de Oriente, Madrid"
+- "Bajo el puente de Segovia" → "Puente de Segovia, Madrid" si hay contexto
+
+**6. Kilómetros de carretera**:
+- "Km 15 A-6 sentido Coruña" → extraer tal cual añadiendo ciudad/comunidad si hay contexto
+
+**7. Nunca dejes locations vacío**: Si no encuentras ninguna dirección formal, extrae el mejor indicador de ubicación disponible (nombre de lugar, zona, landmark). Solo como último recurso un texto descriptivo.
 
 ---
 

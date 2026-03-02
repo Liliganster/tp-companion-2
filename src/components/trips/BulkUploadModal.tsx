@@ -710,9 +710,19 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
     if (nextFiles.length > limits.maxCallsheetsPerBatch) {
       toast.error(t("bulk.batchLimitTitle"), {
-        description: t("bulk.batchLimitMessage"),
-        action: { label: t("bulk.outOfQuotaButton"), onClick: () => navigate("/plans") },
-        duration: 8000,
+        description: (
+          <div className="flex flex-col gap-3 mt-1">
+            <span>{t("bulk.batchLimitMessage")}</span>
+            <button
+              type="button"
+              onClick={() => navigate("/plans")}
+              className="self-start rounded-md bg-white/10 hover:bg-white/20 px-3 py-1.5 text-sm font-medium transition-colors"
+            >
+              {t("bulk.outOfQuotaButton")}
+            </button>
+          </div>
+        ),
+        duration: Infinity,
       });
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
@@ -778,9 +788,19 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
           const quotaData = await quotaRes.json() as { remaining?: number; bypass?: boolean };
           if (!quotaData.bypass && typeof quotaData.remaining === "number" && quotaData.remaining <= 0) {
             toast.error(t("bulk.outOfQuotaTitle"), {
-              description: t("bulk.outOfQuotaMessage"),
-              action: { label: t("bulk.outOfQuotaButton"), onClick: () => navigate("/plans") },
-              duration: 8000,
+              description: (
+                <div className="flex flex-col gap-3 mt-1">
+                  <span>{t("bulk.outOfQuotaMessage")}</span>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/plans")}
+                    className="self-start rounded-md bg-white/10 hover:bg-white/20 px-3 py-1.5 text-sm font-medium transition-colors"
+                  >
+                    {t("bulk.outOfQuotaButton")}
+                  </button>
+                </div>
+              ),
+              duration: Infinity,
             });
             setAiStep("upload");
             setAiLoading(false);
@@ -1163,12 +1183,19 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
           const status = String(j.status ?? "");
           if (status === "out_of_quota") {
             toast.error(t("bulk.outOfQuotaTitle"), {
-              description: t("bulk.outOfQuotaMessage"),
-              action: {
-                label: t("bulk.outOfQuotaButton"),
-                onClick: () => navigate("/plans"),
-              },
-              duration: 8000,
+              description: (
+                <div className="flex flex-col gap-3 mt-1">
+                  <span>{t("bulk.outOfQuotaMessage")}</span>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/plans")}
+                    className="self-start rounded-md bg-white/10 hover:bg-white/20 px-3 py-1.5 text-sm font-medium transition-colors"
+                  >
+                    {t("bulk.outOfQuotaButton")}
+                  </button>
+                </div>
+              ),
+              duration: Infinity,
             });
           } else {
             toast.error(t("bulk.errorProcessOneDoc"), {
