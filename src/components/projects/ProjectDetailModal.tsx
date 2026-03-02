@@ -263,11 +263,19 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         
         if (DEBUG) logger.debug("[Materialize] Optimizing locations:", rawLocations);
         const token = await getAccessToken();
+
+        // Stop if modal was closed while awaiting the access token
+        if (abortControllerRef.current?.signal.aborted) return null;
+
         const { locations: normalizedLocs, distanceKm } = await optimizeCallsheetLocationsAndDistance({
           profile,
           rawLocations,
           accessToken: token,
+          signal: abortControllerRef.current?.signal ?? undefined,
         });
+
+        // Stop if modal was closed while the directions/geocoding API was running
+        if (abortControllerRef.current?.signal.aborted) return null;
 
         const base = buildBaseRouteAddress(profile);
         const route = base ? [base, ...normalizedLocs, base] : normalizedLocs;

@@ -877,6 +877,19 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       queryClient.setQueryData<Trip[]>(queryKey, nextTrips);
       writeLocalFirst(localFirstKey, nextTrips);
 
+      // When all trips are deleted, clear the seed flag so next load
+      // re-seeds from Supabase (picks up new trips created by the worker).
+      if (nextTrips.length === 0 && user) {
+        try {
+          localStorage.removeItem(`fbp.localfirst:seeded:v1:${user.id}`);
+        } catch { /* ignore */ }
+      }
+
+      // Also delete from Supabase so the record doesn't resurface on re-seed.
+      if (supabase && user) {
+        cascadeDeleteTripById(supabase, id).catch(() => null); // best-effort, fire-and-forget
+      }
+
       const removedProjectId = String(removedTrip?.projectId ?? "").trim();
       if (removedProjectId) {
         const stillUsed = nextTrips.some((t) => String((t as any)?.projectId ?? "").trim() === removedProjectId);
@@ -907,7 +920,13 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
     const prevTrips = (queryClient.getQueryData<Trip[]>(queryKey) ?? []) as Trip[];
     const removedTrip = prevTrips.find((t) => t.id === id);
-    queryClient.setQueryData<Trip[]>(queryKey, prevTrips.filter((t) => t.id !== id));
+    const nextTrips = prevTrips.filter((t) => t.id !== id);
+    queryClient.setQueryData<Trip[]>(queryKey, nextTrips);
+
+    // Clear the offline cache immediately so stale trips don't reappear on refresh.
+    if (offlineCacheKey) {
+      try { localStorage.removeItem(offlineCacheKey); } catch { /* ignore */ }
+    }
 
     try {
       await cascadeDeleteTripById(supabase, id);
@@ -925,7 +944,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       }
       throw err;
     }
-  }, [isLocalFirst, localFirstKey, localProjectsKey, queryClient, queryKey, user]);
+  }, [isLocalFirst, localFirstKey, localProjectsKey, offlineCacheKey, queryClient, queryKey, user]);
 
   const value = useMemo<TripsContextValue>(() => ({ 
     trips, 

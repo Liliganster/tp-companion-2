@@ -143,16 +143,17 @@ const handleTriggerWorker = withApiObservability(async function handler(req: any
     const workerUrl = `${protocol}://${req.headers.host}/api/worker?${params.toString()}`;
     const cronSecret = process.env.CRON_SECRET;
 
-    log.info({ jobId: hasJobId ? normalizedJobId : null }, "[trigger-worker] Calling worker");
-    const workerRes = await fetch(workerUrl, { method: "POST", headers: { "Authorization": cronSecret ? `Bearer ${cronSecret}` : "", "Content-Type": "application/json" } });
-    if (!workerRes.ok) {
-      const errorText = await workerRes.text();
-      log.error({ status: workerRes.status, errorText }, "[trigger-worker] worker failed");
-      return sendJson(res, 500, { error: "worker_failed", message: errorText || "Worker execution failed", status: workerRes.status });
-    }
-    const result = await workerRes.json() as Record<string, any>;
-    log.info({ result }, "[trigger-worker] Worker completed");
-    return sendJson(res, 200, { ok: true, ...result });
+    log.info({ jobId: hasJobId ? normalizedJobId : null }, "[trigger-worker] Firing worker (fire-and-forget)");
+
+    // Fire-and-forget: do NOT await — Vercel Hobby has a 10s function limit
+    // and the worker (Gemini PDF processing) can take 15-30s.
+    // The frontend polls /api/callsheets/status for the result.
+    fetch(workerUrl, {
+      method: "POST",
+      headers: { Authorization: cronSecret ? `Bearer ${cronSecret}` : "", "Content-Type": "application/json" },
+    }).catch((err) => log.error({ err }, "[trigger-worker] worker fetch error (background)"));
+
+    return sendJson(res, 200, { ok: true, triggered: true, jobId: hasJobId ? normalizedJobId : null });
   } catch (e: any) {
     log.error({ err: e }, "[trigger-worker] error");
     return sendJson(res, 500, { error: "trigger_failed", message: e?.message ?? "Trigger failed" });
@@ -161,14 +162,17 @@ const handleTriggerWorker = withApiObservability(async function handler(req: any
 
 // ─── Main router ─────────────────────────────────────────────────────────────
 export default async function handler(req: any, res: any) {
-  const path = (req.url || "").split("?")[0].replace(/\/$/, "");
+  // req.url may be the original path or the rewritten path depending on Vercel's behavior.
+  // We check both the URL path and the Vercel-injected sub-path query param as a fallback.
+  const rawPath = (req.url || "").split("?")[0].replace(/\/$/, "");
+  const path = rawPath.includes("/api/callsheets") ? rawPath : `/api/callsheets/${rawPath.replace(/^\//, "")}`;
 
-  if (path === "/api/callsheets/create-upload")   return handleCreateUpload(req, res);
-  if (path === "/api/callsheets/queue")           return handleQueue(req, res);
-  if (path === "/api/callsheets/status")          return handleStatus(req, res);
-  if (path === "/api/callsheets/trigger-worker")  return handleTriggerWorker(req, res);
+  if (path === "/api/callsheets/create-upload" || path.endsWith("/create-upload"))   return handleCreateUpload(req, res);
+  if (path === "/api/callsheets/queue"          || path.endsWith("/queue"))           return handleQueue(req, res);
+  if (path === "/api/callsheets/status"         || path.endsWith("/status"))          return handleStatus(req, res);
+  if (path === "/api/callsheets/trigger-worker" || path.endsWith("/trigger-worker")) return handleTriggerWorker(req, res);
 
   res.statusCode = 404;
   res.setHeader("Content-Type", "application/json");
-  res.end(JSON.stringify({ error: "Not found" }));
+  res.end(JSON.stringify({ error: "Not found", path }));
 }

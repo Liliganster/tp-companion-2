@@ -101,11 +101,11 @@ function SortableStop({ stop, onRemove, onChange, onDraftChange, canRemove, disa
   const getIcon = () => {
     switch (stop.type) {
       case "origin":
-        return <Home className="w-4 h-4 shrink-0 text-muted-foreground" />;
+        return <Home className="w-4 h-4 shrink-0 text-blue-500" />;
       case "destination":
-        return <Home className="w-4 h-4 shrink-0 text-muted-foreground" />;
+        return <Home className="w-4 h-4 shrink-0 text-green-500" />;
       default:
-        return <MapPin className="w-4 h-4 shrink-0 text-muted-foreground" />;
+        return <MapPin className="w-4 h-4 shrink-0 text-red-500" />;
     }
   };
 

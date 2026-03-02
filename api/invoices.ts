@@ -71,16 +71,16 @@ const handleTriggerWorker = withApiObservability(async function handler(req: any
     const workerUrl = `${protocol}://${req.headers.host}/api/invoice-worker?${params.toString()}`;
     const cronSecret = process.env.CRON_SECRET;
 
-    log.info({ jobId: hasJobId ? normalizedJobId : null }, "[invoice trigger-worker] Calling worker");
-    const workerRes = await fetch(workerUrl, { method: "POST", headers: { Authorization: cronSecret ? `Bearer ${cronSecret}` : "", "Content-Type": "application/json" } });
-    if (!workerRes.ok) {
-      const errorText = await workerRes.text();
-      log.error({ status: workerRes.status, errorText }, "[invoice trigger-worker] worker failed");
-      return sendJson(res, 500, { error: "worker_failed", message: errorText || "Worker execution failed", status: workerRes.status });
-    }
-    const result = (await workerRes.json()) as Record<string, any>;
-    log.info({ result }, "[invoice trigger-worker] Worker completed");
-    return sendJson(res, 200, { ok: true, ...result });
+    log.info({ jobId: hasJobId ? normalizedJobId : null }, "[invoice trigger-worker] Firing worker (fire-and-forget)");
+
+    // Fire-and-forget: do NOT await — Vercel Hobby has a 10s function limit
+    // and the worker (Gemini PDF processing) can take 15-30s.
+    fetch(workerUrl, {
+      method: "POST",
+      headers: { Authorization: cronSecret ? `Bearer ${cronSecret}` : "", "Content-Type": "application/json" },
+    }).catch((err) => log.error({ err }, "[invoice trigger-worker] worker fetch error (background)"));
+
+    return sendJson(res, 200, { ok: true, triggered: true, jobId: hasJobId ? normalizedJobId : null });
   } catch (e: any) {
     log.error({ err: e }, "[invoice trigger-worker] error");
     return sendJson(res, 500, { error: "trigger_failed", message: e?.message ?? "Trigger failed" });
@@ -89,12 +89,13 @@ const handleTriggerWorker = withApiObservability(async function handler(req: any
 
 // ─── Main router ─────────────────────────────────────────────────────────────
 export default async function handler(req: any, res: any) {
-  const path = (req.url || "").split("?")[0].replace(/\/$/, "");
+  const rawPath = (req.url || "").split("?")[0].replace(/\/$/, "");
+  const path = rawPath.includes("/api/invoices") ? rawPath : `/api/invoices/${rawPath.replace(/^\//, "")}`;
 
-  if (path === "/api/invoices/queue")           return handleQueue(req, res);
-  if (path === "/api/invoices/trigger-worker")  return handleTriggerWorker(req, res);
+  if (path === "/api/invoices/queue"          || path.endsWith("/queue"))           return handleQueue(req, res);
+  if (path === "/api/invoices/trigger-worker" || path.endsWith("/trigger-worker")) return handleTriggerWorker(req, res);
 
   res.statusCode = 404;
   res.setHeader("Content-Type", "application/json");
-  res.end(JSON.stringify({ error: "Not found" }));
+  res.end(JSON.stringify({ error: "Not found", path }));
 }
