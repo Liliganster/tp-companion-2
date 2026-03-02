@@ -14,9 +14,11 @@ const DEFAULT_DATA_VERSION = "^21";
 type FuelType = "gasoline" | "diesel";
 type ActivitySelection = { activityId: string; region: string };
 
-const FUEL_CONFIG: Record<FuelType, { activityId: string; region: string | null; paramType: "volume" | "distance"; fallbackValue: number; unit: string }> = {
-  gasoline: { activityId: "fuel-type_motor_gasoline-fuel_use_na", region: "EU", paramType: "volume", fallbackValue: 2.31, unit: "kgCo2ePerLiter" },
-  diesel:   { activityId: "fuel-type_diesel-fuel_use_na",         region: "EU", paramType: "volume", fallbackValue: 2.68, unit: "kgCo2ePerLiter" },
+const FUEL_CONFIG: Record<FuelType, { activityId: string; lcaActivity: string; region: string | null; paramType: "volume" | "distance"; fallbackValue: number; unit: string }> = {
+  // UBA Austria 2022 — LCA activity "total" (WTW = fuel_combustion + upstream)
+  // Source: Climatiq Explorer, passenger_vehicle, distance unit type, 0.2472 kg CO₂e/km
+  gasoline: { activityId: "passenger_vehicle-vehicle_type_car-fuel_source_gasoline_diesel-engine_size_na-vehicle_age_na-vehicle_weight_na", lcaActivity: "total", region: "AT", paramType: "distance", fallbackValue: 0.2472, unit: "kgCo2ePerKm" },
+  diesel:   { activityId: "passenger_vehicle-vehicle_type_car-fuel_source_gasoline_diesel-engine_size_na-vehicle_age_na-vehicle_weight_na", lcaActivity: "total", region: "AT", paramType: "distance", fallbackValue: 0.2472, unit: "kgCo2ePerKm" },
 };
 
 function normalizeFuelType(input: unknown): FuelType | null {
@@ -115,9 +117,8 @@ async function handleClimatiqFuelFactor(req: any, res: any) {
     async function estimateOnce(activityId: string, region: string | null) {
       try {
         const parameters = config.paramType === "volume" ? { volume: 1, volume_unit: "l" } : { distance: 1, distance_unit: "km" };
-        const emissionFactor: any = { activity_id: activityId, data_version: "^0" };
+        const emissionFactor: any = { activity_id: activityId, data_version: "^0", lca_activity: config.lcaActivity };
         if (region) emissionFactor.region = region;
-        if (config.paramType === "volume") emissionFactor.unit_type = "volume";
         const upstream = await fetch(ESTIMATE_URL, { method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ emission_factor: emissionFactor, parameters }) });
         const { data, rawText } = await readJsonResponse(upstream);
         return { ok: upstream.ok, status: upstream.status, data, rawText, activityId, region };

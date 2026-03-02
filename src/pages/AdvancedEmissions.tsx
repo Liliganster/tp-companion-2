@@ -58,6 +58,7 @@ type EmissionsResult = {
   rank: number;
   name: string;
   co2Kg: number;
+  co2KgPerPassenger: number;
   distanceKm: number;
   trips: number;
   passengers: number;
@@ -362,6 +363,7 @@ export default function AdvancedEmissions() {
       rank: 0,
       name: a.name,
       co2Kg: clampRound(a.co2Kg, 1),
+      co2KgPerPassenger: clampRound(a.passengers > 0 ? a.co2Kg / a.passengers : a.co2Kg, 2),
       distanceKm: clampRound(a.distanceKm, 0),
       trips: a.trips,
       passengers: a.passengers,
@@ -550,6 +552,12 @@ export default function AdvancedEmissions() {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+        </div>
+
+        {/* Austria-only notice */}
+        <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400 animate-fade-in">
+          <Info className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>{t("advancedEmissions.austriaNotice")}</span>
         </div>
 
         <div>
@@ -836,6 +844,17 @@ export default function AdvancedEmissions() {
                               <div className="text-[8px] text-primary font-black mt-1 uppercase tracking-tighter">
                                 {t("advancedEmissions.co2TotalLabel")}
                               </div>
+                              {result.passengers > 1 && (
+                                <>
+                                  <div className="text-muted-foreground font-semibold text-xs tracking-tight mt-2">
+                                    {kgFormatter.format(result.co2KgPerPassenger)}{" "}
+                                    <span className="text-[10px] text-muted-foreground/60 font-normal">kg</span>
+                                  </div>
+                                  <div className="text-[8px] text-muted-foreground font-bold mt-0.5 uppercase tracking-tighter">
+                                    {t("advancedEmissions.co2PerPassengerLabel")}
+                                  </div>
+                                </>
+                              )}
                             </div>
                           </div>
 

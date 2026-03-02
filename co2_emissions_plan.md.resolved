@@ -1,0 +1,136 @@
+# Plan: CO₂ Emissions — Cálculo Industry-Standard
+
+## Estado actual
+
+### Lo que funciona bien
+| Elemento | Estado |
+|---|---|
+| Integración con **Climatiq** (kg CO₂e/litro para gasolina/diesel) | ✅ Activo, con cache 30d |
+| Integración con **Electricity Maps** (grid CO₂/kWh por país, zona AT) | ✅ Activo, caché 5min |
+| Cálculo por combustible: `L/100km × km × kg/L` | ✅ Correcto |
+| Cálculo EV: `kWh/100km × km × grid_kg/kWh` | ✅ Correcto |
+| Fallback de 0.18 kg/km sin datos | ✅ Razonable |
+
+### Problemas críticos (gaps vs. estándares de punta)
+
+#### 1. 🔴 Solo Tank-to-Wheel (TTW) — falta Well-to-Wheel (WTW)
+La industria (GHG Protocol, GLEC Framework, EU Taxonomy) exige **WTW**:
+- **TTW** = sólo la combustión (lo que mide el tubo de escape)
+- **WTW** = combustión + extracción + refinado + transporte del combustible
+
+| Combustible | TTW actual | WTW correcto | Diferencia |
+|---|---|---|---|
+| Gasolina | 2.31 kg/L | **2.78 kg/L** | +20% |
+| Diesel | 2.68 kg/L | **3.24 kg/L** | +21% |
+| EV (AT grid) | grid directo | grid + pérdidas de transmisión (+8%) | +8% |
+
+**Fuente:** IPCC AR6, JEC Well-to-Wheels Report (EU), Defra UK (usada por todos los calculadores enterprise).
+
+#### 2. 🔴 Factor de emisión de gasolina/diesel es una constante europea genérica
+Climatiq devuelve un factor EU-wide. Los estándares usan factores **por país** del año en curso:
+- España: gasolina → ~2.68 kg CO₂e/L WTW (Defra / MITECO IDAE 2024)
+- Austria: diesel → ~3.18 kg CO₂e/L WTW (Umweltbundesamt 2024)
+- Alemania: ~3.22 kg CO₂e/L WTW (UBA 2024)
+
+#### 3. 🟡 EV solo usa zona AT (Austria hardcoded)
+La intensidad de la red eléctrica debería ser **del país del usuario**, no siempre Austria.
+- El hook `useElectricityMapsCarbonIntensity("AT")` está fijo.
+- Solución: leer la zona desde `profile.country` → code de zona Electricity Maps.
+
+#### 4. 🟡 No incluye carga de ocupación / número de pasajeros en el CO₂ por persona
+La app almacena `passengers` pero el CO₂ que se muestra es **total del vehículo**, no **per cápita**.
+- ISO 14064, GLEC y GHG Protocol calculan tanto total como por pasajero-km.
+
+#### 5. 🟡 Sin factor de tipo de vehículo / EURO norm
+Un EURO 6 diésel emite ~15% menos PM y ~20% menos NOₓ que un EURO 5, e influye en el CO₂e real por lifecycle.
+- Estándar EU: para reporting oficial se pide la norma EURO del vehículo.
+
+#### 6. 🟡 Rounding excesivo (1 decimal en kg)
+`Math.round(co2Kg * 10) / 10` es bueno para UX pero los reportes profesionales guardan 4 decimales internamente y redondean solo en display.
+
+#### 7. 🟢 Viajes con `fuelLiters` reales ignorados
+La app ignora `fuelLiters` por viaje (por diseño actual). Para máxima precisión, si el usuario introduce litros reales, esos deberían usarse en vez del promedio L/100km.
+
+---
+
+## Plan de mejora (por fases)
+
+### Fase 1 — WTW factors (impacto máximo, cambio pequeño) 🔴
+Cambiar las constantes de TTW a WTW usando valores Defra/IPCC:
+
+```
+GASOLINE_KG_CO2E_PER_LITER_WTW = 2.78  (era 2.31)
+DIESEL_KG_CO2E_PER_LITER_WTW   = 3.24  (era 2.68)
+```
+
+Actualizar los `fallbackValue` en [external.ts](file:///c:/Users/lilia/Escritorio/trip-companion-main%202/trip-companion-main/api/external.ts) y las constantes en [emissions.ts](file:///c:/Users/lilia/Escritorio/trip-companion-main%202/trip-companion-main/src/lib/emissions.ts).
+
+> **Fuente:** [UK Defra GHG Conversion Factors 2024](https://www.gov.uk/government/publications/greenhouse-gas-reporting-conversion-factors-2024), Tabla "Fuels - UK".
+
+### Fase 2 — Grid zone por país del usuario 🟡
+Mapear `profile.country` → código de zona de Electricity Maps (AT, DE, ES, FR, IT, GB…).  
+El hook `useElectricityMapsCarbonIntensity` ya acepta la zona como parámetro, solo hay que pasarla dinámicamente.
+
+```ts
+// Actualmente:
+useElectricityMapsCarbonIntensity("AT")
+
+// Con el fix:
+const zone = countryToElectricityMapsZone(profile.country) ?? "AT";
+useElectricityMapsCarbonIntensity(zone)
+```
+
+### Fase 3 — CO₂ per cápita (por pasajero) 🟡
+Añadir al resultado de [calculateTripEmissions](file:///c:/Users/lilia/Escritorio/trip-companion-main%202/trip-companion-main/src/lib/emissions.ts#44-127):
+```ts
+co2KgPerPassenger = co2Kg / max(passengers, 1)
+```
+Mostrar ambos valores en la UI: total + por pasajero.
+
+### Fase 4 — WTW para EV (pérdidas de transmisión) 🟡
+Multiplicar el factor de red por `1.08` para incluir pérdidas de distribución de la red (~8% pérdidas europeas promedio, fuente ENTSO-E).
+
+### Fase 5 — Climatiq data version fix 🟡
+Climatiq usa `data_version: "^21"` pero la v21 es de 2021. Actualizar a `"^9"` (la nomenclatura actual) o mejor: usar el endpoint `search` de Climatiq para obtener el factor **del año en curso** del país del usuario.
+
+### Fase 6 — Usar fuelLiters reales si disponibles 🟢
+Si `input.fuelLiters` > 0, usarlo en vez de calcular `distanceKm × L/100km`.  
+Esto da el valor más preciso posible cuando el usuario llena el depósito manualmente.
+
+---
+
+## Comparativa: app actual vs. estándar GLEC
+
+| Escenario | App actual | Con mejoras |
+|---|---|---|
+| 100km gasolina, 7L/100km | 7 × 2.31 = **16.2 kg** | 7 × 2.78 = **19.5 kg** (+20%) |
+| 100km diesel, 6L/100km | 6 × 2.68 = **16.1 kg** | 6 × 3.24 = **19.4 kg** (+21%) |
+| 100km EV, 18kWh/100km, AT grid (120 g/kWh) | 18 × 0.12 = **2.2 kg** | 18 × 0.12 × 1.08 = **2.3 kg** (+8%) |
+| Fallback (sin datos) | 100 × 0.18 = **18 kg** | 100 × 0.21 = **21 kg** (+17%) |
+
+---
+
+## Estándares de referencia usados en la industria
+
+| Estándar | Usado por |
+|---|---|
+| **GHG Protocol (WBCSD/WRI)** | La mayoría de empresas Fortune 500, ESG reporting |
+| **GLEC Framework (Smart Freight Centre)** | Logística, transporte de carga |
+| **EN 16258 (CEN European Standard)** | Transporte de mercancías en Europa |
+| **UK Defra Conversion Factors** | Base de datos abiertos más usada globalmente |
+| **IPCC AR6** | Valores Well-to-Wheel de referencia científica |
+| **Ecoinvent** (de pago) | Huella de ciclo de vida completa |
+| **ADEME Base Carbone** (FR) | Francia y países francófonos |
+
+---
+
+## Resumen de prioridades
+
+| Prioridad | Cambio | Archivos afectados |
+|---|---|---|
+| 🔴 Alta | Factores TTW → WTW (gasolina/diesel) | [emissions.ts](file:///c:/Users/lilia/Escritorio/trip-companion-main%202/trip-companion-main/src/lib/emissions.ts), [external.ts](file:///c:/Users/lilia/Escritorio/trip-companion-main%202/trip-companion-main/api/external.ts) |
+| 🟡 Media | Zone EV dinámica por país | [use-emissions-input.ts](file:///c:/Users/lilia/Escritorio/trip-companion-main%202/trip-companion-main/src/hooks/use-emissions-input.ts), [use-electricity-maps.ts](file:///c:/Users/lilia/Escritorio/trip-companion-main%202/trip-companion-main/src/hooks/use-electricity-maps.ts) |
+| 🟡 Media | CO₂ per cápita | [emissions.ts](file:///c:/Users/lilia/Escritorio/trip-companion-main%202/trip-companion-main/src/lib/emissions.ts), UI display |
+| 🟡 Media | WTW para EV (×1.08) | [emissions.ts](file:///c:/Users/lilia/Escritorio/trip-companion-main%202/trip-companion-main/src/lib/emissions.ts) |
+| 🟢 Baja | Usar `fuelLiters` reales | [emissions.ts](file:///c:/Users/lilia/Escritorio/trip-companion-main%202/trip-companion-main/src/lib/emissions.ts) |
+| 🟢 Baja | Climatiq data version actualizada | [external.ts](file:///c:/Users/lilia/Escritorio/trip-companion-main%202/trip-companion-main/api/external.ts) |
