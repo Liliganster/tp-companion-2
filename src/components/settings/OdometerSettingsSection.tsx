@@ -105,7 +105,6 @@ function AddSnapshotForm({ onClose }: AddFormProps) {
         source: "dashboard",
         image_storage_path: null,
         extraction_status: "manual",
-        user_correction_note: null,
       });
 
       if (!snapshotId) {

@@ -12,7 +12,7 @@ export type OdometerSnapshot = {
   image_storage_path: string | null;
   extraction_status: "ai" | "manual" | "failed" | "user_edited" | null;
   /** Free-text justification written by the user when correcting an AI value. */
-  user_correction_note: string | null;
+  user_correction_note?: string | null;
   created_at: string;
 };
 
