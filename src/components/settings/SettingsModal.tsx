@@ -28,7 +28,9 @@ import {
   Upload,
   Info,
   ExternalLink,
+  Gauge,
   } from "lucide-react";
+import { OdometerSettingsSection } from "@/components/settings/OdometerSettingsSection";
 import { cn } from "@/lib/utils";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useI18n } from "@/hooks/use-i18n";
@@ -204,6 +206,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const navItems = [
     { id: "profile", label: t("settings.tabProfile"), icon: User },
     { id: "apis", label: t("settings.tabApis"), icon: Sparkles },
+    { id: "odometer", label: t("settings.tabOdometer"), icon: Gauge },
     { id: "personalization", label: t("settings.tabPersonalization"), icon: Palette },
     { id: "language", label: t("settings.tabLanguage"), icon: Languages },
     { id: "news", label: t("settings.tabNews"), icon: Newspaper },
@@ -1089,6 +1092,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                     </Button>
                   </div>
                 </div>
+              )}
+
+              {activeTab === "odometer" && (
+                <OdometerSettingsSection />
               )}
 
               {activeTab === "help" && (

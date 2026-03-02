@@ -4,6 +4,7 @@ import { UserProfileProvider } from "@/contexts/UserProfileContext";
 import { ProjectsProvider } from "@/contexts/ProjectsContext";
 import { TripsProvider } from "@/contexts/TripsContext";
 import { ReportsProvider } from "@/contexts/ReportsContext";
+import { OdometerProvider } from "@/contexts/OdometerContext";
 import { AppearanceProvider } from "@/contexts/AppearanceContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { PlanProvider } from "@/contexts/PlanContext";
@@ -192,6 +193,7 @@ const App = () => (
           <UserProfileProvider>
             <ProjectsProvider>
               <TripsProvider>
+                <OdometerProvider>
                 <ReportsProvider>
                   <TooltipProvider>
                     <Sonner />
@@ -200,6 +202,7 @@ const App = () => (
                     <AppContent />
                   </TooltipProvider>
                 </ReportsProvider>
+                </OdometerProvider>
               </TripsProvider>
             </ProjectsProvider>
           </UserProfileProvider>

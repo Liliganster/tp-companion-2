@@ -15,6 +15,7 @@ import { useReports, type SavedReport } from "@/contexts/ReportsContext";
 import { usePlan } from "@/contexts/PlanContext";
 import { useI18n } from "@/hooks/use-i18n";
 import { buildProjectZip } from "@/hooks/use-project-export";
+import { useOdometer } from "@/contexts/OdometerContext";
 
 interface ReportTrip {
   date: string;
@@ -99,6 +100,7 @@ export default function ReportView() {
   const { projects } = useProjects();
   const { reports, addReport } = useReports();
   const { planTier, limits } = usePlan();
+  const { computeRatio, getImageUrl } = useOdometer();
   const reportId = searchParams.get("reportId");
   const savedReport = reportId ? reports.find((r) => r.id === reportId) : undefined;
 
@@ -469,6 +471,42 @@ export default function ReportView() {
         doc.setLineWidth(0.5);
         doc.line(margin, headerBottomY, pageWidth - margin, headerBottomY);
 
+        // Odometer summary card (Pro only)
+        const reportYear = yearValue ?? (effectiveStartDate ? new Date(effectiveStartDate + "T00:00:00").getFullYear() : new Date().getFullYear());
+        const odometerRatio = planTier === "pro" ? computeRatio(reportYear) : null;
+        let tableStartY = headerBottomY + 18;
+        if (odometerRatio) {
+          const cardH = 52;
+          const cardY = headerBottomY + 6;
+          doc.setFillColor(245, 245, 245);
+          doc.roundedRect(margin, cardY, availableWidth, cardH, 2, 2, "F");
+          doc.setDrawColor(200, 200, 200);
+          doc.setLineWidth(0.3);
+          doc.roundedRect(margin, cardY, availableWidth, cardH, 2, 2, "S");
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(7.5);
+          doc.setTextColor(60, 60, 60);
+          doc.text(t("odometer.calcTitle"), margin + 6, cardY + 13);
+          const oCol = availableWidth / 4;
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(7);
+          doc.text(`${t("odometer.totalKm")}: ${Number(odometerRatio.totalKm).toFixed(0)} km`, margin + 6, cardY + 27);
+          doc.text(`${t("odometer.workKm")}: ${Number(odometerRatio.workKm).toFixed(0)} km`, margin + oCol + 6, cardY + 27);
+          doc.text(`${t("odometer.privateKm")}: ${Number(odometerRatio.privateKm).toFixed(0)} km`, margin + oCol * 2 + 6, cardY + 27);
+          doc.setFont("helvetica", "bold");
+          doc.text(`${t("odometer.workPct")}: ${Number(odometerRatio.pct).toFixed(1)} %`, margin + oCol * 3 + 6, cardY + 27);
+          doc.setFont("helvetica", "italic");
+          doc.setFontSize(6.5);
+          doc.setTextColor(120, 120, 120);
+          doc.text(
+            `${odometerRatio.startSnapshot.snapshot_date} → ${odometerRatio.endSnapshot.snapshot_date}  |  ${Number(odometerRatio.startSnapshot.reading_km).toFixed(0)} → ${Number(odometerRatio.endSnapshot.reading_km).toFixed(0)} km`,
+            margin + 6, cardY + 40
+          );
+          doc.setDrawColor(0, 0, 0);
+          doc.setTextColor(0, 0, 0);
+          tableStartY = cardY + cardH + 10;
+        }
+
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
 
@@ -531,7 +569,7 @@ export default function ReportView() {
               { content: `${t("reportView.totalShort")}: ${totalReimbursement.toFixed(2)} €`, styles: { halign: "right", fontStyle: "bold" } },
             ],
           ],
-          startY: headerBottomY + 18,
+          startY: tableStartY,
           theme: "grid",
           styles: { fontSize: 7, cellPadding: 2.5, textColor: 0, lineColor: [165, 165, 165], lineWidth: 0.35 },
           headStyles: { fillColor: [255, 255, 255], textColor: 0, fontStyle: "bold", fontSize: 7.5, lineColor: 0, lineWidth: 0.6 },
@@ -638,6 +676,43 @@ export default function ReportView() {
         doc.setDrawColor(0, 0, 0);
         doc.setLineWidth(0.5);
         doc.line(margin, headerBottomY, pageWidth - margin, headerBottomY);
+
+        // Odometer summary card (Pro only)
+        const reportYear = yearValue ?? (effectiveStartDate ? new Date(effectiveStartDate + "T00:00:00").getFullYear() : new Date().getFullYear());
+        const odometerRatio = planTier === "pro" ? computeRatio(reportYear) : null;
+        let tableStartY = headerBottomY + 18;
+        if (odometerRatio) {
+          const cardH = 52;
+          const cardY = headerBottomY + 6;
+          doc.setFillColor(245, 245, 245);
+          doc.roundedRect(margin, cardY, availableWidth, cardH, 2, 2, "F");
+          doc.setDrawColor(200, 200, 200);
+          doc.setLineWidth(0.3);
+          doc.roundedRect(margin, cardY, availableWidth, cardH, 2, 2, "S");
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(7.5);
+          doc.setTextColor(60, 60, 60);
+          doc.text(t("odometer.calcTitle"), margin + 6, cardY + 13);
+          const oCol = availableWidth / 4;
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(7);
+          doc.text(`${t("odometer.totalKm")}: ${Number(odometerRatio.totalKm).toFixed(0)} km`, margin + 6, cardY + 27);
+          doc.text(`${t("odometer.workKm")}: ${Number(odometerRatio.workKm).toFixed(0)} km`, margin + oCol + 6, cardY + 27);
+          doc.text(`${t("odometer.privateKm")}: ${Number(odometerRatio.privateKm).toFixed(0)} km`, margin + oCol * 2 + 6, cardY + 27);
+          doc.setFont("helvetica", "bold");
+          doc.text(`${t("odometer.workPct")}: ${Number(odometerRatio.pct).toFixed(1)} %`, margin + oCol * 3 + 6, cardY + 27);
+          doc.setFont("helvetica", "italic");
+          doc.setFontSize(6.5);
+          doc.setTextColor(120, 120, 120);
+          doc.text(
+            `${odometerRatio.startSnapshot.snapshot_date} → ${odometerRatio.endSnapshot.snapshot_date}  |  ${Number(odometerRatio.startSnapshot.reading_km).toFixed(0)} → ${Number(odometerRatio.endSnapshot.reading_km).toFixed(0)} km`,
+            margin + 6, cardY + 40
+          );
+          doc.setDrawColor(0, 0, 0);
+          doc.setTextColor(0, 0, 0);
+          tableStartY = cardY + cardH + 10;
+        }
+
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
 
@@ -688,7 +763,7 @@ export default function ReportView() {
             { content: `${t("reportView.totalShort")}: ${totalDistance.toFixed(1)} km`, styles: { halign: "right", fontStyle: "bold" } },
             { content: `${t("reportView.totalShort")}: ${totalReimbursement.toFixed(2)} €`, styles: { halign: "right", fontStyle: "bold" } },
           ]],
-          startY: headerBottomY + 18,
+          startY: tableStartY,
           theme: "grid",
           styles: { fontSize: 7, cellPadding: 2.5, textColor: 0, lineColor: [165, 165, 165], lineWidth: 0.35 },
           headStyles: { fillColor: [255, 255, 255], textColor: 0, fontStyle: "bold", fontSize: 7.5, lineColor: 0, lineWidth: 0.6 },
@@ -715,8 +790,41 @@ export default function ReportView() {
           trips: filteredTrips,
         });
 
-        // 3. Trigger download
-        const url = URL.createObjectURL(zipBlob);
+        // 3. Odometer photos (Pro only, non-fatal)
+        let finalZipBlob = zipBlob;
+        if (planTier === "pro" && odometerRatio) {
+          try {
+            const JSZipModule = await import("jszip");
+            const JSZipCls = JSZipModule.default;
+            const zip = await JSZipCls.loadAsync(zipBlob);
+            const fetchOdoImg = async (path: string) => {
+              const signedUrl = await getImageUrl(path);
+              if (!signedUrl) return null;
+              const res = await fetch(signedUrl);
+              return res.ok ? res.arrayBuffer() : null;
+            };
+            if (odometerRatio.startSnapshot.image_storage_path) {
+              const buf = await fetchOdoImg(odometerRatio.startSnapshot.image_storage_path);
+              if (buf) {
+                const ext = odometerRatio.startSnapshot.image_storage_path.split(".").pop() ?? "jpg";
+                zip.file(`odometro/foto_inicio_${odometerRatio.startSnapshot.snapshot_date}.${ext}`, buf);
+              }
+            }
+            if (odometerRatio.endSnapshot.image_storage_path && odometerRatio.endSnapshot.id !== odometerRatio.startSnapshot.id) {
+              const buf = await fetchOdoImg(odometerRatio.endSnapshot.image_storage_path);
+              if (buf) {
+                const ext = odometerRatio.endSnapshot.image_storage_path.split(".").pop() ?? "jpg";
+                zip.file(`odometro/foto_fin_${odometerRatio.endSnapshot.snapshot_date}.${ext}`, buf);
+              }
+            }
+            finalZipBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
+          } catch {
+            // Non-fatal: proceed without odometer photos
+          }
+        }
+
+        // 4. Trigger download
+        const url = URL.createObjectURL(finalZipBlob);
         const a = document.createElement("a");
         a.href = url;
         a.download = `${fileBase}_con_documentacion.zip`;

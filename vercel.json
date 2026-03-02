@@ -20,6 +20,7 @@
     { "source": "/api/callsheets/(.*)", "destination": "/api/callsheets" },
     { "source": "/api/invoices/(.*)", "destination": "/api/invoices" },
     { "source": "/api/expenses/(.*)", "destination": "/api/expenses" },
+    { "source": "/api/odometer/(.*)", "destination": "/api/odometer" },
     { "source": "/api/climatiq/(.*)", "destination": "/api/external" },
     { "source": "/api/electricity-maps/(.*)", "destination": "/api/external" },
     {
