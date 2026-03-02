@@ -2,7 +2,6 @@ import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, 
 import { supabase } from "@/lib/supabaseClient";
 import { formatSupabaseError } from "@/lib/supabaseErrors";
 import { useAuth } from "./AuthContext";
-import { usePlan } from "./PlanContext";
 import { toast } from "sonner";
 import { cascadeDeleteProjectById, cascadeDeleteTripById } from "@/lib/cascadeDelete";
 import { calculateTripEmissions } from "@/lib/emissions";
@@ -13,7 +12,6 @@ import { useClimatiqFuelFactor } from "@/hooks/use-climatiq";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { TripInputSchema } from "@/lib/schemas";
 import { isOffline, readOfflineCache, writeOfflineCache } from "@/lib/offlineCache";
-import { getLocalFirstKey, readLocalFirst, writeLocalFirst } from "@/lib/localFirstStore";
 import { logger } from "@/lib/logger";
 
 const DEBUG = import.meta.env.DEV;
@@ -68,14 +66,10 @@ const TripsContext = createContext<TripsContextValue | null>(null);
 
 export function TripsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const { planTier } = usePlan();
   const { profile } = useUserProfile();
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ["trips", user?.id ?? "anon"] as const, [user?.id]);
   const offlineCacheKey = useMemo(() => (user?.id ? `cache:trips:v1:${user.id}` : null), [user?.id]);
-  const localFirstKey = useMemo(() => getLocalFirstKey("trips", user?.id), [user?.id]);
-  const localProjectsKey = useMemo(() => getLocalFirstKey("projects", user?.id), [user?.id]);
-  const isLocalFirst = planTier === "basic";
 
   /* 
    * Standardized emissions input hook.
@@ -97,111 +91,8 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
   const tripsQuery = useQuery({
     queryKey,
-    enabled: isLocalFirst || Boolean(user && supabase),
+    enabled: Boolean(user && supabase),
     queryFn: async (): Promise<Trip[]> => {
-      if (isLocalFirst) {
-        type LocalProjectRecord = { id: string; name: string };
-        const storedTrips = readLocalFirst<Trip[]>(localFirstKey) ?? [];
-        const storedProjects = readLocalFirst<LocalProjectRecord[]>(localProjectsKey) ?? [];
-
-        // Seed local-first storage from Supabase once (helps existing users migrate to local-first).
-        // Without this, Basic users will see an empty app after clearing site data.
-        if (
-          storedTrips.length === 0 &&
-          user &&
-          supabase &&
-          !isOffline()
-        ) {
-          const seedFlagKey = `fbp.localfirst:seeded:v1:${user.id}`;
-          const alreadySeeded = (() => {
-            try {
-              return localStorage.getItem(seedFlagKey) === "1";
-            } catch {
-              return false;
-            }
-          })();
-
-          if (!alreadySeeded) {
-            try {
-              const [projectsRes, tripsRes] = await Promise.all([
-                supabase.from("projects").select("id,name").order("created_at", { ascending: false }),
-                supabase.from("trips").select("*, projects(name)").order("trip_date", { ascending: false }),
-              ]);
-
-              if (projectsRes.error) throw projectsRes.error;
-              if (tripsRes.error) throw tripsRes.error;
-
-              const remoteProjects = projectsRes.data;
-              const remoteTrips = tripsRes.data;
-
-              const seededProjects: LocalProjectRecord[] = (remoteProjects ?? []).map((p: any) => ({
-                id: String(p.id),
-                name: String(p.name ?? "").trim(),
-              }));
-
-              const seededTrips: Trip[] = (remoteTrips ?? []).map((t: any) => ({
-                id: String(t.id),
-                date: t.trip_date || t.date_value || "",
-                route: t.route || [],
-                project: t.projects?.name || (() => {
-                  const docs = t.documents || [];
-                  const meta = docs.find((d: any) => d.kind === "client_meta");
-                  return meta?.name || "Unknown";
-                })(),
-                projectId: t.project_id,
-                clientName: (() => {
-                  const docs = t.documents || [];
-                  const meta = docs.find((d: any) => d.kind === "client_meta");
-                  return meta?.name || undefined;
-                })(),
-                callsheet_job_id: t.callsheet_job_id,
-                purpose: t.purpose || "",
-                passengers: t.passengers || 0,
-                invoice: t.invoice_number,
-                distance: t.distance_km || 0,
-                co2: 0,
-                ratePerKmOverride: t.rate_per_km_override,
-                specialOrigin: t.special_origin,
-                tollAmount: t.toll_amount ?? null,
-                parkingAmount: t.parking_amount ?? null,
-                otherExpenses: t.other_expenses ?? null,
-                fuelAmount: t.fuel_amount ?? null,
-                fuelLiters: Number.isFinite(Number(t.fuel_liters)) ? Number(t.fuel_liters) : null,
-                evKwhUsed: Number.isFinite(Number(t.ev_kwh_used)) ? Number(t.ev_kwh_used) : null,
-                documents: (t.documents || []).filter((d: any) => d.kind !== "client_meta"),
-              }));
-
-              if (seededProjects.length > 0) writeLocalFirst(localProjectsKey, seededProjects);
-              if (seededTrips.length > 0) writeLocalFirst(localFirstKey, seededTrips);
-
-              // Mark as seeded only after successful reads (even if there was nothing to import).
-              try {
-                localStorage.setItem(seedFlagKey, "1");
-              } catch {
-                // ignore
-              }
-
-              const nameById = new Map(seededProjects.map((p) => [String(p.id).trim(), String(p.name ?? "").trim()]));
-              return seededTrips.map((t) => {
-                const pid = String(t.projectId ?? "").trim();
-                const name = pid ? nameById.get(pid) : null;
-                return name ? { ...t, project: name } : t;
-              });
-            } catch (e) {
-              logger.warn("[TripsContext] Local-first seed failed", e);
-            }
-          }
-        }
-
-        const nameById = new Map(storedProjects.map((p) => [String(p.id).trim(), String(p.name ?? "").trim()]));
-
-        return storedTrips.map((t) => {
-          const pid = String(t.projectId ?? "").trim();
-          const name = pid ? nameById.get(pid) : null;
-          return name ? { ...t, project: name } : t;
-        });
-      }
-
       if (!supabase || !user) {
         if (offlineCacheKey) return readOfflineCache<Trip[]>(offlineCacheKey, 30 * 24 * 60 * 60 * 1000) ?? [];
         return [];
@@ -283,7 +174,6 @@ export function TripsProvider({ children }: { children: ReactNode }) {
   // Best-effort: keep DB values in sync with API-calculated emissions
   const lastEmissionsSyncKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    if (isLocalFirst) return;
     if (!user || !supabase) return;
     const key = JSON.stringify(emissionsInput);
     if (lastEmissionsSyncKeyRef.current === key) return;
@@ -320,7 +210,6 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
   // Keep fields in sync when updates trips in DB.
   useEffect(() => {
-    if (isLocalFirst) return;
     if (!user || !supabase) return;
 
     const channel = supabase
@@ -365,48 +254,6 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
   const addTrip = useCallback(async (trip: Trip): Promise<boolean> => {
     if (DEBUG) logger.debug("[TripsContext] addTrip called with:", trip);
-
-    if (isLocalFirst) {
-      const parsedInput = TripInputSchema.safeParse({
-        id: trip.id,
-        date: trip.date,
-        distance: Number(trip.distance),
-        passengers: Number(trip.passengers),
-        purpose: trip.purpose,
-        projectId: trip.projectId ?? null,
-      });
-
-      if (!parsedInput.success) {
-        const issues = parsedInput.error.issues.map((i) => i.message).join("; ");
-        toast.error(`Datos del viaje inválidos. ${issues}`);
-        return false;
-      }
-
-      const normalizedTrip: Trip = {
-        ...trip,
-        co2: calculateTripEmissions({
-          distanceKm: trip.distance,
-          ...emissionsInput,
-        }).co2Kg,
-      };
-
-      const prevTrips = (queryClient.getQueryData<Trip[]>(queryKey) ?? []) as Trip[];
-      const existingById = prevTrips.find((t) => String(t.id ?? "").trim() === String(normalizedTrip.id ?? "").trim());
-      if (existingById) return true;
-      const callsheetJobId = String(normalizedTrip.callsheet_job_id ?? "").trim();
-      if (callsheetJobId) {
-        const cached = prevTrips.find((t) => String(t.callsheet_job_id ?? "").trim() === callsheetJobId);
-        if (cached) return true;
-      }
-
-      const nextTrips = [normalizedTrip, ...prevTrips];
-      queryClient.setQueryData<Trip[]>(queryKey, nextTrips);
-      writeLocalFirst(localFirstKey, nextTrips);
-
-      queryClient.invalidateQueries({ queryKey: ["projects", user?.id ?? "anon"] }).catch(() => null);
-      queryClient.invalidateQueries({ queryKey: ["reports", user?.id ?? "anon"] }).catch(() => null);
-      return true;
-    }
 
     if (!supabase) {
       logger.error("[TripsContext] Supabase client is missing");
@@ -531,82 +378,9 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         queryClient.invalidateQueries({ queryKey }).catch(() => null);
         return true;
     }
-  }, [emissionsInput, isLocalFirst, localFirstKey, localProjectsKey, queryClient, queryKey, user]);
+  }, [emissionsInput, queryClient, queryKey, user]);
 
   const updateTrip = useCallback(async (id: string, patch: Partial<Trip>): Promise<boolean> => {
-    if (isLocalFirst) {
-      const prevTrips = (queryClient.getQueryData<Trip[]>(queryKey) ?? []) as Trip[];
-      const prevTrip = prevTrips.find((t) => t.id === id) ?? null;
-      const previousProjectId = typeof prevTrip?.projectId === "string" ? prevTrip.projectId.trim() : "";
-
-      const safePatch = Object.fromEntries(
-        Object.entries(patch as Record<string, unknown>).filter(([, value]) => value !== undefined),
-      ) as Partial<Trip>;
-
-      const nextPatch: Partial<Trip> = { ...safePatch };
-      if (safePatch.distance !== undefined) {
-        const distanceKm = Number(safePatch.distance);
-        nextPatch.co2 = calculateTripEmissions({ distanceKm, ...emissionsInput }).co2Kg;
-      }
-
-      if (
-        nextPatch.date !== undefined ||
-        nextPatch.distance !== undefined ||
-        nextPatch.passengers !== undefined ||
-        nextPatch.projectId !== undefined ||
-        nextPatch.fuelLiters !== undefined ||
-        nextPatch.evKwhUsed !== undefined
-      ) {
-        const candidate = {
-          id,
-          date: nextPatch.date ?? "1970-01-01",
-          distance: nextPatch.distance !== undefined ? Number(nextPatch.distance) : 1,
-          passengers: nextPatch.passengers !== undefined ? Number(nextPatch.passengers) : 0,
-          fuelLiters: nextPatch.fuelLiters == null ? undefined : Number(nextPatch.fuelLiters),
-          evKwhUsed: nextPatch.evKwhUsed == null ? undefined : Number(nextPatch.evKwhUsed),
-          purpose: nextPatch.purpose,
-          projectId: nextPatch.projectId ?? null,
-        };
-        const parsed = TripInputSchema.safeParse(candidate);
-        if (!parsed.success) {
-          const issues = parsed.error.issues.map((i) => i.message).join("; ");
-          toast.error(`Datos del viaje inválidos. ${issues}`);
-          return false;
-        }
-      }
-
-      const nextTrips = prevTrips.map((t) => (t.id === id ? { ...t, ...nextPatch } : t));
-      queryClient.setQueryData<Trip[]>(queryKey, nextTrips);
-      writeLocalFirst(localFirstKey, nextTrips);
-
-      // If the trip was moved away from a project and that project now has 0 trips, delete it (local-first behavior).
-      const nextProjectId = nextPatch.projectId;
-      const nextProjectIdStr = typeof nextProjectId === "string" ? nextProjectId.trim() : "";
-      if (previousProjectId && previousProjectId !== nextProjectIdStr) {
-        const stillUsed = nextTrips.some((t) => String((t as any)?.projectId ?? "").trim() === previousProjectId);
-        if (!stillUsed) {
-          type LocalProjectRecord = {
-            id: string;
-            name: string;
-            producer?: string;
-            description?: string;
-            ratePerKm: number;
-            starred: boolean;
-            archived?: boolean;
-            createdAt: string;
-          };
-
-          const base = readLocalFirst<LocalProjectRecord[]>(localProjectsKey) ?? [];
-          const next = base.filter((p) => String(p?.id ?? "").trim() !== previousProjectId);
-          writeLocalFirst(localProjectsKey, next);
-        }
-      }
-
-      queryClient.invalidateQueries({ queryKey: ["projects", user?.id ?? "anon"] }).catch(() => null);
-      queryClient.invalidateQueries({ queryKey: ["reports", user?.id ?? "anon"] }).catch(() => null);
-      return true;
-    }
-
     if (!supabase || !user) return false;
 
     const prevTrips = (queryClient.getQueryData<Trip[]>(queryKey) ?? []) as Trip[];
@@ -867,55 +641,9 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       queryClient.invalidateQueries({ queryKey: ["projects", user.id] }).catch(() => null);
     }
     return true;
-  }, [emissionsInput, isLocalFirst, localFirstKey, queryClient, queryKey, user]);
+  }, [emissionsInput, queryClient, queryKey, user]);
 
   const deleteTrip = useCallback(async (id: string) => {
-    if (isLocalFirst) {
-      const prevTrips = (queryClient.getQueryData<Trip[]>(queryKey) ?? []) as Trip[];
-      const removedTrip = prevTrips.find((t) => t.id === id) ?? null;
-      const nextTrips = prevTrips.filter((t) => t.id !== id);
-      queryClient.setQueryData<Trip[]>(queryKey, nextTrips);
-      writeLocalFirst(localFirstKey, nextTrips);
-
-      // When all trips are deleted, clear the seed flag so next load
-      // re-seeds from Supabase (picks up new trips created by the worker).
-      if (nextTrips.length === 0 && user) {
-        try {
-          localStorage.removeItem(`fbp.localfirst:seeded:v1:${user.id}`);
-        } catch { /* ignore */ }
-      }
-
-      // Also delete from Supabase so the record doesn't resurface on re-seed.
-      if (supabase && user) {
-        cascadeDeleteTripById(supabase, id).catch(() => null); // best-effort, fire-and-forget
-      }
-
-      const removedProjectId = String(removedTrip?.projectId ?? "").trim();
-      if (removedProjectId) {
-        const stillUsed = nextTrips.some((t) => String((t as any)?.projectId ?? "").trim() === removedProjectId);
-        if (!stillUsed) {
-          type LocalProjectRecord = {
-            id: string;
-            name: string;
-            producer?: string;
-            description?: string;
-            ratePerKm: number;
-            starred: boolean;
-            archived?: boolean;
-            createdAt: string;
-          };
-
-          const base = readLocalFirst<LocalProjectRecord[]>(localProjectsKey) ?? [];
-          const next = base.filter((p) => String(p?.id ?? "").trim() !== removedProjectId);
-          writeLocalFirst(localProjectsKey, next);
-        }
-      }
-
-      queryClient.invalidateQueries({ queryKey: ["projects", user?.id ?? "anon"] }).catch(() => null);
-      queryClient.invalidateQueries({ queryKey: ["reports", user?.id ?? "anon"] }).catch(() => null);
-      return;
-    }
-
     if (!supabase || !user) return;
 
     const prevTrips = (queryClient.getQueryData<Trip[]>(queryKey) ?? []) as Trip[];
@@ -944,7 +672,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       }
       throw err;
     }
-  }, [isLocalFirst, localFirstKey, localProjectsKey, offlineCacheKey, queryClient, queryKey, user]);
+  }, [offlineCacheKey, queryClient, queryKey, user]);
 
   const value = useMemo<TripsContextValue>(() => ({ 
     trips, 

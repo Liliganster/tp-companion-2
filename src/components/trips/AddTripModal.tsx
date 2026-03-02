@@ -13,7 +13,6 @@ import { Trip, useTrips } from "@/contexts/TripsContext";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
 import { usePlan } from "@/contexts/PlanContext";
-import { getLocalFirstKey, readLocalFirst, writeLocalFirst } from "@/lib/localFirstStore";
 import { logger } from "@/lib/logger";
 import {
   DndContext,
@@ -186,9 +185,7 @@ interface AddTripModalProps {
 export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previousDestination, onSave }: AddTripModalProps) {
   const { profile } = useUserProfile();
   const { user, getAccessToken } = useAuth();
-  const { planTier, limits } = usePlan();
-  const isLocalFirst = planTier === "basic";
-  const routeTemplatesKey = useMemo(() => getLocalFirstKey("route_templates", user?.id), [user?.id]);
+  const { limits } = usePlan();
   const { projects, addProject } = useProjects();
   const { trips } = useTrips();
   const { t, tf, locale } = useI18n();
@@ -1251,41 +1248,6 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                         // Calculate estimated time roughly (e.g. 60km/h avg speed) if not available, or just leave 0
                         // Since we don't have duration here easily without calling API, we default to 0.
 
-                        if (isLocalFirst) {
-                          type LocalRouteTemplate = {
-                            id: string;
-                            name: string;
-                            category: string;
-                            startLocation: string;
-                            waypoints: string[];
-                            endLocation: string;
-                            distance: number;
-                            estimatedTime: number;
-                            description: string;
-                            uses: number;
-                          };
-
-                          const stored = readLocalFirst<LocalRouteTemplate[]>(routeTemplatesKey) ?? [];
-                          if (stored.length >= limits.maxRouteTemplates) {
-                            toast.error(t("limits.maxTemplatesReached"));
-                            return;
-                          }
-
-                          const next: LocalRouteTemplate = {
-                            id: crypto.randomUUID(),
-                            name: templateName.trim(),
-                            category: "business",
-                            startLocation: origin,
-                            endLocation: destination,
-                            waypoints: waypoints,
-                            distance: distanceVal,
-                            estimatedTime: 0,
-                            description: (project || purpose || "").trim(),
-                            uses: 0,
-                          };
-
-                          writeLocalFirst(routeTemplatesKey, [next, ...stored]);
-                        } else {
                           if (!supabase || !user) throw new Error("No autenticado");
 
                           const { error } = await supabase.from("route_templates").insert({
@@ -1302,7 +1264,6 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                           });
 
                           if (error) throw error;
-                        }
 
                         toast.success(t("advancedRoutes.toastCreated") || "Plantilla guardada");
                         setSaveTemplateOpen(false);
