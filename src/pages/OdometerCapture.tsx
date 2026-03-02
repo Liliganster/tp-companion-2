@@ -26,6 +26,7 @@ export default function OdometerCapture() {
   const token = searchParams.get("token") ?? "";
 
   const [state, setState] = useState<CaptureState>("loading");
+  const [errorMessage, setErrorMessage] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [signedUploadUrl, setSignedUploadUrl] = useState("");
@@ -56,13 +57,17 @@ export default function OdometerCapture() {
         }
         if (!ok) {
           setState("error");
+          setErrorMessage(data?.error || `Error ${status}`);
           return;
         }
         setSignedUploadUrl(data.signedUploadUrl);
         setUploadPath(data.uploadPath);
         setState("ready");
       })
-      .catch(() => setState("error"));
+      .catch((e) => {
+        setState("error");
+        setErrorMessage(e.message);
+      });
   }, [token]);
 
   const handleFile = (f: File) => {
@@ -107,8 +112,9 @@ export default function OdometerCapture() {
       const result = await finishRes.json().catch(() => ({}));
       if ((result as any).reading_km) setExtractedKm((result as any).reading_km);
       setState("success");
-    } catch {
+    } catch (e: any) {
       setState("error");
+      setErrorMessage(e.message);
     }
   };
 
@@ -161,6 +167,11 @@ export default function OdometerCapture() {
         <p className="text-center text-sm text-slate-300 max-w-xs">
           {t("odometer.captureError")}
         </p>
+        {errorMessage && (
+          <p className="text-center text-xs text-red-400 bg-red-400/10 p-2 rounded max-w-xs">
+            {errorMessage}
+          </p>
+        )}
         <Button variant="outline" onClick={() => { setFile(null); setPreview(null); setState("ready"); }}>
           Reintentar
         </Button>

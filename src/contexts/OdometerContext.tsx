@@ -86,7 +86,7 @@ export function OdometerProvider({ children }: { children: ReactNode }) {
       .insert({ ...data, user_id: user.id })
       .select()
       .single();
-    if (error || !inserted) return null;
+    if (error || !inserted) { console.error('DB Insert error:', error); return null; }
     const newSnap = inserted as OdometerSnapshot;
     setSnapshots((prev) =>
       [...prev, newSnap].sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))

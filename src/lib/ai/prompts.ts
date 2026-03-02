@@ -210,10 +210,10 @@ Si después de los 5 pasos NO has encontrado nada claro:
    Muchas callsheets incluyen al final un bloque con el plan del día siguiente. **IGNORA POR COMPLETO todo lo que esté bajo esas secciones**.
 
    ❌ **Secciones de día siguiente/futuro — ignorar todo su contenido**:
-   - `NEXT DAY` / `NEXT SHOOTING DAY` / `TOMORROW`
-   - `NÄCHSTER DREHTAG` / `MORGEN` / `FOLGETAG`
-   - `DÍA SIGUIENTE` / `PRÓXIMO DÍA DE RODAJE` / `MAÑANA`
-   - `ADVANCE SCHEDULE` / `PRODUCTION PLAN` / `UPCOMING`
+   - 'NEXT DAY' / 'NEXT SHOOTING DAY' / 'TOMORROW'
+   - 'NÄCHSTER DREHTAG' / 'MORGEN' / 'FOLGETAG'
+   - 'DÍA SIGUIENTE' / 'PRÓXIMO DÍA DE RODAJE' / 'MAÑANA'
+   - 'ADVANCE SCHEDULE' / 'PRODUCTION PLAN' / 'UPCOMING'
    - Cualquier bloque que muestre una fecha **distinta** a la fecha principal del documento
 
    ✅ **Cómo identificar el día principal**:
@@ -288,40 +288,40 @@ Si el call sheet tiene:
 ### ⚠️ FORMATOS NO ESTÁNDAR — REGLAS OBLIGATORIAS
 
 **1. Expande SIEMPRE las abreviaturas de vía** (muy común en callsheets españoles):
-- `C/` o `C.` → `Calle`  →  "C/ Gran Vía, 50" → "Calle Gran Vía 50, Madrid"
-- `Pza.` o `Pl.` o `Pz.` → `Plaza`  →  "Pza. España 1" → "Plaza España 1"
-- `Avda.` o `Av.` o `Avd.` → `Avenida`  →  "Avda. Diagonal, 543" → "Avenida Diagonal 543"
-- `Pº` o `Pso.` → `Paseo`  →  "Pº de la Castellana, 200" → "Paseo de la Castellana 200"
-- `Ctra.` → `Carretera`  →  "Ctra. M-30 km 4" → "Carretera M-30 km 4"
-- `P.I.` o `Pol. Ind.` o `Pol.` → `Polígono Industrial`
-- `Urb.` → `Urbanización`
-- `Blvr.` → `Boulevard`
-- **Alemán**: `Str.` → `Straße`, `Pl.` → `Platz`, `Gasse` ya completa
+- 'C/' o 'C.' → 'Calle'  →  "C/ Gran Vía, 50" → "Calle Gran Vía 50, Madrid"
+- 'Pza.' o 'Pl.' o 'Pz.' → 'Plaza'  →  "Pza. España 1" → "Plaza España 1"
+- 'Avda.' o 'Av.' o 'Avd.' → 'Avenida'  →  "Avda. Diagonal, 543" → "Avenida Diagonal 543"
+- 'Pº' o 'Pso.' → 'Paseo'  →  "Pº de la Castellana, 200" → "Paseo de la Castellana 200"
+- 'Ctra.' → 'Carretera'  →  "Ctra. M-30 km 4" → "Carretera M-30 km 4"
+- 'P.I.' o 'Pol. Ind.' o 'Pol.' → 'Polígono Industrial'
+- 'Urb.' → 'Urbanización'
+- 'Blvr.' → 'Boulevard'
+- **Alemán**: 'Str.' → 'Straße', 'Pl.' → 'Platz', 'Gasse' ya completa
 
 **2. Formato de Bezirk vienés (MUY FRECUENTE en callsheets austríacos)** ⚠️:
-En Viena, el formato es `{NúmeroBezirk}. {NombreCalle} {NúmeroCasa}`.
+En Viena, el formato es '{NúmeroBezirk}. {NombreCalle} {NúmeroCasa}'.
 El número antes del punto es el DISTRITO (Bezirk), NO un número de lista.
 
-Regla de conversión → añade el código postal `1{Bezirk con 2 dígitos}0`:
-- `1. Stephansplatz 1` → `Stephansplatz 1, 1010 Wien`
-- `3. Erdbergstraße 200` → `Erdbergstraße 200, 1030 Wien`
-- `13. Erzbischofgasse 6C` → `Erzbischofgasse 6C, 1130 Wien`
-- `13. Erzbischofgasse 8` → `Erzbischofgasse 8, 1130 Wien`
-- `19. Grinzinger Allee 1` → `Grinzinger Allee 1, 1190 Wien`
-- `23. Brunner Str. 69` → `Brunner Straße 69, 1230 Wien`
+Regla de conversión → añade el código postal '1{Bezirk con 2 dígitos}0':
+- '1. Stephansplatz 1' → 'Stephansplatz 1, 1010 Wien'
+- '3. Erdbergstraße 200' → 'Erdbergstraße 200, 1030 Wien'
+- '13. Erzbischofgasse 6C' → 'Erzbischofgasse 6C, 1130 Wien'
+- '13. Erzbischofgasse 8' → 'Erzbischofgasse 8, 1130 Wien'
+- '19. Grinzinger Allee 1' → 'Grinzinger Allee 1, 1190 Wien'
+- '23. Brunner Str. 69' → 'Brunner Straße 69, 1230 Wien'
 
 Si el documento es claramente vienés (aparece "Wien", "Bezirk", "Drehort" con este patrón), aplica esta conversión a TODAS las direcciones que encajen.
 
 **3. Direcciones en tablas**: Las callsheets suelen tener tablas con columnas separadas.
 Si ves una fila como:
-```
+'''
 Drehort | Hotel Imperial
 Adresse | Kärntner Ring 16, 1010 Wien
-```
+'''
 O en español:
-```
+'''
 Locación: Edificio Telefónica | Dirección: Gran Vía 28, 28013 Madrid
-```
+'''
 Lee AMBAS celdas. Si hay dirección, usa SOLO la dirección, no el nombre del lugar.
 
 **3. Solo nombre de barrio o zona**:

@@ -109,7 +109,8 @@ function AddSnapshotForm({ onClose }: AddFormProps) {
       });
 
       if (!snapshotId) {
-        toast({ title: t("odometer.toastSaveError"), variant: "destructive" });
+        toast({ title: t("odometer.toastSaveError"), description: "Fallo al crear registro (BD)", variant: "destructive" });
+        setSaving(false);
         return;
       }
 
@@ -122,7 +123,8 @@ function AddSnapshotForm({ onClose }: AddFormProps) {
 
       if (uploadError) {
         await deleteSnapshot(snapshotId);
-        toast({ title: t("odometer.toastSaveError"), variant: "destructive" });
+        toast({ title: t("odometer.toastSaveError"), description: "Fallo al subir Storage (Falta Bucket?)", variant: "destructive" });
+        setSaving(false);
         return;
       }
 
