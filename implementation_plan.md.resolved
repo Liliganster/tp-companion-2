@@ -1,0 +1,157 @@
+# Odometer Feature — Implementation Plan
+
+Users retroactively add trips from PDFs. They can't recall per-trip odometer readings, only checkpoint readings (ITV, taller, seguro). The feature calculates work vs. private km ratio per period for tax compliance (Finanzamt/Hacienda).
+
+## User Review Required
+
+> [!IMPORTANT]
+> This feature is **Pro-only**. Free-tier users will see the section with a lock/upgrade CTA instead of the form.
+
+> [!NOTE]
+> Each snapshot includes a **user-uploaded photo** (e.g. photo of the odometer display, ITV paper scan). These photos are the actual proof exported, stored in Supabase Storage bucket `odometer-images`.
+
+
+---
+
+## Proposed Changes
+
+### Database
+
+#### [NEW] Migration `add_odometer_snapshots`
+```sql
+CREATE TABLE public.odometer_snapshots (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  snapshot_date DATE NOT NULL,
+  reading_km NUMERIC NOT NULL,
+  source TEXT,   -- 'itv', 'taller', 'seguro', 'manual', etc.
+  notes TEXT,
+  image_storage_path TEXT,  -- Storage path of the user-uploaded photo of the odometer
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.odometer_snapshots ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "own snapshots" ON public.odometer_snapshots
+  USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE INDEX idx_odometer_user_date ON public.odometer_snapshots(user_id, snapshot_date);
+```
+
+Images are stored in a new Supabase Storage bucket: **`odometer-images`** (private, RLS-protected).
+
+---
+
+### Context / Data layer
+
+#### [NEW] `src/contexts/OdometerContext.tsx`
+- `useOdometer()` hook
+- Fetches `odometer_snapshots` for current user from Supabase
+- Exposes: `snapshots`, `addSnapshot()`, `deleteSnapshot()`, `loading`
+- Each snapshot: `{ id, snapshot_date, reading_km, source, notes, image_storage_path, extractionStatus }`
+- Calculates `computeRatio(startDate, endDate, workKm)` → `{ totalKm, workKm, privateKm, pct }`
+
+---
+
+### UI — Settings
+
+#### [MODIFY] [src/components/settings/SettingsModal.tsx](file:///c:/Users/lilia/Escritorio/trip-companion-main%202/trip-companion-main/src/components/settings/SettingsModal.tsx)
+- Add new nav tab: `"odometer"` with icon `Gauge` (Lucide)
+- Tab content: `<OdometerSettingsSection />` (see below)
+- Pro gate: if `planTier !== "pro"` → show locked card with upgrade CTA instead
+
+#### [NEW] `src/components/settings/OdometerSettingsSection.tsx`
+
+```
+[+ Añadir lectura]
+
+TABLE:
+  Fecha         | Lectura (km)         | Fuente     | Foto                  | [Borrar]
+  01/01/2024    | 98.000  (✨ IA)      | ITV        | 🖼️ vista previa      | 🗑
+  31/12/2024    | 121.500 (✨ IA)      | Taller     | 🖼️ vista previa      | 🗑
+
+─────────────────────────────────────────
+  CÁLCULO (para el periodo 01/01 → 31/12 [selector de año]):
+  Total km:        23.500 km
+  Km laborales:    14.200 km  (tus viajes registrados)
+  Km privados:      9.300 km
+  Uso laboral:     60,4%
+```
+
+**Flujo al añadir un snapshot:**
+1. Usuario sube foto (foto del cuadro del coche, papel ITV, factura de taller)
+2. Foto se guarda en Supabase Storage `odometer-images/{user_id}/{snapshot_id}.{ext}`
+3. La app llama a la IA (Gemini / OpenRouter) para extraer el número de km que aparece en la foto
+4. El km extraído se rellena automáticamente en el campo `reading_km` (editable por el usuario para corregir)
+5. El estado de extracción se muestra en la tabla: `✨ IA` = extraído por IA, `manual` = editado por usuario
+
+- Thumbnail en la tabla; click abre lightbox de preview
+- Year selector (default = año actual) filtra los dos snapshots más cercanos para el cálculo
+- `workKm` = suma de viajes del usuario en ese rango de fechas (de [useTrips()](file:///c:/Users/lilia/Escritorio/trip-companion-main%202/trip-companion-main/src/contexts/TripsContext.tsx#688-693))
+
+---
+
+### Export (ZIP + PDF)
+
+#### [MODIFY] [src/pages/ReportView.tsx](file:///c:/Users/lilia/Escritorio/trip-companion-main%202/trip-companion-main/src/pages/ReportView.tsx)
+
+**In [handleExport()](file:///c:/Users/lilia/Escritorio/trip-companion-main%202/trip-companion-main/src/pages/ReportView.tsx#372-566) and [handleExportZip()](file:///c:/Users/lilia/Escritorio/trip-companion-main%202/trip-companion-main/src/pages/ReportView.tsx#567-738) (PDF):**
+If the user is Pro and has at least 2 odometer snapshots covering the report period, **add a summary card at the top of the first page** (above the trips table), using existing jsPDF draw calls:
+
+```
+┌────────────────────────────────────────────────────────────────┐
+| ■ Resumen cuentakilómetros 2024                       |
+| Inicio: 98.000 km (01/01/2024 · ITV)                 |
+| Fin:   121.500 km (31/12/2024 · Taller)              |
+| Km trabajo: 14.200 km  | Km privados: 9.300 km       |
+| Uso laboral: 60,4%                                   |
+└────────────────────────────────────────────────────────────────┘
+```
+The card uses the same styling as the rest of the report (no extra page, no embedded photos in PDF).
+
+**In [handleExportZip()](file:///c:/Users/lilia/Escritorio/trip-companion-main%202/trip-companion-main/src/pages/ReportView.tsx#567-738) (ZIP only):**
+- Download the two odometer photos from Supabase Storage
+- Add to ZIP as `odometro/foto_inicio_{date}.ext` and `odometro/foto_fin_{date}.ext`
+- Same pattern as existing document downloads in [collectDocs()](file:///c:/Users/lilia/Escritorio/trip-companion-main%202/trip-companion-main/src/hooks/use-project-export.ts#52-133)
+
+#### [MODIFY] [src/hooks/use-project-export.ts](file:///c:/Users/lilia/Escritorio/trip-companion-main%202/trip-companion-main/src/hooks/use-project-export.ts)
+- No changes needed — photos are downloaded and added directly inside [handleExportZip](file:///c:/Users/lilia/Escritorio/trip-companion-main%202/trip-companion-main/src/pages/ReportView.tsx#567-738)
+
+---
+
+### i18n
+
+#### [MODIFY] [src/lib/i18n.ts](file:///c:/Users/lilia/Escritorio/trip-companion-main%202/trip-companion-main/src/lib/i18n.ts)
+New keys added to all 3 locales (ES, EN, DE):
+
+| Key | ES | EN | DE |
+|-----|----|----|-----|
+| `odometer.title` | Odómetro | Odometer | Kilometerstand |
+| `odometer.subtitle` | Lecturas de cuentakilómetros | Odometer readings | Kilometerstandsablesungen |
+| `odometer.addReading` | + Añadir lectura | + Add reading | + Ablesung hinzufügen |
+| `odometer.date` | Fecha | Date | Datum |
+| `odometer.readingKm` | Lectura (km) | Reading (km) | Ablesung (km) |
+| `odometer.source` | Fuente | Source | Quelle |
+| `odometer.notes` | Notas | Notes | Notizen |
+| `odometer.totalKm` | Total km del periodo | Total km in period | Gesamt km im Zeitraum |
+| `odometer.workKm` | Km laborales | Work km | Dienst km |
+| `odometer.privateKm` | Km privados | Private km | Privat km |
+| `odometer.workPct` | Uso laboral | Work usage | Dienstliche Nutzung |
+| `odometer.exportImage` | Exportar como imagen | Export as image | Als Bild exportieren |
+| `odometer.proOnly` | Disponible en plan Pro | Available in Pro plan | Im Pro-Plan verfügbar |
+| `odometer.sourceItv` | ITV / TÜV | ITV / TÜV | TÜV |
+| `odometer.sourceTaller` | Taller / Mantenimiento | Workshop / Service | Werkstatt |
+| `odometer.sourceSeguro` | Seguro | Insurance | Versicherung |
+| `odometer.sourceManual` | Entrada manual | Manual entry | Manuelle Eingabe |
+
+---
+
+## Verification Plan
+
+### Manual Verification (browser)
+
+1. **Free user**: Open Settings → verify “Odómetro” tab shows upgrade CTA
+2. **Pro user**: Open Settings → “Odómetro” tab → add two snapshots with photos → verify table, thumbnails, and calculation block
+3. **Year filter**: Change year selector → verify calculation recalculates using only trips in that year
+4. **Photo upload**: Upload an image for a snapshot → verify thumbnail appears and photo is stored in Supabase Storage
+5. **PDF export**: Export PDF → verify new page at end with odometer section + embedded photos
+6. **ZIP export**: Download ZIP → unzip → verify `odometro/foto_inicio_*.jpg` and `foto_fin_*.jpg` present
+7. **Delete snapshot**: Delete one → verify table, calculation, and storage file all removed
+8. **Persistence**: Reload page → verify snapshots still present

@@ -769,11 +769,8 @@ export default function Projects() {
                         <TableCell className="text-right hidden md:table-cell text-success">
                           {(stats?.co2Emissions ?? 0).toFixed(1)} kg
                         </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1.5 text-success font-medium">
-                            <Euro className="w-4 h-4" />
-                            <span>€{estimatedCost.toFixed(2)}</span>
-                          </div>
+                        <TableCell className="text-right font-medium" style={{ color: "hsl(142 71% 45%)" }}>
+                          {estimatedCost.toFixed(2)} €
                         </TableCell>
                         <TableCell className="text-right font-medium hidden md:table-cell">
                           {totalKm.toLocaleString(locale)} km
