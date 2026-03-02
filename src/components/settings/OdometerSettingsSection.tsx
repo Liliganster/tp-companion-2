@@ -274,9 +274,10 @@ function AddSnapshotForm({ onClose }: AddFormProps) {
 // ─── Ratio card ───────────────────────────────────────────────────────────────
 function OdometerRatioCard({ year, setYear }: { year: number; setYear: (y: number) => void }) {
   const { t, tf } = useI18n();
-  const { computeRatio } = useOdometer();
+  const { computeRatio, snapshots } = useOdometer();
 
   const ratio = computeRatio(year);
+  const snapshotCount = snapshots.length;
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
@@ -297,7 +298,9 @@ function OdometerRatioCard({ year, setYear }: { year: number; setYear: (y: numbe
       </div>
 
       {!ratio ? (
-        <p className="text-xs text-muted-foreground">{t("odometer.noSnapshots")}</p>
+        <p className="text-xs text-muted-foreground">
+          {snapshotCount === 0 ? t("odometer.noSnapshots") : t("odometer.oneSnapshot")}
+        </p>
       ) : (
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">

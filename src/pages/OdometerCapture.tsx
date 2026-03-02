@@ -49,8 +49,13 @@ export default function OdometerCapture() {
           setState("success");
           return;
         }
-        if (!ok || status === 404 || status === 410) {
+        // Only 410 = truly expired; 404 = token not found (wrong URL / dev mode) → treat as error
+        if (status === 410) {
           setState("expired");
+          return;
+        }
+        if (!ok) {
+          setState("error");
           return;
         }
         setSignedUploadUrl(data.signedUploadUrl);
