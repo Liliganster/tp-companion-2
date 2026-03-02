@@ -29,7 +29,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
     if (files.length > limits.maxCallsheetsPerBatch) {
       if (planTier === "basic") {
         toast.error("Solo 1 documento por vez en el plan Basic", {
-          description: "El plan Basic solo permite procesar 1 callsheet a la vez. Mejora a Pro para subir hasta 20 a la vez.",
+          description: "El plan Basic permite subir y procesar 1 callsheet a la vez. Con Pro puedes subir hasta 20 y se procesan automáticamente de 5 en 5 sin hacer nada.",
           action: {
             label: "Ver planes",
             onClick: () => navigate("/plans"),
@@ -55,6 +55,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
     let successCount = 0;
     let failCount = 0;
     let reusedCount = 0;
+    let retriedCount = 0;
     const queuedJobIds: string[] = [];
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -81,23 +82,23 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
           const existingStatus = String((existing as any)?.status ?? "").trim();
 
           if (!existingError && existingId && existingStoragePath && existingStoragePath !== "pending") {
+            const isRetry = existingStatus === "created" || existingStatus === "failed" || existingStatus === "cancelled";
             // If it's stuck in "created"/"failed"/"cancelled", re-queue it so it can process.
-            if (
-              autoQueue &&
-              (existingStatus === "created" || existingStatus === "failed" || existingStatus === "cancelled")
-            ) {
+            if (autoQueue && isRetry) {
               try {
                 await supabase
                   .from("callsheet_jobs")
                   .update({ status: "queued", needs_review_reason: null })
                   .eq("id", existingId);
                 queuedJobIds.push(existingId);
+                retriedCount += 1;
               } catch {
                 // ignore
               }
+            } else {
+              reusedCount += 1;
             }
 
-            reusedCount += 1;
             successCount += 1;
             onJobCreated?.(existingId);
             continue;
@@ -159,6 +160,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
             : `Se subieron ${successCount} documentos. Pulsa "Procesar ahora" para empezar.`,
         );
       }
+      if (retriedCount > 0) toast.info(`Se reprocesará ${retriedCount} documento(s) que falló anteriormente`);
       if (reusedCount > 0) toast.info(`Se reutilizaron ${reusedCount} documento(s) ya subido(s)`);
       if (failCount > 0) toast.error(`Fallaron ${failCount} documentos`);
 
