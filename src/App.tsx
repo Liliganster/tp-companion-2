@@ -41,6 +41,7 @@ const Auth = lazy(() => import("./pages/Auth"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const OdometerCapture = lazy(() => import("./pages/OdometerCapture"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -76,6 +77,8 @@ function AppContent() {
           <Route path="/auth" element={<Auth />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/auth/reset" element={<ResetPassword />} />
+          {/* Public page — no auth required, token-based access */}
+          <Route path="/odometer-capture" element={<OdometerCapture />} />
 
           <Route path="/legal/terms" element={<LegalTerms />} />
           <Route path="/legal/privacy" element={<LegalPrivacy />} />

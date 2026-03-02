@@ -14,8 +14,15 @@ CREATE TABLE IF NOT EXISTS public.odometer_snapshots (
   notes TEXT,
   image_storage_path TEXT,   -- storage path in 'odometer-images' bucket
   extraction_status TEXT DEFAULT 'manual',  -- 'ai' | 'manual' | 'failed'
+  -- QR mobile capture flow (optional, cleared after use)
+  capture_token UUID,          -- random token for the QR link (30-min expiry)
+  capture_expires_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- Safe to run on an already-created table (idempotent)
+ALTER TABLE public.odometer_snapshots ADD COLUMN IF NOT EXISTS capture_token UUID;
+ALTER TABLE public.odometer_snapshots ADD COLUMN IF NOT EXISTS capture_expires_at TIMESTAMPTZ;
 
 ALTER TABLE public.odometer_snapshots ENABLE ROW LEVEL SECURITY;
 

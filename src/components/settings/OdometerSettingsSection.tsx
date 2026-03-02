@@ -1,9 +1,9 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Gauge, Trash2, Lock, Image as ImageIcon, Loader2, AlertCircle } from "lucide-react";
+import { Gauge, Trash2, Lock, Image as ImageIcon, Loader2, AlertCircle, Camera, X, QrCode } from "lucide-react";
 import { useOdometer, OdometerSnapshot } from "@/contexts/OdometerContext";
 import { usePlan } from "@/contexts/PlanContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -70,7 +70,8 @@ function AddSnapshotForm({ onClose }: AddFormProps) {
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [extracting, setExtracting] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -227,12 +228,12 @@ function AddSnapshotForm({ onClose }: AddFormProps) {
       {/* Photo upload */}
       <div className="space-y-1">
         <Label className="text-xs">{t("odometer.photo")}</Label>
-        <div
+      <div
           className={cn(
             "flex items-center gap-2 border border-dashed rounded-lg p-2 cursor-pointer hover:border-primary/50 transition-colors text-xs text-muted-foreground",
             filePreview && "border-primary/40"
           )}
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => galleryInputRef.current?.click()}
         >
           {filePreview ? (
             <img src={filePreview} alt="preview" className="w-14 h-14 object-cover rounded" />
@@ -241,8 +242,33 @@ function AddSnapshotForm({ onClose }: AddFormProps) {
           )}
           <span>{filePreview ? file?.name : t("expenseScan.dragDropText")}</span>
         </div>
+
+        {/* Direct camera button (opens back camera on mobile without gallery) */}
+        {!filePreview && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-xs"
+            onClick={() => cameraInputRef.current?.click()}
+          >
+            <Camera className="w-3.5 h-3.5" />
+            {t("odometer.captureTakePhoto")}
+          </Button>
+        )}
+
+        {/* Camera input (direct, no gallery — mobile only) */}
         <input
-          ref={fileInputRef}
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+        {/* Gallery / file picker */}
+        <input
+          ref={galleryInputRef}
           type="file"
           accept="image/*"
           className="hidden"
@@ -344,9 +370,92 @@ export function OdometerSettingsSection() {
   const { toast } = useToast();
   const { planTier } = usePlan();
   const navigate = useNavigate();
-  const { snapshots, loading, deleteSnapshot } = useOdometer();
+  const { snapshots, loading, deleteSnapshot, refresh } = useOdometer();
+  const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [year, setYear] = useState(new Date().getFullYear());
+
+  // QR mobile capture state
+  type QrState = "idle" | "generating" | "waiting" | "success" | "error";
+  const [qrState, setQrState] = useState<QrState>("idle");
+  const [qrError, setQrError] = useState("");
+  const [qrToken, setQrToken] = useState("");
+  const [qrSnapshotId, setQrSnapshotId] = useState("");
+
+  // Poll every 3s for the draft snapshot gaining an image_storage_path
+  useEffect(() => {
+    if (!qrSnapshotId || qrState !== "waiting" || !supabase) return;
+    let cancelled = false;
+    const interval = setInterval(async () => {
+      const { data } = await supabase
+        .from("odometer_snapshots")
+        .select("image_storage_path, reading_km")
+        .eq("id", qrSnapshotId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (data?.image_storage_path) {
+        clearInterval(interval);
+        setQrState("success");
+        // Refresh context so the new snapshot appears in the table
+        await refresh();
+        setTimeout(() => {
+          setQrState("idle");
+          setQrToken("");
+          setQrSnapshotId("");
+        }, 3000);
+      }
+    }, 3000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [qrSnapshotId, qrState, refresh]);
+
+  const handleOpenQr = async () => {
+    if (!user?.id || !supabase) return;
+    setQrState("generating");
+    setQrError("");
+    try {
+      // Generate token entirely client-side — no Vercel function needed for this step.
+      // Works in both dev and production. The draft row is inserted directly via
+      // Supabase RLS (own_odometer_snapshots allows the authenticated user).
+      const token = crypto.randomUUID();
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+      const today = new Date().toISOString().slice(0, 10);
+
+      const { data: snap, error } = await supabase
+        .from("odometer_snapshots")
+        .insert({
+          user_id: user.id,
+          snapshot_date: today,
+          reading_km: 0,           // placeholder — filled in after AI extraction
+          source: "manual",
+          extraction_status: "manual",
+          capture_token: token,
+          capture_expires_at: expiresAt,
+        } as any)
+        .select("id")
+        .single();
+
+      if (error || !snap) {
+        throw new Error(error?.message ?? "Could not create QR session");
+      }
+
+      setQrToken(token);
+      setQrSnapshotId(snap.id);
+      setQrState("waiting");
+    } catch (err: any) {
+      setQrError(err?.message ?? "Unknown error");
+      setQrState("error");
+    }
+  };
+
+  const handleCloseQr = async () => {
+    // Delete the orphaned draft snapshot if the user closes without completing
+    if (qrSnapshotId && (qrState === "waiting" || qrState === "error")) {
+      await supabase?.from("odometer_snapshots").delete().eq("id", qrSnapshotId);
+    }
+    setQrState("idle");
+    setQrToken("");
+    setQrSnapshotId("");
+  };
 
   // Pro gate
   if (planTier !== "pro") {
@@ -409,6 +518,76 @@ export function OdometerSettingsSection() {
 
   return (
     <div className="space-y-5">
+      {/* QR mobile-camera modal */}
+      {qrState !== "idle" && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-xs space-y-4 relative">
+            {/* Close */}
+            <button
+              type="button"
+              className="absolute top-3 right-3 text-muted-foreground hover:text-foreground"
+              onClick={handleCloseQr}
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="text-center space-y-1">
+              <QrCode className="w-7 h-7 mx-auto text-primary" />
+              <h3 className="font-semibold">{t("odometer.qrTitle")}</h3>
+              <p className="text-xs text-muted-foreground">{t("odometer.qrBody")}</p>
+            </div>
+
+            {qrState === "generating" && (
+              <div className="flex justify-center py-8">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            )}
+
+            {qrState === "error" && (
+              <div className="space-y-3 text-center">
+                <p className="text-sm text-destructive">{qrError || "Error"}</p>
+                <Button size="sm" variant="outline" onClick={handleOpenQr}>
+                  Reintentar
+                </Button>
+              </div>
+            )}
+
+            {(qrState === "waiting" || qrState === "success") && qrToken && (() => {
+              const captureUrl = `${window.location.origin}/odometer-capture?token=${qrToken}`;
+              const qrImgSrc = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(captureUrl)}&margin=2&format=svg`;
+              return (
+                <div className="space-y-3">
+                  <div className="bg-white rounded-xl p-2 flex items-center justify-center">
+                    {qrState === "waiting" && (
+                      <img
+                        src={qrImgSrc}
+                        alt="QR code"
+                        width={220}
+                        height={220}
+                        className="rounded"
+                      />
+                    )}
+                    {qrState === "success" && (
+                      <div className="w-[220px] h-[220px] flex flex-col items-center justify-center gap-2">
+                        <span className="text-4xl">✓</span>
+                        <span className="text-sm font-medium text-green-600">{t("odometer.qrSuccess")}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {qrState === "waiting" && (
+                    <p className="text-xs text-center text-muted-foreground flex items-center justify-center gap-1.5">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      {t("odometer.qrWaiting")}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-2">
         <div>
           <h2 className="text-lg font-medium flex items-center gap-2">
@@ -418,9 +597,23 @@ export function OdometerSettingsSection() {
           <p className="text-xs text-muted-foreground mt-0.5">{t("odometer.subtitle")}</p>
         </div>
         {!showForm && (
-          <Button size="sm" variant="outline" onClick={() => setShowForm(true)}>
-            {t("odometer.addReading")}
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* QR / phone camera button */}
+            <Button
+              size="sm"
+              variant="ghost"
+              className="gap-1.5 text-xs"
+              onClick={handleOpenQr}
+              disabled={qrState !== "idle"}
+              title={t("odometer.qrButton")}
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{t("odometer.qrButton")}</span>
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setShowForm(true)}>
+              {t("odometer.addReading")}
+            </Button>
+          </div>
         )}
       </div>
 
