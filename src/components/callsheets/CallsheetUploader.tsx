@@ -82,10 +82,11 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
           const existingStatus = String((existing as any)?.status ?? "").trim();
 
           if (!existingError && existingId && existingStoragePath && existingStoragePath !== "pending") {
-            const isRetry = existingStatus === "created" || existingStatus === "failed" || existingStatus === "cancelled";
-            if (isRetry) {
-              // Re-uploadable states: reset to queued (autoQueue) or created (manual flow).
-              // Never show "reutilizado" for a job that never finished — the user expects a fresh start.
+            // Only "done" means the file was actually processed successfully.
+            // Any other status (created, queued, processing, failed, cancelled) means
+            // the user is re-uploading because it never finished — always reset it.
+            const alreadyDone = existingStatus === "done";
+            if (!alreadyDone) {
               try {
                 const resetStatus = autoQueue ? "queued" : "created";
                 await supabase
@@ -98,7 +99,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
                 // ignore
               }
             } else {
-              // Job is done/queued/processing — genuinely reused, no new upload needed.
+              // Job is genuinely done — file already processed, no need to re-upload.
               reusedCount += 1;
             }
 
