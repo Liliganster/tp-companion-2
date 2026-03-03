@@ -198,151 +198,102 @@ Si después de los 5 pasos NO has encontrado nada claro:
 
 ---
 
-## CAMPO 4: locations (UBICACIONES DE FILMACIÓN)
+## CAMPO 4: locations (DIRECCIÓN DE FILMACIÓN PRINCIPAL)
 
-**Tu misión**: Extraer SOLO direcciones físicas válidas donde se FILMA (donde ruedan las cámaras) **del día específico de esta callsheet**.
+**MISIÓN ÚNICA**: Extraer la dirección física donde ruedan las cámaras y actúan los actores **en el día de esta callsheet**. Solo la unidad principal. Solo ese día.
 
-### Principios fundamentales:
-
-1. **COMPRENDE EL CONTEXTO**: Lee el documento completo. Las callsheets no están estandarizadas - entiende qué significa cada sección.
-
-2. **SOLO EL DÍA DE LA CALLSHEET** ⚠️ MUY IMPORTANTE:
-   Muchas callsheets incluyen al final un bloque con el plan del día siguiente. **IGNORA POR COMPLETO todo lo que esté bajo esas secciones**.
-
-   ❌ **Secciones de día siguiente/futuro — ignorar todo su contenido**:
-   - 'NEXT DAY' / 'NEXT SHOOTING DAY' / 'TOMORROW'
-   - 'NÄCHSTER DREHTAG' / 'MORGEN' / 'FOLGETAG'
-   - 'DÍA SIGUIENTE' / 'PRÓXIMO DÍA DE RODAJE' / 'MAÑANA'
-   - 'ADVANCE SCHEDULE' / 'PRODUCTION PLAN' / 'UPCOMING'
-   - Cualquier bloque que muestre una fecha **distinta** a la fecha principal del documento
-
-   ✅ **Cómo identificar el día principal**:
-   - La fecha más prominente en el encabezado (más grande o en la parte superior)
-   - La sección con el mayor detalle de escenas, actores y horarios
-   - Si hay dos fechas en el documento, la primera en aparecer es la principal
-
-   ✅ **Ejemplos de ignorar**:
-   - "NEXT DAY — Drehort: Hauptstraße 10, 1040 Wien" → **IGNORAR**
-   - "Morgen: Mühlgasse 5, 1040 Wien" → **IGNORAR**
-   - Tabla de avance con fecha D+1 al final del PDF → **IGNORAR TODA LA TABLA**
-
-3. **SOLO DIRECCIONES FÍSICAS VÁLIDAS**: 
-   - ✅ Extrae: Direcciones completas ("Kärntner Ring 16, 1010 Wien"), landmarks famosos ("Stephansdom", "Schloss Schönbrunn"), lugares conocidos con ciudad ("Hauptbahnhof, Wien")
-   - ❌ NO extraigas: Palabras sueltas sin dirección ("TAXI", "UBER"), servicios logísticos (parking, catering, vestuario), acciones (pick up, transfer)
-
-4. **FILMACIÓN vs LOGÍSTICA**: 
-   - ¿Es donde actúan actores y filman cámaras? → FILMACIÓN (extraer)
-   - ¿Es donde el equipo come/descansa/aparca? → LOGÍSTICA (ignorar)
-
-5. **NO DUPLICAR**: Si hay nombre de lugar Y dirección, extrae solo la dirección física.
-
-6. **EXCLUSIÓN CRÍTICA - OFICINAS DE PRODUCCIÓN**:
-   - ❌ NUNCA extraigas la dirección de la productora (Production Office, Studio HQ) como lugar de rodaje.
-   - Si la dirección está junto al logo de la empresa o en el pie de página, ÍGNORALA.
-   - Solo inclúyela SI explícitamente dice "FILMING LOCATION" o "SET" junto a ella.
-
-7. **EXCLUSIÓN CRÍTICA - UNIDADES SECUNDARIAS Y DRONES** ⚠️:
-   Las callsheets a menudo tienen secciones para unidades adicionales. **SOLO extrae la unidad PRINCIPAL**.
-   
-   ❌ **NUNCA extraigas** ubicaciones de estas secciones:
-   - Drones / Drohnen / Aerial Unit → locaciones de vuelo de dron, NO son donde filman actores
-   - 2nd Unit / B-Unit / Segunda Unidad / Zweite Einheit → equipo separado, dirección diferente
-   - Splinter Unit / C-Unit / Additional Unit → ídem
-   - Stunt Unit / Action Unit → ídem
-   - SFX Unit / VFX Unit → ídem
-   
-   **Cómo identificar estas secciones**: Busca encabezados como "DRONE UNIT", "2ND UNIT", "B-EINHEIT", "LUFTAUFNAHMEN", "DROHNEN", "AERIALS", "SEGUNDA UNIDAD". Todo lo que esté bajo ese encabezado hasta el siguiente se ignora.
-   
-   ✅ **SÍ extrae** únicamente de la sección de la unidad principal:
-   - "MAIN UNIT" / "1ST UNIT" / "PRIMERA UNIDAD" / "HAUPTEINHEIT"
-   - Si no hay etiqueta de unidad, asume que es la principal
-   - "Drehort 1", "Drehort 2" sin mención de drones/segunda unidad → extraer
-
-### Formatos de dirección:
-
-**REGLA CRÍTICA - NO DUPLICAR INFORMACIÓN**:
-Si el call sheet tiene:
-  Drehort 1: Hotel Imperial
-  Adresse: Kärntner Ring 16, 1010 Wien
-
-❌ **MAL**: "Hotel Imperial, Kärntner Ring 16, 1010 Wien" (duplica info)
-❌ **MAL**: "Hotel Imperial + Kärntner Ring 16, 1010 Wien" (duplica info)
-✅ **BIEN**: "Kärntner Ring 16, 1010 Wien" (solo la dirección física)
-
-**Formatos aceptables**:
-- **Dirección completa**: "Hauptstraße 100, 10115 Berlin" ← PREFERIR SIEMPRE
-- **Landmark famoso** (solo si NO hay dirección): "Schloss Schönbrunn"
-- **Nombre + ciudad** (solo si NO hay dirección): "Central Park, New York"
-
-**Prioridad de extracción**:
-1. Si hay dirección física (calle + número + ciudad) → Usar SOLO eso
-2. Si NO hay dirección pero hay landmark famoso → Usar nombre del lugar
-3. Si hay nombre genérico sin dirección → Buscar si hay dirección asociada
-
-**Si la dirección está incompleta**:
-- Si tiene contexto claro de ciudad: "Stephansplatz" → "Stephansplatz, Wien"
-- Si NO hay contexto: Extrae lo que hay
+> El documento siempre contiene esta información. Tu trabajo es encontrarla, no crearla.
 
 ---
 
-### ⚠️ FORMATOS NO ESTÁNDAR — REGLAS OBLIGATORIAS
+### PASO 1 — ENCONTRAR la dirección de filmación
 
-**1. Expande SIEMPRE las abreviaturas de vía** (muy común en callsheets españoles):
-- 'C/' o 'C.' → 'Calle'  →  "C/ Gran Vía, 50" → "Calle Gran Vía 50, Madrid"
-- 'Pza.' o 'Pl.' o 'Pz.' → 'Plaza'  →  "Pza. España 1" → "Plaza España 1"
-- 'Avda.' o 'Av.' o 'Avd.' → 'Avenida'  →  "Avda. Diagonal, 543" → "Avenida Diagonal 543"
-- 'Pº' o 'Pso.' → 'Paseo'  →  "Pº de la Castellana, 200" → "Paseo de la Castellana 200"
-- 'Ctra.' → 'Carretera'  →  "Ctra. M-30 km 4" → "Carretera M-30 km 4"
-- 'P.I.' o 'Pol. Ind.' o 'Pol.' → 'Polígono Industrial'
-- 'Urb.' → 'Urbanización'
-- 'Blvr.' → 'Boulevard'
-- **Alemán**: 'Str.' → 'Straße', 'Pl.' → 'Platz', 'Gasse' ya completa
+Busca en este orden de prioridad:
 
-**2. Formato de Bezirk vienés (MUY FRECUENTE en callsheets austríacos)** ⚠️:
-En Viena, el formato es '{NúmeroBezirk}. {NombreCalle} {NúmeroCasa}'.
-El número antes del punto es el DISTRITO (Bezirk), NO un número de lista.
+1. **Etiquetas explícitas de rodaje** (buscar en TODO el documento):
+   - Alemán: `Drehort`, `Set`, `Drehlocation`, `Location`, `Motiv`, `Aufnahmeort`
+   - Inglés: `Filming Location`, `Shoot Location`, `Set Address`, `Location`, `Scene Location`
+   - Español: `Locación de rodaje`, `Set de filmación`, `Lugar de rodaje`, `Dirección de rodaje`, `Locación`
 
-Regla de conversión → añade el código postal '1{Bezirk con 2 dígitos}0':
-- '1. Stephansplatz 1' → 'Stephansplatz 1, 1010 Wien'
-- '3. Erdbergstraße 200' → 'Erdbergstraße 200, 1030 Wien'
-- '13. Erzbischofgasse 6C' → 'Erzbischofgasse 6C, 1130 Wien'
-- '13. Erzbischofgasse 8' → 'Erzbischofgasse 8, 1130 Wien'
-- '19. Grinzinger Allee 1' → 'Grinzinger Allee 1, 1190 Wien'
-- '23. Brunner Str. 69' → 'Brunner Straße 69, 1230 Wien'
+2. **Sección principal del día** (la sección con más detalle de escenas, actores y horarios): busca direcciones en esa sección.
 
-Si el documento es claramente vienés (aparece "Wien", "Bezirk", "Drehort" con este patrón), aplica esta conversión a TODAS las direcciones que encajen.
+3. **Encabezado del documento**: a veces la dirección está en los primeros campos junto a la fecha.
 
-**3. Direcciones en tablas**: Las callsheets suelen tener tablas con columnas separadas.
-Si ves una fila como:
-'''
-Drehort | Hotel Imperial
-Adresse | Kärntner Ring 16, 1010 Wien
-'''
-O en español:
-'''
-Locación: Edificio Telefónica | Dirección: Gran Vía 28, 28013 Madrid
-'''
-Lee AMBAS celdas. Si hay dirección, usa SOLO la dirección, no el nombre del lugar.
+**Si hay varias locaciones de filmación** (ej. dos sets distintos del mismo día, misma unidad): inclúyelas todas.
 
-**3. Solo nombre de barrio o zona**:
-- "Barrio de Salamanca, Madrid" → extraer tal cual
-- "Zona Retiro" → "Parque del Retiro, Madrid" si es obvio, o extraer como está
-- "Centro histórico de Córdoba" → extraer tal cual + añadir ciudad si falta
+---
 
-**4. Coordenadas GPS en lugar de dirección**:
-- Si solo aparecen coordenadas: "40.4168, -3.7038" → incluir tal cual
-- Si hay coordenadas junto a una dirección, usar la dirección
+### PASO 2 — LIMPIAR y normalizar la dirección encontrada
 
-**5. Direcciones descriptivas o referenciales**:
+La dirección puede estar en un formato no estándar. Normalízala para que sea geocodificable:
+
+**Abreviaturas de vía** (expandir siempre):
+- `C/` o `C.` → `Calle` — "C/ Gran Vía 50" → "Calle Gran Vía 50, Madrid"
+- `Pza.` / `Pl.` / `Pz.` → `Plaza` — "Pza. España 1" → "Plaza España 1"
+- `Avda.` / `Av.` / `Avd.` → `Avenida` — "Avda. Diagonal 543" → "Avenida Diagonal 543"
+- `Pº` / `Pso.` → `Paseo` — "Pº de la Castellana 200" → "Paseo de la Castellana 200"
+- `Ctra.` → `Carretera`
+- `P.I.` / `Pol.Ind.` / `Pol.` → `Polígono Industrial`
+- `Urb.` → `Urbanización`
+- `Blvr.` → `Boulevard`
+- Alemán: `Str.` → `Straße`, `Pl.` → `Platz`
+
+**Formato Bezirk vienés** (muy frecuente en Austria):
+El número antes del punto es el DISTRITO, no un número de lista. Convierte así:
+- `1. Stephansplatz 1` → `Stephansplatz 1, 1010 Wien`
+- `3. Erdbergstraße 200` → `Erdbergstraße 200, 1030 Wien`
+- `13. Erzbischofgasse 6C` → `Erzbischofgasse 6C, 1130 Wien`
+- `19. Grinzinger Allee 1` → `Grinzinger Allee 1, 1190 Wien`
+- `23. Brunner Str. 69` → `Brunner Straße 69, 1230 Wien`
+Patrón: `{N}. NombreCalle Número` → `NombreCalle Número, 1{NN}0 Wien`
+
+**Si hay nombre de lugar Y dirección física**: usa SOLO la dirección física.
+- ❌ "Hotel Imperial, Kärntner Ring 16, 1010 Wien"
+- ✅ "Kärntner Ring 16, 1010 Wien"
+
+**Si la dirección está incompleta**: añade la ciudad del contexto del documento.
+- "Stephansplatz" en un doc claramente vienés → "Stephansplatz, Wien"
+
+**Si solo hay coordenadas GPS**: inclúyelas tal cual — "48.2082, 16.3738"
+
+**Si solo hay un landmark famoso sin dirección**: usa el nombre del landmark + ciudad.
+- "Schloss Schönbrunn, Wien", "Sagrada Família, Barcelona"
+
+**Si la dirección es referencial o descriptiva**: extrae lo mejor posible.
 - "Junto al Mercado de San Miguel, Madrid" → extraer tal cual
-- "Frente a C/ Mayor 45, Madrid" → "Calle Mayor 45, Madrid (aprox.)"
 - "Exterior del Teatro Real, Plaza de Oriente, Madrid" → "Plaza de Oriente, Madrid"
-- "Bajo el puente de Segovia" → "Puente de Segovia, Madrid" si hay contexto
 
-**6. Kilómetros de carretera**:
-- "Km 15 A-6 sentido Coruña" → extraer tal cual añadiendo ciudad/comunidad si hay contexto
+---
 
-**7. Nunca dejes locations vacío**: Si no encuentras ninguna dirección formal, extrae el mejor indicador de ubicación disponible (nombre de lugar, zona, landmark). Solo como último recurso un texto descriptivo.
+### PASO 3 — EXCLUIR lo que NO es filmación
+
+Antes de incluir una dirección, verifica que NO sea alguna de estas:
+
+**❌ Logística del equipo** (no se filma aquí):
+- Parking / Parque de vehículos / Crew parking
+- Catering / Comedor / Lunch / Mittagessen
+- Maquillaje / Peluquería / Makeup / Hairstyling / Garderobe
+- Vestuario / Wardrobe / Kostüm
+- Base camp / Basecamp / Unidad de base / Basiscamp
+- Carga y descarga / Load & Unload
+- Hospital / Médico de rodaje / On-set doctor
+
+**❌ Oficina de producción** (dirección administrativa, no de rodaje):
+- Direcciones junto al logo de la empresa o en pie de página
+- Production Office / Oficina de producción / Produktionsbüro
+- Studio headquarters / Sede de la productora
+- EXCEPCIÓN: inclúyela SOLO si dice explícitamente "Filming here" / "Set" / "Drehort aquí"
+
+**❌ Plan del día siguiente o fechas futuras**:
+- Todo lo que aparezca bajo: `NEXT DAY` / `TOMORROW` / `NÄCHSTER DREHTAG` / `MORGEN` / `FOLGETAG` / `DÍA SIGUIENTE` / `MAÑANA` / `ADVANCE SCHEDULE` / `PRODUCTION PLAN` / `UPCOMING`
+- Cualquier sección con una fecha distinta a la fecha principal del documento
+- Cómo identificar el día principal: la fecha más prominente en el encabezado (más grande o en la parte superior)
+
+**❌ Unidades secundarias y drones** (equipo separado, locación diferente):
+- Secciones bajo: `DRONE UNIT` / `AERIAL UNIT` / `DROHNEN` / `LUFTAUFNAHMEN` / `AERIALS`
+- Secciones bajo: `2ND UNIT` / `B-UNIT` / `SEGUNDA UNIDAD` / `ZWEITE EINHEIT` / `B-EINHEIT`
+- Secciones bajo: `SPLINTER UNIT` / `C-UNIT` / `STUNT UNIT` / `SFX UNIT`
+- Si no hay etiqueta de unidad, asume que es la unidad principal → SÍ extraer
 
 ---
 
