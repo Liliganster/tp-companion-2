@@ -937,8 +937,10 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     if (!nextOpen) {
       const pendingCallsheets = Array.from(cancelCallsheetJobIdsRef.current);
       const pendingInvoices = Array.from(cancelInvoiceJobIdsRef.current);
+      const inFlightCount = docAbortControllersRef.current.size;
       const totalPending = pendingCallsheets.length + pendingInvoices.length;
-      console.warn("[handleDialogOpenChange] Pending jobs to cancel:", { pendingCallsheets, pendingInvoices, totalPending });
+      const shouldShowCancelToast = totalPending > 0 || inFlightCount > 0;
+      console.warn("[handleDialogOpenChange] Pending jobs to cancel:", { pendingCallsheets, pendingInvoices, totalPending, inFlightCount });
       
       // Abort all in-flight extractions FIRST (before clearing refs)
       docAbortControllersRef.current.forEach((ac, docId) => {
@@ -949,9 +951,10 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       void cancelCallsheetJobs(pendingCallsheets);
       void cancelInvoiceJobs(pendingInvoices);
       
-      if (totalPending > 0) {
-        console.warn("[handleDialogOpenChange] Showing cancel toast for", totalPending, "jobs");
-        toast.info(`Procesamiento cancelado (${totalPending} trabajo${totalPending > 1 ? 's' : ''})`, {
+      if (shouldShowCancelToast) {
+        const totalToCancel = Math.max(totalPending, inFlightCount);
+        console.warn("[handleDialogOpenChange] Showing cancel toast for", totalToCancel, "jobs");
+        toast.info(`Procesamiento cancelado (${totalToCancel} trabajo${totalToCancel > 1 ? 's' : ''})`, {
           duration: 4000,
         });
       }
@@ -1060,6 +1063,14 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
         console.error("[handleExtract] API error", { docId: doc.id, errData });
+        if (response.status === 402 || (errData as any)?.error === "quota_exceeded") {
+          console.warn("[handleExtract] quota_exceeded -> removing document from UI", { docId: doc.id });
+          localStatusOverridesRef.current.delete(doc.id);
+          cancelCallsheetJobIdsRef.current.delete(doc.id);
+          setRealCallSheets((prev) => prev.filter((p) => p.id !== doc.id));
+          toast.error("Límite mensual alcanzado: este documento no se guardó");
+          return;
+        }
         throw new Error((errData as any).message ?? `Error ${response.status}`);
       }
 
@@ -1118,7 +1129,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
     // Find all un-processed docs
     const toProcess = realCallSheets.filter(
-      (j) => j.status === "created" || j.status === "queued" || j.status === "failed"
+      (j) => j.status === "created" || j.status === "queued" || j.status === "failed" || j.status === "out_of_quota"
     );
     
     console.warn("[handleTriggerWorker] Docs to process:", toProcess.map(d => ({ id: d.id, status: d.status, name: d.name })));
@@ -1581,7 +1592,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                       </div>
                       
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {sheet.status !== 'processing' && sheet.status !== 'out_of_quota' && (
+                        {sheet.status !== 'processing' && (
                           <Button 
                             variant="ghost" 
                             size="icon" 

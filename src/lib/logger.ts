@@ -1,12 +1,9 @@
 import { captureClientError } from "@/lib/sentryClient";
 
-const DEV = import.meta.env.DEV;
 const IS_TEST = import.meta.env.MODE === "test";
 
 function safeConsole(method: "debug" | "info" | "warn" | "error", args: unknown[]) {
   if (IS_TEST) return;
-  // Solo silenciamos 'debug' e 'info' en producción. Los 'warn' y 'error' siempre se deben ver.
-  if (!DEV && (method === "debug" || method === "info")) return;
   const fn = console[method] as ((...a: unknown[]) => void) | undefined;
   if (typeof fn !== "function") return;
   fn(...args);

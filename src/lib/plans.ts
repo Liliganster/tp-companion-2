@@ -109,13 +109,18 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
   },
 };
 
+function normalizePlanTier(tier: PlanTier | string | undefined | null): PlanTier {
+  const value = String(tier ?? "").trim().toLowerCase();
+  if (value === "pro" || value === "pro_plan" || value === "pro plan") return "pro";
+  return "basic";
+}
+
 /**
  * Get the plan limits for a given tier
  * Defaults to "basic" if tier is unknown
  */
 export function getPlanLimits(tier: PlanTier | string | undefined | null): PlanLimits {
-  if (tier === "pro") return PLAN_LIMITS.pro;
-  return PLAN_LIMITS.basic;
+  return PLAN_LIMITS[normalizePlanTier(tier)];
 }
 
 /**

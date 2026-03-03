@@ -36,7 +36,28 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
     // 2. Check monthly quota
     const quota = await checkAiMonthlyQuota(user.id, profile?.plan_tier);
     if (!quota.allowed) {
-      await supabaseAdmin.from("callsheet_jobs").update({ status: "out_of_quota", needs_review_reason: quota.reason ?? "monthly_quota_exceeded" }).eq("id", jobId).eq("user_id", user.id);
+      const { data: existingJob } = await supabaseAdmin
+        .from("callsheet_jobs")
+        .select("id, storage_path")
+        .eq("id", jobId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      const storagePath = String((existingJob as any)?.storage_path ?? "").trim();
+      if (storagePath && storagePath !== "pending") {
+        try {
+          await supabaseAdmin.storage.from("callsheets").remove([storagePath]);
+        } catch {
+          // ignore cleanup failure
+        }
+      }
+
+      await supabaseAdmin
+        .from("callsheet_jobs")
+        .delete()
+        .eq("id", jobId)
+        .eq("user_id", user.id);
+
       return sendJson(res, 402, { error: "quota_exceeded", reason: quota.reason });
     }
 
@@ -47,7 +68,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
       .update({ status: "processing", processing_started_at: now, processed_at: now })
       .eq("id", jobId)
       .eq("user_id", user.id)
-      .in("status", ["created", "queued", "failed", "cancelled"])
+      .in("status", ["created", "queued", "failed", "cancelled", "out_of_quota"])
       .select("id, storage_path, user_id")
       .maybeSingle();
 
