@@ -116,7 +116,16 @@ async function handleClimatiqFuelFactor(req: any, res: any) {
         if (config.paramType === 'volume' && userHistory?.kg_co2e_per_liter) finalFallback = Number(userHistory.kg_co2e_per_liter);
         else if (config.paramType === 'distance' && userHistory?.kg_co2e_per_km) finalFallback = Number(userHistory.kg_co2e_per_km);
       }
-      const payload = { fuelType, ...(config.paramType === 'volume' ? { kgCo2ePerLiter: finalFallback } : { kgCo2ePerKm: finalFallback }), activityId: null, dataVersion, source: 'historic_user_fallback', year: null, region: config.region, method: 'fallback', fallback: true };
+      const payload: any = { fuelType, ...(config.paramType === 'volume' ? { kgCo2ePerLiter: finalFallback } : { kgCo2ePerKm: finalFallback }), activityId: null, dataVersion, source: 'historic_user_fallback', year: null, region: config.region, method: 'fallback', fallback: true };
+      if (typeof attempt !== "undefined") {
+        payload._debug = {
+          status: attempt.status,
+          rawText: attempt.rawText,
+          message: "API called but failed or returned invalid data"
+        };
+      } else {
+        payload._debug = "No attempt made. Possibly missing API key.";
+      }
       return sendJson(res, 200, payload);
     }
 
@@ -152,7 +161,16 @@ async function handleClimatiqFuelFactor(req: any, res: any) {
         if (config.paramType === 'volume' && userHistory?.kg_co2e_per_liter) finalFallback = Number(userHistory.kg_co2e_per_liter);
         else if (config.paramType === 'distance' && userHistory?.kg_co2e_per_km) finalFallback = Number(userHistory.kg_co2e_per_km);
       }
-      const payload = { fuelType, ...(config.paramType === 'volume' ? { kgCo2ePerLiter: finalFallback } : { kgCo2ePerKm: finalFallback }), activityId: null, dataVersion, source: 'historic_user_fallback', year: null, region: config.region, method: 'fallback', fallback: true };
+      const payload: any = { fuelType, ...(config.paramType === 'volume' ? { kgCo2ePerLiter: finalFallback } : { kgCo2ePerKm: finalFallback }), activityId: null, dataVersion, source: 'historic_user_fallback', year: null, region: config.region, method: 'fallback', fallback: true };
+      if (typeof attempt !== "undefined") {
+        payload._debug = {
+          status: attempt.status,
+          rawText: attempt.rawText,
+          message: "API called but failed or returned invalid data"
+        };
+      } else {
+        payload._debug = "No attempt made. Possibly missing API key.";
+      }
       return sendJson(res, 200, payload);
     }
 
