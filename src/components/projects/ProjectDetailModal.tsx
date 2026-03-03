@@ -1047,7 +1047,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             
       if (error) throw error;
 
-      cancelCallsheetJobIdsRef.current.add(doc.id);
+      // Remove from cancel list: user explicitly requested processing, so closing the modal should NOT cancel it.
+      cancelCallsheetJobIdsRef.current.delete(doc.id);
 
       toast.success(doc.status === "done" ? t("projectDetail.toastReprocessingStarted") : t("projectDetail.toastExtractionStarted"));
       setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'queued' } : p));
