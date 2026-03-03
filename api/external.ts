@@ -132,7 +132,7 @@ async function handleClimatiqFuelFactor(req: any, res: any) {
     async function estimateOnce(activityId: string, region: string | null) {
       try {
         const parameters = config.paramType === "volume" ? { volume: 1, volume_unit: "l" } : { distance: 1, distance_unit: "km" };
-        const emissionFactor: any = { activity_id: activityId, data_version: dataVersion, lca_activity: config.lcaActivity };
+        const emissionFactor: any = { activity_id: activityId, data_version: dataVersion, source_lca_activity: config.lcaActivity };
         if (region) emissionFactor.region = region;
         const upstream = await fetch(ESTIMATE_URL, { method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ emission_factor: emissionFactor, parameters }) });
         const { data, rawText } = await readJsonResponse(upstream);
