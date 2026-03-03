@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Car, Calendar, Route, Leaf, FileText, Sparkles, Eye, Trash2, Upload, Receipt, Loader2 } from "lucide-react";
+import { Car, Calendar, Route, Leaf, FileText, Sparkles, Eye, Trash2, Upload, Receipt, Loader2, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/hooks/use-i18n";
 import { tf } from "@/lib/i18n";
@@ -99,6 +99,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const abortControllerRef = useRef<AbortController | null>(null);
   const cancelCallsheetJobIdsRef = useRef<Set<string>>(new Set());
   const cancelInvoiceJobIdsRef = useRef<Set<string>>(new Set());
+  // Per-document AbortControllers so each extraction can be cancelled individually
+  const docAbortControllersRef = useRef<Map<string, AbortController>>(new Map());
 
   useEffect(() => {
     // Reset per-project session state
@@ -119,6 +121,9 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
       }
+      // Abort any per-document extractions still in flight
+      for (const ac of docAbortControllersRef.current.values()) ac.abort();
+      docAbortControllersRef.current.clear();
       // Clear pending trips when closing
       if (!open) {
         setPendingTrips([]);
@@ -1036,6 +1041,10 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'processing' } : p));
       cancelCallsheetJobIdsRef.current.add(doc.id);
 
+      // Per-document AbortController (cancelled individually or on modal close)
+      const docAc = new AbortController();
+      docAbortControllersRef.current.set(doc.id, docAc);
+
       // Llamada directa y sincrona al endpoint de extraccion
       // El endpoint hace todo: claim → Gemini → guardar → done
       const { data: { session } } = await supabase.auth.getSession();
@@ -1046,8 +1055,10 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           Authorization: accessToken ? `Bearer ${accessToken}` : "",
           "Content-Type": "application/json",
         },
-        signal: abortControllerRef.current?.signal,
+        signal: docAc.signal,
       });
+
+      docAbortControllersRef.current.delete(doc.id);
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
@@ -1060,10 +1071,29 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       await materializeTripFromJob({ id: doc.id, storage_path: doc.storage_path, status: 'done' });
 
     } catch (e: any) {
-      if (e?.name === "AbortError") return; // modal cerrado, cancelacion esperada
+      docAbortControllersRef.current.delete(doc.id);
+      if (e?.name === "AbortError") {
+        // Cancelled (either by user or modal close) — update UI to show cancelled state
+        setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'cancelled' } : p));
+        cancelCallsheetJobIdsRef.current.delete(doc.id);
+        return;
+      }
       setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'failed' } : p));
       toast.error(tf("projectDetail.toastExtractionStartError", { message: e.message }));
     }
+  };
+
+  const handleCancelExtract = async (doc: ProjectDocument) => {
+    const ac = docAbortControllersRef.current.get(doc.id);
+    if (ac) {
+      ac.abort();
+      docAbortControllersRef.current.delete(doc.id);
+    }
+    cancelCallsheetJobIdsRef.current.delete(doc.id);
+    setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'cancelled' } : p));
+    toast.info("Procesamiento cancelado");
+    // Persist cancellation in DB
+    void cancelCallsheetJobs([doc.id]);
   };
 
   const handleTriggerWorker = async () => {
@@ -1497,7 +1527,23 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                         <FileText className="w-4 h-4 text-primary shrink-0" />
                         <span className="text-sm truncate">{sheet.name}</span>
                         {sheet.status === 'queued' || sheet.status === 'processing' ? (
-                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          <span className="flex items-center gap-1">
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            {sheet.status === 'processing' && (
+                              <button
+                                onClick={() => handleCancelExtract(sheet)}
+                                title="Cancelar procesamiento"
+                                className="h-4 w-4 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            )}
+                          </span>
+                        ) : null}
+                        {sheet.status === 'cancelled' ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-muted-foreground border border-white/10">
+                            Cancelado
+                          </span>
                         ) : null}
                         {sheet.status === 'needs_review' ? (
                           <span title={sheet.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-full cursor-help bg-white/10 text-muted-foreground border border-white/10">

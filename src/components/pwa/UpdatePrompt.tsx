@@ -10,22 +10,6 @@ export function UpdatePrompt() {
   const wbRef = useRef<WorkboxInstance | null>(null);
   const registeredRef = useRef(false);
   const promptShownRef = useRef(false);
-  // Becomes true once the user interacts with the page (click, key, scroll).
-  // If an update arrives before any interaction, we auto-reload silently.
-  const userInteractedRef = useRef(false);
-
-  // Track first user interaction so we know if the page is "fresh"
-  useEffect(() => {
-    const mark = () => { userInteractedRef.current = true; };
-    window.addEventListener("pointerdown", mark, { once: true, capture: true });
-    window.addEventListener("keydown", mark, { once: true, capture: true });
-    window.addEventListener("scroll", mark, { once: true, capture: true, passive: true });
-    return () => {
-      window.removeEventListener("pointerdown", mark, { capture: true });
-      window.removeEventListener("keydown", mark, { capture: true });
-      window.removeEventListener("scroll", mark, { capture: true });
-    };
-  }, []);
 
   useEffect(() => {
     if (import.meta.env.PROD) return;
@@ -81,12 +65,11 @@ export function UpdatePrompt() {
         if (cancelled) return;
         if (swRegistration) setRegistration(swRegistration);
 
-        // If a SW is already waiting (downloaded in a previous visit), activate immediately.
-        // The user just opened the app — no need for a toast, just reload.
+        // If a SW is already waiting (downloaded in a previous session),
+        // show the toast immediately so the user can decide when to update.
         if (swRegistration?.waiting) {
-          logger.debug("[SW] Found waiting SW on load, auto-reloading");
-          wb.messageSkipWaiting();
-          window.location.reload();
+          logger.debug("[SW] Found waiting SW on load");
+          setNeedRefresh(true);
         }
       } catch (error) {
         logger.warn("SW registration error", error);
@@ -142,17 +125,8 @@ export function UpdatePrompt() {
     if (promptShownRef.current) return;
     promptShownRef.current = true;
 
-    // If the user hasn't interacted with the page yet, they just opened the app.
-    // Silently activate the new SW and reload — no toast needed.
-    if (!userInteractedRef.current) {
-      logger.debug("[SW] Auto-reloading on fresh navigation");
-      wbRef.current?.messageSkipWaiting();
-      window.location.reload();
-      return;
-    }
-
     toast("Nueva versión disponible", {
-      description: "Haz clic en actualizar para cargar la nueva versión.",
+      description: "Haz clic en Actualizar para cargar la nueva versión. La página se recargará.",
       action: {
         label: "Actualizar",
         onClick: async () => {
