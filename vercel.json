@@ -1,14 +1,4 @@
 {
-  "crons": [
-    {
-      "path": "/api/worker",
-      "schedule": "0 0 * * *"
-    },
-    {
-      "path": "/api/invoice-worker",
-      "schedule": "0 0 * * *"
-    }
-  ],
   "functions": {
     "api/**/*.ts": {
       "maxDuration": 60

@@ -7,7 +7,120 @@ import { supabaseAdmin } from "../src/lib/supabaseServer.js";
 import { withApiObservability } from "./_utils/observability.js";
 import { requireSupabaseUser, sendJson } from "./_utils/supabase.js";
 import { enforceRateLimit } from "./_utils/rateLimit.js";
+import { checkAiMonthlyQuota } from "./_utils/aiQuota.js";
+import { generateContentFromPDF } from "../src/lib/ai/geminiClient.js";
+import { buildUniversalExtractorPrompt } from "../src/lib/ai/prompts.js";
+import { extractionSchema } from "../src/lib/ai/schema.js";
+import { CallsheetExtractionResultSchema } from "../src/lib/ai/validation.js";
 import { z } from "zod";
+
+// ─── /api/callsheets/process ────────────────────────────────────────────────
+// Direct synchronous extraction: claim job → download PDF → call Gemini → save results → done.
+// No worker, no fire-and-forget, no polling needed. maxDuration=60s covers Gemini (15-30s).
+const handleProcess = withApiObservability(async function handler(req: any, res: any, { log, requestId }) {
+  if (req.method !== "POST") { res.statusCode = 405; res.setHeader("Allow", "POST"); res.end(); return; }
+
+  const user = await requireSupabaseUser(req, res);
+  if (!user) return;
+
+  const allowed = await enforceRateLimit({ req, res, name: "callsheet_process", identifier: user.id, limit: 10, windowMs: 60_000, requestId });
+  if (!allowed) return;
+
+  const jobId = typeof req.query?.jobId === "string" ? req.query.jobId.trim() : null;
+  if (!jobId) return sendJson(res, 400, { error: "missing_jobId" });
+
+  try {
+    // 1. Check monthly quota
+    const quota = await checkAiMonthlyQuota(user.id);
+    if (!quota.allowed) {
+      await supabaseAdmin.from("callsheet_jobs").update({ status: "out_of_quota", needs_review_reason: quota.reason ?? "monthly_quota_exceeded" }).eq("id", jobId).eq("user_id", user.id);
+      return sendJson(res, 402, { error: "quota_exceeded", reason: quota.reason });
+    }
+
+    // 2. Atomically claim the job (created/queued/failed/cancelled → processing)
+    const now = new Date().toISOString();
+    const { data: job, error: claimError } = await supabaseAdmin
+      .from("callsheet_jobs")
+      .update({ status: "processing", processing_started_at: now, processed_at: now })
+      .eq("id", jobId)
+      .eq("user_id", user.id)
+      .in("status", ["created", "queued", "failed", "cancelled"])
+      .select("id, storage_path, user_id")
+      .maybeSingle();
+
+    if (claimError) return sendJson(res, 500, { error: "claim_failed", message: claimError.message });
+    if (!job) {
+      const { data: existing } = await supabaseAdmin.from("callsheet_jobs").select("status").eq("id", jobId).maybeSingle();
+      const s = String((existing as any)?.status ?? "");
+      // If already processing or done, return ok so the client can poll/refresh
+      if (s === "done") return sendJson(res, 200, { ok: true, alreadyDone: true });
+      return sendJson(res, 409, { error: "not_claimable", status: s });
+    }
+
+    // 3. Download PDF from storage
+    const { data: fileData, error: downloadError } = await supabaseAdmin.storage.from("callsheets").download(job.storage_path);
+    if (downloadError || !fileData) {
+      await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", last_error: "PDF download failed", needs_review_reason: downloadError?.message ?? "download_failed" }).eq("id", jobId);
+      return sendJson(res, 500, { error: "download_failed", message: downloadError?.message });
+    }
+
+    // 4. Load user AI settings (OpenRouter override if configured)
+    const { data: profile } = await supabaseAdmin.from("user_profiles").select("openrouter_enabled, openrouter_api_key, openrouter_model").eq("id", user.id).maybeSingle();
+    const userSettings = profile?.openrouter_enabled && profile?.openrouter_api_key
+      ? { openrouterEnabled: true, openrouterApiKey: profile.openrouter_api_key, openrouterModel: profile.openrouter_model }
+      : undefined;
+
+    // 5. Call Gemini (or OpenRouter)
+    const buffer = Buffer.from(await fileData.arrayBuffer());
+    const prompt = buildUniversalExtractorPrompt("[PDF CONTENT ATTACHED]");
+    const aiResult = await generateContentFromPDF("gemini-2.5-flash", prompt, buffer, "application/pdf", extractionSchema, userSettings);
+    log.info({ jobId, provider: aiResult.provider, model: aiResult.model }, "callsheet_process_ai_done");
+
+    // 6. Parse and validate
+    let extractedJson: any = null;
+    try { extractedJson = JSON.parse(aiResult.text); }
+    catch { extractedJson = JSON.parse(aiResult.text.replace(/```json|```/g, "").trim()); }
+
+    const validated = CallsheetExtractionResultSchema.safeParse(extractedJson);
+    if (!validated.success) {
+      const reason = `invalid_extraction: ${validated.error.issues.map((i: any) => i.message).join("; ")}`;
+      await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", needs_review_reason: reason }).eq("id", jobId);
+      return sendJson(res, 422, { error: "extraction_invalid", reason });
+    }
+    const extracted = validated.data;
+
+    // 7. Save results
+    const { error: resultError } = await supabaseAdmin.from("callsheet_results").insert({
+      job_id: jobId,
+      date_value: extracted.date,
+      project_value: extracted.projectName,
+      producer_value: (extracted.productionCompanies as any)?.[0],
+    });
+    if (resultError) throw new Error(`Failed to save results: ${resultError.message}`);
+
+    if (extracted.locations.length > 0) {
+      const { error: locsError } = await supabaseAdmin.from("callsheet_locations").insert(
+        extracted.locations.map((addr: string) => ({
+          job_id: jobId,
+          address_raw: addr,
+          label_source: "EXTRACTED",
+          evidence_text: addr,
+        }))
+      );
+      if (locsError) log.warn({ jobId, locsError }, "callsheet_process_locs_insert_failed");
+    }
+
+    // 8. Mark done
+    await supabaseAdmin.from("callsheet_jobs").update({ status: "done" }).eq("id", jobId).eq("status", "processing");
+    log.info({ jobId }, "callsheet_process_done");
+
+    return sendJson(res, 200, { ok: true, jobId, date: extracted.date, projectName: extracted.projectName, locations: extracted.locations });
+  } catch (err: any) {
+    log.error({ err, jobId }, "callsheet_process_error");
+    await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", last_error: err?.message ?? "unknown" }).eq("id", jobId).catch(() => {});
+    return sendJson(res, 500, { error: "process_failed", message: err?.message ?? "Extraction failed" });
+  }
+}, { name: "callsheets/process" });
 
 // ─── /api/callsheets/create-upload ──────────────────────────────────────────
 const CreateUploadBodySchema = z.object({
@@ -196,6 +309,7 @@ export default async function handler(req: any, res: any) {
   const rawPath = (req.url || "").split("?")[0].replace(/\/$/, "");
   const path = rawPath.includes("/api/callsheets") ? rawPath : `/api/callsheets/${rawPath.replace(/^\//, "")}`;
 
+  if (path === "/api/callsheets/process"        || path.endsWith("/process"))        return handleProcess(req, res);
   if (path === "/api/callsheets/create-upload" || path.endsWith("/create-upload"))   return handleCreateUpload(req, res);
   if (path === "/api/callsheets/queue"          || path.endsWith("/queue"))           return handleQueue(req, res);
   if (path === "/api/callsheets/status"         || path.endsWith("/status"))          return handleStatus(req, res);

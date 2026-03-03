@@ -93,29 +93,20 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     }
   }, [open, project]);
 
-  // Tracks which jobs the user has explicitly triggered via "Procesar".
-  // While the DB is still in "queued" (waiting for the worker to claim it),
-  // the UI shows "processing" so the user never sees the intermediate queued state.
-  const recentlyTriggeredRef = useRef<Set<string>>(new Set());
   const processedJobsRef = useRef<Set<string>>(new Set());
   const inFlightJobsRef = useRef<Set<string>>(new Set());
   const processedInvoiceJobsRef = useRef<Set<string>>(new Set());
   const abortControllerRef = useRef<AbortController | null>(null);
   const cancelCallsheetJobIdsRef = useRef<Set<string>>(new Set());
   const cancelInvoiceJobIdsRef = useRef<Set<string>>(new Set());
-  // Tracks how many polling ticks each job has been stuck in "queued" without being claimed.
-  // If it exceeds the threshold the client re-triggers the worker so the user never has to wait for cron.
-  const queuedTicksRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     // Reset per-project session state
     processedJobsRef.current = new Set();
-    recentlyTriggeredRef.current = new Set();
     inFlightJobsRef.current = new Set();
     processedInvoiceJobsRef.current = new Set();
     cancelCallsheetJobIdsRef.current = new Set();
     cancelInvoiceJobIdsRef.current = new Set();
-    queuedTicksRef.current = new Map();
     
     // Create new abort controller when modal opens
     if (open) {
@@ -748,24 +739,11 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
               const path = job.storage_path || existing?.storage_path || "";
               const name = (existing?.name || path.split("/").pop() || path || "Documento").toString();
 
-              // If the user just clicked "Procesar" and the worker hasn't claimed the job yet,
-              // the DB still says "queued". Show "processing" so the user never sees a queue flash.
-              // Once the DB moves past "queued", remove from ref and follow DB state normally.
-              let displayStatus = job.status;
-              if (recentlyTriggeredRef.current.has(job.id)) {
-                if (job.status === "queued") {
-                  displayStatus = "processing";
-                } else {
-                  // Worker has claimed it or it failed — follow DB from now on.
-                  recentlyTriggeredRef.current.delete(job.id);
-                }
-              }
-
               const next: ProjectDocument = {
                 id: job.id,
                 name,
                 type: "call-sheet",
-                status: displayStatus,
+                status: job.status,
                 storage_path: job.storage_path,
                 needs_review_reason: job.needs_review_reason,
               };
@@ -918,40 +896,6 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         const hasInvoicePending = projectDocsRef.current.some(
           (d: any) => d.status === "queued" || d.status === "processing" || d.status === "created"
         );
-
-        // If any callsheet job has been in "queued" for too long the worker fire-and-forget
-        // may have been silently dropped by Vercel. Re-trigger from the client (browser stays alive).
-        // Threshold: 5 ticks × 2 s = ~10 s, then retry once. Reset when job moves to processing/done.
-        const STUCK_QUEUED_TICKS = 5;
-        for (const j of (jobs ?? []) as any[]) {
-          const jid = String(j?.id ?? "");
-          if (!jid) continue;
-          if (j?.status === "queued") {
-            const ticks = (queuedTicksRef.current.get(jid) ?? 0) + 1;
-            queuedTicksRef.current.set(jid, ticks);
-            if (ticks === STUCK_QUEUED_TICKS) {
-              // Re-trigger the worker for this specific job from the client.
-              logger.debug("[Polling] Job stuck in queued, re-triggering worker", { jid });
-              void (async () => {
-                try {
-                  const { data: { session } } = await supabase.auth.getSession();
-                  const accessToken = session?.access_token;
-                  await fetch(`/api/callsheets/trigger-worker?jobId=${encodeURIComponent(jid)}`, {
-                    method: "POST",
-                    headers: {
-                      Authorization: accessToken ? `Bearer ${accessToken}` : "",
-                      "Content-Type": "application/json",
-                    },
-                    // No signal — must not be aborted by modal lifecycle
-                  });
-                } catch { /* best-effort */ }
-              })();
-            }
-          } else {
-            // Job moved out of queued — reset counter
-            queuedTicksRef.current.delete(jid);
-          }
-        }
         
         if (!hasPending && !hasInvoicePending && interval) {
           if (DEBUG) logger.debug("[Polling] No pending jobs, stopping polling");
@@ -1060,92 +1004,64 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   };
   
   const handleExtract = async (doc: ProjectDocument, isReprocess = false) => {
-    if (doc.status === 'queued' || doc.status === 'processing') {
+    if (doc.status === 'processing') {
       toast.info("El documento ya se está procesando");
       return;
     }
-    
-    // Si es re-procesamiento, confirmar primero
+
     if (doc.status === 'done' && !isReprocess) {
       if (!confirm("Este documento ya fue procesado. ¿Quieres volver a procesarlo? Se borrarán los datos anteriores y se hará una nueva extracción con IA.")) {
         return;
       }
     }
-    
+
     try {
-      // Si está en 'done', limpiar datos anteriores
+      // Limpiar datos anteriores si es re-procesamiento
       if (doc.status === 'done') {
-        // 1. Eliminar el viaje asociado a este job
         const tripToDelete = trips.find(t => t.callsheet_job_id === doc.id);
         if (tripToDelete) {
-          const { error: tripError } = await supabase
-            .from("trips")
-            .delete()
-            .eq("id", tripToDelete.id);
-          if (tripError) logger.warn("Error eliminando viaje anterior", tripError);
+          await supabase.from("trips").delete().eq("id", tripToDelete.id);
         }
-
-        // 2. Eliminar resultados de extracción anteriores
-        const { error: resultsError } = await supabase
-          .from("callsheet_results")
-          .delete()
-          .eq("job_id", doc.id);
-        if (resultsError) logger.warn("Error eliminando resultados", resultsError);
-
-        // 3. Eliminar ubicaciones anteriores
-        const { error: locsError } = await supabase
-          .from("callsheet_locations")
-          .delete()
-          .eq("job_id", doc.id);
-        if (locsError) logger.warn("Error eliminando ubicaciones", locsError);
-
-        // 4. Marcar el job para re-procesamiento
+        await supabase.from("callsheet_results").delete().eq("job_id", doc.id);
+        await supabase.from("callsheet_locations").delete().eq("job_id", doc.id);
         processedJobsRef.current.delete(doc.id);
       }
 
-      // Ensure project_id is set (upload might have happened before project was selected).
-      // Do NOT change status here — trigger-worker claims atomically to "processing" directly,
-      // so the job never sits in "queued" for the manual single-doc flow.
+      // Actualizar project_id si hace falta
       if (project?.id) {
-        await supabase
-          .from("callsheet_jobs")
-          .update({ project_id: project.id })
-          .eq("id", doc.id);
+        await supabase.from("callsheet_jobs").update({ project_id: project.id }).eq("id", doc.id);
       }
 
-      // Track this job so it gets cancelled if the user closes the modal before it finishes.
-      cancelCallsheetJobIdsRef.current.add(doc.id);
-      // Safety: show "processing" in UI immediately even before trigger-worker responds.
-      recentlyTriggeredRef.current.add(doc.id);
-
-      toast.success(doc.status === "done" ? t("projectDetail.toastReprocessingStarted") : t("projectDetail.toastExtractionStarted"));
+      // Mostrar spinner inmediatamente
       setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'processing' } : p));
+      cancelCallsheetJobIdsRef.current.add(doc.id);
 
-      // Best-effort: kick the worker so the user doesn't have to wait for cron or press "Procesar ahora".
-      // IMPORTANT: no `signal` here — this fetch must NOT be aborted by the polling AbortController
-      // lifecycle. If the modal re-renders or the effect re-runs the signal would abort this fetch
-      // silently, leaving the job stuck in "queued" until cron. The polling already handles retries.
-      void (async () => {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          const accessToken = session?.access_token;
-          const res = await fetch(`/api/callsheets/trigger-worker?jobId=${encodeURIComponent(doc.id)}`, {
-            method: "POST",
-            headers: {
-              Authorization: accessToken ? `Bearer ${accessToken}` : "",
-              "Content-Type": "application/json",
-            },
-          });
+      // Llamada directa y sincrona al endpoint de extraccion
+      // El endpoint hace todo: claim → Gemini → guardar → done
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      const response = await fetch(`/api/callsheets/process?jobId=${encodeURIComponent(doc.id)}`, {
+        method: "POST",
+        headers: {
+          Authorization: accessToken ? `Bearer ${accessToken}` : "",
+          "Content-Type": "application/json",
+        },
+        signal: abortControllerRef.current?.signal,
+      });
 
-          if (!res.ok) {
-            const msg = await res.text().catch(() => "");
-            logger.warn("[ProjectDetailModal] trigger-worker failed", { status: res.status, msg });
-          }
-        } catch (err) {
-          logger.warn("[ProjectDetailModal] trigger-worker error", err);
-        }
-      })();
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error((errData as any).message ?? `Error ${response.status}`);
+      }
+
+      // Exito: actualizar UI y materializar el viaje directamente
+      setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'done' } : p));
+      cancelCallsheetJobIdsRef.current.delete(doc.id);
+      await materializeTripFromJob({ id: doc.id, storage_path: doc.storage_path, status: 'done' });
+
     } catch (e: any) {
+      if (e?.name === "AbortError") return; // modal cerrado, cancelacion esperada
+      setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'failed' } : p));
       toast.error(tf("projectDetail.toastExtractionStartError", { message: e.message }));
     }
   };
