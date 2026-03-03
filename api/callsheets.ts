@@ -119,7 +119,11 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
     return sendJson(res, 200, { ok: true, jobId, date: extracted.date, projectName: extracted.projectName, locations: extracted.locations });
   } catch (err: any) {
     log.error({ err, jobId }, "callsheet_process_error");
-    await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", last_error: err?.message ?? "unknown" }).eq("id", jobId).catch(() => {});
+    try {
+      await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", last_error: err?.message ?? "unknown" }).eq("id", jobId);
+    } catch (updateErr) {
+      // ignore
+    }
     return sendJson(res, 500, { error: "process_failed", message: err?.message ?? "Extraction failed" });
   }
 }, { name: "callsheets/process" });
