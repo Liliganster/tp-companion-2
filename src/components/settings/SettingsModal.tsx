@@ -84,6 +84,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   };
 
   const { profile, saveProfile } = useUserProfile();
+  const { planTier } = usePlan();
   const { appearance, saveAppearance, previewAppearance, resetPreview } = useAppearance();
   const { getAccessToken, signOut, user } = useAuth();
 

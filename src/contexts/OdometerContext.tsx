@@ -35,11 +35,11 @@ type OdometerContextValue = {
   /** Delete a snapshot and its associated photo from storage. */
   deleteSnapshot: (id: string) => Promise<void>;
   /**
-   * Compute work vs private km ratio for the given year.
-   * Uses the two snapshots that bracket the year (earliest before/at year-end,
-   * latest at/after year-start). Returns null if < 2 distinct snapshots exist.
+   * Compute work vs private km ratio for the given period.
+   * Uses the two snapshots that bracket the period (earliest before/at period-end,
+   * latest at/after period-start). Returns null if < 2 distinct snapshots exist.
    */
-  computeRatio: (year: number) => OdometerRatio | null;
+  computeRatio: (periodStart: string, periodEnd: string) => OdometerRatio | null;
   /** Get a signed (or public) URL for a storage path. */
   getImageUrl: (storagePath: string) => Promise<string | null>;
   /** Reload snapshots from Supabase. */
@@ -129,16 +129,13 @@ export function OdometerProvider({ children }: { children: ReactNode }) {
     setSnapshots((prev) => prev.filter((s) => s.id !== id));
   }, [snapshots]);
 
-  const computeRatio = useCallback((year: number): OdometerRatio | null => {
+  const computeRatio = useCallback((periodStart: string, periodEnd: string): OdometerRatio | null => {
     if (snapshots.length < 2) return null;
 
-    const yearStart = `${year}-01-01`;
-    const yearEnd = `${year}-12-31`;
-
-    // The "start" snapshot: nearest snapshot before or on the year-end
-    const candidatesStart = snapshots.filter((s) => s.snapshot_date <= yearEnd);
-    // The "end" snapshot: nearest snapshot after or on the year-start
-    const candidatesEnd = snapshots.filter((s) => s.snapshot_date >= yearStart);
+    // The "start" snapshot: earliest snapshot before or on the period-end
+    const candidatesStart = snapshots.filter((s) => s.snapshot_date <= periodEnd);
+    // The "end" snapshot: latest snapshot after or on the period-start
+    const candidatesEnd = snapshots.filter((s) => s.snapshot_date >= periodStart);
 
     if (candidatesStart.length === 0 || candidatesEnd.length === 0) return null;
 

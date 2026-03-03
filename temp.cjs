@@ -1,0 +1,1 @@
+﻿const fs = require('fs');let s = fs.readFileSync('api/worker.ts', 'utf-8');let idx = s.lastIndexOf('await recordUsage({'); let endIdx = s.lastIndexOf('log.info({ jobId'); let old = s.substring(idx, endIdx); s = s.replace(old, 'if (selectedAiProvider !== \'openrouter\') {\n            ' + old.split('\n').join('\n  ') + '}\n          '); fs.writeFileSync('api/worker.ts', s);

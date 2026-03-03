@@ -278,7 +278,9 @@ function OdometerRatioCard({ year, setYear }: { year: number; setYear: (y: numbe
   const { t, tf } = useI18n();
   const { computeRatio, snapshots } = useOdometer();
 
-  const ratio = computeRatio(year);
+    const periodStart = `${year}-01-01`;
+    const periodEnd = `${year}-12-31`;
+    const ratio = computeRatio(periodStart, periodEnd);
   const snapshotCount = snapshots.length;
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
@@ -487,7 +489,6 @@ export function OdometerSettingsSection() {
     if (snap.extraction_status === "user_edited") {
       return (
         <span className="inline-flex items-center gap-0.5 text-[10px] bg-amber-500/10 text-amber-600 px-1 rounded">
-          <Pencil className="w-2 h-2" />
           {t("odometer.userEdited")}
         </span>
       );
@@ -495,7 +496,6 @@ export function OdometerSettingsSection() {
     if (snap.extraction_status === "failed") {
       return (
         <span className="flex items-center gap-0.5 text-[10px] text-destructive">
-          <AlertCircle className="w-2.5 h-2.5" />
           {t("odometer.extractionFailed")}
         </span>
       );

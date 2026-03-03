@@ -55,6 +55,7 @@ async function countExtractionsThisMonth(
       .select("id", { count: "exact" })
       .range(0, 0)
       .eq("user_id", userId)
+      .eq("kind", "callsheet")
       .eq("status", "done")
       .gte("run_at", sinceIso);
 
@@ -67,7 +68,7 @@ async function countExtractionsThisMonth(
     return typeof count === "number" ? count : 0;
   };
 
-  const countTable = async (table: "invoice_jobs" | "callsheet_jobs", status: "done" | "processing") => {
+  const countTable = async (table: "callsheet_jobs", status: "done" | "processing") => {
     let q = supabaseAdmin
       .from(table)
       // Avoid HEAD requests: some networks/proxies can fail them and return a wrong count.
@@ -85,17 +86,15 @@ async function countExtractionsThisMonth(
     return typeof count === "number" ? count : 0;
   };
 
-  const [doneFromUsage, invoiceDone, callsheetDone, invoiceProcessing, callsheetProcessing] = await Promise.all([
+  const [doneFromUsage, callsheetDone, callsheetProcessing] = await Promise.all([
     countDoneFromUsage(),
-    countTable("invoice_jobs", "done"),
     countTable("callsheet_jobs", "done"),
-    countTable("invoice_jobs", "processing"),
     countTable("callsheet_jobs", "processing"),
   ]);
 
   return {
-    done: typeof doneFromUsage === "number" ? doneFromUsage : invoiceDone + callsheetDone,
-    processing: invoiceProcessing + callsheetProcessing,
+    done: typeof doneFromUsage === "number" ? doneFromUsage : callsheetDone,
+    processing: callsheetProcessing,
   };
 }
 

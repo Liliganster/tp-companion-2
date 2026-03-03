@@ -535,12 +535,14 @@ export default withApiObservability(async function handler(req: any, res: any, {
           log.warn({ jobId, err }, "failed_to_log_extraction_metrics");
         }
 
-        await recordUsage({
-          userId: String((claimed as any).user_id ?? (job as any).user_id ?? ""),
-          jobId,
-          runAt: (claimed as any).processed_at ?? null,
-        });
-        log.info({ jobId, retryCount: currentRetry }, "callsheet_job_done");
+        if (selectedAiProvider !== 'openrouter') {
+            await recordUsage({
+            userId: String((claimed as any).user_id ?? (job as any).user_id ?? ""),
+            jobId,
+            runAt: (claimed as any).processed_at ?? null,
+          });
+          }
+          log.info({ jobId, retryCount: currentRetry }, "callsheet_job_done");
         processedResults.push({ id: jobId, status: "success", retries: currentRetry });
       } catch (jobErr: any) {
         log.error({ jobId, err: jobErr, retryCount: currentRetry }, "callsheet_job_failed");
