@@ -6,8 +6,14 @@ import { CallsheetExtractionResultSchema } from "../src/lib/ai/validation.js";
 import { captureServerException, logger, withApiObservability } from "./_utils/observability.js";
 import { enforceRateLimit } from "./_utils/rateLimit.js";
 import { checkAiMonthlyQuota } from "./_utils/aiQuota.js";
-import { calculateNextRetry, isJobStuck, shouldRetry, DEFAULT_RETRY_STRATEGY } from "./_utils/retry.js";
-import { getPlanLimits } from "./_utils/plans.js";
+import { calculateNextRetry, DEFAULT_RETRY_STRATEGY } from "./_utils/retry.js";
+import {
+  CALLSHEET_PARALLEL_BATCH_SIZE,
+  getCallsheetWorkerFetchLimit,
+  limitCallsheetJobsByPlan,
+  runWithConcurrencyLimit,
+  shouldSelfTriggerCallsheetBatch,
+} from "./_utils/callsheetWorker.js";
 
 // Geocoding function with direct access to env vars
 async function geocodeAddress(address: string) {
@@ -51,7 +57,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
   const manualJobId = manual && typeof req.query?.jobId === "string" ? String(req.query.jobId).trim() : null;
   // preClaimed=1: trigger-worker already set this job to "processing"; skip the atomic claim step.
   const preClaimed = manual && manualJobId != null && String(req.query?.preClaimed ?? "").trim() === "1";
-  const maxJobs = manual ? (manualJobId ? 1 : 4) : 16; // Keep single-job manual runs deterministic, but allow small manual batches.
+  const maxJobs = getCallsheetWorkerFetchLimit({ manual, manualJobId });
   const manualUserId = manual && typeof req.query?.userId === "string" ? String(req.query.userId).trim() : null;
 
   const queryKey = typeof req.query?.key === "string" ? req.query.key : null;
@@ -218,32 +224,25 @@ export default withApiObservability(async function handler(req: any, res: any, {
       return;
     }
 
-    // Enforce per-user plan limits: group jobs by user, limit Basic users to 1 job per run.
-    // This prevents the cron from bulk-processing multiple callsheets for Basic plan users.
-    const jobsByUser = new Map<string, any[]>();
-    for (const job of jobs) {
-      const uid = String((job as any).user_id ?? "").trim();
-      if (!uid) continue;
-      if (!jobsByUser.has(uid)) jobsByUser.set(uid, []);
-      jobsByUser.get(uid)!.push(job);
-    }
-
     // Cache user profiles (plan tier + AI settings) in one query per user to avoid
     // redundant DB roundtrips later inside processJob.
     const userProfileCache = new Map<string, any>();
-    const limitedJobs: any[] = [];
-    for (const [uid, userJobs] of jobsByUser) {
+    const planTierByUserId = new Map<string, string>();
+    const userIds = Array.from(
+      new Set(jobs.map((job) => String((job as any).user_id ?? "").trim()).filter(Boolean)),
+    );
+
+    for (const uid of userIds) {
       const { data: profile } = await supabaseAdmin
         .from("user_profiles")
         .select("plan_tier, openrouter_enabled, openrouter_api_key, openrouter_model")
         .eq("id", uid)
         .maybeSingle();
       userProfileCache.set(uid, profile ?? {});
-      const planTier = String((profile as any)?.plan_tier ?? "basic").trim();
-      const limits = getPlanLimits(planTier);
-      const maxPerRun = limits.maxCallsheetsPerWorkerRun;
-      limitedJobs.push(...userJobs.slice(0, maxPerRun));
+      planTierByUserId.set(uid, String((profile as any)?.plan_tier ?? "basic").trim());
     }
+
+    const limitedJobs = limitCallsheetJobsByPlan({ jobs, planTierByUserId });
 
     const processedResults: any[] = [];
 
@@ -601,33 +600,48 @@ export default withApiObservability(async function handler(req: any, res: any, {
       }
     }
 
-    // Process sequentially (not in parallel) for stability with Gemini API.
-    // Parallel calls cause rate-limit errors and timeouts under load.
-    for (const job of limitedJobs) {
-      await processJob(job);
-    }
+    // Pro users can advance up to 5 jobs at once; Basic remains capped at 1 by plan slicing above.
+    await runWithConcurrencyLimit({
+      items: limitedJobs,
+      concurrency: CALLSHEET_PARALLEL_BATCH_SIZE,
+      worker: async (job) => {
+        await processJob(job);
+      },
+    });
 
     // After processing this batch, check if there are still queued jobs.
-    // If so, self-trigger the worker so the next batch runs automatically
-    // (Pro users upload up to 20, processed 5 at a time without user intervention).
-    if (!manual) {
+    // If so, self-trigger the worker so the next batch runs automatically.
+    // Manual single-job runs stay single-job; manual batch runs keep draining the same user's queue.
+    if (shouldSelfTriggerCallsheetBatch({ manual, manualJobId, manualUserId })) {
       try {
-        const { count: remainingCount } = await supabaseAdmin
+        let remainingQuery = supabaseAdmin
           .from("callsheet_jobs")
           .select("id", { head: true, count: "exact" })
           .eq("status", "queued");
+        if (manual && manualUserId) {
+          remainingQuery = remainingQuery.eq("user_id", manualUserId);
+        }
+        const { count: remainingCount } = await remainingQuery;
 
         if ((remainingCount ?? 0) > 0) {
           const hostHeader = req.headers?.host;
           if (hostHeader) {
             const proto = hostHeader.includes("localhost") ? "http" : "https";
-            const selfUrl = `${proto}://${hostHeader}/api/worker`;
+            const params = new URLSearchParams();
+            if (manual) {
+              params.set("manual", "1");
+              if (skipGeocode) params.set("skipGeocode", "1");
+              if (manualUserId) params.set("userId", manualUserId);
+            }
+            const selfUrl = params.size > 0
+              ? `${proto}://${hostHeader}/api/worker?${params.toString()}`
+              : `${proto}://${hostHeader}/api/worker`;
             const cronSecret = process.env.CRON_SECRET;
             fetch(selfUrl, {
               method: "POST",
               headers: { Authorization: cronSecret ? `Bearer ${cronSecret}` : "", "Content-Type": "application/json" },
             }).catch((err) => log.warn({ err }, "worker_self_trigger_failed"));
-            log.info({ remainingCount }, "worker_self_triggered_for_next_batch");
+            log.info({ remainingCount, manualBatch: manual }, "worker_self_triggered_for_next_batch");
           }
         }
       } catch (err) {
