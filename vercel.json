@@ -2,11 +2,11 @@
   "crons": [
     {
       "path": "/api/worker",
-      "schedule": "*/10 * * * *"
+      "schedule": "0 0 * * *"
     },
     {
       "path": "/api/invoice-worker",
-      "schedule": "*/10 * * * *"
+      "schedule": "0 0 * * *"
     }
   ],
   "functions": {

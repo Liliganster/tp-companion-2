@@ -962,8 +962,14 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
   const handleDialogOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
-      void cancelCallsheetJobs(Array.from(cancelCallsheetJobIdsRef.current));
-      void cancelInvoiceJobs(Array.from(cancelInvoiceJobIdsRef.current));
+      const pendingCallsheets = Array.from(cancelCallsheetJobIdsRef.current);
+      const pendingInvoices = Array.from(cancelInvoiceJobIdsRef.current);
+      const totalPending = pendingCallsheets.length + pendingInvoices.length;
+      void cancelCallsheetJobs(pendingCallsheets);
+      void cancelInvoiceJobs(pendingInvoices);
+      if (totalPending > 0) {
+        toast.info(t("projectDetail.toastProcessingCancelled") || "Procesamiento cancelado al cerrar el proyecto");
+      }
     }
     onOpenChange(nextOpen);
   };
@@ -1047,8 +1053,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             
       if (error) throw error;
 
-      // Remove from cancel list: user explicitly requested processing, so closing the modal should NOT cancel it.
-      cancelCallsheetJobIdsRef.current.delete(doc.id);
+      // Track this job so it gets cancelled if the user closes the modal before it finishes.
+      cancelCallsheetJobIdsRef.current.add(doc.id);
 
       toast.success(doc.status === "done" ? t("projectDetail.toastReprocessingStarted") : t("projectDetail.toastExtractionStarted"));
       setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'queued' } : p));
