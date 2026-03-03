@@ -352,7 +352,7 @@ const handleTriggerWorker = withApiObservability(async function handler(req: any
       .then(async (response) => {
         if (response.ok) return;
         const bodyPreview = (await response.text().catch(() => "")).slice(0, 300);
-        log.warn(
+        log.error(
           {
             status: response.status,
             bodyPreview,

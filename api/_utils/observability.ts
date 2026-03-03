@@ -3,6 +3,8 @@ import * as Sentry from "@sentry/node";
 import { randomUUID } from "crypto";
 
 let sentryInitialized = false;
+const QUIET_SERVER_OBSERVABILITY_ROUTE_PREFIXES = ["/api/climatiq/", "/api/electricity-maps/"] as const;
+const QUIET_SERVER_OBSERVABILITY_HOSTS = ["api.climatiq.io", "api.electricitymap.org"] as const;
 
 export const logger = pino({
   level: process.env.LOG_LEVEL || (process.env.VERCEL_ENV === "production" ? "info" : "debug"),
@@ -14,18 +16,40 @@ export const logger = pino({
   },
 });
 
+export function shouldIgnoreObservedIncomingRequest(urlPath: string) {
+  const normalizedUrlPath = String(urlPath ?? "").trim().toLowerCase();
+  return QUIET_SERVER_OBSERVABILITY_ROUTE_PREFIXES.some((prefix) =>
+    normalizedUrlPath.startsWith(prefix),
+  );
+}
+
+export function shouldIgnoreObservedOutgoingRequest(url: string) {
+  const normalizedUrl = String(url ?? "").trim().toLowerCase();
+  return QUIET_SERVER_OBSERVABILITY_HOSTS.some((host) => normalizedUrl.includes(host));
+}
+
 function initSentryServer() {
   if (sentryInitialized) return;
   sentryInitialized = true;
 
   const dsn = process.env.SENTRY_DSN;
   if (!dsn) return;
+  const tracesSampleRate = Number(process.env.SENTRY_TRACES_SAMPLE_RATE ?? 0.05);
+  const defaultIntegrations = Sentry.getDefaultIntegrations({ tracesSampleRate })
+    .filter((integration) => integration.name !== "Http")
+    .concat(
+      Sentry.httpIntegration({
+        ignoreIncomingRequests: (urlPath) => shouldIgnoreObservedIncomingRequest(urlPath),
+        ignoreOutgoingRequests: (url) => shouldIgnoreObservedOutgoingRequest(url),
+      }),
+    );
 
   Sentry.init({
     dsn,
     environment: process.env.SENTRY_ENVIRONMENT || process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
     release: process.env.SENTRY_RELEASE || process.env.VERCEL_GIT_COMMIT_SHA,
-    tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE ?? 0.05),
+    tracesSampleRate,
+    defaultIntegrations,
   });
 }
 

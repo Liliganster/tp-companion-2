@@ -71,6 +71,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
       requestId,
     },
     event: "worker_possible_vercel_timeout",
+    level: "error",
     log,
     warningMs: CALLSHEET_WORKER_RUNTIME_WARNING_MS,
   });
@@ -664,7 +665,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
               .then(async (response) => {
                 if (response.ok) return;
                 const bodyPreview = (await response.text().catch(() => "")).slice(0, 300);
-                log.warn(
+                log.error(
                   {
                     remainingCount,
                     manualBatch: manual,
@@ -678,7 +679,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
                 );
               })
               .catch((err) =>
-                log.warn(
+                log.error(
                   {
                     err,
                     remainingCount,

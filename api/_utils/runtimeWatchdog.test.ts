@@ -10,24 +10,27 @@ describe("runtimeWatchdog", () => {
   it("logs a warning when the runtime crosses the threshold", () => {
     vi.useFakeTimers();
     const warn = vi.fn();
+    const error = vi.fn();
 
     const watchdog = startRuntimeWatchdog({
       context: { requestId: "req-1" },
       event: "worker_possible_vercel_timeout",
-      log: { warn },
+      log: { warn, error },
+      level: "error",
       warningMs: 55_000,
     });
 
     vi.advanceTimersByTime(55_000);
 
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith(
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalledWith(
       expect.objectContaining({
         requestId: "req-1",
         warningMs: 55_000,
       }),
       "worker_possible_vercel_timeout",
     );
+    expect(warn).not.toHaveBeenCalled();
 
     expect(watchdog.cancel().warningLogged).toBe(true);
   });
