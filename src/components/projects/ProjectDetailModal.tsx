@@ -101,6 +101,9 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const cancelInvoiceJobIdsRef = useRef<Set<string>>(new Set());
   // Per-document AbortControllers so each extraction can be cancelled individually
   const docAbortControllersRef = useRef<Map<string, AbortController>>(new Map());
+  // Local status overrides — polling must NOT overwrite these until they are cleared.
+  // This prevents the DB status (e.g. 'created') from reverting a local 'processing' or 'cancelled'.
+  const localStatusOverridesRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     // Reset per-project session state
@@ -740,6 +743,18 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
             let changed = false;
             for (const job of jobs as any[]) {
+              // Respect local optimistic status overrides (e.g. processing, cancelled)
+              const localOverride = localStatusOverridesRef.current.get(job.id);
+              if (localOverride) {
+                // If the DB now agrees with (or supersedes) the override, clear it
+                if (job.status === localOverride || job.status === 'done' || job.status === 'failed') {
+                  localStatusOverridesRef.current.delete(job.id);
+                } else {
+                  // DB hasn't caught up yet — keep the local status, skip this job
+                  continue;
+                }
+              }
+
               const existing = byId.get(job.id);
               const path = job.storage_path || existing?.storage_path || "";
               const name = (existing?.name || path.split("/").pop() || path || "Documento").toString();
@@ -1037,7 +1052,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         await supabase.from("callsheet_jobs").update({ project_id: project.id }).eq("id", doc.id);
       }
 
-      // Mostrar spinner inmediatamente
+      // Mostrar spinner inmediatamente + protect from polling overwrite
+      localStatusOverridesRef.current.set(doc.id, 'processing');
       setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'processing' } : p));
       cancelCallsheetJobIdsRef.current.add(doc.id);
 
@@ -1066,6 +1082,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       }
 
       // Exito: actualizar UI y materializar el viaje directamente
+      localStatusOverridesRef.current.delete(doc.id);
       setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'done' } : p));
       cancelCallsheetJobIdsRef.current.delete(doc.id);
       await materializeTripFromJob({ id: doc.id, storage_path: doc.storage_path, status: 'done' });
@@ -1073,11 +1090,10 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     } catch (e: any) {
       docAbortControllersRef.current.delete(doc.id);
       if (e?.name === "AbortError") {
-        // Cancelled (either by user or modal close) — update UI to show cancelled state
-        setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'cancelled' } : p));
-        cancelCallsheetJobIdsRef.current.delete(doc.id);
+        // Cancelled by user — handleCancelExtract already handles UI + toast
         return;
       }
+      localStatusOverridesRef.current.delete(doc.id);
       setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'failed' } : p));
       toast.error(tf("projectDetail.toastExtractionStartError", { message: e.message }));
     }
@@ -1090,10 +1106,17 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       docAbortControllersRef.current.delete(doc.id);
     }
     cancelCallsheetJobIdsRef.current.delete(doc.id);
+    // Protect cancelled status from being overwritten by polling
+    localStatusOverridesRef.current.set(doc.id, 'cancelled');
     setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'cancelled' } : p));
     toast.info("Procesamiento cancelado");
-    // Persist cancellation in DB
-    void cancelCallsheetJobs([doc.id]);
+    // Persist cancellation in DB, then clear override so polling picks up the real status
+    try {
+      await cancelCallsheetJobs([doc.id]);
+    } finally {
+      // After DB is updated, let polling resume normal sync
+      localStatusOverridesRef.current.delete(doc.id);
+    }
   };
 
   const handleTriggerWorker = async () => {

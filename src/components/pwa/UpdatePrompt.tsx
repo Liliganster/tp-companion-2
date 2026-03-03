@@ -125,47 +125,36 @@ export function UpdatePrompt() {
     if (promptShownRef.current) return;
     promptShownRef.current = true;
 
+    logger.debug("[SW] Showing update toast");
+
     toast("Nueva versión disponible", {
-      description: "Haz clic en Actualizar para cargar la nueva versión. La página se recargará.",
+      description: "Haz clic en Actualizar para recargar la página con la nueva versión.",
       action: {
         label: "Actualizar",
-        onClick: async () => {
-          const waiting = registration?.waiting;
-          const activated = waiting
-            ? new Promise<void>((resolve) => {
-                const done = () => resolve();
-                const onStateChange = () => {
-                  if (waiting.state === "activated") {
-                    waiting.removeEventListener("statechange", onStateChange);
-                    done();
-                  }
-                };
-
-                waiting.addEventListener("statechange", onStateChange);
-                if (waiting.state === "activated") {
-                  waiting.removeEventListener("statechange", onStateChange);
-                  done();
-                  return;
-                }
-
-                window.setTimeout(() => {
-                  waiting.removeEventListener("statechange", onStateChange);
-                  done();
-                }, 5_000);
-              })
-            : Promise.resolve();
-
-          try {
-            wbRef.current?.messageSkipWaiting();
-            await activated;
-          } finally {
-            window.location.reload();
-          }
+        onClick: () => {
+          wbRef.current?.messageSkipWaiting();
+          // Give the SW a moment to activate, then reload
+          window.setTimeout(() => window.location.reload(), 300);
         },
       },
       duration: Infinity,
     });
-  }, [needRefresh, registration]);
+  }, [needRefresh]);
+
+  // Fallback: detect controller change (new SW activated by another tab or by the browser)
+  useEffect(() => {
+    if (!import.meta.env.PROD) return;
+    if (!("serviceWorker" in navigator)) return;
+
+    const onControllerChange = () => {
+      // Another tab activated the new SW — reload to pick up new assets
+      logger.debug("[SW] Controller changed, reloading");
+      window.location.reload();
+    };
+
+    navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
+    return () => navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
+  }, []);
 
   return null;
 }
