@@ -323,11 +323,11 @@ Antes de incluir una dirección, verifica que NO sea alguna de estas:
 
 **CONTENIDO A ANALIZAR**:
 
-\${text}\`;
+${text}`;
 }
 
 export function buildCrewFirstDirectPrompt(text: string) {
-   return \`Extrae datos de esta hoja de rodaje en JSON. Devuelve SOLO JSON válido, sin markdown ni explicaciones.
+   return `Extrae datos de esta hoja de rodaje en JSON. Devuelve SOLO JSON válido, sin markdown ni explicaciones.
 
 CAMPOS CLAVE (diferéncialos correctamente):
 • projectName (REQUERIDO): Título del proyecto. Ej: "Dark", "El Reino", "Succession". NO es la productora.
@@ -366,5 +366,5 @@ Input: "DARK - Folge 3 - Produktion: Wiedemann & Berg - Motiv: Höhle"
 Output: {"version":"parser-crew-1","projectName":"Dark","productionCompany":"Wiedemann & Berg","motiv":"Höhle","episode":"Folge 3",...}
 
 TEXTO:
-\${text}\`;
+${text}`;
 }
