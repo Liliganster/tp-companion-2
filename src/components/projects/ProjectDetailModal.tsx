@@ -72,6 +72,10 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const [savingPendingTrips, setSavingPendingTrips] = useState(false);
   const realCallSheetsRef = useRef<ProjectDocument[]>([]);
   const projectDocsRef = useRef<ProjectDocument[]>([]);
+  const isModalOpenRef = useRef<boolean>(false);
+  const stopExtractionRef = useRef<boolean>(false);
+  const closeCleanupHandledRef = useRef<boolean>(false);
+  const prevOpenRef = useRef<boolean>(open);
 
 
   useEffect(() => {
@@ -83,8 +87,80 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   }, [projectDocs]);
 
   useEffect(() => {
+    isModalOpenRef.current = open;
+    if (open) {
+      closeCleanupHandledRef.current = false;
+      stopExtractionRef.current = false;
+      return;
+    }
 
+    stopExtractionRef.current = true;
+    setTriggeringWorker(false);
   }, [open]);
+
+  const runCloseCleanup = useCallback((origin: "dialog" | "effect") => {
+    if (closeCleanupHandledRef.current) {
+      console.warn("[runCloseCleanup] already handled, skipping", { origin });
+      return;
+    }
+    closeCleanupHandledRef.current = true;
+
+    stopExtractionRef.current = true;
+    setTriggeringWorker(false);
+
+    if (abortControllerRef.current && !abortControllerRef.current.signal.aborted) {
+      abortControllerRef.current.abort();
+    }
+
+    const pendingCallsheetsFromRef = Array.from(cancelCallsheetJobIdsRef.current);
+    const visibleNonDoneCallsheets = (realCallSheetsRef.current ?? [])
+      .filter((doc) => doc.status !== "done")
+      .map((doc) => String(doc.id ?? "").trim())
+      .filter(Boolean);
+    const pendingCallsheets = Array.from(new Set([...pendingCallsheetsFromRef, ...visibleNonDoneCallsheets]));
+    const pendingInvoices = Array.from(cancelInvoiceJobIdsRef.current);
+    const inFlightCount = docAbortControllersRef.current.size;
+    const totalPending = pendingCallsheets.length + pendingInvoices.length;
+    const shouldShowCancelToast = totalPending > 0 || inFlightCount > 0;
+
+    console.warn("[runCloseCleanup] Pending jobs to cancel:", {
+      origin,
+      pendingCallsheetsFromRef,
+      visibleNonDoneCallsheets,
+      pendingCallsheets,
+      pendingInvoices,
+      totalPending,
+      inFlightCount,
+    });
+
+    docAbortControllersRef.current.forEach((ac, docId) => {
+      console.warn("[runCloseCleanup] Aborting extraction for:", docId);
+      ac.abort();
+    });
+
+    void cancelCallsheetJobs(pendingCallsheets);
+    void cancelInvoiceJobs(pendingInvoices);
+
+    if (shouldShowCancelToast) {
+      const totalToCancel = Math.max(totalPending, inFlightCount);
+      console.warn("[runCloseCleanup] Showing cancel toast for", totalToCancel, "jobs");
+      toast.info(`Procesamiento cancelado (${totalToCancel} trabajo${totalToCancel > 1 ? 's' : ''})`, {
+        duration: 4000,
+      });
+    }
+
+    docAbortControllersRef.current.clear();
+    cancelCallsheetJobIdsRef.current.clear();
+    cancelInvoiceJobIdsRef.current.clear();
+  }, []);
+
+  useEffect(() => {
+    const wasOpen = prevOpenRef.current;
+    prevOpenRef.current = open;
+    if (wasOpen && !open) {
+      runCloseCleanup("effect");
+    }
+  }, [open, runCloseCleanup]);
 
   // Debug: verificar que project.id se pasa correctamente
   useEffect(() => {
@@ -115,6 +191,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     
     // Create new abort controller when modal opens
     if (open) {
+      stopExtractionRef.current = false;
       abortControllerRef.current = new AbortController();
     }
     
@@ -935,46 +1012,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const handleDialogOpenChange = (nextOpen: boolean) => {
     console.warn("[handleDialogOpenChange] nextOpen:", nextOpen);
     if (!nextOpen) {
-      const pendingCallsheetsFromRef = Array.from(cancelCallsheetJobIdsRef.current);
-      const visibleNonDoneCallsheets = (realCallSheets ?? [])
-        .filter((doc) => doc.status !== "done")
-        .map((doc) => String(doc.id ?? "").trim())
-        .filter(Boolean);
-      const pendingCallsheets = Array.from(new Set([...pendingCallsheetsFromRef, ...visibleNonDoneCallsheets]));
-      const pendingInvoices = Array.from(cancelInvoiceJobIdsRef.current);
-      const inFlightCount = docAbortControllersRef.current.size;
-      const totalPending = pendingCallsheets.length + pendingInvoices.length;
-      const shouldShowCancelToast = totalPending > 0 || inFlightCount > 0;
-      console.warn("[handleDialogOpenChange] Pending jobs to cancel:", {
-        pendingCallsheetsFromRef,
-        visibleNonDoneCallsheets,
-        pendingCallsheets,
-        pendingInvoices,
-        totalPending,
-        inFlightCount,
-      });
-      
-      // Abort all in-flight extractions FIRST (before clearing refs)
-      docAbortControllersRef.current.forEach((ac, docId) => {
-        console.warn("[handleDialogOpenChange] Aborting extraction for:", docId);
-        ac.abort();
-      });
-      
-      void cancelCallsheetJobs(pendingCallsheets);
-      void cancelInvoiceJobs(pendingInvoices);
-      
-      if (shouldShowCancelToast) {
-        const totalToCancel = Math.max(totalPending, inFlightCount);
-        console.warn("[handleDialogOpenChange] Showing cancel toast for", totalToCancel, "jobs");
-        toast.info(`Procesamiento cancelado (${totalToCancel} trabajo${totalToCancel > 1 ? 's' : ''})`, {
-          duration: 4000,
-        });
-      }
-      
-      // Clean up refs after
-      docAbortControllersRef.current.clear();
-      cancelCallsheetJobIdsRef.current.clear();
-      cancelInvoiceJobIdsRef.current.clear();
+      runCloseCleanup("dialog");
     }
     onOpenChange(nextOpen);
   };
@@ -1007,6 +1045,11 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   };
   
   const handleExtract = async (doc: ProjectDocument, isReprocess = false) => {
+    if (stopExtractionRef.current || !isModalOpenRef.current || abortControllerRef.current?.signal.aborted) {
+      console.warn("[handleExtract] EARLY RETURN: modal closed/stop requested", { docId: doc.id });
+      return;
+    }
+
     console.warn("[handleExtract] Starting extraction", { docId: doc.id, docStatus: doc.status, name: doc.name, isReprocess });
 
     if (doc.status === 'processing') {
@@ -1136,6 +1179,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const handleTriggerWorker = async () => {
     if (triggeringWorker) return;
 
+    stopExtractionRef.current = false;
+
     console.warn("[handleTriggerWorker] Starting, realCallSheets:", realCallSheets.map(d => ({ id: d.id, status: d.status, name: d.name })));
 
     // Find all un-processed docs
@@ -1164,11 +1209,20 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       // Procesar documentos en lotes de 5 en paralelo
       const BATCH_SIZE = 5;
       for (let i = 0; i < toProcess.length; i += BATCH_SIZE) {
+        if (stopExtractionRef.current || !isModalOpenRef.current || abortControllerRef.current?.signal.aborted) {
+          console.warn("[handleTriggerWorker] Stop requested, finishing batches");
+          break;
+        }
+
         const batch = toProcess.slice(i, i + BATCH_SIZE);
         console.warn("[handleTriggerWorker] Processing batch:", batch.map(d => d.id));
         
         await Promise.allSettled(batch.map(async (doc) => {
           try {
+            if (stopExtractionRef.current || !isModalOpenRef.current || abortControllerRef.current?.signal.aborted) {
+              console.warn("[handleTriggerWorker] Skip doc due to stop request:", doc.id);
+              return;
+            }
             console.warn("[handleTriggerWorker] Processing doc:", doc.id, doc.name);
             await handleExtract(doc, false);
             console.warn("[handleTriggerWorker] Finished doc:", doc.id);
