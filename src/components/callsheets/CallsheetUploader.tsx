@@ -55,6 +55,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
     let successCount = 0;
     let failCount = 0;
     let reusedCount = 0;
+    // eslint-disable-next-line prefer-const
     let retriedCount = 0;
     const queuedJobIds: string[] = [];
     try {
@@ -64,12 +65,14 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
       for (const file of files) {
         let createdJobId: string | null = null;
         try {
-          // Avoid duplicates if the user re-uploads the same file name (common when a previous processing is still running).
+          // Solo reutilizamos documentos que tengan el estado 'done' (procesado exitosamente) para evitar 
+          // saltarnos documentos fallidos o cancelados.
           const existingPattern = `%/${file.name}`;
           let existingQuery = supabase
             .from("callsheet_jobs")
             .select("id, storage_path, status, created_at")
             .eq("user_id", user.id)
+            .eq("status", "done")
             .ilike("storage_path", existingPattern)
             .order("created_at", { ascending: false })
             .limit(1);
@@ -77,34 +80,12 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
           if (projectId) existingQuery = existingQuery.eq("project_id", projectId);
 
           const { data: existing, error: existingError } = await existingQuery.maybeSingle();
-          const existingId = String((existing as any)?.id ?? "").trim();
-          const existingStoragePath = String((existing as any)?.storage_path ?? "").trim();
-          const existingStatus = String((existing as any)?.status ?? "").trim();
 
-          if (!existingError && existingId && existingStoragePath && existingStoragePath !== "pending") {
-            // Only "done" means the file was actually processed successfully.
-            // Any other status (created, queued, processing, failed, cancelled) means
-            // the user is re-uploading because it never finished — always reset it.
-            const alreadyDone = existingStatus === "done";
-            if (!alreadyDone) {
-              try {
-                const resetStatus = autoQueue ? "queued" : "created";
-                await supabase
-                  .from("callsheet_jobs")
-                  .update({ status: resetStatus, needs_review_reason: null })
-                  .eq("id", existingId);
-                if (autoQueue) queuedJobIds.push(existingId);
-                retriedCount += 1;
-              } catch {
-                // ignore
-              }
-            } else {
-              // Job is genuinely done — file already processed, no need to re-upload.
-              reusedCount += 1;
-            }
-
+          if (!existingError && existing?.id && existing?.storage_path && existing.storage_path !== "pending") {
+            // El documento ya existe y fue procesado (estado "done")
+            reusedCount += 1;
             successCount += 1;
-            onJobCreated?.(existingId);
+            onJobCreated?.(existing.id);
             continue;
           }
 
