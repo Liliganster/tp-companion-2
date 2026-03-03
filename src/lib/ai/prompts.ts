@@ -211,9 +211,9 @@ Si después de los 5 pasos NO has encontrado nada claro:
 Busca en este orden de prioridad:
 
 1. **Etiquetas explícitas de rodaje** (buscar en TODO el documento):
-   - Alemán: `Drehort`, `Set`, `Drehlocation`, `Location`, `Motiv`, `Aufnahmeort`
-   - Inglés: `Filming Location`, `Shoot Location`, `Set Address`, `Location`, `Scene Location`
-   - Español: `Locación de rodaje`, `Set de filmación`, `Lugar de rodaje`, `Dirección de rodaje`, `Locación`
+   - Alemán: 'Drehort', 'Set', 'Drehlocation', 'Location', 'Motiv', 'Aufnahmeort'
+   - Inglés: 'Filming Location', 'Shoot Location', 'Set Address', 'Location', 'Scene Location'
+   - Español: 'Locación de rodaje', 'Set de filmación', 'Lugar de rodaje', 'Dirección de rodaje', 'Locación'
 
 2. **Sección principal del día** (la sección con más detalle de escenas, actores y horarios): busca direcciones en esa sección.
 
@@ -228,24 +228,24 @@ Busca en este orden de prioridad:
 La dirección puede estar en un formato no estándar. Normalízala para que sea geocodificable:
 
 **Abreviaturas de vía** (expandir siempre):
-- `C/` o `C.` → `Calle` — "C/ Gran Vía 50" → "Calle Gran Vía 50, Madrid"
-- `Pza.` / `Pl.` / `Pz.` → `Plaza` — "Pza. España 1" → "Plaza España 1"
-- `Avda.` / `Av.` / `Avd.` → `Avenida` — "Avda. Diagonal 543" → "Avenida Diagonal 543"
-- `Pº` / `Pso.` → `Paseo` — "Pº de la Castellana 200" → "Paseo de la Castellana 200"
-- `Ctra.` → `Carretera`
-- `P.I.` / `Pol.Ind.` / `Pol.` → `Polígono Industrial`
-- `Urb.` → `Urbanización`
-- `Blvr.` → `Boulevard`
-- Alemán: `Str.` → `Straße`, `Pl.` → `Platz`
+- 'C/' o 'C.' → 'Calle' — "C/ Gran Vía 50" → "Calle Gran Vía 50, Madrid"
+- 'Pza.' / 'Pl.' / 'Pz.' → 'Plaza' — "Pza. España 1" → "Plaza España 1"
+- 'Avda.' / 'Av.' / 'Avd.' → 'Avenida' — "Avda. Diagonal 543" → "Avenida Diagonal 543"
+- 'Pº' / 'Pso.' → 'Paseo' — "Pº de la Castellana 200" → "Paseo de la Castellana 200"
+- 'Ctra.' → 'Carretera'
+- 'P.I.' / 'Pol.Ind.' / 'Pol.' → 'Polígono Industrial'
+- 'Urb.' → 'Urbanización'
+- 'Blvr.' → 'Boulevard'
+- Alemán: 'Str.' → 'Straße', 'Pl.' → 'Platz'
 
 **Formato Bezirk vienés** (muy frecuente en Austria):
 El número antes del punto es el DISTRITO, no un número de lista. Convierte así:
-- `1. Stephansplatz 1` → `Stephansplatz 1, 1010 Wien`
-- `3. Erdbergstraße 200` → `Erdbergstraße 200, 1030 Wien`
-- `13. Erzbischofgasse 6C` → `Erzbischofgasse 6C, 1130 Wien`
-- `19. Grinzinger Allee 1` → `Grinzinger Allee 1, 1190 Wien`
-- `23. Brunner Str. 69` → `Brunner Straße 69, 1230 Wien`
-Patrón: `{N}. NombreCalle Número` → `NombreCalle Número, 1{NN}0 Wien`
+- '1. Stephansplatz 1' → 'Stephansplatz 1, 1010 Wien'
+- '3. Erdbergstraße 200' → 'Erdbergstraße 200, 1030 Wien'
+- '13. Erzbischofgasse 6C' → 'Erzbischofgasse 6C, 1130 Wien'
+- '19. Grinzinger Allee 1' → 'Grinzinger Allee 1, 1190 Wien'
+- '23. Brunner Str. 69' → 'Brunner Straße 69, 1230 Wien'
+Patrón: '{N}. NombreCalle Número' → 'NombreCalle Número, 1{NN}0 Wien'
 
 **Si hay nombre de lugar Y dirección física**: usa SOLO la dirección física.
 - ❌ "Hotel Imperial, Kärntner Ring 16, 1010 Wien"
@@ -285,14 +285,14 @@ Antes de incluir una dirección, verifica que NO sea alguna de estas:
 - EXCEPCIÓN: inclúyela SOLO si dice explícitamente "Filming here" / "Set" / "Drehort aquí"
 
 **❌ Plan del día siguiente o fechas futuras**:
-- Todo lo que aparezca bajo: `NEXT DAY` / `TOMORROW` / `NÄCHSTER DREHTAG` / `MORGEN` / `FOLGETAG` / `DÍA SIGUIENTE` / `MAÑANA` / `ADVANCE SCHEDULE` / `PRODUCTION PLAN` / `UPCOMING`
+- Todo lo que aparezca bajo: 'NEXT DAY' / 'TOMORROW' / 'NÄCHSTER DREHTAG' / 'MORGEN' / 'FOLGETAG' / 'DÍA SIGUIENTE' / 'MAÑANA' / 'ADVANCE SCHEDULE' / 'PRODUCTION PLAN' / 'UPCOMING'
 - Cualquier sección con una fecha distinta a la fecha principal del documento
 - Cómo identificar el día principal: la fecha más prominente en el encabezado (más grande o en la parte superior)
 
 **❌ Unidades secundarias y drones** (equipo separado, locación diferente):
-- Secciones bajo: `DRONE UNIT` / `AERIAL UNIT` / `DROHNEN` / `LUFTAUFNAHMEN` / `AERIALS`
-- Secciones bajo: `2ND UNIT` / `B-UNIT` / `SEGUNDA UNIDAD` / `ZWEITE EINHEIT` / `B-EINHEIT`
-- Secciones bajo: `SPLINTER UNIT` / `C-UNIT` / `STUNT UNIT` / `SFX UNIT`
+- Secciones bajo: 'DRONE UNIT' / 'AERIAL UNIT' / 'DROHNEN' / 'LUFTAUFNAHMEN' / 'AERIALS'
+- Secciones bajo: '2ND UNIT' / 'B-UNIT' / 'SEGUNDA UNIDAD' / 'ZWEITE EINHEIT' / 'B-EINHEIT'
+- Secciones bajo: 'SPLINTER UNIT' / 'C-UNIT' / 'STUNT UNIT' / 'SFX UNIT'
 - Si no hay etiqueta de unidad, asume que es la unidad principal → SÍ extraer
 
 ---
