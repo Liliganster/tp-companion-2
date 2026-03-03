@@ -116,7 +116,7 @@ async function handleClimatiqFuelFactor(req: any, res: any) {
         if (config.paramType === 'volume' && userHistory?.kg_co2e_per_liter) finalFallback = Number(userHistory.kg_co2e_per_liter);
         else if (config.paramType === 'distance' && userHistory?.kg_co2e_per_km) finalFallback = Number(userHistory.kg_co2e_per_km);
       }
-      const payload = { fuelType, ...(config.paramType === 'volume' ? { kgCo2ePerLiter: finalFallback } : { kgCo2ePerKm: finalFallback }), activityId: null, dataVersion, source: 'historic_user_fallback', year: null, region: config.region, method: 'fallback', fallback: true };
+      const payload: any = { fuelType, ...(config.paramType === 'volume' ? { kgCo2ePerLiter: finalFallback } : { kgCo2ePerKm: finalFallback }), activityId: null, dataVersion, source: 'historic_user_fallback', year: null, region: config.region, method: 'fallback', fallback: true };
       return sendJson(res, 200, payload);
     }
 
@@ -152,7 +152,7 @@ async function handleClimatiqFuelFactor(req: any, res: any) {
         if (config.paramType === 'volume' && userHistory?.kg_co2e_per_liter) finalFallback = Number(userHistory.kg_co2e_per_liter);
         else if (config.paramType === 'distance' && userHistory?.kg_co2e_per_km) finalFallback = Number(userHistory.kg_co2e_per_km);
       }
-      const payload = { fuelType, ...(config.paramType === 'volume' ? { kgCo2ePerLiter: finalFallback } : { kgCo2ePerKm: finalFallback }), activityId: null, dataVersion, source: 'historic_user_fallback', year: null, region: config.region, method: 'fallback', fallback: true };
+      const payload: any = { fuelType, ...(config.paramType === 'volume' ? { kgCo2ePerLiter: finalFallback } : { kgCo2ePerKm: finalFallback }), activityId: null, dataVersion, source: 'historic_user_fallback', year: null, region: config.region, method: 'fallback', fallback: true };
       return sendJson(res, 200, payload);
     }
 
@@ -164,7 +164,7 @@ async function handleClimatiqFuelFactor(req: any, res: any) {
     if (supabase) await supabase.from("climatiq_cache").upsert(cacheEntry, { onConflict: "user_id,fuel_type" });
     serverCache.set(cacheKey, { data: cacheEntry, expiresAt: new Date(cacheEntry.expires_at).getTime() });
 
-    const payload = { fuelType, ...(config.paramType === "volume" ? { kgCo2ePerLiter: emissionValue } : { kgCo2ePerKm: emissionValue }), activityId: selection.activityId, dataVersion, source: data?.emission_factor?.source ?? "climatiq", year: data?.emission_factor?.year ?? null, region: factorRegion, method: "data", fallback: false, cachedAt: cacheEntry.cached_at, expiresAt: cacheEntry.expires_at, request: { emission_factor: { activity_id: attempt.activityId, region: attempt.region || config.region }, parameters }, upstream: { ok: attempt.ok, status: attempt.status, data, rawText: attempt.rawText } };
+    const payload = { fuelType, ...(config.paramType === "volume" ? { kgCo2ePerLiter: emissionValue } : { kgCo2ePerKm: emissionValue }), activityId: selection.activityId, dataVersion, source: data?.emission_factor?.source ?? "climatiq", year: data?.emission_factor?.year ?? null, region: factorRegion, method: "data", fallback: false, cachedAt: cacheEntry.cached_at, expiresAt: cacheEntry.expires_at };
     return sendJson(res, 200, payload);
   } catch (err: any) {
     const message = typeof err?.message === "string" ? err.message : "Unexpected error";
