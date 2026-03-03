@@ -101,9 +101,9 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
   const { data: openRouterModels, isLoading: modelsLoading } = useOpenRouterModels(
     profileData.openrouterApiKey,
-    open && profileData.openrouterEnabled
+    open && planTier === "pro" && profileData.openrouterEnabled
   );
-  const geminiActive = !profileData.openrouterEnabled;
+  const geminiActive = !(planTier === "pro" && profileData.openrouterEnabled);
   const [lastAiUsage, setLastAiUsage] = useState<{
     loading: boolean;
     provider: string | null;
@@ -762,16 +762,22 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   <div className="glass-card p-4 space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="font-medium">{t("settings.apisOpenRouterTitle")}</h3>
-                        <p className="text-sm text-muted-foreground">{t("settings.apisOpenRouterBody")}</p>
+                        <h3 className="font-medium flex items-center gap-2">
+                          {t("settings.apisOpenRouterTitle")} 
+                          {planTier !== "pro" && <Lock className="w-4 h-4 text-muted-foreground" />}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {planTier !== "pro" ? t("odometer.proOnlyBody") : t("settings.apisOpenRouterBody")}
+                        </p>
                       </div>
                       <Switch 
+                        disabled={planTier !== "pro"}
                         className="data-[state=checked]:bg-green-500 data-[state=checked]:hover:bg-green-500/90"
-                        checked={profileData.openrouterEnabled}
+                        checked={planTier === "pro" ? profileData.openrouterEnabled : false}
                         onCheckedChange={(checked) => setProfileData({ ...profileData, openrouterEnabled: checked })}
                       />
                     </div>
-                    {profileData.openrouterEnabled && (
+                    {planTier === "pro" && profileData.openrouterEnabled && (
                       <>
                         <div className="space-y-2">
                           <Label htmlFor="openrouter-key">{t("settings.apisApiKey")}</Label>
