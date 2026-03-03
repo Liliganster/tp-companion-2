@@ -1,0 +1,1 @@
+﻿const fs = require('fs'); let s = fs.readFileSync('src/components/settings/OdometerSettingsSection.tsx', 'utf-8'); console.log(s.substring(s.indexOf('function OdometerThumbnail'), s.indexOf('function OdometerSettingsSection')));

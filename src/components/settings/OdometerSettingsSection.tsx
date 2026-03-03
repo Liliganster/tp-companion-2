@@ -35,7 +35,6 @@ function OdometerThumbnail({ storagePath, alt }: { storagePath: string; alt: str
       >
         <ImageIcon className="w-3 h-3 shrink-0" />
         <span className="sr-only">{alt}</span>
-        {!url && <span>📷</span>}
         {url && <img src={url} alt={alt} className="w-8 h-8 object-cover rounded border border-border" />}
       </button>
 
