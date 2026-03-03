@@ -21,8 +21,10 @@ import { buildBaseRouteAddress, optimizeCallsheetLocationsAndDistance } from "@/
 import { useAuth } from "@/contexts/AuthContext";
 import { getBulkCloseCancellation } from "@/components/trips/bulkUploadClose";
 import { getBulkDisplayStatus, getBulkTriggerWorkerUrl, getInitialBulkJobStateById } from "@/components/trips/bulkUploadProcessingState";
+import { getBulkDuplicateCleanupIds, getBulkSessionCleanupIds } from "@/components/trips/bulkUploadCleanup";
 
 import { cancelCallsheetJobs } from "@/lib/aiJobCancellation";
+import { cascadeDeleteCallsheetJobById } from "@/lib/cascadeDelete";
 import { usePlanLimits } from "@/hooks/use-plan-limits";
 import { logger } from "@/lib/logger";
 
@@ -692,6 +694,25 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     selectAiFiles(files);
   };
 
+  const cleanupTransientCallsheetJobs = async (ids: string[]) => {
+    const uniqueIds = Array.from(new Set(ids.map((id) => String(id ?? "").trim()).filter(Boolean)));
+    if (uniqueIds.length === 0) return;
+
+    const results = await Promise.allSettled(
+      uniqueIds.map(async (id) => {
+        await cascadeDeleteCallsheetJobById(supabase, id);
+      }),
+    );
+
+    results.forEach((result, index) => {
+      if (result.status === "fulfilled") return;
+      logger.warn("[BulkUploadModal] Failed to cleanup transient callsheet job", {
+        jobId: uniqueIds[index],
+        error: result.reason,
+      });
+    });
+  };
+
   const selectAiFiles = (files: File[]) => {
     const nextFiles = Array.from(files ?? []).filter(Boolean);
     if (nextFiles.length === 0) return;
@@ -825,14 +846,16 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       const initialJobStateById: Record<string, JobState> = {};
       let successCount = 0;
       let failCount = 0;
-      let reusedCount = 0;
+      const persistedJobIds = new Set<string>(
+        (trips ?? []).map((tr) => String((tr as any)?.callsheet_job_id ?? "").trim()).filter(Boolean),
+      );
 
       const processSelectedFile = async (file: File) => {
         if (isAiCancelled(aiSignal)) return;
         let createdJobId: string | null = null;
         try {
-          // Avoid duplicates: if the same file was already uploaded previously (user closed modal / re-tried),
-          // reuse the existing job instead of creating a new one.
+          // Bulk upload must not reuse rows by filename alone. A previous unsaved or out-of-quota
+          // job with the same name can belong to a different file revision and would resurrect stale UI state.
           const existingPattern = `%/${file.name}`;
           const existingQuery = supabase
             .from("callsheet_jobs")
@@ -845,71 +868,20 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
           const { data: existingRows, error: existingError } = await existingQuery;
           if (isAiCancelled(aiSignal)) return;
           if (!existingError && Array.isArray(existingRows) && existingRows.length > 0) {
-            const candidates = existingRows
+            const existingJobs = existingRows
               .map((r: any) => ({
                 id: String(r?.id ?? ""),
-                storagePath: String(r?.storage_path ?? "").trim(),
                 status: String(r?.status ?? "").trim(),
-                createdAt: String(r?.created_at ?? "").trim(),
               }))
-              .filter((r) => r.id && r.storagePath && r.storagePath !== "pending");
+              .filter((job) => job.id);
 
-            if (candidates.length > 0) {
-              const statusScore = (s: string) => {
-                switch (s) {
-                  case "processing":
-                    return 6;
-                  case "queued":
-                    return 5;
-                  case "created":
-                    return 4;
-                  case "done":
-                    return 3;
-                  case "needs_review":
-                    return 2;
-                  case "out_of_quota":
-                    return 1;
-                  case "failed":
-                    return 0;
-                  default:
-                    return -1;
-                }
-              };
-
-              candidates.sort((a, b) => {
-                const ds = statusScore(b.status) - statusScore(a.status);
-                if (ds !== 0) return ds;
-                const ta = Date.parse(a.createdAt);
-                const tb = Date.parse(b.createdAt);
-                if (Number.isFinite(tb) && Number.isFinite(ta) && tb !== ta) return tb - ta;
-                return b.id.localeCompare(a.id);
-              });
-
-              const best = candidates[0];
-              if (!createdJobIds.includes(best.id)) createdJobIds.push(best.id);
-              activeJobIdsRef.current.push(best.id);
-              metaById[best.id] = { fileName: file.name, mimeType: file.type, storagePath: best.storagePath };
-              reusedCount += 1;
-              successCount += 1;
-              let effectiveStatus = best.status;
-
-              // If it was left in "created"/"failed", re-queue it so processing continues (no new AI cost multiplier).
-              if (best.status === "created" || best.status === "failed" || best.status === "cancelled") {
-                try {
-                  await supabase
-                    .from("callsheet_jobs")
-                    .update({ status: "queued", needs_review_reason: null })
-                    .eq("id", best.id);
-                  if (isAiCancelled(aiSignal)) return;
-                  effectiveStatus = "queued";
-                } catch {
-                  // ignore
-                }
-              }
-
-              initialJobStateById[best.id] = { status: effectiveStatus as JobStatus };
-
-              return;
+            const staleJobIds = getBulkDuplicateCleanupIds({
+              existingJobs,
+              persistedJobIds,
+            });
+            if (staleJobIds.length > 0) {
+              await cleanupTransientCallsheetJobs(staleJobIds);
+              if (isAiCancelled(aiSignal)) return;
             }
           }
 
@@ -956,7 +928,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
           failCount += 1;
           if (createdJobId) {
             try {
-              await supabase.from("callsheet_jobs").delete().eq("id", createdJobId);
+              await cleanupTransientCallsheetJobs([createdJobId]);
             } catch {
               // ignore
             }
@@ -972,7 +944,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       }
 
       if (isAiCancelled(aiSignal)) {
-        void cancelCallsheetJobs(createdJobIds);
+        void cleanupTransientCallsheetJobs(createdJobIds);
         return;
       }
 
@@ -983,16 +955,12 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       }
 
       if (successCount > 0) toast.success(tf("bulk.toastUploadedDocs", { count: successCount }));
-      if (reusedCount > 0) toast.info(tf("bulk.toastReusedDocs", { count: reusedCount }));
       if (failCount > 0) toast.error(tf("bulk.toastFailedDocs", { count: failCount }));
 
-      const existingTripJobIds = new Set<string>(
-        (trips ?? []).map((tr) => String((tr as any)?.callsheet_job_id ?? "").trim()).filter(Boolean),
-      );
       const alreadySaved: Record<string, boolean> = {};
       let alreadySavedCount = 0;
       for (const id of createdJobIds) {
-        if (existingTripJobIds.has(id)) {
+        if (persistedJobIds.has(id)) {
           alreadySaved[id] = true;
           alreadySavedCount += 1;
         }
@@ -1057,6 +1025,12 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       triggerWorkerAbortRef.current = null;
       optimizeChainRef.current = Promise.resolve();
       void cancelCallsheetJobs(jobsToCancel);
+      void cleanupTransientCallsheetJobs(
+        getBulkSessionCleanupIds({
+          jobIds: [...jobIds, ...activeJobIdsRef.current],
+          savedByJobId: savedByJobIdRef.current,
+        }),
+      );
 
       if (shouldShowCancellationToast) {
         setTimeout(() => {

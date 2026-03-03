@@ -1,11 +1,34 @@
 import { captureClientError } from "@/lib/sentryClient";
 
 const IS_TEST = import.meta.env.MODE === "test";
+type ConsoleLevel = "debug" | "info" | "warn" | "error";
+type ConsoleMethod = "log" | "info" | "warn" | "error";
 
-function safeConsole(method: "debug" | "info" | "warn" | "error", args: unknown[]) {
+function bindConsoleMethod(method: ConsoleMethod) {
+  const fn = globalThis.console?.[method] as ((...args: unknown[]) => void) | undefined;
+  return typeof fn === "function" ? fn.bind(globalThis.console) : null;
+}
+
+const rawConsole: Record<ConsoleMethod, ((...args: unknown[]) => void) | null> = {
+  log: bindConsoleMethod("log"),
+  info: bindConsoleMethod("info"),
+  warn: bindConsoleMethod("warn"),
+  error: bindConsoleMethod("error"),
+};
+
+const consoleMethodByLevel: Record<ConsoleLevel, ConsoleMethod> = {
+  // `console.debug` lands in the browser's "Verbose" channel and looks "silent"
+  // under the default console filters. Route debug to `log` so it stays visible.
+  debug: "log",
+  info: "info",
+  warn: "warn",
+  error: "error",
+};
+
+function safeConsole(level: ConsoleLevel, args: unknown[]) {
   if (IS_TEST) return;
-  const fn = console[method] as ((...a: unknown[]) => void) | undefined;
-  if (typeof fn !== "function") return;
+  const fn = rawConsole[consoleMethodByLevel[level]];
+  if (!fn) return;
   fn(...args);
 }
 

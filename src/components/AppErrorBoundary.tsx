@@ -1,6 +1,6 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { captureClientError } from "@/lib/sentryClient";
+import { logger } from "@/lib/logger";
 
 type Props = {
   children: React.ReactNode;
@@ -20,7 +20,7 @@ export class AppErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: unknown, info: unknown) {
-    captureClientError(error, { react: true, info });
+    logger.error("[AppErrorBoundary] React render error", error, { react: true, info });
 
     // Handle chunk loading errors (new deployment)
     const msg = error instanceof Error ? error.message : String(error);
@@ -76,4 +76,3 @@ export class AppErrorBoundary extends React.Component<Props, State> {
     );
   }
 }
-

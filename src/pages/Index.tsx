@@ -111,9 +111,10 @@ export default function Index() {
 
         const contentType = response.headers.get("content-type") ?? "";
         if (!contentType.includes("application/json")) {
-          // In Vite dev, /api routes may not be served by the backend.
-          // Avoid spamming console with JSON parse errors.
           if (import.meta.env.DEV) {
+            logger.warn("[Index] AI quota polling disabled in dev: /api/user/ai-quota returned non-JSON", {
+              contentType,
+            });
             aiQuotaPollingDisabled.current = true;
             if (!cancelled) {
               setAiBypassEnabled(false);
@@ -133,8 +134,8 @@ export default function Index() {
           setAiUsedThisMonth(data.used);
         }
       } catch (e) {
-        // If the backend isn't available in dev, don't keep retrying.
         if (import.meta.env.DEV && e instanceof SyntaxError) {
+          logger.warn("[Index] AI quota polling disabled in dev: invalid JSON response", e);
           aiQuotaPollingDisabled.current = true;
         } else {
           logger.warn("Error fetching AI quota", e);

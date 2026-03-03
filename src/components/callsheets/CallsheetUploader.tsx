@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { usePlan } from "@/contexts/PlanContext";
 import { supabase } from "@/lib/supabaseClient";
 import { formatSupabaseError } from "@/lib/supabaseErrors";
+import { cascadeDeleteCallsheetJobById } from "@/lib/cascadeDelete";
 import { Button } from "@/components/ui/button";
 import { Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -10,8 +11,8 @@ import { logger } from "@/lib/logger";
 
 interface CallsheetUploaderProps {
   onJobCreated?: (jobId: string) => void;
-  tripId?: string; // Optional context
-  projectId?: string; // Optional context
+  tripId?: string;
+  projectId?: string;
   autoQueue?: boolean;
 }
 
@@ -29,7 +30,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
     if (files.length > limits.maxCallsheetsPerBatch) {
       if (planTier === "basic") {
         toast.error("Solo 1 documento por vez en el plan Basic", {
-          description: "El plan Basic permite subir y procesar 1 callsheet a la vez. Con Pro puedes subir hasta 20 y se procesan automáticamente de 5 en 5 sin hacer nada.",
+          description: "El plan Basic permite subir y procesar 1 callsheet a la vez. Con Pro puedes subir hasta 20 y se procesan automaticamente de 5 en 5 sin hacer nada.",
           action: {
             label: "Ver planes",
             onClick: () => navigate("/plans"),
@@ -37,7 +38,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
           duration: 8000,
         });
       } else {
-        toast.error(`Máximo ${limits.maxCallsheetsPerBatch} documentos por vez`);
+        toast.error(`Maximo ${limits.maxCallsheetsPerBatch} documentos por vez`);
       }
       e.target.value = "";
       return;
@@ -54,52 +55,18 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
     setUploading(true);
     let successCount = 0;
     let failCount = 0;
-    let reusedCount = 0;
-    // eslint-disable-next-line prefer-const
-    let retriedCount = 0;
     const queuedJobIds: string[] = [];
+
     try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) throw new Error("No estás autenticado");
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+      if (authError || !user) throw new Error("No estas autenticado");
 
       for (const file of files) {
         let createdJobId: string | null = null;
         try {
-          // Solo reutilizamos documentos que tengan el estado 'done' (procesado exitosamente) para evitar 
-          // saltarnos documentos fallidos o cancelados.
-          const existingPattern = `%/${file.name}`;
-          let existingQuery = supabase
-            .from("callsheet_jobs")
-            .select("id, storage_path, status, created_at")
-            .eq("user_id", user.id)
-            .eq("status", "done")
-            .ilike("storage_path", existingPattern)
-            .order("created_at", { ascending: false })
-            .limit(1);
-
-          if (projectId) existingQuery = existingQuery.eq("project_id", projectId);
-
-          const { data: existing, error: existingError } = await existingQuery.maybeSingle();
-          
-          console.warn("[CallsheetUploader] Duplicate check", { 
-            fileName: file.name, 
-            existingId: existing?.id, 
-            existingStatus: existing?.status, 
-            existingPath: existing?.storage_path,
-            projectId
-          });
-
-          if (!existingError && existing?.id && existing?.storage_path && existing.storage_path !== "pending") {
-            // El documento ya existe y fue procesado (estado "done")
-            console.warn("[CallsheetUploader] Reusing existing done document", existing.id);
-            reusedCount += 1;
-            successCount += 1;
-            onJobCreated?.(existing.id);
-            continue;
-          }
-          
-          console.warn("[CallsheetUploader] Creating new job for", file.name);
-
           const { data: job, error: jobError } = await supabase
             .from("callsheet_jobs")
             .insert({
@@ -120,12 +87,15 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
 
           const { error: updateError } = await supabase
             .from("callsheet_jobs")
-            .update({ storage_path: filePath, status: autoQueue ? "queued" : "created", needs_review_reason: null })
+            .update({
+              storage_path: filePath,
+              status: autoQueue ? "queued" : "created",
+              needs_review_reason: null,
+            })
             .eq("id", job.id);
-          
+
           if (updateError) {
-            // If UNIQUE constraint fails (duplicate storage_path), log but continue
-            if (updateError.code === '23505') {
+            if (updateError.code === "23505") {
               logger.debug(`Storage path ${filePath} already exists, skipping update`);
               failCount += 1;
             } else {
@@ -141,7 +111,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
           failCount += 1;
           if (createdJobId) {
             try {
-              await supabase.from("callsheet_jobs").delete().eq("id", createdJobId);
+              await cascadeDeleteCallsheetJobById(supabase, createdJobId);
             } catch {
               // ignore
             }
@@ -156,41 +126,36 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
             : `Se subieron ${successCount} documentos. Pulsa "Procesar ahora" para empezar.`,
         );
       }
-      if (retriedCount > 0) toast.info(`Se reprocesará ${retriedCount} documento(s) que falló anteriormente`);
-      if (reusedCount > 0) toast.info(`Se reutilizaron ${reusedCount} documento(s) ya subido(s)`);
       if (failCount > 0) toast.error(`Fallaron ${failCount} documentos`);
 
-       // Best-effort: kick the worker once so users don't have to wait for cron/manual trigger.
-       // Do not await: the worker call can take long and we don't want to block the UI.
-       if (autoQueue && queuedJobIds.length > 0) {
-         try {
-           const {
-             data: { session },
-           } = await supabase.auth.getSession();
-           const accessToken = session?.access_token;
- 
-           void fetch("/api/callsheets/trigger-worker", {
-             method: "POST",
-             headers: {
-               Authorization: accessToken ? `Bearer ${accessToken}` : "",
-               "Content-Type": "application/json",
-             },
-           }).then(async (res) => {
-             if (res.ok) return;
-             const errorText = await res.text().catch(() => "");
-             logger.warn("[CallsheetUploader] trigger-worker failed", { status: res.status, errorText });
-           });
-         } catch {
-           // ignore: cron/manual trigger can still process later
-         }
-       }
+      if (autoQueue && queuedJobIds.length > 0) {
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          const accessToken = session?.access_token;
 
+          void fetch("/api/callsheets/trigger-worker", {
+            method: "POST",
+            headers: {
+              Authorization: accessToken ? `Bearer ${accessToken}` : "",
+              "Content-Type": "application/json",
+            },
+          }).then(async (res) => {
+            if (res.ok) return;
+            const errorText = await res.text().catch(() => "");
+            logger.warn("[CallsheetUploader] trigger-worker failed", { status: res.status, errorText });
+          });
+        } catch {
+          // ignore: cron/manual trigger can still process later
+        }
+      }
     } catch (err: any) {
       logger.warn("CallsheetUploader error", err);
       toast.error(formatSupabaseError(err, "Error al subir callsheet"));
     } finally {
       setUploading(false);
-      e.target.value = ""; // Reset input
+      e.target.value = "";
     }
   };
 
