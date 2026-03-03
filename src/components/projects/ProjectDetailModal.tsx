@@ -947,7 +947,9 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
   const handleJobCreated = (jobId: string) => {
     const id = String(jobId ?? "").trim();
-    if (id) cancelCallsheetJobIdsRef.current.add(id);
+    // Do NOT add to cancelCallsheetJobIdsRef here: the job is only uploaded (status="created"),
+    // not yet queued. Only handleExtract adds to the cancel ref when the user explicitly
+    // starts processing. Cancelling an unqueued job on modal close is unnecessary.
     setRefreshTrigger((p) => p + 1);
     toast.success(t("projectDetail.toastDocumentUploaded"));
   };

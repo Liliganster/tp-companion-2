@@ -83,19 +83,22 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
 
           if (!existingError && existingId && existingStoragePath && existingStoragePath !== "pending") {
             const isRetry = existingStatus === "created" || existingStatus === "failed" || existingStatus === "cancelled";
-            // If it's stuck in "created"/"failed"/"cancelled", re-queue it so it can process.
-            if (autoQueue && isRetry) {
+            if (isRetry) {
+              // Re-uploadable states: reset to queued (autoQueue) or created (manual flow).
+              // Never show "reutilizado" for a job that never finished — the user expects a fresh start.
               try {
+                const resetStatus = autoQueue ? "queued" : "created";
                 await supabase
                   .from("callsheet_jobs")
-                  .update({ status: "queued", needs_review_reason: null })
+                  .update({ status: resetStatus, needs_review_reason: null })
                   .eq("id", existingId);
-                queuedJobIds.push(existingId);
+                if (autoQueue) queuedJobIds.push(existingId);
                 retriedCount += 1;
               } catch {
                 // ignore
               }
             } else {
+              // Job is done/queued/processing — genuinely reused, no new upload needed.
               reusedCount += 1;
             }
 
