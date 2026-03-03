@@ -501,6 +501,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           return doc;
         });
 
+        console.warn("[loadRealCallSheets] Loaded docs:", finalDocs.map(d => ({ id: d.id, status: d.status, name: d.name })));
         setRealCallSheets(finalDocs);
 
         // Materialize trips from jobs that are already done (but only once per modal open)
@@ -932,15 +933,33 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   };
 
   const handleDialogOpenChange = (nextOpen: boolean) => {
+    console.warn("[handleDialogOpenChange] nextOpen:", nextOpen);
     if (!nextOpen) {
       const pendingCallsheets = Array.from(cancelCallsheetJobIdsRef.current);
       const pendingInvoices = Array.from(cancelInvoiceJobIdsRef.current);
       const totalPending = pendingCallsheets.length + pendingInvoices.length;
+      console.warn("[handleDialogOpenChange] Pending jobs to cancel:", { pendingCallsheets, pendingInvoices, totalPending });
+      
+      // Abort all in-flight extractions FIRST (before clearing refs)
+      docAbortControllersRef.current.forEach((ac, docId) => {
+        console.warn("[handleDialogOpenChange] Aborting extraction for:", docId);
+        ac.abort();
+      });
+      
       void cancelCallsheetJobs(pendingCallsheets);
       void cancelInvoiceJobs(pendingInvoices);
+      
       if (totalPending > 0) {
-        toast.info(t("projectDetail.toastProcessingCancelled") || "Procesamiento cancelado al cerrar el proyecto");
+        console.warn("[handleDialogOpenChange] Showing cancel toast for", totalPending, "jobs");
+        toast.info(`Procesamiento cancelado (${totalPending} trabajo${totalPending > 1 ? 's' : ''})`, {
+          duration: 4000,
+        });
       }
+      
+      // Clean up refs after
+      docAbortControllersRef.current.clear();
+      cancelCallsheetJobIdsRef.current.clear();
+      cancelInvoiceJobIdsRef.current.clear();
     }
     onOpenChange(nextOpen);
   };
@@ -973,21 +992,24 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   };
   
   const handleExtract = async (doc: ProjectDocument, isReprocess = false) => {
-    console.warn("[handleExtract] Starting extraction", { docId: doc.id, status: doc.status, isReprocess });
+    console.warn("[handleExtract] Starting extraction", { docId: doc.id, docStatus: doc.status, name: doc.name, isReprocess });
 
     if (doc.status === 'processing') {
+      console.warn("[handleExtract] EARLY RETURN: already processing", { docId: doc.id });
       toast.info("El documento ya se está procesando");
       return;
     }
 
     if (doc.status === 'done' && !isReprocess) {
+      console.warn("[handleExtract] Document is done, asking confirmation", { docId: doc.id });
       if (!confirm("Este documento ya fue procesado. ¿Quieres volver a procesarlo? Se borrarán los datos anteriores y se hará una nueva extracción con IA.")) {
+        console.warn("[handleExtract] EARLY RETURN: user cancelled reprocess", { docId: doc.id });
         return;
       }
     }
 
     try {
-      console.warn("[handleExtract] Processing started", { docId: doc.id });
+      console.warn("[handleExtract] Processing started - will set UI to processing", { docId: doc.id });
       // Limpiar datos anteriores si es re-procesamiento
       if (doc.status === 'done') {
         const tripToDelete = trips.find(t => t.callsheet_job_id === doc.id);
@@ -1005,9 +1027,14 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       }
 
       // Mostrar spinner inmediatamente + protect from polling overwrite
+      console.warn("[handleExtract] Setting UI to processing", { docId: doc.id });
       localStatusOverridesRef.current.set(doc.id, 'processing');
-      setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'processing' } : p));
+      setRealCallSheets(prev => {
+        console.warn("[handleExtract] setRealCallSheets callback - setting processing", { docId: doc.id });
+        return prev.map(p => p.id === doc.id ? { ...p, status: 'processing' } : p);
+      });
       cancelCallsheetJobIdsRef.current.add(doc.id);
+      console.warn("[handleExtract] Added to cancelCallsheetJobIdsRef", { docId: doc.id, refSize: cancelCallsheetJobIdsRef.current.size });
 
       // Per-document AbortController (cancelled individually or on modal close)
       const docAc = new AbortController();
@@ -1040,15 +1067,21 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       console.warn("[handleExtract] Extraction successful", { docId: doc.id });
       localStatusOverridesRef.current.delete(doc.id);
       setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'done' } : p));
+      console.warn("[handleExtract] Removing from cancelCallsheetJobIdsRef", { docId: doc.id, sizeBefore: cancelCallsheetJobIdsRef.current.size });
       cancelCallsheetJobIdsRef.current.delete(doc.id);
+      console.warn("[handleExtract] Removed from cancelCallsheetJobIdsRef", { docId: doc.id, sizeAfter: cancelCallsheetJobIdsRef.current.size });
       await materializeTripFromJob({ id: doc.id, storage_path: doc.storage_path, status: 'done' });
 
     } catch (e: any) {
+      console.warn("[handleExtract] Caught error", { docId: doc.id, errorName: e?.name, errorMessage: e?.message });
       docAbortControllersRef.current.delete(doc.id);
       if (e?.name === "AbortError") {
-        // Cancelled by user — handleCancelExtract already handles UI + toast
+        // Cancelled by user/modal close — cleanup is handled elsewhere, just log and return
+        console.warn("[handleExtract] AbortError - extraction was cancelled", { docId: doc.id });
         return;
       }
+      console.warn("[handleExtract] Non-abort error - removing from cancelRef and marking failed", { docId: doc.id });
+      cancelCallsheetJobIdsRef.current.delete(doc.id);
       localStatusOverridesRef.current.delete(doc.id);
       setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'failed' } : p));
       toast.error(tf("projectDetail.toastExtractionStartError", { message: e.message }));
@@ -1056,8 +1089,10 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   };
 
   const handleCancelExtract = async (doc: ProjectDocument) => {
+    console.warn("[handleCancelExtract] Called", { docId: doc.id, status: doc.status });
     const ac = docAbortControllersRef.current.get(doc.id);
     if (ac) {
+      console.warn("[handleCancelExtract] Aborting fetch", { docId: doc.id });
       ac.abort();
       docAbortControllersRef.current.delete(doc.id);
     }
@@ -1065,6 +1100,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     // Protect cancelled status from being overwritten by polling
     localStatusOverridesRef.current.set(doc.id, 'cancelled');
     setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'cancelled' } : p));
+    console.warn("[handleCancelExtract] Showing toast");
     toast.info("Procesamiento cancelado");
     // Persist cancellation in DB, then clear override so polling picks up the real status
     try {
@@ -1103,10 +1139,25 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
       toast.info(`Iniciando extracción de ${toProcess.length} documento(s)...`);
 
-      // Procesa secuencialmente o en paralelo. Como maxDuration es 60s en Vercel Hobby, el cliente
-      // puede hacer un Promise.allSettled y cada fetch individual a /api/callsheets/process manejará su propio tiempo.
-      const results = await Promise.allSettled(toProcess.map(doc => handleExtract(doc, false)));
-      console.warn("[handleTriggerWorker] Results:", results);
+      // Procesar documentos en lotes de 5 en paralelo
+      const BATCH_SIZE = 5;
+      for (let i = 0; i < toProcess.length; i += BATCH_SIZE) {
+        const batch = toProcess.slice(i, i + BATCH_SIZE);
+        console.warn("[handleTriggerWorker] Processing batch:", batch.map(d => d.id));
+        
+        await Promise.allSettled(batch.map(async (doc) => {
+          try {
+            console.warn("[handleTriggerWorker] Processing doc:", doc.id, doc.name);
+            await handleExtract(doc, false);
+            console.warn("[handleTriggerWorker] Finished doc:", doc.id);
+          } catch (err) {
+            console.error("[handleTriggerWorker] Error processing doc:", doc.id, err);
+          }
+        }));
+        
+        console.warn("[handleTriggerWorker] Batch finished");
+      }
+      console.warn("[handleTriggerWorker] All docs processed");
 
     } catch (e: any) {
       console.error("[handleTriggerWorker] Error:", e);

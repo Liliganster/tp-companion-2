@@ -100,6 +100,24 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
           
           console.warn("[CallsheetUploader] Creating new job for", file.name);
 
+          const { data: job, error: jobError } = await supabase
+            .from("callsheet_jobs")
+            .insert({
+              user_id: user.id,
+              storage_path: "pending",
+              status: "created",
+              project_id: projectId || null,
+            })
+            .select()
+            .single();
+
+          if (jobError) throw jobError;
+          createdJobId = job.id;
+
+          const filePath = `${user.id}/${job.id}/${file.name}`;
+          const { error: uploadError } = await supabase.storage.from("callsheets").upload(filePath, file);
+          if (uploadError) throw uploadError;
+
           const { error: updateError } = await supabase
             .from("callsheet_jobs")
             .update({ storage_path: filePath, status: autoQueue ? "queued" : "created", needs_review_reason: null })
