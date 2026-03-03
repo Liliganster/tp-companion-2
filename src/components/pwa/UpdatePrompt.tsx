@@ -10,6 +10,22 @@ export function UpdatePrompt() {
   const wbRef = useRef<WorkboxInstance | null>(null);
   const registeredRef = useRef(false);
   const promptShownRef = useRef(false);
+  // Becomes true once the user interacts with the page (click, key, scroll).
+  // If an update arrives before any interaction, we auto-reload silently.
+  const userInteractedRef = useRef(false);
+
+  // Track first user interaction so we know if the page is "fresh"
+  useEffect(() => {
+    const mark = () => { userInteractedRef.current = true; };
+    window.addEventListener("pointerdown", mark, { once: true, capture: true });
+    window.addEventListener("keydown", mark, { once: true, capture: true });
+    window.addEventListener("scroll", mark, { once: true, capture: true, passive: true });
+    return () => {
+      window.removeEventListener("pointerdown", mark, { capture: true });
+      window.removeEventListener("keydown", mark, { capture: true });
+      window.removeEventListener("scroll", mark, { capture: true });
+    };
+  }, []);
 
   useEffect(() => {
     if (import.meta.env.PROD) return;
@@ -46,7 +62,7 @@ export function UpdatePrompt() {
         wb.addEventListener("installed", (event: any) => {
           if (cancelled) return;
           if (event?.isUpdate) {
-            logger.debug("[SW] New version installed, showing update prompt");
+            logger.debug("[SW] New version installed");
             setNeedRefresh(true);
           }
         });
@@ -54,7 +70,7 @@ export function UpdatePrompt() {
         // Show update prompt when a new SW is waiting to activate
         wb.addEventListener("waiting", () => {
           if (cancelled) return;
-          logger.debug("[SW] New version waiting, showing update prompt");
+          logger.debug("[SW] New version waiting");
           setNeedRefresh(true);
         });
 
@@ -65,10 +81,12 @@ export function UpdatePrompt() {
         if (cancelled) return;
         if (swRegistration) setRegistration(swRegistration);
 
-        // If a SW is already waiting (downloaded in background), show prompt immediately
+        // If a SW is already waiting (downloaded in a previous visit), activate immediately.
+        // The user just opened the app — no need for a toast, just reload.
         if (swRegistration?.waiting) {
-          logger.debug("[SW] Found waiting SW on load, showing update prompt");
-          setNeedRefresh(true);
+          logger.debug("[SW] Found waiting SW on load, auto-reloading");
+          wb.messageSkipWaiting();
+          window.location.reload();
         }
       } catch (error) {
         logger.warn("SW registration error", error);
@@ -123,6 +141,15 @@ export function UpdatePrompt() {
     if (!needRefresh) return;
     if (promptShownRef.current) return;
     promptShownRef.current = true;
+
+    // If the user hasn't interacted with the page yet, they just opened the app.
+    // Silently activate the new SW and reload — no toast needed.
+    if (!userInteractedRef.current) {
+      logger.debug("[SW] Auto-reloading on fresh navigation");
+      wbRef.current?.messageSkipWaiting();
+      window.location.reload();
+      return;
+    }
 
     toast("Nueva versión disponible", {
       description: "Haz clic en actualizar para cargar la nueva versión.",
