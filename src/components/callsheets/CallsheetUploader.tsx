@@ -80,32 +80,25 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
           if (projectId) existingQuery = existingQuery.eq("project_id", projectId);
 
           const { data: existing, error: existingError } = await existingQuery.maybeSingle();
+          
+          console.warn("[CallsheetUploader] Duplicate check", { 
+            fileName: file.name, 
+            existingId: existing?.id, 
+            existingStatus: existing?.status, 
+            existingPath: existing?.storage_path,
+            projectId
+          });
 
           if (!existingError && existing?.id && existing?.storage_path && existing.storage_path !== "pending") {
             // El documento ya existe y fue procesado (estado "done")
+            console.warn("[CallsheetUploader] Reusing existing done document", existing.id);
             reusedCount += 1;
             successCount += 1;
             onJobCreated?.(existing.id);
             continue;
           }
-
-          const { data: job, error: jobError } = await supabase
-            .from("callsheet_jobs")
-            .insert({
-              user_id: user.id,
-              storage_path: "pending",
-              status: "created",
-              project_id: projectId || null,
-            })
-            .select()
-            .single();
-
-          if (jobError) throw jobError;
-          createdJobId = job.id;
-
-          const filePath = `${user.id}/${job.id}/${file.name}`;
-          const { error: uploadError } = await supabase.storage.from("callsheets").upload(filePath, file);
-          if (uploadError) throw uploadError;
+          
+          console.warn("[CallsheetUploader] Creating new job for", file.name);
 
           const { error: updateError } = await supabase
             .from("callsheet_jobs")

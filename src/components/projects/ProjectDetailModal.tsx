@@ -973,6 +973,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   };
   
   const handleExtract = async (doc: ProjectDocument, isReprocess = false) => {
+    console.warn("[handleExtract] Starting extraction", { docId: doc.id, status: doc.status, isReprocess });
+
     if (doc.status === 'processing') {
       toast.info("El documento ya se está procesando");
       return;
@@ -985,6 +987,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     }
 
     try {
+      console.warn("[handleExtract] Processing started", { docId: doc.id });
       // Limpiar datos anteriores si es re-procesamiento
       if (doc.status === 'done') {
         const tripToDelete = trips.find(t => t.callsheet_job_id === doc.id);
@@ -1014,6 +1017,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       // El endpoint hace todo: claim → Gemini → guardar → done
       const { data: { session } } = await supabase.auth.getSession();
       const accessToken = session?.access_token;
+      console.warn("[handleExtract] Calling API", { docId: doc.id, hasToken: !!accessToken });
       const response = await fetch(`/api/callsheets/process?jobId=${encodeURIComponent(doc.id)}`, {
         method: "POST",
         headers: {
@@ -1022,15 +1026,18 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         },
         signal: docAc.signal,
       });
+      console.warn("[handleExtract] API response", { docId: doc.id, status: response.status, ok: response.ok });
 
       docAbortControllersRef.current.delete(doc.id);
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
+        console.error("[handleExtract] API error", { docId: doc.id, errData });
         throw new Error((errData as any).message ?? `Error ${response.status}`);
       }
 
       // Exito: actualizar UI y materializar el viaje directamente
+      console.warn("[handleExtract] Extraction successful", { docId: doc.id });
       localStatusOverridesRef.current.delete(doc.id);
       setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'done' } : p));
       cancelCallsheetJobIdsRef.current.delete(doc.id);
@@ -1071,10 +1078,14 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const handleTriggerWorker = async () => {
     if (triggeringWorker) return;
 
+    console.warn("[handleTriggerWorker] Starting, realCallSheets:", realCallSheets.map(d => ({ id: d.id, status: d.status, name: d.name })));
+
     // Find all un-processed docs
     const toProcess = realCallSheets.filter(
       (j) => j.status === "created" || j.status === "queued" || j.status === "failed"
     );
+    
+    console.warn("[handleTriggerWorker] Docs to process:", toProcess.map(d => ({ id: d.id, status: d.status, name: d.name })));
 
     if (toProcess.length === 0) {
       toast.info("No hay documentos pendientes por procesar");
@@ -1094,9 +1105,11 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
       // Procesa secuencialmente o en paralelo. Como maxDuration es 60s en Vercel Hobby, el cliente
       // puede hacer un Promise.allSettled y cada fetch individual a /api/callsheets/process manejará su propio tiempo.
-      await Promise.allSettled(toProcess.map(doc => handleExtract(doc, false)));
+      const results = await Promise.allSettled(toProcess.map(doc => handleExtract(doc, false)));
+      console.warn("[handleTriggerWorker] Results:", results);
 
     } catch (e: any) {
+      console.error("[handleTriggerWorker] Error:", e);
       logger.error("Error trigger all", e);
     } finally {
       setTriggeringWorker(false);
@@ -1444,7 +1457,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                   <h3 className="font-medium">{t("projectDetail.callSheetsTitle")}</h3>
                 </div>
                 <div className="flex items-center gap-2">
-                  {allCallSheets.length > 1 && (
+                  {allCallSheets.length >= 1 && (
                     <Button 
                       variant="outline" 
                       size="sm"
@@ -1460,7 +1473,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                       ) : (
                         <>
                           <Sparkles className="h-4 w-4 mr-2" />
-                          Procesar Todos con IA
+                          Procesar con IA
                         </>
                       )}
                     </Button>
@@ -1517,7 +1530,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                       </div>
                       
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {sheet.status !== 'queued' && sheet.status !== 'processing' && sheet.status !== 'out_of_quota' && (
+                        {sheet.status !== 'processing' && sheet.status !== 'out_of_quota' && (
                           <Button 
                             variant="ghost" 
                             size="icon" 
