@@ -93,20 +93,29 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     }
   }, [open, project]);
 
+  // Tracks which jobs the user has explicitly triggered via "Procesar".
+  // While the DB is still in "queued" (waiting for the worker to claim it),
+  // the UI shows "processing" so the user never sees the intermediate queued state.
+  const recentlyTriggeredRef = useRef<Set<string>>(new Set());
   const processedJobsRef = useRef<Set<string>>(new Set());
   const inFlightJobsRef = useRef<Set<string>>(new Set());
   const processedInvoiceJobsRef = useRef<Set<string>>(new Set());
   const abortControllerRef = useRef<AbortController | null>(null);
   const cancelCallsheetJobIdsRef = useRef<Set<string>>(new Set());
   const cancelInvoiceJobIdsRef = useRef<Set<string>>(new Set());
+  // Tracks how many polling ticks each job has been stuck in "queued" without being claimed.
+  // If it exceeds the threshold the client re-triggers the worker so the user never has to wait for cron.
+  const queuedTicksRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     // Reset per-project session state
     processedJobsRef.current = new Set();
+    recentlyTriggeredRef.current = new Set();
     inFlightJobsRef.current = new Set();
     processedInvoiceJobsRef.current = new Set();
     cancelCallsheetJobIdsRef.current = new Set();
     cancelInvoiceJobIdsRef.current = new Set();
+    queuedTicksRef.current = new Map();
     
     // Create new abort controller when modal opens
     if (open) {
@@ -739,11 +748,24 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
               const path = job.storage_path || existing?.storage_path || "";
               const name = (existing?.name || path.split("/").pop() || path || "Documento").toString();
 
+              // If the user just clicked "Procesar" and the worker hasn't claimed the job yet,
+              // the DB still says "queued". Show "processing" so the user never sees a queue flash.
+              // Once the DB moves past "queued", remove from ref and follow DB state normally.
+              let displayStatus = job.status;
+              if (recentlyTriggeredRef.current.has(job.id)) {
+                if (job.status === "queued") {
+                  displayStatus = "processing";
+                } else {
+                  // Worker has claimed it or it failed — follow DB from now on.
+                  recentlyTriggeredRef.current.delete(job.id);
+                }
+              }
+
               const next: ProjectDocument = {
                 id: job.id,
                 name,
                 type: "call-sheet",
-                status: job.status,
+                status: displayStatus,
                 storage_path: job.storage_path,
                 needs_review_reason: job.needs_review_reason,
               };
@@ -896,6 +918,40 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         const hasInvoicePending = projectDocsRef.current.some(
           (d: any) => d.status === "queued" || d.status === "processing" || d.status === "created"
         );
+
+        // If any callsheet job has been in "queued" for too long the worker fire-and-forget
+        // may have been silently dropped by Vercel. Re-trigger from the client (browser stays alive).
+        // Threshold: 5 ticks × 2 s = ~10 s, then retry once. Reset when job moves to processing/done.
+        const STUCK_QUEUED_TICKS = 5;
+        for (const j of (jobs ?? []) as any[]) {
+          const jid = String(j?.id ?? "");
+          if (!jid) continue;
+          if (j?.status === "queued") {
+            const ticks = (queuedTicksRef.current.get(jid) ?? 0) + 1;
+            queuedTicksRef.current.set(jid, ticks);
+            if (ticks === STUCK_QUEUED_TICKS) {
+              // Re-trigger the worker for this specific job from the client.
+              logger.debug("[Polling] Job stuck in queued, re-triggering worker", { jid });
+              void (async () => {
+                try {
+                  const { data: { session } } = await supabase.auth.getSession();
+                  const accessToken = session?.access_token;
+                  await fetch(`/api/callsheets/trigger-worker?jobId=${encodeURIComponent(jid)}`, {
+                    method: "POST",
+                    headers: {
+                      Authorization: accessToken ? `Bearer ${accessToken}` : "",
+                      "Content-Type": "application/json",
+                    },
+                    // No signal — must not be aborted by modal lifecycle
+                  });
+                } catch { /* best-effort */ }
+              })();
+            }
+          } else {
+            // Job moved out of queued — reset counter
+            queuedTicksRef.current.delete(jid);
+          }
+        }
         
         if (!hasPending && !hasInvoicePending && interval) {
           if (DEBUG) logger.debug("[Polling] No pending jobs, stopping polling");
@@ -1047,22 +1103,28 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         processedJobsRef.current.delete(doc.id);
       }
 
-      // Poner en cola para procesamiento
-      const { error } = await supabase
-        .from("callsheet_jobs")
-        .update({ status: "queued", project_id: project?.id ?? null })
-        .eq("id", doc.id);
-            
-      if (error) throw error;
+      // Ensure project_id is set (upload might have happened before project was selected).
+      // Do NOT change status here — trigger-worker claims atomically to "processing" directly,
+      // so the job never sits in "queued" for the manual single-doc flow.
+      if (project?.id) {
+        await supabase
+          .from("callsheet_jobs")
+          .update({ project_id: project.id })
+          .eq("id", doc.id);
+      }
 
       // Track this job so it gets cancelled if the user closes the modal before it finishes.
       cancelCallsheetJobIdsRef.current.add(doc.id);
+      // Safety: show "processing" in UI immediately even before trigger-worker responds.
+      recentlyTriggeredRef.current.add(doc.id);
 
       toast.success(doc.status === "done" ? t("projectDetail.toastReprocessingStarted") : t("projectDetail.toastExtractionStarted"));
-      setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'queued' } : p));
+      setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'processing' } : p));
 
       // Best-effort: kick the worker so the user doesn't have to wait for cron or press "Procesar ahora".
-      // Do not await: the worker call can take long and we don't want to block the UI.
+      // IMPORTANT: no `signal` here — this fetch must NOT be aborted by the polling AbortController
+      // lifecycle. If the modal re-renders or the effect re-runs the signal would abort this fetch
+      // silently, leaving the job stuck in "queued" until cron. The polling already handles retries.
       void (async () => {
         try {
           const { data: { session } } = await supabase.auth.getSession();
@@ -1073,7 +1135,6 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
               Authorization: accessToken ? `Bearer ${accessToken}` : "",
               "Content-Type": "application/json",
             },
-            signal: abortControllerRef.current?.signal,
           });
 
           if (!res.ok) {
@@ -1081,7 +1142,6 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             logger.warn("[ProjectDetailModal] trigger-worker failed", { status: res.status, msg });
           }
         } catch (err) {
-          if ((err as any)?.name === "AbortError") return;
           logger.warn("[ProjectDetailModal] trigger-worker error", err);
         }
       })();

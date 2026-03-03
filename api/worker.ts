@@ -49,6 +49,8 @@ export default withApiObservability(async function handler(req: any, res: any, {
   const manual = String(req.query?.manual ?? "").trim() === "1";
   const skipGeocode = manual && String(req.query?.skipGeocode ?? "").trim() === "1";
   const manualJobId = manual && typeof req.query?.jobId === "string" ? String(req.query.jobId).trim() : null;
+  // preClaimed=1: trigger-worker already set this job to "processing"; skip the atomic claim step.
+  const preClaimed = manual && manualJobId != null && String(req.query?.preClaimed ?? "").trim() === "1";
   const maxJobs = manual ? (manualJobId ? 1 : 4) : 16; // Keep single-job manual runs deterministic, but allow small manual batches.
   const manualUserId = manual && typeof req.query?.userId === "string" ? String(req.query.userId).trim() : null;
 
@@ -118,45 +120,47 @@ export default withApiObservability(async function handler(req: any, res: any, {
       }
     };
 
-    // 1. Detect and reset stuck jobs
-    const stuckTimeout = DEFAULT_RETRY_STRATEGY.timeoutMinutes;
-    const stuckThreshold = new Date(Date.now() - stuckTimeout * 60 * 1000).toISOString();
-    
-    const { data: stuckJobs } = await supabaseAdmin
-      .from("callsheet_jobs")
-      .select("id, retry_count, max_retries")
-      .eq("status", "processing")
-      .lt("processing_started_at", stuckThreshold);
+    // 1. Detect and reset stuck jobs.
+    // Skip for targeted manual single-job runs: the job was just queued so it can't be stuck,
+    // and running this check adds unnecessary latency for the user pressing "Procesar".
+    if (!manual || !manualJobId) {
+      const stuckTimeout = DEFAULT_RETRY_STRATEGY.timeoutMinutes;
+      const stuckThreshold = new Date(Date.now() - stuckTimeout * 60 * 1000).toISOString();
 
-    if (stuckJobs && stuckJobs.length > 0) {
-      log.warn({ count: stuckJobs.length }, "callsheet_stuck_jobs_detected");
-      
-      for (const stuck of stuckJobs) {
-        const retryCount = (stuck.retry_count || 0) + 1;
-        const maxRetries = stuck.max_retries || DEFAULT_RETRY_STRATEGY.maxRetries;
-        
-        if (retryCount > maxRetries) {
-          // Exceeded max retries, mark as failed
-          await supabaseAdmin
-            .from("callsheet_jobs")
-            .update({ 
-              status: "failed", 
-              last_error: "Job stuck in processing, exceeded max retries",
-              retry_count: retryCount 
-            })
-            .eq("id", stuck.id);
-        } else {
-          // Reset to queued for retry with backoff
-          const nextRetry = calculateNextRetry(retryCount);
-          await supabaseAdmin
-            .from("callsheet_jobs")
-            .update({ 
-              status: "failed", 
-              last_error: "Job stuck in processing, will retry",
-              retry_count: retryCount,
-              next_retry_at: nextRetry
-            })
-            .eq("id", stuck.id);
+      const { data: stuckJobs } = await supabaseAdmin
+        .from("callsheet_jobs")
+        .select("id, retry_count, max_retries")
+        .eq("status", "processing")
+        .lt("processing_started_at", stuckThreshold);
+
+      if (stuckJobs && stuckJobs.length > 0) {
+        log.warn({ count: stuckJobs.length }, "callsheet_stuck_jobs_detected");
+
+        for (const stuck of stuckJobs) {
+          const retryCount = (stuck.retry_count || 0) + 1;
+          const maxRetries = stuck.max_retries || DEFAULT_RETRY_STRATEGY.maxRetries;
+
+          if (retryCount > maxRetries) {
+            await supabaseAdmin
+              .from("callsheet_jobs")
+              .update({
+                status: "failed",
+                last_error: "Job stuck in processing, exceeded max retries",
+                retry_count: retryCount,
+              })
+              .eq("id", stuck.id);
+          } else {
+            const nextRetry = calculateNextRetry(retryCount);
+            await supabaseAdmin
+              .from("callsheet_jobs")
+              .update({
+                status: "failed",
+                last_error: "Job stuck in processing, will retry",
+                retry_count: retryCount,
+                next_retry_at: nextRetry,
+              })
+              .eq("id", stuck.id);
+          }
         }
       }
     }
@@ -224,13 +228,17 @@ export default withApiObservability(async function handler(req: any, res: any, {
       jobsByUser.get(uid)!.push(job);
     }
 
+    // Cache user profiles (plan tier + AI settings) in one query per user to avoid
+    // redundant DB roundtrips later inside processJob.
+    const userProfileCache = new Map<string, any>();
     const limitedJobs: any[] = [];
     for (const [uid, userJobs] of jobsByUser) {
       const { data: profile } = await supabaseAdmin
         .from("user_profiles")
-        .select("plan_tier")
+        .select("plan_tier, openrouter_enabled, openrouter_api_key, openrouter_model")
         .eq("id", uid)
         .maybeSingle();
+      userProfileCache.set(uid, profile ?? {});
       const planTier = String((profile as any)?.plan_tier ?? "basic").trim();
       const limits = getPlanLimits(planTier);
       const maxPerRun = limits.maxCallsheetsPerWorkerRun;
@@ -242,22 +250,38 @@ export default withApiObservability(async function handler(req: any, res: any, {
     async function processJob(job: any) {
       const jobId = job.id;
       const currentRetry = job.retry_count || 0;
-      
-      // Atomically claim the job so concurrent workers don't double-process.
-      const { data: claimed, error: claimError } = await supabaseAdmin
-        .from("callsheet_jobs")
-        .update({ 
-          status: "processing", 
-          processed_at: new Date().toISOString(),
-          processing_started_at: new Date().toISOString(),
-          retry_count: currentRetry
-        })
-        .eq("id", jobId)
-        .in("status", ["queued", "failed"])
-        .select("id, storage_path, user_id, retry_count, processed_at")
-        .maybeSingle();
 
-      if (claimError || !claimed) return; // already taken or not claimable
+      let claimed: any;
+      if (preClaimed && jobId === manualJobId) {
+        // Job was already claimed to "processing" by trigger-worker. Just fetch its data.
+        const { data: existing, error: fetchErr } = await supabaseAdmin
+          .from("callsheet_jobs")
+          .select("id, storage_path, user_id, retry_count, processed_at")
+          .eq("id", jobId)
+          .eq("status", "processing")
+          .maybeSingle();
+        if (fetchErr || !existing) {
+          log.warn({ jobId }, "callsheet_preclaimed_job_not_found");
+          return;
+        }
+        claimed = existing;
+      } else {
+        // Atomically claim the job so concurrent workers don't double-process.
+        const { data: claimedData, error: claimError } = await supabaseAdmin
+          .from("callsheet_jobs")
+          .update({
+            status: "processing",
+            processed_at: new Date().toISOString(),
+            processing_started_at: new Date().toISOString(),
+            retry_count: currentRetry,
+          })
+          .eq("id", jobId)
+          .in("status", ["queued", "failed"])
+          .select("id, storage_path, user_id, retry_count, processed_at")
+          .maybeSingle();
+        if (claimError || !claimedData) return; // already taken or not claimable
+        claimed = claimedData;
+      }
 
       try {
         log.info({ jobId, retryCount: currentRetry }, "callsheet_job_start");
@@ -329,20 +353,15 @@ export default withApiObservability(async function handler(req: any, res: any, {
 
         // B. Process PDF with Gemini Vision
         
-        // Fetch AI user settings
+        // Fetch AI user settings — reuse the profile cached during plan-limit checks (no extra DB query).
         let userSettings = undefined;
         if (userId) {
-          const { data: userProfile } = await supabaseAdmin
-            .from("user_profiles")
-            .select("openrouter_enabled, openrouter_api_key, openrouter_model")
-            .eq("id", userId)
-            .maybeSingle();
-            
-          if (userProfile?.openrouter_enabled && userProfile?.openrouter_api_key) {
+          const cachedProfile = userProfileCache.get(userId);
+          if (cachedProfile?.openrouter_enabled && cachedProfile?.openrouter_api_key) {
             userSettings = {
-              openrouterEnabled: userProfile.openrouter_enabled,
-              openrouterApiKey: userProfile.openrouter_api_key,
-              openrouterModel: userProfile.openrouter_model,
+              openrouterEnabled: cachedProfile.openrouter_enabled,
+              openrouterApiKey: cachedProfile.openrouter_api_key,
+              openrouterModel: cachedProfile.openrouter_model,
             };
           }
         }
@@ -441,19 +460,9 @@ export default withApiObservability(async function handler(req: any, res: any, {
         const extracted = validated.data;
         log.info({ jobId: job.id, locations: extracted.locations.length }, "callsheet_extraction_parsed");
 
-        const { data: preSaveJob } = await supabaseAdmin
-          .from("callsheet_jobs")
-          .select("status")
-          .eq("id", jobId)
-          .maybeSingle();
-
-        if (String((preSaveJob as any)?.status ?? "") === "cancelled") {
-          log.info({ jobId }, "callsheet_job_cancelled_pre_save");
-          processedResults.push({ id: jobId, status: "cancelled" });
-          return;
-        }
-
         // D. Save Results
+        // Note: no pre-save cancel check — the atomic `.update().eq("status","processing")` below
+        // handles cancellation safely, and skipping this check saves one DB roundtrip.
         const { error: resultInsertError } = await supabaseAdmin.from("callsheet_results").insert({
           job_id: job.id,
           date_value: extracted.date,

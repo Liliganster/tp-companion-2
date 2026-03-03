@@ -128,9 +128,35 @@ const handleTriggerWorker = withApiObservability(async function handler(req: any
     const hasJobId = Boolean(normalizedJobId);
 
     if (hasJobId) {
-      const { data: job, error } = await supabaseAdmin.from("callsheet_jobs").select("id, user_id, status").eq("id", normalizedJobId).maybeSingle();
-      if (error) { log.error({ error, jobId: normalizedJobId }, "[trigger-worker] Error fetching job"); return sendJson(res, 500, { error: "fetch_failed", message: error.message }); }
-      if (!job || String((job as any).user_id ?? "") !== user.id) return sendJson(res, 404, { ok: false, error: "not_found", message: "Job not found" });
+      // Atomically claim the job here (trigger-worker → "processing") so the DB never
+      // shows "queued" to the user for a manual single-job trigger.
+      // The worker receives preClaimed=1 and skips its own claim step.
+      const now = new Date().toISOString();
+      const { data: claimed, error: claimError } = await supabaseAdmin
+        .from("callsheet_jobs")
+        .update({ status: "processing", processing_started_at: now, processed_at: now })
+        .eq("id", normalizedJobId)
+        .eq("user_id", user.id)
+        .in("status", ["queued", "created", "failed", "cancelled"])
+        .select("id")
+        .maybeSingle();
+
+      if (claimError) {
+        log.error({ claimError, jobId: normalizedJobId }, "[trigger-worker] claim failed");
+        return sendJson(res, 500, { error: "claim_failed", message: claimError.message });
+      }
+      if (!claimed) {
+        // Already processing/done — still fire worker so it can finish if it was interrupted.
+        const { data: existing } = await supabaseAdmin
+          .from("callsheet_jobs")
+          .select("status")
+          .eq("id", normalizedJobId)
+          .maybeSingle();
+        const existingStatus = String((existing as any)?.status ?? "");
+        if (existingStatus === "done") return sendJson(res, 200, { ok: true, triggered: false, message: "already_done" });
+        if (existingStatus !== "processing")
+          return sendJson(res, 400, { ok: false, error: "not_claimable", status: existingStatus });
+      }
     } else {
       const { count, error } = await supabaseAdmin.from("callsheet_jobs").select("id", { head: true, count: "exact" }).eq("status", "queued").eq("user_id", user.id);
       if (error) { log.error({ error }, "[trigger-worker] Error fetching jobs"); return sendJson(res, 500, { error: "fetch_failed", message: error.message }); }
@@ -139,7 +165,10 @@ const handleTriggerWorker = withApiObservability(async function handler(req: any
 
     const protocol = req.headers.host?.includes("localhost") ? "http" : "https";
     const params = new URLSearchParams({ manual: "1", skipGeocode: "1", userId: user.id });
-    if (hasJobId) params.set("jobId", normalizedJobId);
+    if (hasJobId) {
+      params.set("jobId", normalizedJobId);
+      params.set("preClaimed", "1"); // job is already in "processing"; worker skips its claim step
+    }
     const workerUrl = `${protocol}://${req.headers.host}/api/worker?${params.toString()}`;
     const cronSecret = process.env.CRON_SECRET;
 
