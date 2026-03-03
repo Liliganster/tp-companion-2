@@ -1133,52 +1133,34 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
   const handleTriggerWorker = async () => {
     if (triggeringWorker) return;
+
+    // Find all un-processed docs
+    const toProcess = realCallSheets.filter(
+      (j) => j.status === "created" || j.status === "queued" || j.status === "failed"
+    );
+
+    if (toProcess.length === 0) {
+      toast.info("No hay documentos pendientes por procesar");
+      return;
+    }
+
     setTriggeringWorker(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         toast.error(t("projectDetail.toastInvalidSession"));
+        setTriggeringWorker(false);
         return;
       }
 
-      // Ensure newly uploaded jobs (status=created) are queued so the worker can process them.
-      // We skip rows with storage_path="pending" to avoid queuing half-uploaded jobs.
-      try {
-        await supabase
-          .from("callsheet_jobs")
-          .update({ status: "queued", needs_review_reason: null })
-          .eq("project_id", project?.id ?? null)
-          .eq("status", "created")
-          .neq("storage_path", "pending");
-      } catch {
-        // ignore
-      }
+      toast.info(`Iniciando extracción de ${toProcess.length} documento(s)...`);
 
-      toast.success("Procesamiento iniciado. Se actualizará automáticamente.");
+      // Procesa secuencialmente o en paralelo. Como maxDuration es 60s en Vercel Hobby, el cliente
+      // puede hacer un Promise.allSettled y cada fetch individual a /api/callsheets/process manejará su propio tiempo.
+      await Promise.allSettled(toProcess.map(doc => handleExtract(doc, false)));
 
-      // Fire-and-forget so the UI doesn't look blocked while the worker runs.
-      void fetch("/api/callsheets/trigger-worker", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
-        },
-        signal: abortControllerRef.current?.signal,
-      }).then(async (res) => {
-        const data = await res.json().catch(() => ({} as any));
-        if (!res.ok) {
-          const message = (data as any)?.message || "Error al procesar";
-          toast.error(tf("projectDetail.toastWorkerError", { message }));
-          return;
-        }
-        toast.success(tf("projectDetail.toastWorkerExecuted", { count: (data as any)?.processed || 0 }));
-        setRefreshTrigger((p) => p + 1);
-      }).catch((err) => {
-        if (err?.name === "AbortError") return;
-        toast.error(tf("projectDetail.toastWorkerError", { message: err?.message ?? String(err) }));
-      });
     } catch (e: any) {
-      toast.error(tf("projectDetail.toastWorkerError", { message: e.message }));
+      logger.error("Error trigger all", e);
     } finally {
       setTriggeringWorker(false);
     }

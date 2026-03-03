@@ -98,7 +98,12 @@ async function countExtractionsThisMonth(
   };
 }
 
-export async function checkAiMonthlyQuota(userId: string, planTier?: PlanTier | string | null): Promise<QuotaDecision> {
+export async function checkAiMonthlyQuota(userId: string, planTierParams?: PlanTier | string | null): Promise<QuotaDecision> {
+  let planTier = planTierParams;
+  if (!planTier) {
+    const { data } = await supabaseAdmin.from("user_profiles").select("plan_tier").eq("id", userId).maybeSingle();
+    planTier = data?.plan_tier;
+  }
   const limit = getAIMonthlyLimit(planTier);
   const sinceIso = startOfCurrentMonthUtcIso();
   const counts = await countExtractionsThisMonth(userId, sinceIso);

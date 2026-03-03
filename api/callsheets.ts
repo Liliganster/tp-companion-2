@@ -30,14 +30,17 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
   if (!jobId) return sendJson(res, 400, { error: "missing_jobId" });
 
   try {
-    // 1. Check monthly quota
-    const quota = await checkAiMonthlyQuota(user.id);
+    // 1. Fetch user profile to get AI plan tier
+    const { data: profile } = await supabaseAdmin.from("user_profiles").select("plan_tier, openrouter_enabled, openrouter_api_key, openrouter_model").eq("id", user.id).maybeSingle();
+
+    // 2. Check monthly quota
+    const quota = await checkAiMonthlyQuota(user.id, profile?.plan_tier);
     if (!quota.allowed) {
       await supabaseAdmin.from("callsheet_jobs").update({ status: "out_of_quota", needs_review_reason: quota.reason ?? "monthly_quota_exceeded" }).eq("id", jobId).eq("user_id", user.id);
       return sendJson(res, 402, { error: "quota_exceeded", reason: quota.reason });
     }
 
-    // 2. Atomically claim the job (created/queued/failed/cancelled → processing)
+    // 3. Atomically claim the job (created/queued/failed/cancelled -> processing)
     const now = new Date().toISOString();
     const { data: job, error: claimError } = await supabaseAdmin
       .from("callsheet_jobs")
@@ -65,7 +68,6 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
     }
 
     // 4. Load user AI settings (OpenRouter override if configured)
-    const { data: profile } = await supabaseAdmin.from("user_profiles").select("openrouter_enabled, openrouter_api_key, openrouter_model").eq("id", user.id).maybeSingle();
     const userSettings = profile?.openrouter_enabled && profile?.openrouter_api_key
       ? { openrouterEnabled: true, openrouterApiKey: profile.openrouter_api_key, openrouterModel: profile.openrouter_model }
       : undefined;
