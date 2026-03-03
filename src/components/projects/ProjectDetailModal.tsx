@@ -935,12 +935,24 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const handleDialogOpenChange = (nextOpen: boolean) => {
     console.warn("[handleDialogOpenChange] nextOpen:", nextOpen);
     if (!nextOpen) {
-      const pendingCallsheets = Array.from(cancelCallsheetJobIdsRef.current);
+      const pendingCallsheetsFromRef = Array.from(cancelCallsheetJobIdsRef.current);
+      const visibleNonDoneCallsheets = (realCallSheets ?? [])
+        .filter((doc) => doc.status !== "done")
+        .map((doc) => String(doc.id ?? "").trim())
+        .filter(Boolean);
+      const pendingCallsheets = Array.from(new Set([...pendingCallsheetsFromRef, ...visibleNonDoneCallsheets]));
       const pendingInvoices = Array.from(cancelInvoiceJobIdsRef.current);
       const inFlightCount = docAbortControllersRef.current.size;
       const totalPending = pendingCallsheets.length + pendingInvoices.length;
       const shouldShowCancelToast = totalPending > 0 || inFlightCount > 0;
-      console.warn("[handleDialogOpenChange] Pending jobs to cancel:", { pendingCallsheets, pendingInvoices, totalPending, inFlightCount });
+      console.warn("[handleDialogOpenChange] Pending jobs to cancel:", {
+        pendingCallsheetsFromRef,
+        visibleNonDoneCallsheets,
+        pendingCallsheets,
+        pendingInvoices,
+        totalPending,
+        inFlightCount,
+      });
       
       // Abort all in-flight extractions FIRST (before clearing refs)
       docAbortControllersRef.current.forEach((ac, docId) => {
