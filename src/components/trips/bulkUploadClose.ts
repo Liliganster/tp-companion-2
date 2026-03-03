@@ -14,14 +14,18 @@ type GetBulkCloseCancellationArgs = {
 
 export function getBulkCloseCancellation(args: GetBulkCloseCancellationArgs) {
   const { activeJobIds, aiLoading, aiStep, jobIds, jobStateById } = args;
+  const sessionJobIds = Array.from(new Set([...jobIds, ...activeJobIds])).filter(Boolean);
+  const closeWhileProcessing = aiLoading || aiStep === "processing";
 
-  const jobsToCancel = Array.from(new Set([...jobIds, ...activeJobIds])).filter((id) => {
+  const jobsToCancel = sessionJobIds.filter((id) => {
+    if (closeWhileProcessing) return true;
+
     const status = String(jobStateById[id]?.status ?? "").trim();
-    return status === "created" || status === "queued" || status === "processing" || (aiStep === "processing" && !status);
+    return status === "created" || status === "queued" || status === "processing" || status === "failed";
   });
 
   return {
     jobsToCancel,
-    shouldShowCancellationToast: aiLoading || aiStep === "processing" || jobsToCancel.length > 0,
+    shouldShowCancellationToast: closeWhileProcessing || jobsToCancel.length > 0,
   };
 }

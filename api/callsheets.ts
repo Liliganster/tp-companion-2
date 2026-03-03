@@ -5,7 +5,7 @@
 
 import { supabaseAdmin } from "../src/lib/supabaseServer.js";
 import { withApiObservability } from "./_utils/observability.js";
-import { requireSupabaseUser, sendJson } from "./_utils/supabase.js";
+import { getBearerToken, requireSupabaseUser, sendJson } from "./_utils/supabase.js";
 import { enforceRateLimit } from "./_utils/rateLimit.js";
 import { checkAiMonthlyQuota } from "./_utils/aiQuota.js";
 import { generateContentFromPDF } from "../src/lib/ai/geminiClient.js";
@@ -264,7 +264,19 @@ const handleStatus = withApiObservability(async function handler(req: any, res: 
 const handleTriggerWorker = withApiObservability(async function handler(req: any, res: any, { log }) {
   if (req.method !== "POST") { res.statusCode = 405; res.setHeader("Allow", "POST"); res.end(); return; }
 
-  const user = await requireSupabaseUser(req, res);
+  const cronSecret = process.env.CRON_SECRET;
+  const internalUserId =
+    (typeof req.query?.userId === "string" ? req.query.userId : null) ??
+    (typeof req.body?.userId === "string" ? req.body.userId : null);
+  const normalizedInternalUserId = String(internalUserId ?? "").trim();
+  const isInternalTrigger =
+    Boolean(normalizedInternalUserId) &&
+    Boolean(cronSecret) &&
+    getBearerToken(req) === cronSecret;
+
+  const user = isInternalTrigger
+    ? { id: normalizedInternalUserId }
+    : await requireSupabaseUser(req, res);
   if (!user) return;
 
   const allowed = await enforceRateLimit({ req, res, name: "callsheets_trigger_worker", identifier: user.id, limit: 3, windowMs: 60_000 });
@@ -320,17 +332,43 @@ const handleTriggerWorker = withApiObservability(async function handler(req: any
       params.set("preClaimed", "1"); // job is already in "processing"; worker skips its claim step
     }
     const workerUrl = `${protocol}://${req.headers.host}/api/worker?${params.toString()}`;
-    const cronSecret = process.env.CRON_SECRET;
 
-    log.info({ jobId: hasJobId ? normalizedJobId : null }, "[trigger-worker] Firing worker (fire-and-forget)");
+    log.info(
+      {
+        jobId: hasJobId ? normalizedJobId : null,
+        internalTrigger: isInternalTrigger,
+        userId: user.id,
+      },
+      "[trigger-worker] Firing worker (fire-and-forget)",
+    );
 
     // Fire-and-forget: do NOT await — Vercel Hobby has a 10s function limit
     // and the worker (Gemini PDF processing) can take 15-30s.
     // The frontend polls /api/callsheets/status for the result.
-    fetch(workerUrl, {
+    void fetch(workerUrl, {
       method: "POST",
       headers: { Authorization: cronSecret ? `Bearer ${cronSecret}` : "", "Content-Type": "application/json" },
-    }).catch((err) => log.error({ err }, "[trigger-worker] worker fetch error (background)"));
+    })
+      .then(async (response) => {
+        if (response.ok) return;
+        const bodyPreview = (await response.text().catch(() => "")).slice(0, 300);
+        log.warn(
+          {
+            status: response.status,
+            bodyPreview,
+            jobId: hasJobId ? normalizedJobId : null,
+            internalTrigger: isInternalTrigger,
+            userId: user.id,
+          },
+          "[trigger-worker] worker fetch non-ok (background)",
+        );
+      })
+      .catch((err) =>
+        log.error(
+          { err, internalTrigger: isInternalTrigger, userId: user.id },
+          "[trigger-worker] worker fetch error (background)",
+        ),
+      );
 
     return sendJson(res, 200, { ok: true, triggered: true, jobId: hasJobId ? normalizedJobId : null });
   } catch (e: any) {

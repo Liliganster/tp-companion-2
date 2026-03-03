@@ -180,6 +180,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const cancelRequestedRef = useRef(false);
   const aiAbortControllerRef = useRef<AbortController | null>(null);
   const triggerWorkerAbortRef = useRef<AbortController | null>(null);
+  const lastTriggerWorkerKickAtRef = useRef(0);
   const dragDepthRef = useRef(0);
   
   const { t, tf, locale } = useI18n();
@@ -229,6 +230,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     activeJobIdsRef.current = [];
     optimizeChainRef.current = Promise.resolve();
     triggerWorkerAbortRef.current = null;
+    lastTriggerWorkerKickAtRef.current = 0;
     jobResultsLoadingRef.current.clear();
     failureToastShownRef.current.clear();
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -713,6 +715,58 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     });
   };
 
+  const triggerBulkWorker = async (
+    ids: string[],
+    signal: AbortSignal | null | undefined,
+    reason: "initial_batch" | "queued_safety_net",
+  ) => {
+    const targetIds = Array.from(new Set(ids.map((id) => String(id ?? "").trim()).filter(Boolean)));
+    if (targetIds.length === 0 || isAiCancelled(signal)) return;
+
+    const token = await getAccessToken();
+    if (isAiCancelled(signal)) return;
+
+    const url = getBulkTriggerWorkerUrl(targetIds);
+    const controller = new AbortController();
+    triggerWorkerAbortRef.current?.abort();
+    triggerWorkerAbortRef.current = controller;
+    lastTriggerWorkerKickAtRef.current = Date.now();
+
+    void fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: token ? `Bearer ${token}` : "",
+        "Content-Type": "application/json",
+      },
+      signal: controller.signal,
+    })
+      .then(async (res) => {
+        if (res.ok) return;
+        const errorText = await res.text().catch(() => "");
+        logger.warn("[BulkUploadModal] trigger-worker failed", {
+          reason,
+          status: res.status,
+          errorText,
+          jobCount: targetIds.length,
+          url,
+        });
+      })
+      .catch((error) => {
+        if (error?.name === "AbortError") return;
+        logger.warn("[BulkUploadModal] trigger-worker error", {
+          reason,
+          error,
+          jobCount: targetIds.length,
+          url,
+        });
+      })
+      .finally(() => {
+        if (triggerWorkerAbortRef.current === controller) {
+          triggerWorkerAbortRef.current = null;
+        }
+      });
+  };
+
   const selectAiFiles = (files: File[]) => {
     const nextFiles = Array.from(files ?? []).filter(Boolean);
     if (nextFiles.length === 0) return;
@@ -793,6 +847,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     try {
       cancelRequestedRef.current = false;
       activeJobIdsRef.current = [];
+      lastTriggerWorkerKickAtRef.current = 0;
       aiAbortControllerRef.current?.abort();
       aiAbortControllerRef.current = new AbortController();
       const aiSignal = aiAbortControllerRef.current.signal;
@@ -977,24 +1032,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       setProcessingDone(0);
       // Kick the worker once so users don't have to wait for cron.
       try {
-        if (isAiCancelled(aiSignal)) return;
-        const token = await getAccessToken();
-        if (isAiCancelled(aiSignal)) return;
-        triggerWorkerAbortRef.current?.abort();
-        const controller = new AbortController();
-        triggerWorkerAbortRef.current = controller;
-        // Do not await: the worker call can take long and we don't want to block the modal UX.
-        void fetch(getBulkTriggerWorkerUrl(createdJobIds), {
-          method: "POST",
-          headers: {
-            Authorization: token ? `Bearer ${token}` : "",
-            "Content-Type": "application/json",
-          },
-          signal: controller.signal,
-        }).catch((error) => {
-          if (error?.name === "AbortError") return null;
-          return null;
-        });
+        await triggerBulkWorker(createdJobIds, aiSignal, "initial_batch");
       } catch {
         // ignore: polling will still update if cron runs
       }
@@ -1154,6 +1192,15 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         if (jobsError || !jobs) return;
 
         const doneIds = jobs.filter((j: any) => j.status === "done").map((j: any) => String(j.id));
+        const queuedIds = jobs
+          .filter((j: any) => {
+            const status = String(j?.status ?? "");
+            return status === "created" || status === "queued";
+          })
+          .map((j: any) => String(j.id));
+        const processingIds = jobs
+          .filter((j: any) => String(j?.status ?? "") === "processing")
+          .map((j: any) => String(j.id));
         const failedJobs = jobs.filter(
           (j: any) => j.status === "failed" || j.status === "needs_review" || j.status === "out_of_quota",
         );
@@ -1206,6 +1253,17 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
           await Promise.allSettled(pendingLoads.map((id) => loadJobResult(id, aiSignal)));
         }
         if (isAiCancelled(aiSignal)) return;
+
+        const shouldKickQueuedJobs =
+          queuedIds.length > 0 &&
+          processingIds.length === 0 &&
+          Date.now() - lastTriggerWorkerKickAtRef.current >= 5000;
+        if (shouldKickQueuedJobs) {
+          logger.warn("[BulkUploadModal] queued jobs detected without an active worker; re-triggering", {
+            queuedIds,
+          });
+          void triggerBulkWorker(queuedIds, aiSignal, "queued_safety_net");
+        }
 
         // Move to review as soon as there are no pending jobs.
         if (aiStep === "processing" && (!hasPending || doneIds.length > 0)) setAiStep("review");

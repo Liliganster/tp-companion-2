@@ -14,6 +14,9 @@ import {
   runWithConcurrencyLimit,
   shouldSelfTriggerCallsheetBatch,
 } from "./_utils/callsheetWorker.js";
+import { startRuntimeWatchdog } from "./_utils/runtimeWatchdog.js";
+
+const CALLSHEET_WORKER_RUNTIME_WARNING_MS = 55_000;
 
 // Geocoding function with direct access to env vars
 async function geocodeAddress(address: string) {
@@ -59,6 +62,18 @@ export default withApiObservability(async function handler(req: any, res: any, {
   const preClaimed = manual && manualJobId != null && String(req.query?.preClaimed ?? "").trim() === "1";
   const maxJobs = getCallsheetWorkerFetchLimit({ manual, manualJobId });
   const manualUserId = manual && typeof req.query?.userId === "string" ? String(req.query.userId).trim() : null;
+  const runtimeWatchdog = startRuntimeWatchdog({
+    context: {
+      manual,
+      manualJobId,
+      manualUserId,
+      maxJobs,
+      requestId,
+    },
+    event: "worker_possible_vercel_timeout",
+    log,
+    warningMs: CALLSHEET_WORKER_RUNTIME_WARNING_MS,
+  });
 
   const queryKey = typeof req.query?.key === "string" ? req.query.key : null;
 
@@ -627,21 +642,64 @@ export default withApiObservability(async function handler(req: any, res: any, {
           const hostHeader = req.headers?.host;
           if (hostHeader) {
             const proto = hostHeader.includes("localhost") ? "http" : "https";
+            const cronSecret = process.env.CRON_SECRET;
+            const useInternalTriggerWorker = manual && Boolean(manualUserId);
             const params = new URLSearchParams();
-            if (manual) {
+            if (useInternalTriggerWorker && manualUserId) {
+              params.set("userId", manualUserId);
+            } else if (manual) {
               params.set("manual", "1");
               if (skipGeocode) params.set("skipGeocode", "1");
               if (manualUserId) params.set("userId", manualUserId);
             }
-            const selfUrl = params.size > 0
-              ? `${proto}://${hostHeader}/api/worker?${params.toString()}`
-              : `${proto}://${hostHeader}/api/worker`;
-            const cronSecret = process.env.CRON_SECRET;
-            fetch(selfUrl, {
+            const selfUrl = useInternalTriggerWorker
+              ? `${proto}://${hostHeader}/api/callsheets/trigger-worker?${params.toString()}`
+              : params.size > 0
+                ? `${proto}://${hostHeader}/api/worker?${params.toString()}`
+                : `${proto}://${hostHeader}/api/worker`;
+            void fetch(selfUrl, {
               method: "POST",
               headers: { Authorization: cronSecret ? `Bearer ${cronSecret}` : "", "Content-Type": "application/json" },
-            }).catch((err) => log.warn({ err }, "worker_self_trigger_failed"));
-            log.info({ remainingCount, manualBatch: manual }, "worker_self_triggered_for_next_batch");
+            })
+              .then(async (response) => {
+                if (response.ok) return;
+                const bodyPreview = (await response.text().catch(() => "")).slice(0, 300);
+                log.warn(
+                  {
+                    remainingCount,
+                    manualBatch: manual,
+                    manualUserId,
+                    selfUrl,
+                    status: response.status,
+                    bodyPreview,
+                    via: useInternalTriggerWorker ? "callsheets_trigger_worker" : "worker",
+                  },
+                  "worker_self_trigger_non_ok",
+                );
+              })
+              .catch((err) =>
+                log.warn(
+                  {
+                    err,
+                    remainingCount,
+                    manualBatch: manual,
+                    manualUserId,
+                    selfUrl,
+                    via: useInternalTriggerWorker ? "callsheets_trigger_worker" : "worker",
+                  },
+                  "worker_self_trigger_failed",
+                ),
+              );
+            log.info(
+              {
+                remainingCount,
+                manualBatch: manual,
+                manualUserId,
+                selfUrl,
+                via: useInternalTriggerWorker ? "callsheets_trigger_worker" : "worker",
+              },
+              "worker_self_triggered_for_next_batch",
+            );
           }
         }
       } catch (err) {
@@ -654,5 +712,10 @@ export default withApiObservability(async function handler(req: any, res: any, {
     log.error({ err }, "worker_error");
     captureServerException(err, { requestId, kind: "callsheet_worker" });
     res.status(500).json({ error: err.message });
+  } finally {
+    const { context, elapsedMs, warningLogged } = runtimeWatchdog.cancel();
+    if (warningLogged) {
+      log.warn({ ...context, elapsedMs }, "worker_completed_after_timeout_warning");
+    }
   }
 }, { name: "worker" });
