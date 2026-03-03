@@ -38,6 +38,7 @@ import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps"
 import { useClimatiqFuelFactor } from "@/hooks/use-climatiq";
 import { useAppearance } from "@/contexts/AppearanceContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePlan } from "@/contexts/PlanContext";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { formatLocaleNumber, parseLocaleNumber } from "@/lib/number";
