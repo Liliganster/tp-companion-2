@@ -172,7 +172,7 @@ Si después de los 5 pasos NO has encontrado nada claro:
   - "Produktion:", "Production Company:", "Productora:", "Studio:", "Prod:", "Producer:"
   - "In Co-Production with:", "Co-produced by:", "Koproduzent:", "En coproducción con:"
   - En logos, cabeceras principales, o pie de página del documento
-- Ejemplos: ["UFA Fiction"], ["Netflix", "Warner Bros TV"], ["Bavaria Film", "Neue Super"], ["X Filme", "ARD Degeto"]
+  - Ejemplos: ["UFA Fiction"], ["Netflix", "Warner Bros TV"], ["Bavaria Film", "Neue Super"], ["X Filme", "ARD Degeto"]
 
 **DÓNDE BUSCAR** (en orden de prioridad):
 1. **ENCABEZADO/HEADER** (primera página, parte superior)
@@ -308,7 +308,7 @@ Antes de incluir una dirección, verifica que NO sea alguna de estas:
 ✓ Distingue entre set principal, equipo técnico (drones), y logística
 
 ✗ NO busques solo keywords rígidas
-✗ NO asumas que todo "drehort" es principal (puede ser drones, b-unit, etc.)
+✗ NO asumas que todo 'drehort' es principal (puede ser drones, b-unit, etc.)
 ✗ NO extraigas ubicaciones de equipo/crew (basis, catering, parken, makeup, wardrobe)
 ✗ NO inventes información que no esté en el documento
 
@@ -323,11 +323,11 @@ Antes de incluir una dirección, verifica que NO sea alguna de estas:
 
 **CONTENIDO A ANALIZAR**:
 
-${text}`;
+\${text}\`;
 }
 
 export function buildCrewFirstDirectPrompt(text: string) {
-   return `Extrae datos de esta hoja de rodaje en JSON. Devuelve SOLO JSON válido, sin markdown ni explicaciones.
+   return \`Extrae datos de esta hoja de rodaje en JSON. Devuelve SOLO JSON válido, sin markdown ni explicaciones.
 
 CAMPOS CLAVE (diferéncialos correctamente):
 • projectName (REQUERIDO): Título del proyecto. Ej: "Dark", "El Reino", "Succession". NO es la productora.
@@ -366,5 +366,5 @@ Input: "DARK - Folge 3 - Produktion: Wiedemann & Berg - Motiv: Höhle"
 Output: {"version":"parser-crew-1","projectName":"Dark","productionCompany":"Wiedemann & Berg","motiv":"Höhle","episode":"Folge 3",...}
 
 TEXTO:
-${text}`;
+\${text}\`;
 }
