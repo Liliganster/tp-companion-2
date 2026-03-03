@@ -20,6 +20,7 @@ import { uuidv4 } from "@/lib/utils";
 import { buildBaseRouteAddress, optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
 import { useAuth } from "@/contexts/AuthContext";
 import { getBulkCloseCancellation } from "@/components/trips/bulkUploadClose";
+import { getBulkDisplayStatus, getBulkTriggerWorkerUrl, getInitialBulkJobStateById } from "@/components/trips/bulkUploadProcessingState";
 
 import { cancelCallsheetJobs } from "@/lib/aiJobCancellation";
 import { usePlanLimits } from "@/hooks/use-plan-limits";
@@ -821,6 +822,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
       const createdJobIds: string[] = [];
       const metaById: Record<string, { fileName: string; mimeType: string; storagePath: string }> = {};
+      const initialJobStateById: Record<string, JobState> = {};
       let successCount = 0;
       let failCount = 0;
       let reusedCount = 0;
@@ -889,6 +891,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
               metaById[best.id] = { fileName: file.name, mimeType: file.type, storagePath: best.storagePath };
               reusedCount += 1;
               successCount += 1;
+              let effectiveStatus = best.status;
 
               // If it was left in "created"/"failed", re-queue it so processing continues (no new AI cost multiplier).
               if (best.status === "created" || best.status === "failed" || best.status === "cancelled") {
@@ -898,10 +901,13 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                     .update({ status: "queued", needs_review_reason: null })
                     .eq("id", best.id);
                   if (isAiCancelled(aiSignal)) return;
+                  effectiveStatus = "queued";
                 } catch {
                   // ignore
                 }
               }
+
+              initialJobStateById[best.id] = { status: effectiveStatus as JobStatus };
 
               return;
             }
@@ -943,6 +949,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
           createdJobIds.push(job.id);
           metaById[job.id] = { fileName: file.name, mimeType: file.type, storagePath: filePath };
+          initialJobStateById[job.id] = { status: "queued" };
           successCount += 1;
         } catch (err) {
           logger.warn("Bulk upload error", err);
@@ -997,6 +1004,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
       setJobIds(createdJobIds);
       setJobMetaById(metaById);
+      setJobStateById(getInitialBulkJobStateById({ createdJobIds, jobStateById: initialJobStateById }) as Record<string, JobState>);
       setProcessingTotal(createdJobIds.length);
       setProcessingDone(0);
       // Kick the worker once so users don't have to wait for cron.
@@ -1008,7 +1016,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         const controller = new AbortController();
         triggerWorkerAbortRef.current = controller;
         // Do not await: the worker call can take long and we don't want to block the modal UX.
-        void fetch("/api/callsheets/trigger-worker", {
+        void fetch(getBulkTriggerWorkerUrl(createdJobIds), {
           method: "POST",
           headers: {
             Authorization: token ? `Bearer ${token}` : "",
@@ -1250,7 +1258,10 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       return {
         id,
         fileName: meta?.fileName ?? id,
-        status: (state?.status ?? "queued") as JobStatus,
+        status: getBulkDisplayStatus({
+          status: state?.status ?? "queued",
+          totalJobs: jobIds.length,
+        }) as JobStatus,
         reason: state?.needsReviewReason ?? null,
         review,
         saving,
