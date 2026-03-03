@@ -67,6 +67,15 @@ function AppContent() {
     document.documentElement.lang = language;
   }, [language]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const force = new URLSearchParams(window.location.search).get("forceConsoleError");
+    if (force !== "1") return;
+
+    const forcedError = new Error("FORCED_CONSOLE_ERROR_TEST");
+    console.error("[FORCED_TEST] Console error visible check", forcedError);
+  }, []);
+
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AnalyticsListener />

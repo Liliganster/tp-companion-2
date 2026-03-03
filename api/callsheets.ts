@@ -14,6 +14,36 @@ import { extractionSchema } from "../src/lib/ai/schema.js";
 import { CallsheetExtractionResultSchema } from "../src/lib/ai/validation.js";
 import { z } from "zod";
 
+const NON_DONE_CALLSHEET_STATUSES = ["created", "queued", "processing", "failed", "cancelled", "out_of_quota"] as const;
+
+async function deleteUnprocessedCallsheetJob(args: { userId: string; jobId: string }) {
+  const { userId, jobId } = args;
+
+  const { data: existingJob } = await supabaseAdmin
+    .from("callsheet_jobs")
+    .select("id, storage_path")
+    .eq("id", jobId)
+    .eq("user_id", userId)
+    .in("status", [...NON_DONE_CALLSHEET_STATUSES])
+    .maybeSingle();
+
+  const storagePath = String((existingJob as any)?.storage_path ?? "").trim();
+  if (storagePath && storagePath !== "pending") {
+    try {
+      await supabaseAdmin.storage.from("callsheets").remove([storagePath]);
+    } catch {
+      // ignore cleanup failure
+    }
+  }
+
+  await supabaseAdmin
+    .from("callsheet_jobs")
+    .delete()
+    .eq("id", jobId)
+    .eq("user_id", userId)
+    .in("status", [...NON_DONE_CALLSHEET_STATUSES]);
+}
+
 // ─── /api/callsheets/process ────────────────────────────────────────────────
 // Direct synchronous extraction: claim job → download PDF → call Gemini → save results → done.
 // No worker, no fire-and-forget, no polling needed. maxDuration=60s covers Gemini (15-30s).
@@ -36,27 +66,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
     // 2. Check monthly quota
     const quota = await checkAiMonthlyQuota(user.id, profile?.plan_tier);
     if (!quota.allowed) {
-      const { data: existingJob } = await supabaseAdmin
-        .from("callsheet_jobs")
-        .select("id, storage_path")
-        .eq("id", jobId)
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      const storagePath = String((existingJob as any)?.storage_path ?? "").trim();
-      if (storagePath && storagePath !== "pending") {
-        try {
-          await supabaseAdmin.storage.from("callsheets").remove([storagePath]);
-        } catch {
-          // ignore cleanup failure
-        }
-      }
-
-      await supabaseAdmin
-        .from("callsheet_jobs")
-        .delete()
-        .eq("id", jobId)
-        .eq("user_id", user.id);
+      await deleteUnprocessedCallsheetJob({ userId: user.id, jobId });
 
       return sendJson(res, 402, { error: "quota_exceeded", reason: quota.reason });
     }
@@ -84,7 +94,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
     // 3. Download PDF from storage
     const { data: fileData, error: downloadError } = await supabaseAdmin.storage.from("callsheets").download(job.storage_path);
     if (downloadError || !fileData) {
-      await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", last_error: "PDF download failed", needs_review_reason: downloadError?.message ?? "download_failed" }).eq("id", jobId);
+      await deleteUnprocessedCallsheetJob({ userId: user.id, jobId });
       return sendJson(res, 500, { error: "download_failed", message: downloadError?.message });
     }
 
@@ -107,7 +117,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
     const validated = CallsheetExtractionResultSchema.safeParse(extractedJson);
     if (!validated.success) {
       const reason = `invalid_extraction: ${validated.error.issues.map((i: any) => i.message).join("; ")}`;
-      await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", needs_review_reason: reason }).eq("id", jobId);
+      await deleteUnprocessedCallsheetJob({ userId: user.id, jobId });
       return sendJson(res, 422, { error: "extraction_invalid", reason });
     }
     const extracted = validated.data;
@@ -141,7 +151,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
   } catch (err: any) {
     log.error({ err, jobId }, "callsheet_process_error");
     try {
-      await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", last_error: err?.message ?? "unknown" }).eq("id", jobId);
+      await deleteUnprocessedCallsheetJob({ userId: user.id, jobId });
     } catch (updateErr) {
       // ignore
     }

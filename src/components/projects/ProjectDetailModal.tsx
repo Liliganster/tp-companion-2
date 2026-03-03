@@ -1094,7 +1094,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       console.warn("[handleExtract] Non-abort error - removing from cancelRef and marking failed", { docId: doc.id });
       cancelCallsheetJobIdsRef.current.delete(doc.id);
       localStatusOverridesRef.current.delete(doc.id);
-      setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'failed' } : p));
+      setRealCallSheets(prev => prev.filter(p => p.id !== doc.id));
       toast.error(tf("projectDetail.toastExtractionStartError", { message: e.message }));
     }
   };
@@ -1108,16 +1108,15 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       docAbortControllersRef.current.delete(doc.id);
     }
     cancelCallsheetJobIdsRef.current.delete(doc.id);
-    // Protect cancelled status from being overwritten by polling
-    localStatusOverridesRef.current.set(doc.id, 'cancelled');
-    setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'cancelled' } : p));
+    // Remove from UI immediately because cancelled jobs are deleted
+    localStatusOverridesRef.current.delete(doc.id);
+    setRealCallSheets(prev => prev.filter(p => p.id !== doc.id));
     console.warn("[handleCancelExtract] Showing toast");
-    toast.info("Procesamiento cancelado");
-    // Persist cancellation in DB, then clear override so polling picks up the real status
+    toast.info("Procesamiento cancelado y eliminado");
+    // Delete cancelled job (and file) from DB/storage
     try {
       await cancelCallsheetJobs([doc.id]);
     } finally {
-      // After DB is updated, let polling resume normal sync
       localStatusOverridesRef.current.delete(doc.id);
     }
   };
