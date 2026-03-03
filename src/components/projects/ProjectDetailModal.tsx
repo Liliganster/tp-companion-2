@@ -552,11 +552,23 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           }
         }
 
-        setRealCallSheets(Array.from(byName.values()));
+        const finalDocs = Array.from(byName.values()).map(doc => {
+          const override = localStatusOverridesRef.current.get(doc.id);
+          if (override) {
+            if (doc.status === override || doc.status === 'done' || doc.status === 'failed') {
+               localStatusOverridesRef.current.delete(doc.id);
+            } else {
+               return { ...doc, status: override };
+            }
+          }
+          return doc;
+        });
+
+        setRealCallSheets(finalDocs);
 
         // Materialize trips from jobs that are already done (but only once per modal open)
         // This runs after initial fetch to create trips for jobs that completed before modal opened
-        const doneJobs = Array.from(byName.values()).filter(doc => doc.status === 'done');
+        const doneJobs = finalDocs.filter(doc => doc.status === 'done');
         if (doneJobs.length > 0) {
           // Use setTimeout to avoid blocking the UI and to run after state is set
           setTimeout(async () => {
