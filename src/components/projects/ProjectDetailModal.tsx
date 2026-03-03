@@ -74,6 +74,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const projectDocsRef = useRef<ProjectDocument[]>([]);
   const isModalOpenRef = useRef<boolean>(false);
   const stopExtractionRef = useRef<boolean>(false);
+  const activeExtractionCountRef = useRef<number>(0);
   const closeCleanupHandledRef = useRef<boolean>(false);
   const prevOpenRef = useRef<boolean>(open);
 
@@ -120,8 +121,9 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     const pendingCallsheets = Array.from(new Set([...pendingCallsheetsFromRef, ...visibleNonDoneCallsheets]));
     const pendingInvoices = Array.from(cancelInvoiceJobIdsRef.current);
     const inFlightCount = docAbortControllersRef.current.size;
+    const activeExtractionCount = activeExtractionCountRef.current;
     const totalPending = pendingCallsheets.length + pendingInvoices.length;
-    const shouldShowCancelToast = totalPending > 0 || inFlightCount > 0;
+    const shouldShowCancelToast = totalPending > 0 || inFlightCount > 0 || activeExtractionCount > 0;
 
     console.warn("[runCloseCleanup] Pending jobs to cancel:", {
       origin,
@@ -131,6 +133,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       pendingInvoices,
       totalPending,
       inFlightCount,
+      activeExtractionCount,
     });
 
     docAbortControllersRef.current.forEach((ac, docId) => {
@@ -142,11 +145,13 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     void cancelInvoiceJobs(pendingInvoices);
 
     if (shouldShowCancelToast) {
-      const totalToCancel = Math.max(totalPending, inFlightCount);
+      const totalToCancel = Math.max(totalPending, inFlightCount, activeExtractionCount);
       console.warn("[runCloseCleanup] Showing cancel toast for", totalToCancel, "jobs");
-      toast.info(`Procesamiento cancelado (${totalToCancel} trabajo${totalToCancel > 1 ? 's' : ''})`, {
-        duration: 4000,
-      });
+      setTimeout(() => {
+        toast.info(`Procesamiento cancelado (${totalToCancel} trabajo${totalToCancel > 1 ? 's' : ''})`, {
+          duration: 4000,
+        });
+      }, 50);
     }
 
     docAbortControllersRef.current.clear();
@@ -1050,6 +1055,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       return;
     }
 
+    activeExtractionCountRef.current += 1;
+
     console.warn("[handleExtract] Starting extraction", { docId: doc.id, docStatus: doc.status, name: doc.name, isReprocess });
 
     if (doc.status === 'processing') {
@@ -1151,6 +1158,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       localStatusOverridesRef.current.delete(doc.id);
       setRealCallSheets(prev => prev.filter(p => p.id !== doc.id));
       toast.error(tf("projectDetail.toastExtractionStartError", { message: e.message }));
+    } finally {
+      activeExtractionCountRef.current = Math.max(0, activeExtractionCountRef.current - 1);
     }
   };
 

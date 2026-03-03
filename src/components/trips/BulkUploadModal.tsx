@@ -19,6 +19,7 @@ import { useTrips } from "@/contexts/TripsContext";
 import { uuidv4 } from "@/lib/utils";
 import { buildBaseRouteAddress, optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
 import { useAuth } from "@/contexts/AuthContext";
+import { getBulkCloseCancellation } from "@/components/trips/bulkUploadClose";
 
 import { cancelCallsheetJobs } from "@/lib/aiJobCancellation";
 import { usePlanLimits } from "@/hooks/use-plan-limits";
@@ -583,7 +584,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       if (failed > 0) toast.error(tf("bulk.toastFailedTrips", { count: failed }));
 
       // keep the text for user inspection; close if everything ok
-      if (failed === 0) setOpen(false);
+      if (failed === 0) handleOpenChange(false);
     } finally {
       setCsvBusy(false);
     }
@@ -1033,13 +1034,27 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
+      const { jobsToCancel, shouldShowCancellationToast } = getBulkCloseCancellation({
+        activeJobIds: activeJobIdsRef.current,
+        aiLoading,
+        aiStep,
+        jobIds,
+        jobStateById,
+      });
+
       cancelRequestedRef.current = true;
       aiAbortControllerRef.current?.abort();
       aiAbortControllerRef.current = null;
       triggerWorkerAbortRef.current?.abort();
       triggerWorkerAbortRef.current = null;
       optimizeChainRef.current = Promise.resolve();
-      void cancelCallsheetJobs([...jobIds, ...activeJobIdsRef.current]);
+      void cancelCallsheetJobs(jobsToCancel);
+
+      if (shouldShowCancellationToast) {
+        setTimeout(() => {
+          toast.info(t("bulk.toastProcessingCancelled"));
+        }, 50);
+      }
     }
 
     setOpen(nextOpen);
@@ -1624,7 +1639,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
             </div>
 
             <div className="flex justify-end pt-2">
-              <Button variant="outline" onClick={() => setOpen(false)}>
+              <Button variant="outline" onClick={() => handleOpenChange(false)}>
                 {t("bulk.cancel")}
               </Button>
             </div>
@@ -1672,7 +1687,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                     </p>
 
                     <div className="flex justify-end gap-2 pt-2">
-                    <Button variant="outline" onClick={() => setOpen(false)}>
+                    <Button variant="outline" onClick={() => handleOpenChange(false)}>
                         {t("bulk.cancel")}
                     </Button>
                     <Button 
