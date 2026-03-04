@@ -20,6 +20,30 @@ import {
 } from "./_utils/callsheetLocationHints.js";
 import { z } from "zod";
 
+// ─── Geocoding (same logic as worker.ts) ─────────────────────────────────────
+async function geocodeAddress(address: string) {
+  const apiKey = process.env.GOOGLE_MAPS_SERVER_KEY;
+  if (!apiKey) return null;
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`;
+    const response = await fetch(url);
+    const data: any = await response.json();
+    if (data.status === "OK" && data.results?.length > 0) {
+      const result = data.results[0];
+      return {
+        formatted_address: result.formatted_address as string,
+        lat: result.geometry.location.lat as number,
+        lng: result.geometry.location.lng as number,
+        place_id: result.place_id as string,
+        quality: result.geometry.location_type as string,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 const NON_DONE_CALLSHEET_STATUSES = ["created", "queued", "processing", "failed", "cancelled", "out_of_quota"] as const;
 const CALLSHEET_PROCESS_STALE_MS = 90_000;
 
@@ -205,14 +229,28 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
     if (resultError) throw new Error(`Failed to save results: ${resultError.message}`);
 
     if (extracted.locations.length > 0) {
+      // Geocode all locations in parallel (same as worker)
+      const geoResults = await Promise.all(
+        extracted.locations.map((addr: string) => geocodeAddress(addr))
+      );
+      log.info({ jobId, geocoded: geoResults.filter(Boolean).length, total: extracted.locations.length }, "callsheet_process_geocoding_done");
+
       const { error: locsError } = await supabaseAdmin.from("callsheet_locations").insert(
-        extracted.locations.map((addr: string, index: number) => ({
-          job_id: jobId,
-          name_raw: /\d/.test(addr) ? null : addr,
-          address_raw: addr,
-          label_source: "EXTRACTED",
-          evidence_text: sourceLocations[index] ?? addr,
-        }))
+        extracted.locations.map((addr: string, index: number) => {
+          const geo = geoResults[index];
+          return {
+            job_id: jobId,
+            name_raw: /\d/.test(addr) ? null : addr,
+            address_raw: addr,
+            label_source: "EXTRACTED",
+            evidence_text: sourceLocations[index] ?? addr,
+            formatted_address: geo?.formatted_address ?? null,
+            lat: geo?.lat ?? null,
+            lng: geo?.lng ?? null,
+            place_id: geo?.place_id ?? null,
+            geocode_quality: geo?.quality ?? null,
+          };
+        })
       );
       if (locsError) log.warn({ jobId, locsError }, "callsheet_process_locs_insert_failed");
     }
