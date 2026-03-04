@@ -428,7 +428,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
           labeledPdfLocations = [];
         }
         const promptSource = pdfHintText
-          ? `[PDF CONTENT ATTACHED]\n\nBEST-EFFORT PDF TEXT SNIPPETS:\n${pdfHintText}`
+          ? `[PDF CONTENT ATTACHED]\n\nTEXT FROM PDF HEADER (use for projectName/date/company — NOT for locations):\n${pdfHintText}`
           : "[PDF CONTENT ATTACHED]";
         const systemInstruction = buildUniversalExtractorPrompt(promptSource);
         const aiResult = await generateContentFromPDF(

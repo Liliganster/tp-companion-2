@@ -155,55 +155,23 @@ export function buildCallsheetPdfHintText(pdfText: string) {
 
   if (lines.length === 0) return "";
 
-  // Always include the first 8 non-empty lines (header area — contains project name, date, company)
+  // Only include header lines (project name, date, company).
+  // Skip logistics lines that would pollute the model's context.
+  const LOGISTICS_HINT_RE =
+    /\b(base(?:camp)?|basis|sammelpunkt|treffpunkt|parking|parken|catering|lunch|fr[uü]hst[uü]ck|breakfast|mittag|dinner|maske|make\s*-?\s*up|hmu|garderobe|wardrobe|kost[uü]m|production\s*office|produktionsb[uü]ro|load\s*(?:&|and)?\s*unload|laderampe|anlieferung|hospital|arzt|medic|generator|strom|toiletten)\b/i;
+
   const headerLines: string[] = [];
-  for (let i = 0; i < lines.length && headerLines.length < 8; i++) {
-    if (lines[i].length > 2) headerLines.push(lines[i].length > 220 ? `${lines[i].slice(0, 217)}...` : lines[i]);
+  for (let i = 0; i < lines.length && headerLines.length < 10; i++) {
+    const line = lines[i];
+    if (line.length <= 2) continue;
+    // Skip logistics lines — they confuse the model about which addresses are filming locations
+    if (LOGISTICS_HINT_RE.test(line)) continue;
+    headerLines.push(line.length > 220 ? `${line.slice(0, 217)}...` : line);
   }
 
-  const pickedIndexes = new Set<number>();
-  lines.forEach((line, index) => {
-    if (!RELEVANT_PDF_LINE_RE.test(line)) return;
+  if (headerLines.length === 0) return "";
 
-    for (let offset = -1; offset <= 1; offset += 1) {
-      const target = index + offset;
-      if (target >= 0 && target < lines.length) pickedIndexes.add(target);
-    }
-  });
-
-  const selected = Array.from(pickedIndexes)
-    .sort((a, b) => a - b)
-    .map((index) => lines[index])
-    .filter(Boolean);
-
-  const compacted: string[] = [];
-
-  // Header lines first (project name, date, production company live here)
-  if (headerLines.length > 0) {
-    compacted.push("DOCUMENT HEADER:");
-    compacted.push(...headerLines);
-    compacted.push("");
-  }
-
-  const labeledCandidates = extractLabeledLocationCandidates(pdfText);
-  if (labeledCandidates.length > 0) {
-    compacted.push("EXPLICIT LOCATION CANDIDATES FROM PDF LABELS:");
-    labeledCandidates.forEach((candidate, index) => {
-      compacted.push(`${index + 1}. ${candidate}`);
-    });
-    compacted.push("");
-  }
-
-  let totalLength = compacted.join("\n").length;
-  for (const line of selected) {
-    if (compacted.length >= 40) break;
-    const nextLine = line.length > 220 ? `${line.slice(0, 217)}...` : line;
-    if (totalLength + nextLine.length > 3200) break;
-    compacted.push(nextLine);
-    totalLength += nextLine.length;
-  }
-
-  return compacted.join("\n");
+  return `DOCUMENT HEADER (project name, date, production company):\n${headerLines.join("\n")}`;
 }
 
 export function normalizeExtractedCallsheetLocations(args: {

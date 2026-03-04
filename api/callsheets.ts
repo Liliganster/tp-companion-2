@@ -183,7 +183,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
       labeledPdfLocations = [];
     }
     const promptSource = pdfHintText
-      ? `[PDF CONTENT ATTACHED]\n\nBEST-EFFORT PDF TEXT SNIPPETS:\n${pdfHintText}`
+      ? `[PDF CONTENT ATTACHED]\n\nTEXT FROM PDF HEADER (use for projectName/date/company — NOT for locations):\n${pdfHintText}`
       : "[PDF CONTENT ATTACHED]";
     const prompt = buildUniversalExtractorPrompt(promptSource);
     const aiResult = await generateContentFromPDF("gemini-2.5-flash", prompt, buffer, "application/pdf", extractionSchema, userSettings);
