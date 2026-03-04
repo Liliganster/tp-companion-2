@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "../src/lib/supabaseServer.js";
-import { generateContentFromImages } from "../src/lib/ai/geminiClient.js";
+import { generateContentFromPDF } from "../src/lib/ai/geminiClient.js";
 import { buildUniversalExtractorPrompt } from "../src/lib/ai/prompts.js";
 import { extractionSchema } from "../src/lib/ai/schema.js";
 import { CallsheetExtractionResultSchema } from "../src/lib/ai/validation.js";
@@ -415,29 +415,30 @@ export default withApiObservability(async function handler(req: any, res: any, {
 
         const aiStartTime = Date.now();
         
-        // Extract first 2 pages as images + OCR (dual approach for robustness)
+        // Run OCR on first 2 pages to get clean text for header fields
         const ocrResult = await extractPagesWithOcr(buffer, {
           maxPages: 2,
           languages: "deu+eng",
           timeoutMs: 25000,
         });
         const pdfText = ocrResult.text;
-        log.info({ jobId: job.id, ocrPages: ocrResult.pages, ocrConfidence: ocrResult.confidence, ocrDurationMs: ocrResult.durationMs, imageCount: ocrResult.pageImages.length }, "callsheet_ocr_extracted");
+        log.info({ jobId: job.id, ocrPages: ocrResult.pages, ocrConfidence: ocrResult.confidence, ocrDurationMs: ocrResult.durationMs }, "callsheet_ocr_extracted");
         
         const labeledPdfLocations = extractLabeledLocationCandidates(pdfText);
         const pdfHintText = buildCallsheetPdfHintText(pdfText);
         
-        // Dual approach: Gemini Vision sees images + has OCR text as backup
+        // Send FULL PDF to Gemini Vision + OCR text as context
         const promptSource = pdfHintText
-          ? `[PAGE IMAGES ATTACHED - First 2 pages only]\n\nOCR TEXT (use for projectName/date/company — NOT for locations):\n${pdfHintText}`
-          : "[PAGE IMAGES ATTACHED - First 2 pages only]";
+          ? `[PDF ATTACHED]\n\nOCR TEXT FROM FIRST 2 PAGES (use for projectName/date/company):\n${pdfHintText}`
+          : "[PDF ATTACHED]";
         const systemInstruction = buildUniversalExtractorPrompt(promptSource);
         
-        // Send page images to Gemini Vision (not full PDF)
-        const aiResult = await generateContentFromImages(
+        // Send full PDF to Gemini Vision (not just images)
+        const aiResult = await generateContentFromPDF(
           "gemini-2.5-flash",
           systemInstruction,
-          ocrResult.pageImages,
+          buffer,
+          "application/pdf",
           extractionSchema,
           userSettings
         );

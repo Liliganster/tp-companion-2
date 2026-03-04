@@ -8,7 +8,7 @@ import { withApiObservability } from "./_utils/observability.js";
 import { getBearerToken, requireSupabaseUser, sendJson } from "./_utils/supabase.js";
 import { enforceRateLimit } from "./_utils/rateLimit.js";
 import { checkAiMonthlyQuota } from "./_utils/aiQuota.js";
-import { generateContentFromImages } from "../src/lib/ai/geminiClient.js";
+import { generateContentFromPDF } from "../src/lib/ai/geminiClient.js";
 import { buildUniversalExtractorPrompt } from "../src/lib/ai/prompts.js";
 import { extractionSchema } from "../src/lib/ai/schema.js";
 import { CallsheetExtractionResultSchema } from "../src/lib/ai/validation.js";
@@ -167,37 +167,39 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
       ? { openrouterEnabled: true, openrouterApiKey: profile.openrouter_api_key, openrouterModel: profile.openrouter_model }
       : undefined;
 
-    // 5. Extract first 2 pages as images + OCR (dual approach for robustness)
+    // 5. Extract OCR text from first 2 pages (for better projectName/company detection)
     const buffer = Buffer.from(await fileData.arrayBuffer());
     
-    // Always extract first 2 pages: OCR text + images for Vision
+    // Run OCR on first 2 pages to get clean text for header fields
     const ocrResult = await extractPagesWithOcr(buffer, {
       maxPages: 2,
       languages: "deu+eng",
       timeoutMs: 25000,
     });
     const pdfText = ocrResult.text;
-    log.info({ jobId, ocrPages: ocrResult.pages, ocrConfidence: ocrResult.confidence, ocrDurationMs: ocrResult.durationMs, imageCount: ocrResult.pageImages.length }, "callsheet_ocr_extracted");
+    log.info({ jobId, ocrPages: ocrResult.pages, ocrConfidence: ocrResult.confidence, ocrDurationMs: ocrResult.durationMs }, "callsheet_ocr_extracted");
     
     const labeledPdfLocations = extractLabeledLocationCandidates(pdfText);
     const pdfHintText = buildCallsheetPdfHintText(pdfText);
     
-    // 6. Call Gemini Vision with images + OCR text context
-    // Dual approach: Gemini sees images visually + has OCR text as backup
+    // 6. Call Gemini Vision with FULL PDF + OCR text as context
+    // PDF: Gemini reads visually (best for locations)
+    // OCR text: helps with projectName/productionCompanies that may be in headers
     const promptSource = pdfHintText
-      ? `[PAGE IMAGES ATTACHED - First 2 pages only]\n\nOCR TEXT (use for projectName/date/company — NOT for locations):\n${pdfHintText}`
-      : "[PAGE IMAGES ATTACHED - First 2 pages only]";
+      ? `[PDF ATTACHED]\n\nOCR TEXT FROM FIRST 2 PAGES (use for projectName/date/company):\n${pdfHintText}`
+      : "[PDF ATTACHED]";
     const prompt = buildUniversalExtractorPrompt(promptSource);
     
-    // Send page images to Gemini Vision (not full PDF)
-    const aiResult = await generateContentFromImages(
+    // Send full PDF to Gemini Vision (not just images)
+    const aiResult = await generateContentFromPDF(
       "gemini-2.5-flash",
       prompt,
-      ocrResult.pageImages,
+      buffer,
+      "application/pdf",
       extractionSchema,
       userSettings
     );
-    log.info({ jobId, provider: aiResult.provider, model: aiResult.model, pagesAnalyzed: ocrResult.pageImages.length }, "callsheet_process_ai_done");
+    log.info({ jobId, provider: aiResult.provider, model: aiResult.model, ocrUsed: ocrResult.pages > 0 }, "callsheet_process_ai_done");
 
     // 6. Parse and validate
     let extractedJson: any = null;
