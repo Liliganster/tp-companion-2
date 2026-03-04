@@ -385,6 +385,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       shootingDays: 0,
       kmPerDay: 0,
       co2Emissions: 0,
+      createdAt: new Date().toISOString(),
     });
     return newProjectId;
   };
