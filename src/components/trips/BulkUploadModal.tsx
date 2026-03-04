@@ -20,7 +20,7 @@ import { uuidv4 } from "@/lib/utils";
 import { buildBaseRouteAddress, optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
 import { useAuth } from "@/contexts/AuthContext";
 import { getBulkCloseCancellation } from "@/components/trips/bulkUploadClose";
-import { getBulkDisplayStatus, getBulkTriggerWorkerUrl, getInitialBulkJobStateById } from "@/components/trips/bulkUploadProcessingState";
+import { getBulkDisplayStatus, getInitialBulkJobStateById } from "@/components/trips/bulkUploadProcessingState";
 import { getBulkDuplicateCleanupIds, getBulkSessionCleanupIds } from "@/components/trips/bulkUploadCleanup";
 
 import { cancelCallsheetJobs } from "@/lib/aiJobCancellation";
@@ -52,6 +52,7 @@ interface BulkUploadModalProps {
 
 let googleApiJsPromise: Promise<void> | null = null;
 let googlePickerApiPromise: Promise<void> | null = null;
+const BULK_CALLSHEET_PROCESS_CONCURRENCY = 2;
 
 async function loadGoogleApiJs() {
   if (typeof window === "undefined") throw new Error("Google API no disponible");
@@ -179,7 +180,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const activeJobIdsRef = useRef<string[]>([]);
   const cancelRequestedRef = useRef(false);
   const aiAbortControllerRef = useRef<AbortController | null>(null);
-  const triggerWorkerAbortRef = useRef<AbortController | null>(null);
+  const scheduledProcessJobIdsRef = useRef(new Set<string>());
   const lastTriggerWorkerKickAtRef = useRef(0);
   const dragDepthRef = useRef(0);
   
@@ -202,16 +203,16 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     cancelRequestedRef.current = true;
     aiAbortControllerRef.current?.abort();
     aiAbortControllerRef.current = null;
-    triggerWorkerAbortRef.current?.abort();
-    triggerWorkerAbortRef.current = null;
+    scheduledProcessJobIdsRef.current.clear();
     resetAiState();
   }, [open]);
 
   useEffect(() => {
+    const scheduledProcessJobIds = scheduledProcessJobIdsRef.current;
     return () => {
       cancelRequestedRef.current = true;
       aiAbortControllerRef.current?.abort();
-      triggerWorkerAbortRef.current?.abort();
+      scheduledProcessJobIds.clear();
     };
   }, []);
 
@@ -229,7 +230,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     setSavedByJobId({});
     activeJobIdsRef.current = [];
     optimizeChainRef.current = Promise.resolve();
-    triggerWorkerAbortRef.current = null;
+    scheduledProcessJobIdsRef.current.clear();
     lastTriggerWorkerKickAtRef.current = 0;
     jobResultsLoadingRef.current.clear();
     failureToastShownRef.current.clear();
@@ -715,56 +716,128 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     });
   };
 
-  const triggerBulkWorker = async (
+  const triggerBulkProcessing = async (
     ids: string[],
     signal: AbortSignal | null | undefined,
     reason: "initial_batch" | "queued_safety_net",
   ) => {
-    const targetIds = Array.from(new Set(ids.map((id) => String(id ?? "").trim()).filter(Boolean)));
+    const targetIds = Array.from(new Set(ids.map((id) => String(id ?? "").trim()).filter(Boolean))).filter(
+      (id) => !scheduledProcessJobIdsRef.current.has(id) && !savedByJobIdRef.current[id],
+    );
     if (targetIds.length === 0 || isAiCancelled(signal)) return;
 
     const token = await getAccessToken();
     if (isAiCancelled(signal)) return;
 
-    const url = getBulkTriggerWorkerUrl(targetIds);
-    const controller = new AbortController();
-    triggerWorkerAbortRef.current?.abort();
-    triggerWorkerAbortRef.current = controller;
     lastTriggerWorkerKickAtRef.current = Date.now();
+    targetIds.forEach((id) => scheduledProcessJobIdsRef.current.add(id));
 
-    void fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: token ? `Bearer ${token}` : "",
-        "Content-Type": "application/json",
-      },
-      signal: controller.signal,
-    })
-      .then(async (res) => {
-        if (res.ok) return;
-        const errorText = await res.text().catch(() => "");
-        logger.warn("[BulkUploadModal] trigger-worker failed", {
-          reason,
-          status: res.status,
-          errorText,
-          jobCount: targetIds.length,
-          url,
-        });
-      })
-      .catch((error) => {
-        if (error?.name === "AbortError") return;
-        logger.warn("[BulkUploadModal] trigger-worker error", {
-          reason,
-          error,
-          jobCount: targetIds.length,
-          url,
-        });
-      })
-      .finally(() => {
-        if (triggerWorkerAbortRef.current === controller) {
-          triggerWorkerAbortRef.current = null;
-        }
-      });
+    void (async () => {
+      const queue = [...targetIds];
+      const workers = Array.from(
+        { length: Math.min(BULK_CALLSHEET_PROCESS_CONCURRENCY, queue.length) },
+        async () => {
+          while (queue.length > 0 && !isAiCancelled(signal)) {
+            const jobId = queue.shift();
+            if (!jobId) return;
+
+            try {
+              setJobStateById((prev) => ({
+                ...prev,
+                [jobId]: {
+                  ...(prev[jobId] ?? { status: "queued" }),
+                  status: "processing",
+                  needsReviewReason: null,
+                },
+              }));
+
+              const response = await fetch(`/api/callsheets/process?jobId=${encodeURIComponent(jobId)}`, {
+                method: "POST",
+                headers: {
+                  Authorization: token ? `Bearer ${token}` : "",
+                  "Content-Type": "application/json",
+                },
+                signal: signal ?? undefined,
+              });
+
+              if (!response.ok) {
+                const errorText = await response.text().catch(() => "");
+                let errorData: Record<string, unknown> | null = null;
+                try {
+                  errorData = errorText ? JSON.parse(errorText) as Record<string, unknown> : null;
+                } catch {
+                  errorData = null;
+                }
+
+                const errorCode = String(errorData?.error ?? "").trim();
+                const claimedStatus = String(errorData?.status ?? "").trim();
+                const nextReason =
+                  String(errorData?.reason ?? errorData?.message ?? errorText ?? "").trim() || null;
+
+                let nextStatus: JobStatus = "failed";
+                if (response.status === 402 || errorCode === "quota_exceeded") {
+                  nextStatus = "out_of_quota";
+                } else if (errorCode === "not_claimable" && claimedStatus === "done") {
+                  nextStatus = "done";
+                } else if (errorCode === "not_claimable" && claimedStatus === "processing") {
+                  nextStatus = "processing";
+                }
+
+                setJobStateById((prev) => ({
+                  ...prev,
+                  [jobId]: {
+                    ...(prev[jobId] ?? { status: "queued" }),
+                    status: nextStatus,
+                    needsReviewReason: nextReason,
+                  },
+                }));
+
+                logger.warn("[BulkUploadModal] direct callsheet process failed", {
+                  reason,
+                  jobId,
+                  status: response.status,
+                  errorCode,
+                  claimedStatus,
+                  errorText: nextReason ?? errorText,
+                });
+              }
+            } catch (error) {
+              if ((error as { name?: string } | null)?.name === "AbortError") return;
+
+              const message = error instanceof Error ? error.message : String(error ?? "");
+              setJobStateById((prev) => ({
+                ...prev,
+                [jobId]: {
+                  ...(prev[jobId] ?? { status: "queued" }),
+                  status: "failed",
+                  needsReviewReason: message || null,
+                },
+              }));
+
+              logger.warn("[BulkUploadModal] direct callsheet process error", {
+                reason,
+                jobId,
+                error,
+              });
+            } finally {
+              scheduledProcessJobIdsRef.current.delete(jobId);
+            }
+          }
+        },
+      );
+
+      await Promise.allSettled(workers);
+    })();
+  };
+
+  const getQueuedJobsNeedingProcessing = (ids: string[]) => {
+    return ids.filter((id) => {
+      const normalizedId = String(id ?? "").trim();
+      if (!normalizedId) return false;
+      if (scheduledProcessJobIdsRef.current.has(normalizedId)) return false;
+      const localStatus = String(jobStateById[normalizedId]?.status ?? "").trim();
+      return localStatus !== "failed" && localStatus !== "done" && localStatus !== "out_of_quota";
+    });
   };
 
   const selectAiFiles = (files: File[]) => {
@@ -1030,11 +1103,11 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       setJobStateById(getInitialBulkJobStateById({ createdJobIds, jobStateById: initialJobStateById }) as Record<string, JobState>);
       setProcessingTotal(createdJobIds.length);
       setProcessingDone(0);
-      // Kick the worker once so users don't have to wait for cron.
+      // Start extraction from the browser so bulk uploads don't depend on trigger-worker.
       try {
-        await triggerBulkWorker(createdJobIds, aiSignal, "initial_batch");
+        await triggerBulkProcessing(createdJobIds, aiSignal, "initial_batch");
       } catch {
-        // ignore: polling will still update if cron runs
+        // ignore: polling will still update already-finished jobs
       }
 
     } catch (err: any) {
@@ -1059,8 +1132,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       cancelRequestedRef.current = true;
       aiAbortControllerRef.current?.abort();
       aiAbortControllerRef.current = null;
-      triggerWorkerAbortRef.current?.abort();
-      triggerWorkerAbortRef.current = null;
+      scheduledProcessJobIdsRef.current.clear();
       optimizeChainRef.current = Promise.resolve();
       void cancelCallsheetJobs(jobsToCancel);
       void cleanupTransientCallsheetJobs(
@@ -1254,15 +1326,16 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         }
         if (isAiCancelled(aiSignal)) return;
 
+        const queuedIdsNeedingProcessing = getQueuedJobsNeedingProcessing(queuedIds);
         const shouldKickQueuedJobs =
-          queuedIds.length > 0 &&
+          queuedIdsNeedingProcessing.length > 0 &&
           processingIds.length === 0 &&
           Date.now() - lastTriggerWorkerKickAtRef.current >= 5000;
         if (shouldKickQueuedJobs) {
-          logger.warn("[BulkUploadModal] queued jobs detected without an active worker; re-triggering", {
-            queuedIds,
+          logger.warn("[BulkUploadModal] queued jobs detected without an active process request; retrying", {
+            queuedIds: queuedIdsNeedingProcessing,
           });
-          void triggerBulkWorker(queuedIds, aiSignal, "queued_safety_net");
+          void triggerBulkProcessing(queuedIdsNeedingProcessing, aiSignal, "queued_safety_net");
         }
 
         // Move to review as soon as there are no pending jobs.
