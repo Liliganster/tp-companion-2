@@ -7,7 +7,7 @@ import { supabaseAdmin } from "../src/lib/supabaseServer.js";
 import { withApiObservability } from "./_utils/observability.js";
 import { getBearerToken, requireSupabaseUser, sendJson } from "./_utils/supabase.js";
 import { enforceRateLimit } from "./_utils/rateLimit.js";
-import { checkAiMonthlyQuota } from "./_utils/aiQuota.js";
+import { checkAiMonthlyQuota, recordAiUsage } from "./_utils/aiQuota.js";
 import { generateContentFromPDF } from "../src/lib/ai/geminiClient.js";
 import { buildUniversalExtractorPrompt } from "../src/lib/ai/prompts.js";
 import { extractionSchema } from "../src/lib/ai/schema.js";
@@ -281,6 +281,10 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
 
     // 8. Mark done
     await supabaseAdmin.from("callsheet_jobs").update({ status: "done" }).eq("id", jobId).eq("status", "processing");
+    
+    // 9. Record AI usage for quota tracking
+    await recordAiUsage(user.id, "callsheet", jobId);
+    
     log.info({ jobId }, "callsheet_process_done");
 
     return sendJson(res, 200, { ok: true, jobId, date: extracted.date, projectName: extracted.projectName, locations: extracted.locations });
