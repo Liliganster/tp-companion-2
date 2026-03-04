@@ -18,6 +18,7 @@ import {
   extractLabeledLocationCandidates,
   normalizeExtractedCallsheetLocations,
   filterHallucinatedLocations,
+  filterLogisticsLocations,
   postProcessLocationsForGeocoding,
 } from "./_utils/callsheetLocationHints.js";
 import { z } from "zod";
@@ -213,7 +214,11 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
           : validated.data.locations,
     };
 
-    // 6b. Filter out hallucinated locations (addresses the AI invented)
+    // 6b. Strip logistics locations (Base, Parking, Catering, etc.)
+    const nonLogistics = filterLogisticsLocations(extracted.locations);
+    extracted.locations = nonLogistics.length > 0 ? nonLogistics : extracted.locations;
+
+    // 6c. Filter out hallucinated locations (addresses the AI invented)
     const verifiedLocations = filterHallucinatedLocations({
       locations: extracted.locations,
       pdfText,

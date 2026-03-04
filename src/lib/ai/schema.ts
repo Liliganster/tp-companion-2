@@ -12,9 +12,9 @@ export const extractionSchema = {
       type: "array",
       items: {
         type: "string",
-        description: "Verbatim filming location address or venue name from the document. Copy exactly as written — never invent or complete addresses."
+        description: "ONLY where the camera shoots scenes (Drehort/Set). Verbatim from document. NEVER include Base, Parking, Catering, Makeup, Office, or any logistics address."
       },
-      description: "Main filming locations only. At least 1 entry. No logistics, no sub-locations, no next-day."
+      description: "Filming locations only (Drehort/Set). At least 1. Exclude all logistics (Base, Parking, Catering, Makeup, Office, etc). No sub-rooms. No next-day."
     }
   },
   required: ["date", "projectName", "productionCompanies", "locations"]

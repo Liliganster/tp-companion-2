@@ -298,6 +298,76 @@ export function postProcessLocationsForGeocoding(locations: string[]): string[] 
   });
 }
 
+// ─── Logistics filter (code-level safety net) ────────────────────────────────
+
+/**
+ * Regex matching logistics-related labels/keywords that should never appear in
+ * a filming location. Applied to the full location string (case-insensitive).
+ * This catches cases where the AI ignores prompt instructions.
+ */
+const LOGISTICS_KEYWORD_RE = new RegExp(
+  [
+    // Base / Basecamp
+    "\\b(?:unit\\s*)?base(?:camp)?\\b",
+    "\\bbasis(?:camp)?\\b",
+    "\\bsammelpunkt\\b",
+    "\\btreffpunkt\\b",
+    "\\bmeeting\\s*point\\b",
+    // Parking
+    "\\b(?:crew\\s*)?park(?:ing|en|platz)\\b",
+    "\\btech\\s*park(?:ing|en)\\b",
+    "\\bfahrer\\b",
+    // Catering / meals
+    "\\bcatering\\b",
+    "\\blunch\\b",
+    "\\bfr[uü]hst[uü]ck\\b",
+    "\\bbreakfast\\b",
+    "\\bmittagessen\\b",
+    "\\bmittag\\b",
+    "\\bdinner\\b",
+    // Makeup / Wardrobe
+    "\\bmaske\\b",
+    "\\bmake\\s*-?\\s*up\\b",
+    "\\bhmu\\b",
+    "\\bhair\\s*&?\\s*make",
+    "\\bgarderobe\\b",
+    "\\bwardrobe\\b",
+    "\\bkost[uü]m\\b",
+    // Office
+    "\\bproduction\\s*office\\b",
+    "\\bproduktionsb[uü]ro\\b",
+    // Load/Unload
+    "\\bload\\s*(?:&|and)?\\s*unload\\b",
+    "\\bladerampe\\b",
+    "\\banlieferung\\b",
+    // Medical
+    "\\bhospital\\b",
+    "\\bmedic\\b",
+    "\\b(?:set\\s*)?arzt\\b",
+    // Infrastructure
+    "\\btoiletten\\b",
+    "\\bgenerator\\b",
+    "\\bstromversorgung\\b",
+  ].join("|"),
+  "i"
+);
+
+/**
+ * Remove locations that are clearly logistics / non-filming addresses.
+ * This is a code-level safety net — even if the AI includes them, we strip them.
+ * Returns original array if filtering would empty it (preserves at least AI output).
+ */
+export function filterLogisticsLocations(locations: string[]): string[] {
+  const filtered = locations.filter((loc) => {
+    const trimmed = String(loc ?? "").trim();
+    if (!trimmed) return false;
+    // Pass through sentinel values
+    if (/^no\s+location/i.test(trimmed)) return true;
+    return !LOGISTICS_KEYWORD_RE.test(trimmed);
+  });
+  return filtered;
+}
+
 /**
  * Cross-validate AI-extracted locations against the actual PDF text.
  * Drops entries that appear to be hallucinated (no significant fragment found in source).

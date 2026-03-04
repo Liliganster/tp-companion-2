@@ -13,6 +13,7 @@ import {
   extractLabeledLocationCandidates,
   normalizeExtractedCallsheetLocations,
   filterHallucinatedLocations,
+  filterLogisticsLocations,
   postProcessLocationsForGeocoding,
 } from "./_utils/callsheetLocationHints.js";
 import {
@@ -509,6 +510,10 @@ export default withApiObservability(async function handler(req: any, res: any, {
               ? normalizedAiLocations
               : validated.data.locations,
         };
+
+        // Strip logistics locations (Base, Parking, Catering, etc.)
+        const nonLogistics = filterLogisticsLocations(extracted.locations);
+        extracted.locations = nonLogistics.length > 0 ? nonLogistics : extracted.locations;
 
         // Filter out hallucinated locations (addresses the AI invented)
         const verifiedLocations = filterHallucinatedLocations({
