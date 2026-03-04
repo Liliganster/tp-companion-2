@@ -641,7 +641,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       if (!statusRes.ok || !connected) {
         const url = new URL(window.location.href);
         url.searchParams.set(BULK_DRIVE_IMPORT_QUERY_PARAM, "1");
-        const returnTo = `${url.pathname}${url.search}`;
+        const returnTo = `${url.pathname}${url.search}${url.hash}`;
         const startRes = await fetch("/api/google/oauth/start", {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
