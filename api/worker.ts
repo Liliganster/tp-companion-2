@@ -7,7 +7,7 @@ import { captureServerException, logger, withApiObservability } from "./_utils/o
 import { enforceRateLimit } from "./_utils/rateLimit.js";
 import { checkAiMonthlyQuota } from "./_utils/aiQuota.js";
 import { calculateNextRetry, DEFAULT_RETRY_STRATEGY } from "./_utils/retry.js";
-import { parsePdf } from "./_utils/pdf-parser.js";
+import { parsePdfWithTimeout } from "./_utils/pdf-parser.js";
 import {
   buildCallsheetPdfHintText,
   extractLabeledLocationCandidates,
@@ -415,7 +415,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
         let pdfHintText = "";
         let labeledPdfLocations: string[] = [];
         try {
-          const parsedPdf = await parsePdf(buffer);
+          const parsedPdf = await parsePdfWithTimeout(buffer, 4_000);
           pdfText = String(parsedPdf?.text ?? "");
           labeledPdfLocations = extractLabeledLocationCandidates(pdfText);
           pdfHintText = buildCallsheetPdfHintText(pdfText);

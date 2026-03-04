@@ -13,3 +13,12 @@ export async function parsePdf(buffer: Buffer): Promise<{
 }> {
   return await pdfParse(buffer);
 }
+
+export async function parsePdfWithTimeout(buffer: Buffer, timeoutMs = 5_000) {
+  return await Promise.race([
+    parsePdf(buffer),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`pdf_parse_timeout_${timeoutMs}ms`)), timeoutMs),
+    ),
+  ]);
+}

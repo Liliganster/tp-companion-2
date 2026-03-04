@@ -12,7 +12,7 @@ import { generateContentFromPDF } from "../src/lib/ai/geminiClient.js";
 import { buildUniversalExtractorPrompt } from "../src/lib/ai/prompts.js";
 import { extractionSchema } from "../src/lib/ai/schema.js";
 import { CallsheetExtractionResultSchema } from "../src/lib/ai/validation.js";
-import { parsePdf } from "./_utils/pdf-parser.js";
+import { parsePdfWithTimeout } from "./_utils/pdf-parser.js";
 import {
   buildCallsheetPdfHintText,
   extractLabeledLocationCandidates,
@@ -21,6 +21,7 @@ import {
 import { z } from "zod";
 
 const NON_DONE_CALLSHEET_STATUSES = ["created", "queued", "processing", "failed", "cancelled", "out_of_quota"] as const;
+const CALLSHEET_PROCESS_STALE_MS = 90_000;
 
 async function deleteUnprocessedCallsheetJob(args: { userId: string; jobId: string }) {
   const { userId, jobId } = args;
@@ -48,6 +49,13 @@ async function deleteUnprocessedCallsheetJob(args: { userId: string; jobId: stri
     .eq("id", jobId)
     .eq("user_id", userId)
     .in("status", [...NON_DONE_CALLSHEET_STATUSES]);
+}
+
+function isCallsheetProcessingStale(timestamp: unknown, staleMs = CALLSHEET_PROCESS_STALE_MS) {
+  if (typeof timestamp !== "string" || !timestamp.trim()) return true;
+  const parsed = Date.parse(timestamp);
+  if (!Number.isFinite(parsed)) return true;
+  return Date.now() - parsed >= staleMs;
 }
 
 // ─── /api/callsheets/process ────────────────────────────────────────────────
@@ -79,7 +87,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
 
     // 3. Atomically claim the job (created/queued/failed/cancelled -> processing)
     const now = new Date().toISOString();
-    const { data: job, error: claimError } = await supabaseAdmin
+    const { data: claimedJob, error: claimError } = await supabaseAdmin
       .from("callsheet_jobs")
       .update({ status: "processing", processing_started_at: now, processed_at: now })
       .eq("id", jobId)
@@ -87,8 +95,31 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
       .in("status", ["created", "queued", "failed", "cancelled", "out_of_quota"])
       .select("id, storage_path, user_id")
       .maybeSingle();
+    let job = claimedJob;
 
     if (claimError) return sendJson(res, 500, { error: "claim_failed", message: claimError.message });
+    if (!job) {
+      const { data: existing } = await supabaseAdmin
+        .from("callsheet_jobs")
+        .select("status, processing_started_at, processed_at, user_id, storage_path")
+        .eq("id", jobId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      const s = String((existing as any)?.status ?? "");
+      const processingStartedAt = String((existing as any)?.processing_started_at ?? (existing as any)?.processed_at ?? "");
+      if (s === "processing" && isCallsheetProcessingStale(processingStartedAt)) {
+        const { data: reclaimed, error: reclaimError } = await supabaseAdmin
+          .from("callsheet_jobs")
+          .update({ status: "processing", processing_started_at: now, processed_at: now })
+          .eq("id", jobId)
+          .eq("user_id", user.id)
+          .eq("status", "processing")
+          .select("id, storage_path, user_id")
+          .maybeSingle();
+        if (reclaimError) return sendJson(res, 500, { error: "reclaim_failed", message: reclaimError.message });
+        if (reclaimed) job = reclaimed as any;
+      }
+    }
     if (!job) {
       const { data: existing } = await supabaseAdmin.from("callsheet_jobs").select("status").eq("id", jobId).maybeSingle();
       const s = String((existing as any)?.status ?? "");
@@ -115,7 +146,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
     let pdfHintText = "";
     let labeledPdfLocations: string[] = [];
     try {
-      const parsedPdf = await parsePdf(buffer);
+      const parsedPdf = await parsePdfWithTimeout(buffer, 4_000);
       pdfText = String(parsedPdf?.text ?? "");
       labeledPdfLocations = extractLabeledLocationCandidates(pdfText);
       pdfHintText = buildCallsheetPdfHintText(pdfText);

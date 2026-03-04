@@ -53,6 +53,7 @@ interface BulkUploadModalProps {
 let googleApiJsPromise: Promise<void> | null = null;
 let googlePickerApiPromise: Promise<void> | null = null;
 const BULK_CALLSHEET_PROCESS_CONCURRENCY = 2;
+const BULK_CALLSHEET_STALE_PROCESSING_MS = 90_000;
 
 async function loadGoogleApiJs() {
   if (typeof window === "undefined") throw new Error("Google API no disponible");
@@ -719,7 +720,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const triggerBulkProcessing = async (
     ids: string[],
     signal: AbortSignal | null | undefined,
-    reason: "initial_batch" | "queued_safety_net",
+    reason: "initial_batch" | "queued_safety_net" | "stale_processing_retry",
   ) => {
     const targetIds = Array.from(new Set(ids.map((id) => String(id ?? "").trim()).filter(Boolean))).filter(
       (id) => !scheduledProcessJobIdsRef.current.has(id) && !savedByJobIdRef.current[id],
@@ -1257,7 +1258,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         if (isAiCancelled(aiSignal)) return;
         const { data: jobs, error: jobsError } = await supabase
           .from("callsheet_jobs")
-          .select("id, status, needs_review_reason")
+          .select("id, status, needs_review_reason, processing_started_at, processed_at")
           .in("id", jobIds);
         if (isAiCancelled(aiSignal)) return;
 
@@ -1272,6 +1273,16 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
           .map((j: any) => String(j.id));
         const processingIds = jobs
           .filter((j: any) => String(j?.status ?? "") === "processing")
+          .map((j: any) => String(j.id));
+        const staleProcessingIds = jobs
+          .filter((j: any) => {
+            const status = String(j?.status ?? "");
+            if (status !== "processing") return false;
+            const startedAt = String(j?.processing_started_at ?? j?.processed_at ?? "").trim();
+            const parsed = Date.parse(startedAt);
+            if (!Number.isFinite(parsed)) return true;
+            return Date.now() - parsed >= BULK_CALLSHEET_STALE_PROCESSING_MS;
+          })
           .map((j: any) => String(j.id));
         const failedJobs = jobs.filter(
           (j: any) => j.status === "failed" || j.status === "needs_review" || j.status === "out_of_quota",
@@ -1327,15 +1338,27 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         if (isAiCancelled(aiSignal)) return;
 
         const queuedIdsNeedingProcessing = getQueuedJobsNeedingProcessing(queuedIds);
+        const staleProcessingIdsNeedingRetry = staleProcessingIds.filter(
+          (id) => !scheduledProcessJobIdsRef.current.has(id) && !savedByJobIdRef.current[id],
+        );
         const shouldKickQueuedJobs =
           queuedIdsNeedingProcessing.length > 0 &&
           processingIds.length === 0 &&
+          Date.now() - lastTriggerWorkerKickAtRef.current >= 5000;
+        const shouldRetryStaleProcessing =
+          staleProcessingIdsNeedingRetry.length > 0 &&
           Date.now() - lastTriggerWorkerKickAtRef.current >= 5000;
         if (shouldKickQueuedJobs) {
           logger.warn("[BulkUploadModal] queued jobs detected without an active process request; retrying", {
             queuedIds: queuedIdsNeedingProcessing,
           });
           void triggerBulkProcessing(queuedIdsNeedingProcessing, aiSignal, "queued_safety_net");
+        }
+        if (shouldRetryStaleProcessing) {
+          logger.warn("[BulkUploadModal] stale processing jobs detected; retrying direct process", {
+            staleProcessingIds: staleProcessingIdsNeedingRetry,
+          });
+          void triggerBulkProcessing(staleProcessingIdsNeedingRetry, aiSignal, "stale_processing_retry");
         }
 
         // Move to review as soon as there are no pending jobs.
