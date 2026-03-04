@@ -375,7 +375,14 @@ async function handleOAuthCallback(req: any, res: any) {
   try { state = verifySignedState(stateRaw); } catch (e: any) { return sendJson(res, 400, { error: e?.message ?? "Invalid state" }); }
 
   if (!state?.userId || typeof state.userId !== "string") return sendJson(res, 400, { error: "Invalid state" });
-  if (typeof state.exp === "number" && Date.now() > state.exp) return sendJson(res, 400, { error: "State expired" });
+  if (typeof state.exp === "number" && Date.now() > state.exp) {
+    if (state.flow === "popup") {
+      res.statusCode = 200; res.setHeader("Content-Type", "text/html");
+      res.end('<html><body><script>if(window.opener) window.opener.postMessage({ type: "OAUTH_ERROR", error: "state_expired" }, "*"); window.close();</script></body></html>');
+      return;
+    }
+    return sendJson(res, 400, { error: "State expired" });
+  }
 
   const tokens = await exchangeCodeForTokens(code);
   const providerAccountEmail = await getGoogleAccountEmail(tokens.access_token);

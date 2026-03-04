@@ -646,12 +646,43 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         const startRes = await fetch("/api/google/oauth/start", {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ scopes: ["drive"], returnTo }),
+          body: JSON.stringify({ scopes: ["drive"], returnTo, flow: "popup" }),
         });
         const startData: any = await startRes.json().catch(() => null);
         if (!startRes.ok || !startData?.authUrl) throw new Error(startData?.error || "OAuth start failed");
-        window.location.href = startData.authUrl;
-        return;
+        
+        const width = 500;
+        const height = 650;
+        const left = (window.screen.width - width) / 2;
+        const top = (window.screen.height - height) / 2;
+        const popup = window.open(startData.authUrl, "GoogleOAuth", `width=${width},height=${height},left=${left},top=${top}`);
+        
+        await new Promise<void>((resolve, reject) => {
+          const checkPopup = setInterval(() => {
+            if (!popup || popup.closed) {
+              clearInterval(checkPopup);
+              window.removeEventListener("message", handleMessage);
+              reject(new Error("Ventana de Google Drive cerrada."));
+            }
+          }, 1000);
+
+          const handleMessage = (event: MessageEvent) => {
+            if (event.origin !== window.location.origin) return;
+            if (event.data?.type === "OAUTH_SUCCESS") {
+              clearInterval(checkPopup);
+              window.removeEventListener("message", handleMessage);
+              resolve();
+            } else if (event.data?.type === "OAUTH_ERROR") {
+              clearInterval(checkPopup);
+              window.removeEventListener("message", handleMessage);
+              reject(new Error(event.data.error || "Error de conexión"));
+            }
+          };
+          window.addEventListener("message", handleMessage);
+        });
+
+        // Vuelve a llamar a importFromGoogleDrive de forma recursiva ahora que estamos conectados
+        return importFromGoogleDrive();
       }
 
       const pickerApiKey = import.meta.env.VITE_GOOGLE_PICKER_API_KEY as string | undefined;
