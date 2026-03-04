@@ -355,6 +355,7 @@ async function handleOAuthStart(req: any, res: any) {
     scopes: [...requested],
     exp: Date.now() + 10 * 60 * 1000,
     nonce: Math.random().toString(16).slice(2),
+    flow: body?.flow === "popup" ? "popup" : "redirect",
   });
 
   const authUrl = buildGoogleAuthUrl({ scopes: googleScopes, state });
@@ -400,6 +401,13 @@ async function handleOAuthCallback(req: any, res: any) {
   ].filter(Boolean))).join(",");
 
   await supabaseUpsertGoogleConnection({ userId: state.userId, providerAccountEmail: providerAccountEmail ?? undefined, refreshToken, accessToken: tokens.access_token, expiresAt, scopes: mergedScopes });
+
+  if (state.flow === "popup") {
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "text/html");
+    res.end(`<html><body><script>if(window.opener){window.opener.postMessage({type:'OAUTH_SUCCESS',scopes:'${mergedScopes}'},'*');}window.close();<\/script></body></html>`);
+    return;
+  }
 
   const rawReturnTo = typeof state.returnTo === "string" ? state.returnTo : "/";
   let returnTo = "/";
