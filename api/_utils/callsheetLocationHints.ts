@@ -9,7 +9,9 @@ const LOCATION_LABEL_RE =
 const LOCATION_LABEL_WITH_VALUE_RE =
   /^(?:location|loc(?:ation)?|set|motiv|drehort|drehlocation|film(?:ing)?\s+location|shoot(?:ing)?\s+location|set\s+address|location\s+set)\s*(?:[#.]?\s*\d+)?\s*(?:[:=|-]+)\s*(.+)$/i;
 const EXCLUDED_LOCATION_LABEL_RE =
-  /^(?:lunch|mittag|mittagessen|catering|parking|crew parking|crew bus|base(?:camp)?|make(?:-?up)?|hair|wardrobe|kost[uü]m|garderobe|production office|produktionsb[uü]ro|office|hospital|doctor|medic|load(?:\s*&\s*unload)?|unload|pickup|dropoff)\b/i;
+  /^(?:lunch|mittag|mittagessen|catering|parking|parken|crew parking|crew parken|crew bus|base(?:camp)?|basis|base\s*[&+]\s*park(?:en|ing)|make(?:-?up)?|hair|wardrobe|kost[uü]m|garderobe|production office|produktionsb[uü]ro|office|hospital|doctor|medic|load(?:\s*&\s*unload)?|unload|pickup|dropoff|tech\s*park(?:en|ing))\b/i;
+const TABLE_HEADER_WORDS_RE =
+  /^(?:adresse|address|location|loc|set|motiv|drehort|basis|base|parken|parking|\&|und|and|,|\s)+$/i;
 const GENERIC_LOCATION_VALUE_RE =
   /^(?:location|loc(?:ation)?|address|adresse|set|motiv|drehort|drehlocation|film(?:ing)?\s+location|shoot(?:ing)?\s+location)$/i;
 const TABLE_SPLIT_RE = /\s+\|\s+|\|+|\t+|\s{2,}/;
@@ -54,6 +56,7 @@ function cleanLocationCandidate(value: string) {
 
   if (!cleaned) return "";
   if (GENERIC_LOCATION_VALUE_RE.test(cleaned)) return "";
+  if (TABLE_HEADER_WORDS_RE.test(cleaned)) return "";
   const normalizedWords = cleaned
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s]/gu, " ")

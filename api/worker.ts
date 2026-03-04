@@ -509,10 +509,10 @@ export default withApiObservability(async function handler(req: any, res: any, {
         const extracted = {
           ...validated.data,
           locations:
-            normalizedLabeledLocations.length > 0
-              ? normalizedLabeledLocations
-              : normalizedAiLocations.length > 0
-                ? normalizedAiLocations
+            normalizedAiLocations.length > 0
+              ? normalizedAiLocations
+              : normalizedLabeledLocations.length > 0
+                ? normalizedLabeledLocations
                 : validated.data.locations,
         };
         log.info({ jobId: job.id, locations: extracted.locations.length }, "callsheet_extraction_parsed");
