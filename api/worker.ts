@@ -12,6 +12,8 @@ import {
   buildCallsheetPdfHintText,
   extractLabeledLocationCandidates,
   normalizeExtractedCallsheetLocations,
+  filterHallucinatedLocations,
+  postProcessLocationsForGeocoding,
 } from "./_utils/callsheetLocationHints.js";
 import {
   CALLSHEET_PARALLEL_BATCH_SIZE,
@@ -498,23 +500,27 @@ export default withApiObservability(async function handler(req: any, res: any, {
           locations: validated.data.locations,
           pdfText,
         });
-        const normalizedLabeledLocations = normalizeExtractedCallsheetLocations({
-          locations: labeledPdfLocations,
-          pdfText,
-        });
-        const sourceLocations =
-          normalizedLabeledLocations.length > 0
-            ? labeledPdfLocations
-            : validated.data.locations;
+        // Evidence: keep the raw AI output for DB records
+        const evidenceLocations = validated.data.locations;
         const extracted = {
           ...validated.data,
           locations:
             normalizedAiLocations.length > 0
               ? normalizedAiLocations
-              : normalizedLabeledLocations.length > 0
-                ? normalizedLabeledLocations
-                : validated.data.locations,
+              : validated.data.locations,
         };
+
+        // Filter out hallucinated locations (addresses the AI invented)
+        const verifiedLocations = filterHallucinatedLocations({
+          locations: extracted.locations,
+          pdfText,
+        });
+        extracted.locations = verifiedLocations.length > 0 ? verifiedLocations : extracted.locations;
+        log.info({ jobId: job.id, aiLocs: validated.data.locations.length, verified: verifiedLocations.length, final: extracted.locations.length }, "callsheet_hallucination_filter");
+
+        // Code-side normalization for geocoding (Bezirk expansion, abbreviations)
+        const geocodingLocations = postProcessLocationsForGeocoding(extracted.locations);
+
         log.info({ jobId: job.id, locations: extracted.locations.length }, "callsheet_extraction_parsed");
 
         // D. Save Results
@@ -540,7 +546,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
           // Parallelize geocoding to avoid sequential API calls (70% speed improvement)
           const geoStartTime = Date.now();
           const geoResults = await Promise.all(
-            extracted.locations.map((locStr) =>
+            geocodingLocations.map((locStr) =>
               skipGeocode ? Promise.resolve(null) : geocodeAddress(locStr)
             )
           );
@@ -558,7 +564,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
               name_raw: /\d/.test(locStr) ? null : locStr,
               address_raw: locStr,
               label_source: "EXTRACTED",
-              evidence_text: sourceLocations[index] ?? locStr,
+              evidence_text: evidenceLocations[index] ?? locStr,
               formatted_address: geo?.formatted_address,
               lat: geo?.lat,
               lng: geo?.lng,

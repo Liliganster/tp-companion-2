@@ -234,3 +234,152 @@ export function normalizeExtractedCallsheetLocations(args: {
 
   return dedupeStrings(normalized);
 }
+
+// ─── Code-side address normalization (runs AFTER AI extraction, BEFORE geocoding) ──
+
+const BEZIRK_PREFIX_RE = /^(\d{1,2})\.\s+(.+)$/;
+const ABBREVIATION_MAP: Record<string, string> = {
+  "str.": "Straße",
+  "g.": "Gasse",
+  "pl.": "Platz",
+  "c/": "Calle",
+  "pza.": "Plaza",
+  "avda.": "Avenida",
+  "av.": "Avenida",
+  "pº": "Paseo",
+  "ctra.": "Carretera",
+};
+const ABBREVIATION_RE = new RegExp(
+  Object.keys(ABBREVIATION_MAP)
+    .map((k) => k.replace(/[.*+?^${}()|[\]\\\/]/g, "\\$&"))
+    .join("|"),
+  "gi"
+);
+
+/**
+ * Expand Vienna Bezirk prefix: "13. Erzbischofgasse 6C" → "Erzbischofgasse 6C, 1130 Wien"
+ */
+function expandBezirkPrefix(address: string): string {
+  const match = address.match(BEZIRK_PREFIX_RE);
+  if (!match) return address;
+  const bezirkNum = parseInt(match[1], 10);
+  if (bezirkNum < 1 || bezirkNum > 23) return address; // Vienna has 23 Bezirke
+  const rest = match[2].trim();
+  // Only expand if the rest looks like a street (has letters), not a date like "Februar 2025"
+  if (!/[a-zA-ZäöüßÄÖÜ]{3,}/.test(rest)) return address;
+  // Avoid matching dates: "25. Februar" or ordinal contexts
+  if (/^(?:jänner|januar|februar|märz|april|mai|juni|juli|august|september|oktober|november|dezember)\b/i.test(rest)) return address;
+  const postalCode = `1${String(bezirkNum).padStart(2, "0")}0`;
+  return `${rest}, ${postalCode} Wien`;
+}
+
+/**
+ * Expand common German/Spanish street abbreviations for geocoding.
+ */
+function expandAbbreviations(address: string): string {
+  return address.replace(ABBREVIATION_RE, (match) => {
+    return ABBREVIATION_MAP[match.toLowerCase()] ?? match;
+  });
+}
+
+/**
+ * Apply code-side normalization to locations after AI extraction:
+ * 1. Vienna Bezirk prefix expansion
+ * 2. Street abbreviation expansion
+ * These transformations improve geocoding accuracy without asking the AI to guess.
+ */
+export function postProcessLocationsForGeocoding(locations: string[]): string[] {
+  return locations.map((loc) => {
+    let result = String(loc ?? "").trim();
+    if (!result) return result;
+    result = expandBezirkPrefix(result);
+    result = expandAbbreviations(result);
+    return result;
+  });
+}
+
+/**
+ * Cross-validate AI-extracted locations against the actual PDF text.
+ * Drops entries that appear to be hallucinated (no significant fragment found in source).
+ * Uses both token-level and bigram matching for robustness.
+ */
+export function filterHallucinatedLocations(args: {
+  locations: string[];
+  pdfText: string;
+}): string[] {
+  const { locations, pdfText } = args;
+  const normalizedPdf = String(pdfText ?? "")
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+
+  if (!normalizedPdf.trim()) {
+    // No PDF text available to validate against — return all (can't prove hallucination)
+    return locations;
+  }
+
+  // Very generic filler words that match too broadly — exclude from token validation
+  const FILLER_WORDS = new Set([
+    "wien", "vienna", "berlin", "munich", "münchen", "hamburg", "köln",
+    "madrid", "barcelona", "paris", "london", "rome", "roma",
+    "the", "and", "und", "der", "die", "das", "von", "van", "del", "des",
+    "calle", "avenida", "paseo", "plaza", "carretera",
+    "street", "road", "avenue", "lane", "drive", "place",
+  ]);
+
+  const validated: string[] = [];
+
+  for (const loc of locations) {
+    const trimmed = String(loc ?? "").trim();
+    if (!trimmed) continue;
+
+    // "No location found" sentinel — pass through
+    if (/^no\s+location/i.test(trimmed)) {
+      validated.push(trimmed);
+      continue;
+    }
+
+    // Extract significant tokens (3+ chars, not generic city/filler)
+    // NOTE: street-type words (straße, gasse, platz, ring, weg) are kept as meaningful tokens
+    const tokens = trimmed
+      .replace(/[,.:;()\-\/|@#]+/g, " ")
+      .split(/\s+/)
+      .map((t) => t.trim().toLowerCase())
+      .filter((t) => t.length >= 3)
+      .filter((t) => !FILLER_WORDS.has(t));
+
+    if (tokens.length === 0) {
+      // Only filler/city words — can't validate, keep it
+      validated.push(trimmed);
+      continue;
+    }
+
+    // Token-level matching
+    const matchCount = tokens.filter((token) => normalizedPdf.includes(token)).length;
+    const matchRatio = tokens.length > 0 ? matchCount / tokens.length : 0;
+
+    // Bigram matching: check consecutive word pairs for stronger evidence
+    let bigramHit = false;
+    if (tokens.length >= 2) {
+      for (let i = 0; i < tokens.length - 1; i++) {
+        const bigram = `${tokens[i]} ${tokens[i + 1]}`;
+        if (normalizedPdf.includes(bigram)) {
+          bigramHit = true;
+          break;
+        }
+      }
+    }
+
+    // Accept if: ≥50% token match, OR any bigram hit with ≥1 token match, OR short address with ≥1 match
+    const accepted =
+      (matchRatio >= 0.5) ||
+      (bigramHit && matchCount >= 1) ||
+      (tokens.length <= 2 && matchCount >= 1);
+
+    if (accepted) {
+      validated.push(trimmed);
+    }
+    // else: hallucinated — drop it
+  }
+
+  return validated;
+}

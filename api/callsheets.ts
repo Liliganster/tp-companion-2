@@ -17,6 +17,8 @@ import {
   buildCallsheetPdfHintText,
   extractLabeledLocationCandidates,
   normalizeExtractedCallsheetLocations,
+  filterHallucinatedLocations,
+  postProcessLocationsForGeocoding,
 } from "./_utils/callsheetLocationHints.js";
 import { z } from "zod";
 
@@ -201,23 +203,26 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
       locations: validated.data.locations,
       pdfText,
     });
-    const normalizedLabeledLocations = normalizeExtractedCallsheetLocations({
-      locations: labeledPdfLocations,
-      pdfText,
-    });
-    const sourceLocations =
-      normalizedLabeledLocations.length > 0
-        ? labeledPdfLocations
-        : validated.data.locations;
+    // Evidence: keep the raw AI output for DB records
+    const evidenceLocations = validated.data.locations;
     const extracted = {
       ...validated.data,
       locations:
         normalizedAiLocations.length > 0
           ? normalizedAiLocations
-          : normalizedLabeledLocations.length > 0
-            ? normalizedLabeledLocations
-            : validated.data.locations,
+          : validated.data.locations,
     };
+
+    // 6b. Filter out hallucinated locations (addresses the AI invented)
+    const verifiedLocations = filterHallucinatedLocations({
+      locations: extracted.locations,
+      pdfText,
+    });
+    extracted.locations = verifiedLocations.length > 0 ? verifiedLocations : extracted.locations;
+    log.info({ jobId, aiLocs: validated.data.locations.length, verified: verifiedLocations.length }, "callsheet_process_hallucination_filter");
+
+    // 6c. Code-side normalization for geocoding (Bezirk expansion, abbreviations)
+    const geocodingLocations = postProcessLocationsForGeocoding(extracted.locations);
 
     // 7. Save results
     const { error: resultError } = await supabaseAdmin.from("callsheet_results").insert({
@@ -231,7 +236,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
     if (extracted.locations.length > 0) {
       // Geocode all locations in parallel (same as worker)
       const geoResults = await Promise.all(
-        extracted.locations.map((addr: string) => geocodeAddress(addr))
+        geocodingLocations.map((addr: string) => geocodeAddress(addr))
       );
       log.info({ jobId, geocoded: geoResults.filter(Boolean).length, total: extracted.locations.length }, "callsheet_process_geocoding_done");
 
@@ -243,7 +248,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
             name_raw: /\d/.test(addr) ? null : addr,
             address_raw: addr,
             label_source: "EXTRACTED",
-            evidence_text: sourceLocations[index] ?? addr,
+            evidence_text: evidenceLocations[index] ?? addr,
             formatted_address: geo?.formatted_address ?? null,
             lat: geo?.lat ?? null,
             lng: geo?.lng ?? null,
