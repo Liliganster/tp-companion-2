@@ -155,6 +155,12 @@ export function buildCallsheetPdfHintText(pdfText: string) {
 
   if (lines.length === 0) return "";
 
+  // Always include the first 8 non-empty lines (header area — contains project name, date, company)
+  const headerLines: string[] = [];
+  for (let i = 0; i < lines.length && headerLines.length < 8; i++) {
+    if (lines[i].length > 2) headerLines.push(lines[i].length > 220 ? `${lines[i].slice(0, 217)}...` : lines[i]);
+  }
+
   const pickedIndexes = new Set<number>();
   lines.forEach((line, index) => {
     if (!RELEVANT_PDF_LINE_RE.test(line)) return;
@@ -171,6 +177,14 @@ export function buildCallsheetPdfHintText(pdfText: string) {
     .filter(Boolean);
 
   const compacted: string[] = [];
+
+  // Header lines first (project name, date, production company live here)
+  if (headerLines.length > 0) {
+    compacted.push("DOCUMENT HEADER:");
+    compacted.push(...headerLines);
+    compacted.push("");
+  }
+
   const labeledCandidates = extractLabeledLocationCandidates(pdfText);
   if (labeledCandidates.length > 0) {
     compacted.push("EXPLICIT LOCATION CANDIDATES FROM PDF LABELS:");

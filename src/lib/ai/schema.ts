@@ -2,7 +2,7 @@ export const extractionSchema = {
   type: "object",
   properties: {
     date: { type: "string", description: "Shooting day date in YYYY-MM-DD. Not prep/wrap/next-day dates." },
-    projectName: { type: "string", description: "Creative title of the show/film/series. Not the production company." },
+    projectName: { type: "string", description: "Creative title of the show/film/series (e.g. 'Dark', 'Tatort'). NOT the production company. Look in header, 'Projekt:'/'Serie:'/'Titel:' labels. 'Untitled Project' only as absolute last resort." },
     productionCompanies: {
       type: "array",
       items: { type: "string", description: "Production company or studio name." },
