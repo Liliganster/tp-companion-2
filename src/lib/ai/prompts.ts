@@ -331,7 +331,7 @@ export function buildUniversalExtractorPrompt(text: string) {
     "**CONTENIDO A ANALIZAR**:",
     "",
     text
-  ].join("\\n");
+  ].join("\n");
 }
 
 export function buildCrewFirstDirectPrompt(text: string) {
@@ -376,5 +376,5 @@ export function buildCrewFirstDirectPrompt(text: string) {
     "",
     "TEXTO:",
     text
-  ].join("\\n");
+  ].join("\n");
 }
