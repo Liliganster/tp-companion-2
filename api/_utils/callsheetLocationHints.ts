@@ -299,6 +299,7 @@ const LOGISTICS_KEYWORD_RE = new RegExp(
     "\\b(?:crew\\s*)?park(?:ing|en|platz)\\b",
     "\\btech\\s*park(?:ing|en)\\b",
     "\\bfahrer\\b",
+    "\\bstellplatz\\b",
     // Catering / meals
     "\\bcatering\\b",
     "\\blunch\\b",
@@ -307,6 +308,7 @@ const LOGISTICS_KEYWORD_RE = new RegExp(
     "\\bmittagessen\\b",
     "\\bmittag\\b",
     "\\bdinner\\b",
+    "\\bessen\\b",
     // Makeup / Wardrobe
     "\\bmaske\\b",
     "\\bmake\\s*-?\\s*up\\b",
@@ -318,18 +320,29 @@ const LOGISTICS_KEYWORD_RE = new RegExp(
     // Office
     "\\bproduction\\s*office\\b",
     "\\bproduktionsb[uü]ro\\b",
+    "\\bb[uü]ro\\b",
+    "\\boffice\\b",
     // Load/Unload
     "\\bload\\s*(?:&|and)?\\s*unload\\b",
     "\\bladerampe\\b",
     "\\banlieferung\\b",
+    "\\blkw\\b",
+    "\\btruck\\b",
     // Medical
     "\\bhospital\\b",
     "\\bmedic\\b",
     "\\b(?:set\\s*)?arzt\\b",
+    "\\bkrankenhaus\\b",
     // Infrastructure
     "\\btoiletten\\b",
     "\\bgenerator\\b",
     "\\bstromversorgung\\b",
+    "\\bstrom\\b",
+    "\\btechnik\\b",
+    // Accommodation (not filming)
+    "\\bhotel\\s*(?:crew|team|unterkunft)\\b",
+    "\\bunterkunft\\b",
+    "\\bübernachtung\\b",
   ].join("|"),
   "i"
 );

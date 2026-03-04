@@ -224,3 +224,70 @@ export async function generateContentFromPDF(
       vendor: "google",
     };
 }
+
+/**
+ * Generate content from multiple images using Gemini Vision.
+ * Used for robust extraction: sends page images for visual analysis.
+ * 
+ * @param modelName - Gemini model name (e.g., "gemini-2.5-flash")
+ * @param prompt - The extraction prompt
+ * @param images - Array of base64-encoded PNG images
+ * @param schema - Optional JSON schema for structured output
+ * @param userSettings - Optional user AI settings (OpenRouter fallback)
+ */
+export async function generateContentFromImages(
+  modelName: string,
+  prompt: string,
+  images: string[],
+  schema?: any,
+  userSettings?: AiUserSettings,
+): Promise<AiGenerationResult> {
+    if (userSettings?.openrouterEnabled && userSettings?.openrouterApiKey) {
+        const orModel = userSettings.openrouterModel || "google/gemini-2.5-flash";
+        
+        // Build content array with text + all images
+        const content: any[] = [{ type: "text", text: prompt }];
+        for (const img of images) {
+          content.push({
+            type: "image_url",
+            image_url: { url: `data:image/png;base64,${img}` },
+          });
+        }
+
+        const messages = [{ role: "user", content }];
+        return callOpenRouter(orModel, prompt, userSettings.openrouterApiKey, schema, messages);
+    }
+
+    const model = requireGemini().getGenerativeModel({
+        model: modelName,
+        generationConfig: schema ? {
+            responseMimeType: "application/json",
+            responseSchema: schema,
+        } : undefined
+    });
+
+    const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Gemini Vision timeout (60s)")), 60000)
+    );
+
+    // Build parts array: all images + prompt
+    const parts: any[] = images.map(img => ({
+      inlineData: {
+        data: img,
+        mimeType: "image/png",
+      },
+    }));
+    parts.push(prompt);
+
+    const result = await Promise.race([
+        model.generateContent(parts),
+        timeoutPromise
+    ]) as any;
+
+    return {
+      text: result.response.text(),
+      provider: "gemini",
+      model: modelName,
+      vendor: "google",
+    };
+}

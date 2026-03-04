@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "../src/lib/supabaseServer.js";
-import { generateContentFromPDF } from "../src/lib/ai/geminiClient.js";
+import { generateContentFromImages } from "../src/lib/ai/geminiClient.js";
 import { buildUniversalExtractorPrompt } from "../src/lib/ai/prompts.js";
 import { extractionSchema } from "../src/lib/ai/schema.js";
 import { CallsheetExtractionResultSchema } from "../src/lib/ai/validation.js";
@@ -7,7 +7,6 @@ import { captureServerException, logger, withApiObservability } from "./_utils/o
 import { enforceRateLimit } from "./_utils/rateLimit.js";
 import { checkAiMonthlyQuota } from "./_utils/aiQuota.js";
 import { calculateNextRetry, DEFAULT_RETRY_STRATEGY } from "./_utils/retry.js";
-import { parsePdfWithTimeout } from "./_utils/pdf-parser.js";
 import {
   buildCallsheetPdfHintText,
   extractLabeledLocationCandidates,
@@ -16,6 +15,7 @@ import {
   filterLogisticsLocations,
   postProcessLocationsForGeocoding,
 } from "./_utils/callsheetLocationHints.js";
+import { extractPagesWithOcr } from "./_utils/ocr.js";
 import {
   CALLSHEET_PARALLEL_BATCH_SIZE,
   getCallsheetWorkerFetchLimit,
@@ -414,28 +414,30 @@ export default withApiObservability(async function handler(req: any, res: any, {
         );
 
         const aiStartTime = Date.now();
-        let pdfText = "";
-        let pdfHintText = "";
-        let labeledPdfLocations: string[] = [];
-        try {
-          const parsedPdf = await parsePdfWithTimeout(buffer, 4_000);
-          pdfText = String(parsedPdf?.text ?? "");
-          labeledPdfLocations = extractLabeledLocationCandidates(pdfText);
-          pdfHintText = buildCallsheetPdfHintText(pdfText);
-        } catch {
-          pdfText = "";
-          pdfHintText = "";
-          labeledPdfLocations = [];
-        }
+        
+        // Extract first 2 pages as images + OCR (dual approach for robustness)
+        const ocrResult = await extractPagesWithOcr(buffer, {
+          maxPages: 2,
+          languages: "deu+eng",
+          timeoutMs: 25000,
+        });
+        const pdfText = ocrResult.text;
+        log.info({ jobId: job.id, ocrPages: ocrResult.pages, ocrConfidence: ocrResult.confidence, ocrDurationMs: ocrResult.durationMs, imageCount: ocrResult.pageImages.length }, "callsheet_ocr_extracted");
+        
+        const labeledPdfLocations = extractLabeledLocationCandidates(pdfText);
+        const pdfHintText = buildCallsheetPdfHintText(pdfText);
+        
+        // Dual approach: Gemini Vision sees images + has OCR text as backup
         const promptSource = pdfHintText
-          ? `[PDF CONTENT ATTACHED]\n\nTEXT FROM PDF HEADER (use for projectName/date/company — NOT for locations):\n${pdfHintText}`
-          : "[PDF CONTENT ATTACHED]";
+          ? `[PAGE IMAGES ATTACHED - First 2 pages only]\n\nOCR TEXT (use for projectName/date/company — NOT for locations):\n${pdfHintText}`
+          : "[PAGE IMAGES ATTACHED - First 2 pages only]";
         const systemInstruction = buildUniversalExtractorPrompt(promptSource);
-        const aiResult = await generateContentFromPDF(
+        
+        // Send page images to Gemini Vision (not full PDF)
+        const aiResult = await generateContentFromImages(
           "gemini-2.5-flash",
           systemInstruction,
-          buffer,
-          "application/pdf",
+          ocrResult.pageImages,
           extractionSchema,
           userSettings
         );
@@ -513,13 +515,15 @@ export default withApiObservability(async function handler(req: any, res: any, {
 
         // Strip logistics locations (Base, Parking, Catering, etc.)
         const nonLogistics = filterLogisticsLocations(extracted.locations);
-        extracted.locations = nonLogistics.length > 0 ? nonLogistics : extracted.locations;
+        // If all were logistics, don't revert to bad data — use sentinel
+        extracted.locations = nonLogistics.length > 0 ? nonLogistics : ["No location found"];
 
         // Filter out hallucinated locations (addresses the AI invented)
         const verifiedLocations = filterHallucinatedLocations({
           locations: extracted.locations,
           pdfText,
         });
+        // Keep filtered result even if empty (sentinel already set above if needed)
         extracted.locations = verifiedLocations.length > 0 ? verifiedLocations : extracted.locations;
         log.info({ jobId: job.id, aiLocs: validated.data.locations.length, verified: verifiedLocations.length, final: extracted.locations.length }, "callsheet_hallucination_filter");
 
