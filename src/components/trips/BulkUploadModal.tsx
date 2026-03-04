@@ -54,6 +54,7 @@ let googleApiJsPromise: Promise<void> | null = null;
 let googlePickerApiPromise: Promise<void> | null = null;
 const BULK_CALLSHEET_PROCESS_CONCURRENCY = 2;
 const BULK_CALLSHEET_STALE_PROCESSING_MS = 90_000;
+const BULK_DRIVE_IMPORT_QUERY_PARAM = "bulkDriveImport";
 
 async function loadGoogleApiJs() {
   if (typeof window === "undefined") throw new Error("Google API no disponible");
@@ -140,6 +141,8 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const [open, setOpen] = useState(false);
   const [csvText, setCsvText] = useState("");
   const [csvBusy, setCsvBusy] = useState(false);
+  const resumeDriveImportRef = useRef(false);
+  const importFromGoogleDriveRef = useRef<(() => Promise<void>) | null>(null);
   
   // AI Tab State
   const [aiStep, setAiStep] = useState<"upload" | "processing" | "review">("upload");
@@ -636,7 +639,9 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       const connected = Boolean(statusData?.connected) && hasDriveScope;
 
       if (!statusRes.ok || !connected) {
-        const returnTo = `${window.location.pathname}${window.location.search}`;
+        const url = new URL(window.location.href);
+        url.searchParams.set(BULK_DRIVE_IMPORT_QUERY_PARAM, "1");
+        const returnTo = `${url.pathname}${url.search}`;
         const startRes = await fetch("/api/google/oauth/start", {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -692,6 +697,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       setCsvBusy(false);
     }
   };
+  importFromGoogleDriveRef.current = importFromGoogleDrive;
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -1152,6 +1158,32 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
     setOpen(nextOpen);
   };
+
+  useEffect(() => {
+    if (typeof window === "undefined" || resumeDriveImportRef.current) return;
+
+    const url = new URL(window.location.href);
+    if (url.searchParams.get(BULK_DRIVE_IMPORT_QUERY_PARAM) !== "1") return;
+
+    resumeDriveImportRef.current = true;
+    url.searchParams.delete(BULK_DRIVE_IMPORT_QUERY_PARAM);
+
+    try {
+      const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+      window.history.replaceState({}, document.title, nextUrl);
+    } catch {
+      // ignore
+    }
+
+    setOpen(true);
+  }, []);
+
+  useEffect(() => {
+    if (!open || !resumeDriveImportRef.current) return;
+
+    resumeDriveImportRef.current = false;
+    void importFromGoogleDriveRef.current?.();
+  }, [open]);
 
   // Multi-job: carga resultados para TODOS los documentos completados y los muestra en paralelo.
   const enqueueOptimization = (jobId: string, rawLocations: string[], signal?: AbortSignal | null) => {
