@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload, Sparkles, FileSpreadsheet, CloudUpload, Loader2, MapPin, Calendar, Building2, CheckCircle, Save } from "lucide-react";
+import { Upload, Sparkles, FileSpreadsheet, CloudUpload, Loader2, MapPin, Calendar, Building2, CheckCircle, Save, AlertTriangle } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useI18n } from "@/hooks/use-i18n";
 import { supabase } from "@/lib/supabaseClient";
@@ -1853,6 +1853,13 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                     </p>
                     </div>
 
+                    <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                      <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        {t("bulk.aiDisclaimer")}
+                      </p>
+                    </div>
+
                     <p className="text-sm text-muted-foreground text-center">
                       {t("bulk.aiDescription")}
                     </p>
@@ -1895,6 +1902,13 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                         : t("bulk.aiProcessingHint")}
                     </p>
                   </div>
+                </div>
+
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                  <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    {t("bulk.aiDisclaimer")}
+                  </p>
                 </div>
 
                 {jobsForUi.length > 0 && (
