@@ -1220,7 +1220,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       if (resultError || locsError || !result) return;
 
       const rawLocations = (locs ?? [])
-        .map((l: any) => String(l?.formatted_address || l?.address_raw || l?.name_raw || "").trim())
+        .map((l: any) => String(l?.name_raw || l?.address_raw || l?.formatted_address || "").trim())
         .filter(Boolean);
 
       setReviewByJobId((prev) => {

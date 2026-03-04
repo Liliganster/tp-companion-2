@@ -47,6 +47,13 @@ function normalizeRegion(value: unknown) {
   return trimmed ? trimmed : undefined;
 }
 
+function normalizePlacesAutocompleteType(value: unknown) {
+  if (typeof value !== "string") return "address";
+  const trimmed = value.trim().toLowerCase();
+  if (trimmed === "address" || trimmed === "establishment" || trimmed === "geocode") return trimmed;
+  return "address";
+}
+
 function regionFromComponents(components: unknown) {
   if (typeof components !== "string") return undefined;
   const match = components.toLowerCase().match(/(?:^|\|)country:([a-z]{2})(?:$|\|)/);
@@ -230,11 +237,12 @@ async function handlePlacesAutocomplete(req: any, res: any) {
   const location = typeof body?.location === "string" ? body.location : undefined;
   const radius = typeof body?.radius === "number" ? body.radius : undefined;
   const strictbounds = body?.strictbounds === true;
+  const types = normalizePlacesAutocompleteType(body?.types);
 
   if (typeof input !== "string" || !input.trim()) return badRequest(res, "input is required");
   if (input.length > 120) return badRequest(res, "input too long");
 
-  const params = new URLSearchParams({ input, key, types: "address" });
+  const params = new URLSearchParams({ input, key, types });
   const derivedLanguage = languageForRegion(region);
   if (derivedLanguage) params.set("language", derivedLanguage);
   if (components) params.set("components", components);

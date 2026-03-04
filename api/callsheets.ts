@@ -12,6 +12,12 @@ import { generateContentFromPDF } from "../src/lib/ai/geminiClient.js";
 import { buildUniversalExtractorPrompt } from "../src/lib/ai/prompts.js";
 import { extractionSchema } from "../src/lib/ai/schema.js";
 import { CallsheetExtractionResultSchema } from "../src/lib/ai/validation.js";
+import { parsePdf } from "./_utils/pdf-parser.js";
+import {
+  buildCallsheetPdfHintText,
+  extractLabeledLocationCandidates,
+  normalizeExtractedCallsheetLocations,
+} from "./_utils/callsheetLocationHints.js";
 import { z } from "zod";
 
 const NON_DONE_CALLSHEET_STATUSES = ["created", "queued", "processing", "failed", "cancelled", "out_of_quota"] as const;
@@ -105,7 +111,23 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
 
     // 5. Call Gemini (or OpenRouter)
     const buffer = Buffer.from(await fileData.arrayBuffer());
-    const prompt = buildUniversalExtractorPrompt("[PDF CONTENT ATTACHED]");
+    let pdfText = "";
+    let pdfHintText = "";
+    let labeledPdfLocations: string[] = [];
+    try {
+      const parsedPdf = await parsePdf(buffer);
+      pdfText = String(parsedPdf?.text ?? "");
+      labeledPdfLocations = extractLabeledLocationCandidates(pdfText);
+      pdfHintText = buildCallsheetPdfHintText(pdfText);
+    } catch {
+      pdfText = "";
+      pdfHintText = "";
+      labeledPdfLocations = [];
+    }
+    const promptSource = pdfHintText
+      ? `[PDF CONTENT ATTACHED]\n\nBEST-EFFORT PDF TEXT SNIPPETS:\n${pdfHintText}`
+      : "[PDF CONTENT ATTACHED]";
+    const prompt = buildUniversalExtractorPrompt(promptSource);
     const aiResult = await generateContentFromPDF("gemini-2.5-flash", prompt, buffer, "application/pdf", extractionSchema, userSettings);
     log.info({ jobId, provider: aiResult.provider, model: aiResult.model }, "callsheet_process_ai_done");
 
@@ -120,7 +142,27 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
       await deleteUnprocessedCallsheetJob({ userId: user.id, jobId });
       return sendJson(res, 422, { error: "extraction_invalid", reason });
     }
-    const extracted = validated.data;
+    const normalizedAiLocations = normalizeExtractedCallsheetLocations({
+      locations: validated.data.locations,
+      pdfText,
+    });
+    const normalizedLabeledLocations = normalizeExtractedCallsheetLocations({
+      locations: labeledPdfLocations,
+      pdfText,
+    });
+    const sourceLocations =
+      normalizedLabeledLocations.length > 0
+        ? labeledPdfLocations
+        : validated.data.locations;
+    const extracted = {
+      ...validated.data,
+      locations:
+        normalizedLabeledLocations.length > 0
+          ? normalizedLabeledLocations
+          : normalizedAiLocations.length > 0
+            ? normalizedAiLocations
+            : validated.data.locations,
+    };
 
     // 7. Save results
     const { error: resultError } = await supabaseAdmin.from("callsheet_results").insert({
@@ -133,11 +175,12 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
 
     if (extracted.locations.length > 0) {
       const { error: locsError } = await supabaseAdmin.from("callsheet_locations").insert(
-        extracted.locations.map((addr: string) => ({
+        extracted.locations.map((addr: string, index: number) => ({
           job_id: jobId,
+          name_raw: /\d/.test(addr) ? null : addr,
           address_raw: addr,
           label_source: "EXTRACTED",
-          evidence_text: addr,
+          evidence_text: sourceLocations[index] ?? addr,
         }))
       );
       if (locsError) log.warn({ jobId, locsError }, "callsheet_process_locs_insert_failed");

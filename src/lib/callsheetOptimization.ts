@@ -72,6 +72,49 @@ export async function optimizeCallsheetLocationsAndDistance(args: {
 
   const region = getCountryCode(country);
 
+  function looksLikeVenueQuery(value: string) {
+    const normalized = String(value ?? "").trim().toLowerCase();
+    if (!normalized) return false;
+    if (normalized.startsWith("@")) return true;
+    if (/\b(hotel|studio|cafe|café|bar|restaurant|club|palace|museum|kino|theater|theatre|meridien)\b/i.test(normalized)) {
+      return true;
+    }
+    return !/\d/.test(normalized);
+  }
+
+  async function tryResolveVenueWithPlaces(query: string) {
+    const components = region ? `country:${region}` : undefined;
+    const { res: autoRes, data: autoData } = await fetchJsonWithTimeout(
+      "/api/google/places-autocomplete",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ input: query, region, components, types: "establishment" }),
+      },
+      geocodeTimeoutMs,
+    );
+
+    const firstPrediction = Array.isArray((autoData as any)?.predictions) ? (autoData as any).predictions[0] : null;
+    const placeId = String(firstPrediction?.placeId ?? "").trim();
+    if (!autoRes.ok || !placeId) return null;
+
+    const { res: detailsRes, data: detailsData } = await fetchJsonWithTimeout(
+      "/api/google/place-details",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ placeId, region }),
+      },
+      geocodeTimeoutMs,
+    );
+
+    if (detailsRes.ok && typeof (detailsData as any)?.formattedAddress === "string" && (detailsData as any).formattedAddress.trim()) {
+      return String((detailsData as any).formattedAddress).trim();
+    }
+
+    return null;
+  }
+
   const normalizedLocs: string[] = [];
   for (const locStr of currentLocs) {
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
@@ -87,6 +130,14 @@ export async function optimizeCallsheetLocationsAndDistance(args: {
     }
 
     try {
+      if (looksLikeVenueQuery(query)) {
+        const venueAddress = await tryResolveVenueWithPlaces(query);
+        if (venueAddress) {
+          normalizedLocs.push(venueAddress);
+          continue;
+        }
+      }
+
       const { res, data } = await fetchJsonWithTimeout(
         "/api/google/geocode",
         {

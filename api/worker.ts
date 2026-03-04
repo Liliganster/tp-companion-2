@@ -7,6 +7,12 @@ import { captureServerException, logger, withApiObservability } from "./_utils/o
 import { enforceRateLimit } from "./_utils/rateLimit.js";
 import { checkAiMonthlyQuota } from "./_utils/aiQuota.js";
 import { calculateNextRetry, DEFAULT_RETRY_STRATEGY } from "./_utils/retry.js";
+import { parsePdf } from "./_utils/pdf-parser.js";
+import {
+  buildCallsheetPdfHintText,
+  extractLabeledLocationCandidates,
+  normalizeExtractedCallsheetLocations,
+} from "./_utils/callsheetLocationHints.js";
 import {
   CALLSHEET_PARALLEL_BATCH_SIZE,
   getCallsheetWorkerFetchLimit,
@@ -405,7 +411,23 @@ export default withApiObservability(async function handler(req: any, res: any, {
         );
 
         const aiStartTime = Date.now();
-        const systemInstruction = buildUniversalExtractorPrompt("[PDF CONTENT ATTACHED]");
+        let pdfText = "";
+        let pdfHintText = "";
+        let labeledPdfLocations: string[] = [];
+        try {
+          const parsedPdf = await parsePdf(buffer);
+          pdfText = String(parsedPdf?.text ?? "");
+          labeledPdfLocations = extractLabeledLocationCandidates(pdfText);
+          pdfHintText = buildCallsheetPdfHintText(pdfText);
+        } catch {
+          pdfText = "";
+          pdfHintText = "";
+          labeledPdfLocations = [];
+        }
+        const promptSource = pdfHintText
+          ? `[PDF CONTENT ATTACHED]\n\nBEST-EFFORT PDF TEXT SNIPPETS:\n${pdfHintText}`
+          : "[PDF CONTENT ATTACHED]";
+        const systemInstruction = buildUniversalExtractorPrompt(promptSource);
         const aiResult = await generateContentFromPDF(
           "gemini-2.5-flash",
           systemInstruction,
@@ -472,7 +494,27 @@ export default withApiObservability(async function handler(req: any, res: any, {
           return;
         }
 
-        const extracted = validated.data;
+        const normalizedAiLocations = normalizeExtractedCallsheetLocations({
+          locations: validated.data.locations,
+          pdfText,
+        });
+        const normalizedLabeledLocations = normalizeExtractedCallsheetLocations({
+          locations: labeledPdfLocations,
+          pdfText,
+        });
+        const sourceLocations =
+          normalizedLabeledLocations.length > 0
+            ? labeledPdfLocations
+            : validated.data.locations;
+        const extracted = {
+          ...validated.data,
+          locations:
+            normalizedLabeledLocations.length > 0
+              ? normalizedLabeledLocations
+              : normalizedAiLocations.length > 0
+                ? normalizedAiLocations
+                : validated.data.locations,
+        };
         log.info({ jobId: job.id, locations: extracted.locations.length }, "callsheet_extraction_parsed");
 
         // D. Save Results
@@ -513,9 +555,10 @@ export default withApiObservability(async function handler(req: any, res: any, {
             const geo = geoResults[index];
             locs.push({
               job_id: job.id,
+              name_raw: /\d/.test(locStr) ? null : locStr,
               address_raw: locStr,
               label_source: "EXTRACTED",
-              evidence_text: locStr,
+              evidence_text: sourceLocations[index] ?? locStr,
               formatted_address: geo?.formatted_address,
               lat: geo?.lat,
               lng: geo?.lng,
