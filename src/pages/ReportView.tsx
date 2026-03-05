@@ -307,7 +307,6 @@ export default function ReportView() {
   const pdfHeaders = [
     t("reportView.colDate"),
     t("reportView.colProject"),
-    companyOrClientLabel,
     t("reportView.colRoute"),
     t("reportView.colPassengersShort"),
     t("reportView.colDistanceKm"),
@@ -331,7 +330,6 @@ export default function ReportView() {
     return [
       trip.date,
       trip.project,
-      trip.producer,
       routeStr,
       String(trip.passengers),
       trip.distance.toFixed(1) + " km",
@@ -561,16 +559,16 @@ export default function ReportView() {
           const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
           const pad = 6;
 
-          // 7 columns: Date, Project, Company, Route, Passengers, Distance, Reimbursement
-          const min = [55, 70, 0, 250, 50, 55, 60];
-          const max = [65, 90, 0, 450, 60, 70, 80];
+          // 6 columns: Date, Project, Route, Passengers, Distance, Reimbursement
+          const min = [60, 80, 280, 55, 60, 70];
+          const max = [70, 110, 500, 65, 75, 90];
 
           const desired = pdfHeaders.map((header, colIndex) => {
             let maxTextWidth = doc.getTextWidth(String(header));
             for (const row of pdfRows) {
               const raw = row[colIndex] ?? "";
               const text =
-                colIndex === 3 ? String(raw).slice(0, 60) : String(raw);
+                colIndex === 2 ? String(raw).slice(0, 80) : String(raw);
               maxTextWidth = Math.max(maxTextWidth, doc.getTextWidth(text));
             }
             return clamp(maxTextWidth + pad, min[colIndex] ?? 50, max[colIndex] ?? 80);
@@ -580,7 +578,7 @@ export default function ReportView() {
           const sum = () => widths.reduce((acc, w) => acc + w, 0);
 
           if (sum() > availableWidth) {
-            const reducible = [3, 2, 1, 0, 5, 6];
+            const reducible = [2, 1, 0, 4, 5];
             for (let iteration = 0; iteration < 4 && sum() > availableWidth; iteration++) {
               const overflow = sum() - availableWidth;
               const totalSlack = reducible.reduce((acc, i) => acc + Math.max(0, widths[i] - min[i]), 0);
@@ -595,7 +593,7 @@ export default function ReportView() {
             }
           } else if (sum() < availableWidth) {
             const extra = availableWidth - sum();
-            const routeIndex = 3;
+            const routeIndex = 2;
             widths[routeIndex] = Math.min(max[routeIndex], widths[routeIndex] + extra);
           }
 
@@ -610,10 +608,10 @@ export default function ReportView() {
           body: pdfRows,
           foot: [
             [
-              { content: "", colSpan: 4, styles: { fillColor: [255, 255, 255] } },
-              { content: "", styles: { halign: "center", fillColor: [255, 255, 255] } },
-              { content: `${t("reportView.totalShort")}: ${totalDistance.toFixed(1)} km`, styles: { halign: "right", fontStyle: "bold" } },
-              { content: `${t("reportView.totalShort")}: ${totalReimbursement.toFixed(2)} €`, styles: { halign: "right", fontStyle: "bold" } },
+              { content: "", colSpan: 3, styles: { fillColor: [255, 255, 255] } },
+              { content: `${t("reportView.totalShort")}:`, styles: { halign: "right", fillColor: [255, 255, 255] } },
+              { content: `${totalDistance.toFixed(1)} km`, styles: { halign: "right", fontStyle: "bold" } },
+              { content: `${totalReimbursement.toFixed(2)} €`, styles: { halign: "right", fontStyle: "bold" } },
             ],
           ],
           startY: tableStartY,
@@ -649,10 +647,9 @@ export default function ReportView() {
             0: { cellWidth: columnWidths[0] },
             1: { cellWidth: columnWidths[1] },
             2: { cellWidth: columnWidths[2] },
-            3: { cellWidth: columnWidths[3] },
-            4: { cellWidth: columnWidths[4], halign: "center" },
+            3: { cellWidth: columnWidths[3], halign: "center" },
+            4: { cellWidth: columnWidths[4], halign: "right" },
             5: { cellWidth: columnWidths[5], halign: "right" },
-            6: { cellWidth: columnWidths[6], halign: "right" },
           },
         });
 
@@ -806,13 +803,14 @@ export default function ReportView() {
         const computeColumnWidths = () => {
           const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
           const pad = 6;
-          const min = [55, 70, 0, 250, 50, 55, 60];
-          const max = [65, 90, 0, 450, 60, 70, 80];
+          // 6 columns: Date, Project, Route, Passengers, Distance, Reimbursement
+          const min = [60, 80, 280, 55, 60, 70];
+          const max = [70, 110, 500, 65, 75, 90];
           const desired = pdfHeaders.map((header, colIndex) => {
             let maxTextWidth = doc.getTextWidth(String(header));
             for (const row of pdfRows) {
               const raw = row[colIndex] ?? "";
-              const text = colIndex === 3 ? String(raw).slice(0, 80) : String(raw);
+              const text = colIndex === 2 ? String(raw).slice(0, 80) : String(raw);
               maxTextWidth = Math.max(maxTextWidth, doc.getTextWidth(text));
             }
             return clamp(maxTextWidth + pad, min[colIndex] ?? 50, max[colIndex] ?? 80);
@@ -820,7 +818,7 @@ export default function ReportView() {
           let widths = desired.slice();
           const sum = () => widths.reduce((acc, w) => acc + w, 0);
           if (sum() > availableWidth) {
-            const reducible = [3, 2, 1, 0, 5, 6];
+            const reducible = [2, 1, 0, 4, 5];
             for (let iteration = 0; iteration < 4 && sum() > availableWidth; iteration++) {
               const overflow = sum() - availableWidth;
               const totalSlack = reducible.reduce((acc, i) => acc + Math.max(0, widths[i] - min[i]), 0);
@@ -834,7 +832,7 @@ export default function ReportView() {
             }
           } else if (sum() < availableWidth) {
             const extra = availableWidth - sum();
-            widths[3] = Math.min(max[3], widths[3] + extra);
+            widths[2] = Math.min(max[2], widths[2] + extra);
           }
           widths = widths.map((w) => Math.floor(w));
           return widths;
@@ -845,10 +843,10 @@ export default function ReportView() {
           head: [pdfHeaders],
           body: pdfRows,
           foot: [[
-            { content: "", colSpan: 4, styles: { fillColor: [255, 255, 255] } },
-            { content: "", styles: { halign: "center", fillColor: [255, 255, 255] } },
-            { content: `${t("reportView.totalShort")}: ${totalDistance.toFixed(1)} km`, styles: { halign: "right", fontStyle: "bold" } },
-            { content: `${t("reportView.totalShort")}: ${totalReimbursement.toFixed(2)} €`, styles: { halign: "right", fontStyle: "bold" } },
+            { content: "", colSpan: 3, styles: { fillColor: [255, 255, 255] } },
+            { content: `${t("reportView.totalShort")}:`, styles: { halign: "right", fillColor: [255, 255, 255] } },
+            { content: `${totalDistance.toFixed(1)} km`, styles: { halign: "right", fontStyle: "bold" } },
+            { content: `${totalReimbursement.toFixed(2)} €`, styles: { halign: "right", fontStyle: "bold" } },
           ]],
           startY: tableStartY,
           theme: "grid",
@@ -883,10 +881,9 @@ export default function ReportView() {
             0: { cellWidth: columnWidths[0] },
             1: { cellWidth: columnWidths[1] },
             2: { cellWidth: columnWidths[2] },
-            3: { cellWidth: columnWidths[3] },
-            4: { cellWidth: columnWidths[4], halign: "center" },
+            3: { cellWidth: columnWidths[3], halign: "center" },
+            4: { cellWidth: columnWidths[4], halign: "right" },
             5: { cellWidth: columnWidths[5], halign: "right" },
-            6: { cellWidth: columnWidths[6], halign: "right" },
           },
         });
 
