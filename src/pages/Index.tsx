@@ -222,7 +222,7 @@ export default function Index() {
             <div className="flex items-center gap-4">
               <div>
                 <h1 className="text-foreground text-2xl sm:text-3xl md:text-[31px] font-semibold leading-tight tracking-tight">
-                  {t("dashboard.welcomeBackPrefix")} <span className="text-foreground">{profile.fullName}</span>
+                  {t("dashboard.welcomeBackPrefix")} <span className="text-foreground">{profile.fullName.split(" ")[0]}</span>
                 </h1>
                 <p className="text-muted-foreground mt-1">
                   {t("dashboard.subtitle")}
