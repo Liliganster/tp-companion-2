@@ -397,3 +397,11 @@
     visibility: hidden !important;
   }
 }
+
+/* Google Drive Picker – must appear above shadcn/radix modals (z-50 = 50) */
+.picker-dialog-bg {
+  z-index: 10000 !important;
+}
+.picker-dialog {
+  z-index: 10001 !important;
+}
