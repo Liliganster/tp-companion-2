@@ -324,15 +324,18 @@ export default function ReportView() {
     trip.reimbursement.toFixed(2),
   ]);
 
-  const pdfRows = trips.map((trip) => [
-    trip.date,
-    trip.project,
-    trip.producer,
-    trip.route.join(" -> "),
-    String(trip.passengers),
-    trip.distance.toFixed(1),
-    `${trip.reimbursement.toFixed(2)} €`,
-  ]);
+  const pdfRows = trips.map((trip) => {
+    const routeStr = trip.route.join(" \u2192 ");
+    return [
+      trip.date,
+      trip.project,
+      trip.producer,
+      routeStr.length > 55 ? routeStr.slice(0, 54) + "\u2026" : routeStr,
+      String(trip.passengers),
+      trip.distance.toFixed(1),
+      `${trip.reimbursement.toFixed(2)} \u20ac`,
+    ];
+  });
 
   const canSave = !savedReport && filteredTrips.length > 0;
 
@@ -496,36 +499,49 @@ export default function ReportView() {
         doc.setLineWidth(0.5);
         doc.line(margin, headerBottomY, pageWidth - margin, headerBottomY);
 
-        // Odometer summary card — use component-level odometerRatio
-        const pdfOdoRatio = odometerRatio;
+        // Odometer summary card — use displayOdoRatio (works with 1 or 2 snapshots)
+        const pdfOdoRatio = displayOdoRatio;
         let tableStartY = headerBottomY + 18;
         if (pdfOdoRatio) {
-          const cardH = 52;
+          const cardH = 40;
           const cardY = headerBottomY + 6;
-          doc.setFillColor(245, 245, 245);
+          doc.setFillColor(248, 248, 248);
           doc.roundedRect(margin, cardY, availableWidth, cardH, 2, 2, "F");
           doc.setDrawColor(200, 200, 200);
           doc.setLineWidth(0.3);
           doc.roundedRect(margin, cardY, availableWidth, cardH, 2, 2, "S");
+
+          // Title row
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(7.5);
-          doc.setTextColor(60, 60, 60);
-          doc.text(t("odometer.calcTitle"), margin + 6, cardY + 13);
-          const oCol = availableWidth / 4;
+          doc.setFontSize(6.5);
+          doc.setTextColor(100, 100, 100);
+          doc.text(t("odometer.calcTitle").toUpperCase(), margin + 6, cardY + 11);
+
+          // Metrics row — label: value inline, evenly spaced
           doc.setFont("helvetica", "normal");
           doc.setFontSize(7);
-          doc.text(`${t("odometer.totalKm")}: ${Number(odometerRatio.totalKm).toFixed(0)} km`, margin + 6, cardY + 27);
-          doc.text(`${t("odometer.workKm")}: ${Number(odometerRatio.workKm).toFixed(0)} km`, margin + oCol + 6, cardY + 27);
-          doc.text(`${t("odometer.privateKm")}: ${Number(odometerRatio.privateKm).toFixed(0)} km`, margin + oCol * 2 + 6, cardY + 27);
-          doc.setFont("helvetica", "bold");
-          doc.text(`${t("odometer.workPct")}: ${Number(odometerRatio.pct).toFixed(1)} %`, margin + oCol * 3 + 6, cardY + 27);
-          doc.setFont("helvetica", "italic");
-          doc.setFontSize(6.5);
-          doc.setTextColor(120, 120, 120);
-          doc.text(
-            `${odometerRatio.startSnapshot.snapshot_date} → ${odometerRatio.endSnapshot.snapshot_date}  |  ${Number(odometerRatio.startSnapshot.reading_km).toFixed(0)}${odometerRatio.startSnapshot.extraction_status === "user_edited" ? " (mod. manual)" : ""} → ${Number(odometerRatio.endSnapshot.reading_km).toFixed(0)}${odometerRatio.endSnapshot.extraction_status === "user_edited" ? " (mod. manual)" : ""} km`,
-            margin + 6, cardY + 40
-          );
+          doc.setTextColor(30, 30, 30);
+          const metrics = [
+            `${t("odometer.totalKm")}: ${Number(pdfOdoRatio.totalKm).toFixed(0)} km`,
+            `${t("odometer.workKm")}: ${Number(pdfOdoRatio.workKm).toFixed(0)} km`,
+            `${t("odometer.privateKm")}: ${Number(pdfOdoRatio.privateKm).toFixed(0)} km`,
+            `${t("odometer.workPct")}: ${Number(pdfOdoRatio.pct).toFixed(1)} %`,
+          ];
+          const colW = availableWidth / metrics.length;
+          metrics.forEach((text, i) => {
+            doc.text(text, margin + 6 + colW * i, cardY + 24);
+          });
+
+          // Footer note
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(6);
+          doc.setTextColor(140, 140, 140);
+          const isSingleSnap = pdfOdoRatio.startSnapshot.id === pdfOdoRatio.endSnapshot.id;
+          const snapNote = isSingleSnap
+            ? `${pdfOdoRatio.startSnapshot.snapshot_date} | ${Number(pdfOdoRatio.startSnapshot.reading_km).toFixed(0)} km`
+            : `${pdfOdoRatio.startSnapshot.snapshot_date} \u2192 ${pdfOdoRatio.endSnapshot.snapshot_date}  |  ${Number(pdfOdoRatio.startSnapshot.reading_km).toFixed(0)} \u2192 ${Number(pdfOdoRatio.endSnapshot.reading_km).toFixed(0)} km`;
+          doc.text(snapNote, margin + 6, cardY + 34);
+
           doc.setDrawColor(0, 0, 0);
           doc.setTextColor(0, 0, 0);
           tableStartY = cardY + cardH + 10;
@@ -603,7 +619,7 @@ export default function ReportView() {
             0: { cellWidth: columnWidths[0] },
             1: { cellWidth: columnWidths[1], overflow: "ellipsize" },
             2: { cellWidth: columnWidths[2], overflow: "ellipsize" },
-            3: { cellWidth: columnWidths[3], overflow: "linebreak" },
+            3: { cellWidth: columnWidths[3], overflow: "ellipsize" },
             4: { cellWidth: columnWidths[4], halign: "center" },
             5: { cellWidth: columnWidths[5], halign: "right" },
             6: { cellWidth: columnWidths[6], halign: "right" },
@@ -701,36 +717,46 @@ export default function ReportView() {
         doc.setLineWidth(0.5);
         doc.line(margin, headerBottomY, pageWidth - margin, headerBottomY);
 
-        // Odometer summary card — use component-level odometerRatio
-        const zipOdoRatio = odometerRatio;
+        // Odometer summary card — use displayOdoRatio (works with 1 or 2 snapshots)
+        const zipOdoRatio = displayOdoRatio;
         let tableStartY = headerBottomY + 18;
         if (zipOdoRatio) {
-          const cardH = 52;
+          const cardH = 40;
           const cardY = headerBottomY + 6;
-          doc.setFillColor(245, 245, 245);
+          doc.setFillColor(248, 248, 248);
           doc.roundedRect(margin, cardY, availableWidth, cardH, 2, 2, "F");
           doc.setDrawColor(200, 200, 200);
           doc.setLineWidth(0.3);
           doc.roundedRect(margin, cardY, availableWidth, cardH, 2, 2, "S");
+
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(7.5);
-          doc.setTextColor(60, 60, 60);
-          doc.text(t("odometer.calcTitle"), margin + 6, cardY + 13);
-          const oCol = availableWidth / 4;
+          doc.setFontSize(6.5);
+          doc.setTextColor(100, 100, 100);
+          doc.text(t("odometer.calcTitle").toUpperCase(), margin + 6, cardY + 11);
+
           doc.setFont("helvetica", "normal");
           doc.setFontSize(7);
-          doc.text(`${t("odometer.totalKm")}: ${Number(odometerRatio.totalKm).toFixed(0)} km`, margin + 6, cardY + 27);
-          doc.text(`${t("odometer.workKm")}: ${Number(odometerRatio.workKm).toFixed(0)} km`, margin + oCol + 6, cardY + 27);
-          doc.text(`${t("odometer.privateKm")}: ${Number(odometerRatio.privateKm).toFixed(0)} km`, margin + oCol * 2 + 6, cardY + 27);
-          doc.setFont("helvetica", "bold");
-          doc.text(`${t("odometer.workPct")}: ${Number(odometerRatio.pct).toFixed(1)} %`, margin + oCol * 3 + 6, cardY + 27);
-          doc.setFont("helvetica", "italic");
-          doc.setFontSize(6.5);
-          doc.setTextColor(120, 120, 120);
-          doc.text(
-            `${odometerRatio.startSnapshot.snapshot_date} → ${odometerRatio.endSnapshot.snapshot_date}  |  ${Number(odometerRatio.startSnapshot.reading_km).toFixed(0)}${odometerRatio.startSnapshot.extraction_status === "user_edited" ? " (mod. manual)" : ""} → ${Number(odometerRatio.endSnapshot.reading_km).toFixed(0)}${odometerRatio.endSnapshot.extraction_status === "user_edited" ? " (mod. manual)" : ""} km`,
-            margin + 6, cardY + 40
-          );
+          doc.setTextColor(30, 30, 30);
+          const zipMetrics = [
+            `${t("odometer.totalKm")}: ${Number(zipOdoRatio.totalKm).toFixed(0)} km`,
+            `${t("odometer.workKm")}: ${Number(zipOdoRatio.workKm).toFixed(0)} km`,
+            `${t("odometer.privateKm")}: ${Number(zipOdoRatio.privateKm).toFixed(0)} km`,
+            `${t("odometer.workPct")}: ${Number(zipOdoRatio.pct).toFixed(1)} %`,
+          ];
+          const zipColW = availableWidth / zipMetrics.length;
+          zipMetrics.forEach((text, i) => {
+            doc.text(text, margin + 6 + zipColW * i, cardY + 24);
+          });
+
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(6);
+          doc.setTextColor(140, 140, 140);
+          const zipIsSingle = zipOdoRatio.startSnapshot.id === zipOdoRatio.endSnapshot.id;
+          const zipNote = zipIsSingle
+            ? `${zipOdoRatio.startSnapshot.snapshot_date} | ${Number(zipOdoRatio.startSnapshot.reading_km).toFixed(0)} km`
+            : `${zipOdoRatio.startSnapshot.snapshot_date} \u2192 ${zipOdoRatio.endSnapshot.snapshot_date}  |  ${Number(zipOdoRatio.startSnapshot.reading_km).toFixed(0)} \u2192 ${Number(zipOdoRatio.endSnapshot.reading_km).toFixed(0)} km`;
+          doc.text(zipNote, margin + 6, cardY + 34);
+
           doc.setDrawColor(0, 0, 0);
           doc.setTextColor(0, 0, 0);
           tableStartY = cardY + cardH + 10;
@@ -796,7 +822,7 @@ export default function ReportView() {
             0: { cellWidth: columnWidths[0] },
             1: { cellWidth: columnWidths[1], overflow: "ellipsize" },
             2: { cellWidth: columnWidths[2], overflow: "ellipsize" },
-            3: { cellWidth: columnWidths[3], overflow: "linebreak" },
+            3: { cellWidth: columnWidths[3], overflow: "ellipsize" },
             4: { cellWidth: columnWidths[4], halign: "center" },
             5: { cellWidth: columnWidths[5], halign: "right" },
             6: { cellWidth: columnWidths[6], halign: "right" },

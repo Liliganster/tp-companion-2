@@ -48,8 +48,8 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     maxActiveTripsNonAI: 15,
     maxStopsPerTrip: 10,
 
-    // AI - 5 jobs/month, allows callsheet and invoice extraction
-    aiJobsPerMonth: 5,
+    // AI - 15 jobs/month, allows callsheet and invoice extraction
+    aiJobsPerMonth: 15,
     allowedAITypes: ["callsheet", "invoice"],
 
     // Projects
