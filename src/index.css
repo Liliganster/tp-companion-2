@@ -398,10 +398,23 @@
   }
 }
 
-/* Google Drive Picker – must appear above shadcn/radix modals (z-50 = 50) */
+/* Google Drive Picker – must appear above shadcn/radix modals */
 .picker-dialog-bg {
   z-index: 10000 !important;
 }
 .picker-dialog {
   z-index: 10001 !important;
+}
+.picker.modal-dialog {
+  z-index: 10001 !important;
+}
+/* The Picker also creates iframes – make sure they're on top */
+iframe.picker-frame {
+  z-index: 10001 !important;
+}
+/* Ensure the Picker's own overlay is clickable */
+.picker-dialog-bg,
+.picker-dialog,
+.picker-dialog * {
+  pointer-events: auto !important;
 }
