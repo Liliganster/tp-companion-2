@@ -668,7 +668,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         const w = window as any;
         const tokenClient = w.google.accounts.oauth2.initTokenClient({
           client_id: clientId,
-          scope: "https://www.googleapis.com/auth/drive.file",
+          scope: "https://www.googleapis.com/auth/drive.readonly",
           callback: (response: any) => {
             if (response.error) {
               reject(new Error(response.error_description || response.error));
@@ -754,7 +754,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         const w = window as any;
         const tokenClient = w.google.accounts.oauth2.initTokenClient({
           client_id: clientId,
-          scope: "https://www.googleapis.com/auth/drive.file",
+          scope: "https://www.googleapis.com/auth/drive.readonly",
           callback: (response: any) => {
             if (response.error) { reject(new Error(response.error_description || response.error)); return; }
             resolve(response.access_token);
