@@ -325,12 +325,13 @@ export default function ReportView() {
   ]);
 
   const pdfRows = trips.map((trip) => {
-    const routeStr = trip.route.join(" \u2192 ");
+    // Truncate keeping more characters, wait until actually needed
+    const routeStr = trip.route.join(" \u2192 ").replace(/\r?\n|\r/g, " ");
     return [
       trip.date,
       trip.project,
       trip.producer,
-      routeStr.length > 55 ? routeStr.slice(0, 54) + "\u2026" : routeStr,
+      routeStr.length > 80 ? routeStr.slice(0, 79) + "\u2026" : routeStr,
       String(trip.passengers),
       trip.distance.toFixed(1),
       `${trip.reimbursement.toFixed(2)} \u20ac`,
@@ -453,22 +454,27 @@ export default function ReportView() {
         const drawLabelValueLeft = (x: number, y: number, label: string, value: string) => {
           const labelText = `${label}: `;
           doc.setFont("helvetica", "bold");
+          doc.setFontSize(11);
           doc.text(labelText, x, y);
           const labelWidth = doc.getTextWidth(labelText);
           doc.setFont("helvetica", "normal");
+          doc.setFontSize(11); // Ensure value is also 11
           doc.text(value, x + labelWidth, y, { maxWidth: pageWidth / 2 - margin - (x + labelWidth) });
         };
 
         const drawLabelValueRight = (rightEdge: number, y: number, label: string, value: string) => {
           const labelText = `${label}: `;
           doc.setFont("helvetica", "normal");
+          doc.setFontSize(11);
           const valueWidth = doc.getTextWidth(value);
           doc.setFont("helvetica", "bold");
+          doc.setFontSize(11);
           const labelWidth = doc.getTextWidth(labelText);
           const minStartX = pageWidth / 2 + 20;
           const startX = Math.max(minStartX, rightEdge - (labelWidth + valueWidth));
           doc.text(labelText, startX, y);
           doc.setFont("helvetica", "normal");
+          doc.setFontSize(11);
           doc.text(value, startX + labelWidth, y, { maxWidth: rightEdge - (startX + labelWidth) });
         };
 
@@ -478,7 +484,7 @@ export default function ReportView() {
         doc.text(t("reportView.reportTitle"), pageWidth / 2, 44, { align: "center" });
 
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
+        doc.setFontSize(11);
         doc.text(`${t("reportView.periodLabel")}: ${period}`, pageWidth / 2, 64, { align: "center" });
 
         const leftX = margin;
@@ -499,11 +505,11 @@ export default function ReportView() {
         doc.setLineWidth(0.5);
         doc.line(margin, headerBottomY, pageWidth - margin, headerBottomY);
 
-        // Odometer summary card — use displayOdoRatio (works with 1 or 2 snapshots)
+        // Odometer summary card — works with 1 or 2 snapshots
         const pdfOdoRatio = displayOdoRatio;
         let tableStartY = headerBottomY + 18;
         if (pdfOdoRatio) {
-          const cardH = 40;
+          const cardH = 50; // Increased to 50 for 11pt
           const cardY = headerBottomY + 6;
           doc.setFillColor(248, 248, 248);
           doc.roundedRect(margin, cardY, availableWidth, cardH, 2, 2, "F");
@@ -513,13 +519,13 @@ export default function ReportView() {
 
           // Title row
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(6.5);
+          doc.setFontSize(9); // Standardized title
           doc.setTextColor(100, 100, 100);
-          doc.text(t("odometer.calcTitle").toUpperCase(), margin + 6, cardY + 11);
+          doc.text(t("odometer.calcTitle").toUpperCase(), margin + 6, cardY + 13);
 
-          // Metrics row — label: value inline, evenly spaced
+          // Metrics row — 11pt font, evenly spaced
           doc.setFont("helvetica", "normal");
-          doc.setFontSize(7);
+          doc.setFontSize(11);
           doc.setTextColor(30, 30, 30);
           const metrics = [
             `${t("odometer.totalKm")}: ${Number(pdfOdoRatio.totalKm).toFixed(0)} km`,
@@ -529,18 +535,18 @@ export default function ReportView() {
           ];
           const colW = availableWidth / metrics.length;
           metrics.forEach((text, i) => {
-            doc.text(text, margin + 6 + colW * i, cardY + 24);
+            doc.text(text, margin + 6 + colW * i, cardY + 30);
           });
 
           // Footer note
           doc.setFont("helvetica", "normal");
-          doc.setFontSize(6);
+          doc.setFontSize(9);
           doc.setTextColor(140, 140, 140);
           const isSingleSnap = pdfOdoRatio.startSnapshot.id === pdfOdoRatio.endSnapshot.id;
           const snapNote = isSingleSnap
             ? `${pdfOdoRatio.startSnapshot.snapshot_date} | ${Number(pdfOdoRatio.startSnapshot.reading_km).toFixed(0)} km`
             : `${pdfOdoRatio.startSnapshot.snapshot_date} \u2192 ${pdfOdoRatio.endSnapshot.snapshot_date}  |  ${Number(pdfOdoRatio.startSnapshot.reading_km).toFixed(0)} \u2192 ${Number(pdfOdoRatio.endSnapshot.reading_km).toFixed(0)} km`;
-          doc.text(snapNote, margin + 6, cardY + 34);
+          doc.text(snapNote, margin + 6, cardY + 44);
 
           doc.setDrawColor(0, 0, 0);
           doc.setTextColor(0, 0, 0);
@@ -548,15 +554,15 @@ export default function ReportView() {
         }
 
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
+        doc.setFontSize(11);
 
         const computeColumnWidths = () => {
           const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
           const pad = 10;
 
           // 7 columns: Date, Project, Company, Route, Passengers, Distance, Reimbursement
-          const min = [50, 70, 80, 180, 45, 55, 55];
-          const max = [65, 100, 140, 300, 55, 75, 75];
+          const min = [65, 80, 90, 180, 50, 60, 60];
+          const max = [80, 120, 150, 300, 60, 80, 80];
 
           const desired = pdfHeaders.map((header, colIndex) => {
             let maxTextWidth = doc.getTextWidth(String(header));
@@ -611,9 +617,9 @@ export default function ReportView() {
           ],
           startY: tableStartY,
           theme: "grid",
-          styles: { fontSize: 7, cellPadding: 2.5, textColor: 0, lineColor: [165, 165, 165], lineWidth: 0.35 },
-          headStyles: { fillColor: [255, 255, 255], textColor: 0, fontStyle: "bold", fontSize: 7.5, lineColor: 0, lineWidth: 0.6 },
-          footStyles: { fillColor: [255, 255, 255], textColor: 0, fontSize: 7.5, lineColor: 0, lineWidth: 0.6 },
+          styles: { fontSize: 11, cellPadding: 3.5, textColor: 0, lineColor: [165, 165, 165], lineWidth: 0.35 },
+          headStyles: { fillColor: [255, 255, 255], textColor: 0, fontStyle: "bold", fontSize: 11, lineColor: 0, lineWidth: 0.6 },
+          footStyles: { fillColor: [255, 255, 255], textColor: 0, fontSize: 11, lineColor: 0, lineWidth: 0.6 },
           margin: { left: margin, right: margin },
           columnStyles: {
             0: { cellWidth: columnWidths[0] },
@@ -673,22 +679,27 @@ export default function ReportView() {
         const drawLabelValueLeft = (x: number, y: number, label: string, value: string) => {
           const labelText = `${label}: `;
           doc.setFont("helvetica", "bold");
+          doc.setFontSize(11);
           doc.text(labelText, x, y);
           const labelWidth = doc.getTextWidth(labelText);
           doc.setFont("helvetica", "normal");
+          doc.setFontSize(11);
           doc.text(value, x + labelWidth, y, { maxWidth: pageWidth / 2 - margin - (x + labelWidth) });
         };
 
         const drawLabelValueRight = (rightEdge: number, y: number, label: string, value: string) => {
           const labelText = `${label}: `;
           doc.setFont("helvetica", "normal");
+          doc.setFontSize(11);
           const valueWidth = doc.getTextWidth(value);
           doc.setFont("helvetica", "bold");
+          doc.setFontSize(11);
           const labelWidth = doc.getTextWidth(labelText);
           const minStartX = pageWidth / 2 + 20;
           const startX = Math.max(minStartX, rightEdge - (labelWidth + valueWidth));
           doc.text(labelText, startX, y);
           doc.setFont("helvetica", "normal");
+          doc.setFontSize(11);
           doc.text(value, startX + labelWidth, y, { maxWidth: rightEdge - (startX + labelWidth) });
         };
 
@@ -697,7 +708,7 @@ export default function ReportView() {
         doc.setFontSize(14);
         doc.text(t("reportView.reportTitle"), pageWidth / 2, 44, { align: "center" });
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
+        doc.setFontSize(11);
         doc.text(`${t("reportView.periodLabel")}: ${period}`, pageWidth / 2, 64, { align: "center" });
 
         const leftX = margin;
@@ -717,11 +728,11 @@ export default function ReportView() {
         doc.setLineWidth(0.5);
         doc.line(margin, headerBottomY, pageWidth - margin, headerBottomY);
 
-        // Odometer summary card — use displayOdoRatio (works with 1 or 2 snapshots)
+        // Odometer summary card — works with 1 or 2 snapshots
         const zipOdoRatio = displayOdoRatio;
         let tableStartY = headerBottomY + 18;
         if (zipOdoRatio) {
-          const cardH = 40;
+          const cardH = 50;
           const cardY = headerBottomY + 6;
           doc.setFillColor(248, 248, 248);
           doc.roundedRect(margin, cardY, availableWidth, cardH, 2, 2, "F");
@@ -729,13 +740,15 @@ export default function ReportView() {
           doc.setLineWidth(0.3);
           doc.roundedRect(margin, cardY, availableWidth, cardH, 2, 2, "S");
 
+          // Title
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(6.5);
+          doc.setFontSize(9);
           doc.setTextColor(100, 100, 100);
-          doc.text(t("odometer.calcTitle").toUpperCase(), margin + 6, cardY + 11);
+          doc.text(t("odometer.calcTitle").toUpperCase(), margin + 6, cardY + 13);
 
+          // Metrics row — 11pt
           doc.setFont("helvetica", "normal");
-          doc.setFontSize(7);
+          doc.setFontSize(11);
           doc.setTextColor(30, 30, 30);
           const zipMetrics = [
             `${t("odometer.totalKm")}: ${Number(zipOdoRatio.totalKm).toFixed(0)} km`,
@@ -745,17 +758,18 @@ export default function ReportView() {
           ];
           const zipColW = availableWidth / zipMetrics.length;
           zipMetrics.forEach((text, i) => {
-            doc.text(text, margin + 6 + zipColW * i, cardY + 24);
+            doc.text(text, margin + 6 + zipColW * i, cardY + 30);
           });
 
+          // Note
           doc.setFont("helvetica", "normal");
-          doc.setFontSize(6);
+          doc.setFontSize(9);
           doc.setTextColor(140, 140, 140);
           const zipIsSingle = zipOdoRatio.startSnapshot.id === zipOdoRatio.endSnapshot.id;
           const zipNote = zipIsSingle
             ? `${zipOdoRatio.startSnapshot.snapshot_date} | ${Number(zipOdoRatio.startSnapshot.reading_km).toFixed(0)} km`
             : `${zipOdoRatio.startSnapshot.snapshot_date} \u2192 ${zipOdoRatio.endSnapshot.snapshot_date}  |  ${Number(zipOdoRatio.startSnapshot.reading_km).toFixed(0)} \u2192 ${Number(zipOdoRatio.endSnapshot.reading_km).toFixed(0)} km`;
-          doc.text(zipNote, margin + 6, cardY + 34);
+          doc.text(zipNote, margin + 6, cardY + 44);
 
           doc.setDrawColor(0, 0, 0);
           doc.setTextColor(0, 0, 0);
@@ -763,13 +777,13 @@ export default function ReportView() {
         }
 
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
+        doc.setFontSize(11);
 
         const computeColumnWidths = () => {
           const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
           const pad = 10;
-          const min = [50, 70, 80, 180, 45, 55, 55];
-          const max = [65, 100, 140, 300, 55, 75, 75];
+          const min = [65, 80, 90, 180, 50, 60, 60];
+          const max = [80, 120, 150, 300, 60, 80, 80];
           const desired = pdfHeaders.map((header, colIndex) => {
             let maxTextWidth = doc.getTextWidth(String(header));
             for (const row of pdfRows) {
@@ -814,9 +828,9 @@ export default function ReportView() {
           ]],
           startY: tableStartY,
           theme: "grid",
-          styles: { fontSize: 7, cellPadding: 2.5, textColor: 0, lineColor: [165, 165, 165], lineWidth: 0.35 },
-          headStyles: { fillColor: [255, 255, 255], textColor: 0, fontStyle: "bold", fontSize: 7.5, lineColor: 0, lineWidth: 0.6 },
-          footStyles: { fillColor: [255, 255, 255], textColor: 0, fontSize: 7.5, lineColor: 0, lineWidth: 0.6 },
+          styles: { fontSize: 11, cellPadding: 3.5, textColor: 0, lineColor: [165, 165, 165], lineWidth: 0.35 },
+          headStyles: { fillColor: [255, 255, 255], textColor: 0, fontStyle: "bold", fontSize: 11, lineColor: 0, lineWidth: 0.6 },
+          footStyles: { fillColor: [255, 255, 255], textColor: 0, fontSize: 11, lineColor: 0, lineWidth: 0.6 },
           margin: { left: margin, right: margin },
           columnStyles: {
             0: { cellWidth: columnWidths[0] },
