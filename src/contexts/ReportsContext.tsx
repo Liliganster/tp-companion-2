@@ -20,7 +20,6 @@ export type SavedReport = {
   driver: string;
   address: string;
   licensePlate: string;
-  reportType?: "filmcrew" | "general"; // New: type of report
 };
 
 const safeId = () => {

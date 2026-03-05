@@ -129,8 +129,6 @@ export default function ReportView() {
   const selectedYear = savedReport?.year ?? (searchParams.get("year") || "");
   const queryStartDate = searchParams.get("startDate") || "";
   const queryEndDate = searchParams.get("endDate") || "";
-  const reportType = (savedReport?.reportType ?? searchParams.get("reportType") ?? "filmcrew") as "filmcrew" | "general";
-
   const normalizeProjectParam = (value: string) => {
     const trimmed = value.trim();
     if (!trimmed) return "all";
@@ -258,15 +256,10 @@ export default function ReportView() {
 
   const fileBase = `${t("reportView.filePrefix")}_${sanitizeFilePart(period)}_${sanitizeFilePart(projectLabel)}`;
 
-  // Column header changes based on report type
-  const companyOrClientLabel = reportType === "general" 
-    ? t("reportView.colClient") 
-    : t("reportView.colCompanyProducer");
+  const companyOrClientLabel = t("reportView.colCompanyProducer");
 
   // For HTML table, split company/producer into two lines keeping the /
-  const companyOrClientLabelHtml = reportType === "general" 
-    ? t("reportView.colClient") 
-    : (<>{t("reportView.colCompanyProducer").split("/")[0]}/<br/>{t("reportView.colCompanyProducer").split("/")[1]}</>);
+  const companyOrClientLabelHtml = (<>{t("reportView.colCompanyProducer").split("/")[0]}/<br/>{t("reportView.colCompanyProducer").split("/")[1]}</>);
 
   const headers = [
     t("reportView.colDate"),
@@ -356,7 +349,7 @@ export default function ReportView() {
         driver,
         address,
         licensePlate,
-        reportType,
+        reportType: "filmcrew",
       });
     } catch {
       // addReport already shows the error toast (e.g. monthly limit reached)

@@ -150,7 +150,7 @@ export default function Reports() {
        setSelectedProject("all");
     }
   }, [selectedProject, trips]);
-  const [reportType, setReportType] = useState<"filmcrew" | "general">("filmcrew");
+
   const toDateInputValue = (d: Date) => {
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -302,7 +302,6 @@ export default function Reports() {
       startDate: effectiveStartDate,
       endDate: effectiveEndDate,
       trips: String(selectedTrips.length),
-      reportType: reportType,
     });
     navigate(`/reports/view?${params.toString()}`);
   };
@@ -356,18 +355,7 @@ export default function Reports() {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label>{t("reports.reportType")}</Label>
-              <Select value={reportType} onValueChange={(v) => setReportType(v as "filmcrew" | "general")}>
-                <SelectTrigger className="bg-secondary/50">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="filmcrew">{t("reports.reportTypeFilmCrew")}</SelectItem>
-                  <SelectItem value="general">{t("reports.reportTypeGeneral")}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+
             
             <div className="space-y-2">
               <Label>{t("reports.from")}</Label>
@@ -560,51 +548,7 @@ export default function Reports() {
               </div>
             )}
 
-            <div className="hidden">
-            <div>
-              <h4 className="font-semibold text-sm mb-2">Lista de verificación pre-exportación</h4>
-              <p className="text-sm text-muted-foreground">
-                El sistema ha revisado los viajes del período seleccionado en busca de posibles problemas.
-              </p>
-            </div>
 
-            {warnings.length === 0 ? (
-              <div className="flex items-center gap-3 p-4 rounded-lg bg-success/10 border border-success/30">
-                <Check className="w-5 h-5 text-success shrink-0" />
-                <p className="text-sm text-success">
-                  No se encontraron problemas potenciales. Listo para generar.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-warning">
-                  <AlertTriangle className="w-4 h-4" />
-                  <span className="text-sm font-medium">
-                    Se encontraron {warnings.length} advertencia(s)
-                  </span>
-                </div>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {warnings.map((warning, index) => (
-                    <div
-                      key={index}
-                      className="flex items-start gap-3 p-3 rounded-lg bg-warning/10 border border-warning/30"
-                    >
-                      <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
-                      <div className="text-sm">
-                        <p className="font-medium">{warning.route}</p>
-                        <p className="text-muted-foreground text-xs">
-                          {warning.date} - {warning.warning}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Puedes continuar con la generación del informe o revisar los viajes antes.
-                </p>
-              </div>
-            )}
-            </div>
           </div>
 
           <div className="flex gap-2 pt-2">
@@ -616,20 +560,7 @@ export default function Reports() {
             </Button>
           </div>
 
-          <div className="hidden flex gap-2 pt-2">
-            <Button
-              variant="outline"
-              onClick={() => setVerificationModalOpen(false)}
-            >
-              {t("reports.back")}
-            </Button>
-            <Button
-              className="flex-1"
-              onClick={handleGenerateReport}
-            >
-              {t("reports.generateReport")}
-            </Button>
-          </div>
+
         </DialogContent>
       </Dialog>
     </MainLayout>
