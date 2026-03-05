@@ -111,28 +111,36 @@ async function openGoogleDrivePicker(params: {
   view.setSelectFolderEnabled(false);
   view.setMimeTypes(mimeTypes.join(","));
 
-  return await new Promise((resolve) => {
-    const picker = new google.picker.PickerBuilder()
-      .setDeveloperKey(params.apiKey)
-      .setOAuthToken(params.oauthToken)
-      .setOrigin(window.location.origin)
-      .setTitle(params.title)
-      .addView(view)
-      .setCallback((data: any) => {
-        const action = data?.action;
-        if (action === google.picker.Action.CANCEL) return resolve(null);
-        if (action !== google.picker.Action.PICKED) return;
-        const doc = Array.isArray(data?.docs) ? data.docs[0] : null;
-        if (!doc?.id) return resolve(null);
-        resolve({
-          fileId: String(doc.id),
-          name: typeof doc.name === "string" ? doc.name : "import.csv",
-          mimeType: typeof doc.mimeType === "string" ? doc.mimeType : "",
-        });
-      })
-      .build();
+  return await new Promise((resolve, reject) => {
+    try {
+      const picker = new google.picker.PickerBuilder()
+        .setDeveloperKey(params.apiKey)
+        .setOAuthToken(params.oauthToken)
+        .setOrigin(window.location.origin)
+        .setTitle(params.title)
+        .addView(view)
+        .setCallback((data: any) => {
+          const action = data?.action;
+          if (action === google.picker.Action.CANCEL) {
+            picker.setVisible(false);
+            return resolve(null);
+          }
+          if (action !== google.picker.Action.PICKED) return;
+          const doc = Array.isArray(data?.docs) ? data.docs[0] : null;
+          picker.setVisible(false);
+          if (!doc?.id) return resolve(null);
+          resolve({
+            fileId: String(doc.id),
+            name: typeof doc.name === "string" ? doc.name : "import.csv",
+            mimeType: typeof doc.mimeType === "string" ? doc.mimeType : "",
+          });
+        })
+        .build();
 
-    picker.setVisible(true);
+      picker.setVisible(true);
+    } catch (err: any) {
+      reject(new Error(err?.message || "Error opening Google Drive Picker"));
+    }
   });
 }
 
