@@ -156,6 +156,11 @@ export default function ReportView() {
   const address = savedReport?.address ?? (searchParams.get("address") || [profile.baseAddress, profile.city].filter(Boolean).join(", "));
   const licensePlate = savedReport?.licensePlate ?? (searchParams.get("licensePlate") || profile.licensePlate);
 
+  // Compute odometer ratio for the report period (needs >= 2 snapshots that bracket the period)
+  const odometerRatio = effectiveStartDate && effectiveEndDate
+    ? computeRatio(effectiveStartDate, effectiveEndDate)
+    : null;
+
 
   const getProducerForProject = (projectName: string) => {
     const key = getProjectKey(projectName);
@@ -349,7 +354,6 @@ export default function ReportView() {
         driver,
         address,
         licensePlate,
-        reportType: "filmcrew",
       });
     } catch {
       // addReport already shows the error toast (e.g. monthly limit reached)
@@ -464,11 +468,10 @@ export default function ReportView() {
         doc.setLineWidth(0.5);
         doc.line(margin, headerBottomY, pageWidth - margin, headerBottomY);
 
-        // Odometer summary card (Pro only)
-        const reportYear = yearValue ?? (effectiveStartDate ? new Date(effectiveStartDate + "T00:00:00").getFullYear() : new Date().getFullYear());
-        const odometerRatio = planTier === "pro" ? computeRatio(reportYear) : null;
+        // Odometer summary card — use component-level odometerRatio
+        const pdfOdoRatio = odometerRatio;
         let tableStartY = headerBottomY + 18;
-        if (odometerRatio) {
+        if (pdfOdoRatio) {
           const cardH = 52;
           const cardY = headerBottomY + 6;
           doc.setFillColor(245, 245, 245);
@@ -670,11 +673,10 @@ export default function ReportView() {
         doc.setLineWidth(0.5);
         doc.line(margin, headerBottomY, pageWidth - margin, headerBottomY);
 
-        // Odometer summary card (Pro only)
-        const reportYear = yearValue ?? (effectiveStartDate ? new Date(effectiveStartDate + "T00:00:00").getFullYear() : new Date().getFullYear());
-        const odometerRatio = planTier === "pro" ? computeRatio(reportYear) : null;
+        // Odometer summary card — use component-level odometerRatio
+        const zipOdoRatio = odometerRatio;
         let tableStartY = headerBottomY + 18;
-        if (odometerRatio) {
+        if (zipOdoRatio) {
           const cardH = 52;
           const cardY = headerBottomY + 6;
           doc.setFillColor(245, 245, 245);
@@ -930,6 +932,40 @@ export default function ReportView() {
             </div>
 
             <hr className="hidden print:block border-black mb-4" />
+
+            {/* Odometer Summary Card — shown when >= 2 snapshots bracket the period */}
+            {odometerRatio && (
+              <div className="mb-4 rounded-lg bg-slate-700/50 border border-slate-600/60 print:bg-gray-50 print:border-gray-200 p-3 sm:p-4">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 print:text-gray-500 mb-2">
+                  {t("odometer.calcTitle")}
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-xs sm:text-sm">
+                  <div>
+                    <p className="text-slate-400 print:text-gray-500 text-[10px]">{t("odometer.totalKm")}</p>
+                    <p className="font-semibold">{Number(odometerRatio.totalKm).toFixed(0)} km</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-400 print:text-gray-500 text-[10px]">{t("odometer.workKm")}</p>
+                    <p className="font-semibold text-green-400 print:text-green-700">{Number(odometerRatio.workKm).toFixed(0)} km</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-400 print:text-gray-500 text-[10px]">{t("odometer.privateKm")}</p>
+                    <p className="font-semibold">{Number(odometerRatio.privateKm).toFixed(0)} km</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-400 print:text-gray-500 text-[10px]">{t("odometer.workPct")}</p>
+                    <p className="font-bold text-blue-400 print:text-blue-700">{Number(odometerRatio.pct).toFixed(1)} %</p>
+                  </div>
+                </div>
+                <p className="mt-2 text-[10px] text-slate-500 print:text-gray-400">
+                  {odometerRatio.startSnapshot.snapshot_date} {"\u2192"} {odometerRatio.endSnapshot.snapshot_date}
+                  {" | "}
+                  {Number(odometerRatio.startSnapshot.reading_km).toFixed(0)}{odometerRatio.startSnapshot.extraction_status === "user_edited" ? " (mod." + ")" : ""}
+                  {" \u2192 "}
+                  {Number(odometerRatio.endSnapshot.reading_km).toFixed(0)}{odometerRatio.endSnapshot.extraction_status === "user_edited" ? " (mod." + ")" : ""} km
+                </p>
+              </div>
+            )}
 
             {/* Report Table */}
             <div className="overflow-x-auto -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 print:overflow-visible print:mx-0 print:px-0">
