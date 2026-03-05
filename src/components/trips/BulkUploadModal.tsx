@@ -720,6 +720,76 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   };
   importFromGoogleDriveRef.current = importFromGoogleDrive;
 
+  const importPdfFromDrive = async () => {
+    const pickerApiKey = import.meta.env.VITE_GOOGLE_PICKER_API_KEY as string | undefined;
+    if (!pickerApiKey) {
+      toast.error(t("bulk.errorDrivePickerNotConfigured"));
+      return;
+    }
+    const clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID as string | undefined;
+    if (!clientId) {
+      toast.error("Google OAuth Client ID not configured");
+      return;
+    }
+
+    try {
+      // Load GIS script
+      await new Promise<void>((resolve, reject) => {
+        const w = window as any;
+        if (w.google?.accounts?.oauth2) return resolve();
+        const existingScript = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+        if (existingScript) { existingScript.addEventListener("load", () => resolve()); return; }
+        const script = document.createElement("script");
+        script.src = "https://accounts.google.com/gsi/client";
+        script.async = true; script.defer = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error("Failed to load Google Identity Services"));
+        document.head.appendChild(script);
+      });
+
+      // Get Drive token via GIS popup
+      const driveAccessToken = await new Promise<string>((resolve, reject) => {
+        const w = window as any;
+        const tokenClient = w.google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: "https://www.googleapis.com/auth/drive.file",
+          callback: (response: any) => {
+            if (response.error) { reject(new Error(response.error_description || response.error)); return; }
+            resolve(response.access_token);
+          },
+          error_callback: (error: any) => {
+            reject(new Error(error?.message || "Google authorization failed"));
+          },
+        });
+        tokenClient.requestAccessToken();
+      });
+
+      // Open picker for PDF files
+      const picked = await openGoogleDrivePicker({
+        apiKey: pickerApiKey,
+        oauthToken: driveAccessToken,
+        title: t("bulk.drivePickerTitlePdf") || "Select PDFs from Drive",
+        mimeTypes: ["application/pdf"],
+      });
+      if (!picked) return;
+
+      // Download the PDF file directly from Drive using the access token
+      toast.info(t("bulk.downloadingFromDrive") || "Downloading from Drive...");
+      const downloadUrl = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(picked.fileId)}?alt=media`;
+      const response = await fetch(downloadUrl, {
+        headers: { Authorization: `Bearer ${driveAccessToken}` },
+      });
+      if (!response.ok) throw new Error("Failed to download file from Drive");
+
+      const blob = await response.blob();
+      const file = new File([blob], picked.name || "document.pdf", { type: "application/pdf" });
+      selectAiFiles([file]);
+    } catch (err: any) {
+      if (err?.message?.includes("popup_closed") || err?.message?.includes("access_denied")) return;
+      toast.error("Google Drive", { description: err?.message ?? "Error importing from Drive" });
+    }
+  };
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     selectAiFiles(files);
@@ -1873,6 +1943,16 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                       {selectedFiles.length > 0 ? t("bulk.aiChangeFilesHint") : t("bulk.aiDropSubtitle")}
                     </p>
                     </div>
+
+                    <Button
+                      variant="outline"
+                      className="w-full h-12 gap-2"
+                      type="button"
+                      onClick={() => void importPdfFromDrive()}
+                    >
+                      <CloudUpload className="w-4 h-4" />
+                      {t("bulk.importPdfFromDrive") || "Import PDFs from Google Drive"}
+                    </Button>
 
                     <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
                       <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
