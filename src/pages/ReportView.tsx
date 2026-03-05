@@ -325,16 +325,17 @@ export default function ReportView() {
   ]);
 
   const pdfRows = trips.map((trip) => {
-    // Truncate keeping more characters, wait until actually needed
-    const routeStr = trip.route.join(" \u2192 ").replace(/\r?\n|\r/g, " ");
+    // Clean route: normalize whitespace and join with arrows
+    const cleanRoute = (str: string) => str.replace(/\r?\n|\r/g, ", ").replace(/\s+/g, " ").trim();
+    const routeStr = trip.route.map(cleanRoute).join(" \u2192 ");
     return [
       trip.date,
       trip.project,
       trip.producer,
-      routeStr.length > 80 ? routeStr.slice(0, 79) + "\u2026" : routeStr,
+      routeStr.length > 100 ? routeStr.slice(0, 99) + "\u2026" : routeStr,
       String(trip.passengers),
-      trip.distance.toFixed(1),
-      `${trip.reimbursement.toFixed(2)} \u20ac`,
+      trip.distance.toFixed(1) + " km",
+      trip.reimbursement.toFixed(2) + " \u20ac",
     ];
   });
 
@@ -554,22 +555,22 @@ export default function ReportView() {
         }
 
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(11);
+        doc.setFontSize(9);
 
         const computeColumnWidths = () => {
           const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
-          const pad = 10;
+          const pad = 8;
 
           // 7 columns: Date, Project, Company, Route, Passengers, Distance, Reimbursement
-          const min = [65, 80, 90, 180, 50, 60, 60];
-          const max = [80, 120, 150, 300, 60, 80, 80];
+          const min = [60, 75, 80, 150, 40, 55, 65];
+          const max = [70, 110, 130, 280, 50, 70, 80];
 
           const desired = pdfHeaders.map((header, colIndex) => {
             let maxTextWidth = doc.getTextWidth(String(header));
             for (const row of pdfRows) {
               const raw = row[colIndex] ?? "";
               const text =
-                colIndex === 3 ? String(raw).slice(0, 80) : String(raw);
+                colIndex === 3 ? String(raw).slice(0, 60) : String(raw);
               maxTextWidth = Math.max(maxTextWidth, doc.getTextWidth(text));
             }
             return clamp(maxTextWidth + pad, min[colIndex] ?? 50, max[colIndex] ?? 80);
@@ -617,18 +618,41 @@ export default function ReportView() {
           ],
           startY: tableStartY,
           theme: "grid",
-          styles: { fontSize: 11, cellPadding: 3.5, textColor: 0, lineColor: [165, 165, 165], lineWidth: 0.35 },
-          headStyles: { fillColor: [255, 255, 255], textColor: 0, fontStyle: "bold", fontSize: 11, lineColor: 0, lineWidth: 0.6 },
-          footStyles: { fillColor: [255, 255, 255], textColor: 0, fontSize: 11, lineColor: 0, lineWidth: 0.6 },
+          styles: { 
+            fontSize: 9, 
+            cellPadding: { top: 4, right: 6, bottom: 4, left: 6 }, 
+            textColor: [30, 30, 30], 
+            lineColor: [200, 200, 200], 
+            lineWidth: 0.4,
+            valign: "middle",
+            overflow: "linebreak",
+          },
+          headStyles: { 
+            fillColor: [245, 245, 245], 
+            textColor: [60, 60, 60], 
+            fontStyle: "bold", 
+            fontSize: 9, 
+            lineColor: [180, 180, 180], 
+            lineWidth: 0.5,
+            valign: "middle",
+          },
+          footStyles: { 
+            fillColor: [255, 255, 255], 
+            textColor: 0, 
+            fontSize: 9, 
+            lineColor: [180, 180, 180], 
+            lineWidth: 0.5,
+            fontStyle: "bold",
+          },
           margin: { left: margin, right: margin },
           columnStyles: {
-            0: { cellWidth: columnWidths[0] },
+            0: { cellWidth: columnWidths[0], overflow: "visible" },
             1: { cellWidth: columnWidths[1], overflow: "ellipsize" },
             2: { cellWidth: columnWidths[2], overflow: "ellipsize" },
-            3: { cellWidth: columnWidths[3], overflow: "ellipsize" },
-            4: { cellWidth: columnWidths[4], halign: "center" },
-            5: { cellWidth: columnWidths[5], halign: "right" },
-            6: { cellWidth: columnWidths[6], halign: "right" },
+            3: { cellWidth: columnWidths[3], overflow: "linebreak" },
+            4: { cellWidth: columnWidths[4], halign: "center", overflow: "visible" },
+            5: { cellWidth: columnWidths[5], halign: "right", overflow: "visible" },
+            6: { cellWidth: columnWidths[6], halign: "right", overflow: "visible" },
           },
         });
 
@@ -777,18 +801,18 @@ export default function ReportView() {
         }
 
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(11);
+        doc.setFontSize(9);
 
         const computeColumnWidths = () => {
           const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
-          const pad = 10;
-          const min = [65, 80, 90, 180, 50, 60, 60];
-          const max = [80, 120, 150, 300, 60, 80, 80];
+          const pad = 8;
+          const min = [60, 75, 80, 150, 40, 55, 65];
+          const max = [70, 110, 130, 280, 50, 70, 80];
           const desired = pdfHeaders.map((header, colIndex) => {
             let maxTextWidth = doc.getTextWidth(String(header));
             for (const row of pdfRows) {
               const raw = row[colIndex] ?? "";
-              const text = colIndex === 3 ? String(raw).slice(0, 80) : String(raw);
+              const text = colIndex === 3 ? String(raw).slice(0, 60) : String(raw);
               maxTextWidth = Math.max(maxTextWidth, doc.getTextWidth(text));
             }
             return clamp(maxTextWidth + pad, min[colIndex] ?? 50, max[colIndex] ?? 80);
@@ -828,18 +852,41 @@ export default function ReportView() {
           ]],
           startY: tableStartY,
           theme: "grid",
-          styles: { fontSize: 11, cellPadding: 3.5, textColor: 0, lineColor: [165, 165, 165], lineWidth: 0.35 },
-          headStyles: { fillColor: [255, 255, 255], textColor: 0, fontStyle: "bold", fontSize: 11, lineColor: 0, lineWidth: 0.6 },
-          footStyles: { fillColor: [255, 255, 255], textColor: 0, fontSize: 11, lineColor: 0, lineWidth: 0.6 },
+          styles: { 
+            fontSize: 9, 
+            cellPadding: { top: 4, right: 6, bottom: 4, left: 6 }, 
+            textColor: [30, 30, 30], 
+            lineColor: [200, 200, 200], 
+            lineWidth: 0.4,
+            valign: "middle",
+            overflow: "linebreak",
+          },
+          headStyles: { 
+            fillColor: [245, 245, 245], 
+            textColor: [60, 60, 60], 
+            fontStyle: "bold", 
+            fontSize: 9, 
+            lineColor: [180, 180, 180], 
+            lineWidth: 0.5,
+            valign: "middle",
+          },
+          footStyles: { 
+            fillColor: [255, 255, 255], 
+            textColor: 0, 
+            fontSize: 9, 
+            lineColor: [180, 180, 180], 
+            lineWidth: 0.5,
+            fontStyle: "bold",
+          },
           margin: { left: margin, right: margin },
           columnStyles: {
-            0: { cellWidth: columnWidths[0] },
+            0: { cellWidth: columnWidths[0], overflow: "visible" },
             1: { cellWidth: columnWidths[1], overflow: "ellipsize" },
             2: { cellWidth: columnWidths[2], overflow: "ellipsize" },
-            3: { cellWidth: columnWidths[3], overflow: "ellipsize" },
-            4: { cellWidth: columnWidths[4], halign: "center" },
-            5: { cellWidth: columnWidths[5], halign: "right" },
-            6: { cellWidth: columnWidths[6], halign: "right" },
+            3: { cellWidth: columnWidths[3], overflow: "linebreak" },
+            4: { cellWidth: columnWidths[4], halign: "center", overflow: "visible" },
+            5: { cellWidth: columnWidths[5], halign: "right", overflow: "visible" },
+            6: { cellWidth: columnWidths[6], halign: "right", overflow: "visible" },
           },
         });
 
