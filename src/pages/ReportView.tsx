@@ -557,11 +557,11 @@ export default function ReportView() {
 
         const computeColumnWidths = () => {
           const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
-          const pad = 6;
+          const pad = 8;
 
           // 6 columns: Date, Project, Route, Passengers, Distance, Reimbursement
-          const min = [60, 80, 280, 55, 60, 70];
-          const max = [70, 110, 500, 65, 75, 90];
+          const min = [65, 90, 300, 60, 65, 75];
+          const max = [75, 120, 500, 70, 80, 95];
 
           const desired = pdfHeaders.map((header, colIndex) => {
             let maxTextWidth = doc.getTextWidth(String(header));
@@ -615,31 +615,25 @@ export default function ReportView() {
             ],
           ],
           startY: tableStartY,
-          theme: "grid",
+          theme: "plain",
           styles: { 
             fontSize: 9, 
-            cellPadding: { top: 5, right: 6, bottom: 5, left: 6 }, 
-            textColor: [30, 30, 30], 
-            lineColor: [220, 220, 220], 
-            lineWidth: 0.3,
+            cellPadding: { top: 6, right: 8, bottom: 6, left: 8 }, 
+            textColor: [0, 0, 0], 
             valign: "middle",
             overflow: "linebreak",
           },
           headStyles: { 
             fillColor: [255, 255, 255], 
-            textColor: [30, 30, 30], 
+            textColor: [0, 0, 0], 
             fontStyle: "bold", 
-            fontSize: 9, 
-            lineColor: [180, 180, 180], 
-            lineWidth: 0.4,
+            fontSize: 9,
             valign: "middle",
           },
           footStyles: { 
             fillColor: [255, 255, 255], 
-            textColor: 0, 
-            fontSize: 9, 
-            lineColor: [180, 180, 180], 
-            lineWidth: 0.4,
+            textColor: [0, 0, 0], 
+            fontSize: 9,
             fontStyle: "bold",
           },
           margin: { left: margin, right: margin },
@@ -650,6 +644,21 @@ export default function ReportView() {
             3: { cellWidth: columnWidths[3], halign: "center" },
             4: { cellWidth: columnWidths[4], halign: "right" },
             5: { cellWidth: columnWidths[5], halign: "right" },
+          },
+          didDrawPage: (data: { table?: { head?: Array<{ cells?: Record<string, { x: number; width: number; y: number; height: number }> }> } }) => {
+            // Draw line under header row
+            if (data.table?.head?.[0]) {
+              const headerCells = data.table.head[0].cells;
+              if (headerCells) {
+                const firstCell = headerCells[0];
+                const lastCell = headerCells[Object.keys(headerCells).length - 1];
+                if (firstCell && lastCell) {
+                  doc.setDrawColor(180, 180, 180);
+                  doc.setLineWidth(0.5);
+                  doc.line(firstCell.x, firstCell.y + firstCell.height, lastCell.x + lastCell.width, lastCell.y + lastCell.height);
+                }
+              }
+            }
           },
         });
 
@@ -709,19 +718,15 @@ export default function ReportView() {
         };
 
         const drawLabelValueRight = (rightEdge: number, y: number, label: string, value: string) => {
-          const labelText = `${label}: `;
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(11);
-          const valueWidth = doc.getTextWidth(value);
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(11);
-          const labelWidth = doc.getTextWidth(labelText);
-          const minStartX = pageWidth / 2 + 20;
-          const startX = Math.max(minStartX, rightEdge - (labelWidth + valueWidth));
-          doc.text(labelText, startX, y);
+          doc.setFontSize(10);
+          const fullText = `${label}: ${value}`;
+          const textWidth = doc.getTextWidth(fullText);
+          const startX = rightEdge - textWidth;
+          doc.text(`${label}: `, startX, y);
+          const labelWidth = doc.getTextWidth(`${label}: `);
           doc.setFont("helvetica", "normal");
-          doc.setFontSize(11);
-          doc.text(value, startX + labelWidth, y, { maxWidth: rightEdge - (startX + labelWidth) });
+          doc.text(value, startX + labelWidth, y);
         };
 
         doc.setTextColor(0, 0, 0);
@@ -802,10 +807,10 @@ export default function ReportView() {
 
         const computeColumnWidths = () => {
           const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
-          const pad = 6;
+          const pad = 8;
           // 6 columns: Date, Project, Route, Passengers, Distance, Reimbursement
-          const min = [60, 80, 280, 55, 60, 70];
-          const max = [70, 110, 500, 65, 75, 90];
+          const min = [65, 90, 300, 60, 65, 75];
+          const max = [75, 120, 500, 70, 80, 95];
           const desired = pdfHeaders.map((header, colIndex) => {
             let maxTextWidth = doc.getTextWidth(String(header));
             for (const row of pdfRows) {
@@ -849,31 +854,25 @@ export default function ReportView() {
             { content: `${totalReimbursement.toFixed(2)} €`, styles: { halign: "right", fontStyle: "bold" } },
           ]],
           startY: tableStartY,
-          theme: "grid",
+          theme: "plain",
           styles: { 
             fontSize: 9, 
-            cellPadding: { top: 5, right: 6, bottom: 5, left: 6 }, 
-            textColor: [30, 30, 30], 
-            lineColor: [220, 220, 220], 
-            lineWidth: 0.3,
+            cellPadding: { top: 6, right: 8, bottom: 6, left: 8 }, 
+            textColor: [0, 0, 0], 
             valign: "middle",
             overflow: "linebreak",
           },
           headStyles: { 
             fillColor: [255, 255, 255], 
-            textColor: [30, 30, 30], 
+            textColor: [0, 0, 0], 
             fontStyle: "bold", 
-            fontSize: 9, 
-            lineColor: [180, 180, 180], 
-            lineWidth: 0.4,
+            fontSize: 9,
             valign: "middle",
           },
           footStyles: { 
             fillColor: [255, 255, 255], 
-            textColor: 0, 
-            fontSize: 9, 
-            lineColor: [180, 180, 180], 
-            lineWidth: 0.4,
+            textColor: [0, 0, 0], 
+            fontSize: 9,
             fontStyle: "bold",
           },
           margin: { left: margin, right: margin },
@@ -884,6 +883,20 @@ export default function ReportView() {
             3: { cellWidth: columnWidths[3], halign: "center" },
             4: { cellWidth: columnWidths[4], halign: "right" },
             5: { cellWidth: columnWidths[5], halign: "right" },
+          },
+          didDrawPage: (data: { table?: { head?: Array<{ cells?: Record<string, { x: number; width: number; y: number; height: number }> }> } }) => {
+            if (data.table?.head?.[0]) {
+              const headerCells = data.table.head[0].cells;
+              if (headerCells) {
+                const firstCell = headerCells[0];
+                const lastCell = headerCells[Object.keys(headerCells).length - 1];
+                if (firstCell && lastCell) {
+                  doc.setDrawColor(180, 180, 180);
+                  doc.setLineWidth(0.5);
+                  doc.line(firstCell.x, firstCell.y + firstCell.height, lastCell.x + lastCell.width, lastCell.y + lastCell.height);
+                }
+              }
+            }
           },
         });
 
