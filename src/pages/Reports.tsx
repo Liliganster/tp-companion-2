@@ -136,20 +136,6 @@ export default function Reports() {
   // Pagination state - show 5 reports initially
   const ITEMS_PER_PAGE = 5;
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
-  
-  // Validate selectedProject against trips list
-  useEffect(() => {
-    if (selectedProject === "all") return;
-    
-    // Get unique projects from trips
-    const uniqueProjects = Array.from(
-      new Set(trips.map((t) => t.project).map((p) => p.trim()).filter(Boolean))
-    );
-    
-    if (uniqueProjects.length > 0 && !uniqueProjects.includes(selectedProject)) {
-       setSelectedProject("all");
-    }
-  }, [selectedProject, trips]);
 
   const toDateInputValue = (d: Date) => {
     const y = d.getFullYear();
@@ -167,6 +153,50 @@ export default function Reports() {
   const [verificationModalOpen, setVerificationModalOpen] = useState(false);
   const [warnings, setWarnings] = useState<TripWarning[]>([]);
   const { toast } = useToast();
+  
+  
+  // Validate selectedProject against trips list
+  useEffect(() => {
+    if (selectedProject === "all") return;
+    
+    // Get unique projects from trips
+    const uniqueProjects = Array.from(
+      new Set(trips.map((t) => t.project).map((p) => p.trim()).filter(Boolean))
+    );
+    
+    if (uniqueProjects.length > 0 && !uniqueProjects.includes(selectedProject)) {
+       setSelectedProject("all");
+    }
+  }, [selectedProject, trips]);
+
+  // Auto-adjust date range when a project is selected
+  useEffect(() => {
+    if (selectedProject === "all") {
+      // Reset to current month
+      const n = new Date();
+      setStartDate(toDateInputValue(new Date(n.getFullYear(), n.getMonth(), 1)));
+      setEndDate(toDateInputValue(n));
+      return;
+    }
+    // Find min/max dates among trips for this project
+    const projectTrips = trips.filter(
+      (t) => t.project.trim() === selectedProject
+    );
+    if (projectTrips.length === 0) return;
+
+    const times = projectTrips
+      .map((t) => Date.parse(t.date))
+      .filter(Number.isFinite);
+    if (times.length === 0) return;
+
+    const minTime = Math.min(...times);
+    const maxTime = Math.max(...times);
+    setStartDate(toDateInputValue(new Date(minTime)));
+    setEndDate(toDateInputValue(new Date(maxTime)));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProject]);
+
+
 
   const getTripTime = (date: string) => {
     const time = Date.parse(date);
