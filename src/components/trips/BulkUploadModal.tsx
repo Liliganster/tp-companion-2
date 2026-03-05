@@ -708,8 +708,9 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       }
 
       const text = await response.text();
-      setCsvText(text.replace(/^\uFEFF/, ""));
-      toast.success(t("bulk.toastCsvImportedDrive"));
+      const cleanText = text.replace(/^\uFEFF/, "");
+      setCsvText(cleanText);
+      await importCsvText(cleanText, "Google Drive");
     } catch (err: any) {
       if (err?.message?.includes("popup_closed") || err?.message?.includes("access_denied")) {
         // User closed the popup or denied access — don't show error
