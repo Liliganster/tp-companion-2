@@ -967,25 +967,25 @@ export default function ReportView() {
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 print:text-gray-500 mb-2">
                   {t("odometer.calcTitle")}
                 </p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-xs sm:text-sm">
+                <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs sm:text-sm">
                   <div>
-                    <p className="text-slate-400 print:text-gray-500 text-[10px]">{t("odometer.totalKm")}</p>
-                    <p className="font-semibold">{Number(displayOdoRatio.totalKm).toFixed(0)} km</p>
+                    <span className="text-slate-400 print:text-gray-500">{t("odometer.totalKm")}: </span>
+                    <span className="font-semibold">{Number(displayOdoRatio.totalKm).toFixed(0)} km</span>
                   </div>
                   <div>
-                    <p className="text-slate-400 print:text-gray-500 text-[10px]">{t("odometer.workKm")}</p>
-                    <p className="font-semibold text-green-400 print:text-green-700">{Number(displayOdoRatio.workKm).toFixed(0)} km</p>
+                    <span className="text-slate-400 print:text-gray-500">{t("odometer.workKm")}: </span>
+                    <span className="font-semibold">{Number(displayOdoRatio.workKm).toFixed(0)} km</span>
                   </div>
                   <div>
-                    <p className="text-slate-400 print:text-gray-500 text-[10px]">{t("odometer.privateKm")}</p>
-                    <p className="font-semibold">{Number(displayOdoRatio.privateKm).toFixed(0)} km</p>
+                    <span className="text-slate-400 print:text-gray-500">{t("odometer.privateKm")}: </span>
+                    <span className="font-semibold">{Number(displayOdoRatio.privateKm).toFixed(0)} km</span>
                   </div>
                   <div>
-                    <p className="text-slate-400 print:text-gray-500 text-[10px]">{t("odometer.workPct")}</p>
-                    <p className="font-bold text-blue-400 print:text-blue-700">{Number(displayOdoRatio.pct).toFixed(1)} %</p>
+                    <span className="text-slate-400 print:text-gray-500">{t("odometer.workPct")}: </span>
+                    <span className="font-semibold">{Number(displayOdoRatio.pct).toFixed(1)} %</span>
                   </div>
                 </div>
-                <p className="mt-2 text-[10px] text-slate-500 print:text-gray-400">
+                <p className="mt-1 text-[10px] text-slate-500 print:text-gray-400">
                   {displayOdoRatio.startSnapshot.snapshot_date}
                   {displayOdoRatio.startSnapshot.id !== displayOdoRatio.endSnapshot.id && (
                     <>{" \u2192 "}{displayOdoRatio.endSnapshot.snapshot_date}</>
