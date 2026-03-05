@@ -694,12 +694,14 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       const exportMimeType =
         picked.mimeType === "application/vnd.google-apps.spreadsheet" ? "text/csv" : "";
 
-      const url =
-        `/api/google/drive/download?fileId=${encodeURIComponent(picked.fileId)}` +
-        `&name=${encodeURIComponent(picked.name || "import.csv")}` +
-        (exportMimeType ? `&exportMimeType=${encodeURIComponent(exportMimeType)}` : "");
+      // Download directly from Google Drive API using the client-side token
+      const downloadUrl = exportMimeType
+        ? `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(picked.fileId)}/export?mimeType=${encodeURIComponent(exportMimeType)}`
+        : `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(picked.fileId)}?alt=media`;
 
-      const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const response = await fetch(downloadUrl, {
+        headers: { Authorization: `Bearer ${driveAccessToken}` },
+      });
       if (!response.ok) {
         const text = await response.text().catch(() => "");
         throw new Error(text || t("bulk.errorDriveDownload"));
