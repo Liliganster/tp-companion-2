@@ -623,85 +623,62 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       return;
     }
 
-    // Ensure Google is connected before asking for a Drive link/fileId.
-    // Otherwise users only see the prompt but the download will always fail.
+    const pickerApiKey = import.meta.env.VITE_GOOGLE_PICKER_API_KEY as string | undefined;
+    if (!pickerApiKey) {
+      toast.error(t("bulk.errorDrivePickerNotConfigured"));
+      return;
+    }
+
+    const clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID as string | undefined;
+    if (!clientId) {
+      toast.error("Google OAuth Client ID not configured");
+      return;
+    }
+
     setCsvBusy(true);
     try {
-      const statusRes = await fetch("/api/google/oauth/status", {
-        headers: { Authorization: `Bearer ${token}` },
+      // Load the Google Identity Services script if not already loaded
+      await new Promise<void>((resolve, reject) => {
+        const w = window as any;
+        if (w.google?.accounts?.oauth2) return resolve();
+        const existingScript = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+        if (existingScript) {
+          existingScript.addEventListener("load", () => resolve());
+          return;
+        }
+        const script = document.createElement("script");
+        script.src = "https://accounts.google.com/gsi/client";
+        script.async = true;
+        script.defer = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error("Failed to load Google Identity Services"));
+        document.head.appendChild(script);
       });
-      const statusData: any = await statusRes.json().catch(() => null);
-      const scopes = typeof statusData?.scopes === "string" ? statusData.scopes : "";
-      const hasDriveScope = scopes
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .includes("drive");
-      const connected = Boolean(statusData?.connected) && hasDriveScope;
 
-      if (!statusRes.ok || !connected) {
-        const url = new URL(window.location.href);
-        url.searchParams.set(BULK_DRIVE_IMPORT_QUERY_PARAM, "1");
-        const returnTo = `${url.pathname}${url.search}${url.hash}`;
-        const startRes = await fetch("/api/google/oauth/start", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ scopes: ["drive"], returnTo, flow: "popup" }),
-        });
-        const startData: any = await startRes.json().catch(() => null);
-        if (!startRes.ok || !startData?.authUrl) throw new Error(startData?.error || "OAuth start failed");
-        
-        const width = 500;
-        const height = 650;
-        const left = (window.screen.width - width) / 2;
-        const top = (window.screen.height - height) / 2;
-        const popup = window.open(startData.authUrl, "GoogleOAuth", `width=${width},height=${height},left=${left},top=${top}`);
-        
-        await new Promise<void>((resolve, reject) => {
-          const checkPopup = setInterval(() => {
-            if (!popup || popup.closed) {
-              clearInterval(checkPopup);
-              window.removeEventListener("message", handleMessage);
-              reject(new Error("Ventana de Google Drive cerrada."));
+      // Request Drive access token via Google's built-in popup (no redirect needed)
+      const driveAccessToken = await new Promise<string>((resolve, reject) => {
+        const w = window as any;
+        const tokenClient = w.google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: "https://www.googleapis.com/auth/drive.file",
+          callback: (response: any) => {
+            if (response.error) {
+              reject(new Error(response.error_description || response.error));
+              return;
             }
-          }, 1000);
-
-          const handleMessage = (event: MessageEvent) => {
-            if (event.origin !== window.location.origin) return;
-            if (event.data?.type === "OAUTH_SUCCESS") {
-              clearInterval(checkPopup);
-              window.removeEventListener("message", handleMessage);
-              resolve();
-            } else if (event.data?.type === "OAUTH_ERROR") {
-              clearInterval(checkPopup);
-              window.removeEventListener("message", handleMessage);
-              reject(new Error(event.data.error || "Error de conexión"));
-            }
-          };
-          window.addEventListener("message", handleMessage);
+            resolve(response.access_token);
+          },
+          error_callback: (error: any) => {
+            reject(new Error(error?.message || "Google authorization failed"));
+          },
         });
-
-        // Vuelve a llamar a importFromGoogleDrive de forma recursiva ahora que estamos conectados
-        return importFromGoogleDrive();
-      }
-
-      const pickerApiKey = import.meta.env.VITE_GOOGLE_PICKER_API_KEY as string | undefined;
-      if (!pickerApiKey) {
-        toast.error(t("bulk.errorDrivePickerNotConfigured"));
-        return;
-      }
-
-      const tokenRes = await fetch("/api/google/oauth/access-token", {
-        headers: { Authorization: `Bearer ${token}` },
+        tokenClient.requestAccessToken();
       });
-      const tokenData: any = await tokenRes.json().catch(() => null);
-      if (!tokenRes.ok || !tokenData?.accessToken) {
-        throw new Error(tokenData?.message ?? tokenData?.error ?? "Google token failed");
-      }
 
+      // Open the Google Drive Picker with the obtained token
       const picked = await openGoogleDrivePicker({
         apiKey: pickerApiKey,
-        oauthToken: tokenData.accessToken,
+        oauthToken: driveAccessToken,
         title: t("bulk.drivePickerTitle"),
       });
       if (!picked) return;
@@ -724,6 +701,10 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       setCsvText(text.replace(/^\uFEFF/, ""));
       toast.success(t("bulk.toastCsvImportedDrive"));
     } catch (err: any) {
+      if (err?.message?.includes("popup_closed") || err?.message?.includes("access_denied")) {
+        // User closed the popup or denied access — don't show error
+        return;
+      }
       toast.error("Google", { description: err?.message ?? t("settings.googleConnectFailed") });
     } finally {
       setCsvBusy(false);
