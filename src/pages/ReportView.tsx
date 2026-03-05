@@ -100,7 +100,7 @@ export default function ReportView() {
   const { projects } = useProjects();
   const { reports, addReport } = useReports();
   const { planTier, limits } = usePlan();
-  const { computeRatio, getImageUrl } = useOdometer();
+  const { computeRatio, getImageUrl, snapshots: odoSnapshots } = useOdometer();
   const reportId = searchParams.get("reportId");
   const savedReport = reportId ? reports.find((r) => r.id === reportId) : undefined;
 
@@ -160,6 +160,20 @@ export default function ReportView() {
   const odometerRatio = effectiveStartDate && effectiveEndDate
     ? computeRatio(effectiveStartDate, effectiveEndDate)
     : null;
+
+  // Single snapshot fallback: find the best snapshot in/near the period for synthetic ratio
+  const fallbackOdoSnap = odometerRatio ? null : (() => {
+    if (!effectiveStartDate || !effectiveEndDate || odoSnapshots.length === 0) return null;
+    const inPeriod = odoSnapshots.filter(
+      (s) => s.snapshot_date >= effectiveStartDate && s.snapshot_date <= effectiveEndDate
+    );
+    if (inPeriod.length > 0) return inPeriod[inPeriod.length - 1];
+    return odoSnapshots.reduce((prev, cur) =>
+      Math.abs(cur.snapshot_date.localeCompare(effectiveEndDate)) <
+      Math.abs(prev.snapshot_date.localeCompare(effectiveEndDate))
+        ? cur : prev
+    );
+  })();
 
 
   const getProducerForProject = (projectName: string) => {
@@ -231,6 +245,20 @@ export default function ReportView() {
   const trips = reportTrips;
   const totalDistance = trips.reduce((acc, trip) => acc + (Number.isFinite(trip.distance) ? trip.distance : 0), 0);
   const totalReimbursement = trips.reduce((acc, trip) => acc + (Number.isFinite(trip.reimbursement) ? trip.reimbursement : 0), 0);
+
+  // Synthetic ratio from 1 snapshot: reading_km = totalKm, workKm = trips total distance
+  const synthOdoRatio = (!odometerRatio && fallbackOdoSnap && fallbackOdoSnap.reading_km > 0)
+    ? (() => {
+        const totalKm = fallbackOdoSnap.reading_km;
+        const workKm = Math.min(totalDistance, totalKm);
+        const privateKm = Math.max(0, totalKm - workKm);
+        const pct = totalKm > 0 ? Math.min(100, (workKm / totalKm) * 100) : 0;
+        return { startSnapshot: fallbackOdoSnap, endSnapshot: fallbackOdoSnap, totalKm, workKm, privateKm, pct };
+      })()
+    : null;
+
+  // Final display ratio: prefer full 2-snapshot ratio, fallback to synthetic
+  const displayOdoRatio = odometerRatio ?? synthOdoRatio;
 
   const downloadTextFile = (content: string, fileName: string, mimeType: string) => {
     const blob = new Blob([content], { type: mimeType });
@@ -933,8 +961,8 @@ export default function ReportView() {
 
             <hr className="hidden print:block border-black mb-4" />
 
-            {/* Odometer Summary Card — shown when >= 2 snapshots bracket the period */}
-            {odometerRatio && (
+            {/* Odometer Summary Card — works with 1 or 2+ snapshots */}
+            {displayOdoRatio && (
               <div className="mb-4 rounded-lg bg-slate-700/50 border border-slate-600/60 print:bg-gray-50 print:border-gray-200 p-3 sm:p-4">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 print:text-gray-500 mb-2">
                   {t("odometer.calcTitle")}
@@ -942,27 +970,31 @@ export default function ReportView() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-xs sm:text-sm">
                   <div>
                     <p className="text-slate-400 print:text-gray-500 text-[10px]">{t("odometer.totalKm")}</p>
-                    <p className="font-semibold">{Number(odometerRatio.totalKm).toFixed(0)} km</p>
+                    <p className="font-semibold">{Number(displayOdoRatio.totalKm).toFixed(0)} km</p>
                   </div>
                   <div>
                     <p className="text-slate-400 print:text-gray-500 text-[10px]">{t("odometer.workKm")}</p>
-                    <p className="font-semibold text-green-400 print:text-green-700">{Number(odometerRatio.workKm).toFixed(0)} km</p>
+                    <p className="font-semibold text-green-400 print:text-green-700">{Number(displayOdoRatio.workKm).toFixed(0)} km</p>
                   </div>
                   <div>
                     <p className="text-slate-400 print:text-gray-500 text-[10px]">{t("odometer.privateKm")}</p>
-                    <p className="font-semibold">{Number(odometerRatio.privateKm).toFixed(0)} km</p>
+                    <p className="font-semibold">{Number(displayOdoRatio.privateKm).toFixed(0)} km</p>
                   </div>
                   <div>
                     <p className="text-slate-400 print:text-gray-500 text-[10px]">{t("odometer.workPct")}</p>
-                    <p className="font-bold text-blue-400 print:text-blue-700">{Number(odometerRatio.pct).toFixed(1)} %</p>
+                    <p className="font-bold text-blue-400 print:text-blue-700">{Number(displayOdoRatio.pct).toFixed(1)} %</p>
                   </div>
                 </div>
                 <p className="mt-2 text-[10px] text-slate-500 print:text-gray-400">
-                  {odometerRatio.startSnapshot.snapshot_date} {"\u2192"} {odometerRatio.endSnapshot.snapshot_date}
+                  {displayOdoRatio.startSnapshot.snapshot_date}
+                  {displayOdoRatio.startSnapshot.id !== displayOdoRatio.endSnapshot.id && (
+                    <>{" \u2192 "}{displayOdoRatio.endSnapshot.snapshot_date}</>
+                  )}
                   {" | "}
-                  {Number(odometerRatio.startSnapshot.reading_km).toFixed(0)}{odometerRatio.startSnapshot.extraction_status === "user_edited" ? " (mod." + ")" : ""}
-                  {" \u2192 "}
-                  {Number(odometerRatio.endSnapshot.reading_km).toFixed(0)}{odometerRatio.endSnapshot.extraction_status === "user_edited" ? " (mod." + ")" : ""} km
+                  {Number(displayOdoRatio.startSnapshot.reading_km).toFixed(0)}{displayOdoRatio.startSnapshot.extraction_status === "user_edited" ? " (mod.)" : ""}
+                  {displayOdoRatio.startSnapshot.id !== displayOdoRatio.endSnapshot.id && (
+                    <>{" \u2192 "}{Number(displayOdoRatio.endSnapshot.reading_km).toFixed(0)}{displayOdoRatio.endSnapshot.extraction_status === "user_edited" ? " (mod.)" : ""}</>
+                  )} km
                 </p>
               </div>
             )}
