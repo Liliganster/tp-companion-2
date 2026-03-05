@@ -385,6 +385,11 @@
 }
 
 /* Print styles - hide UI elements */
+@page {
+  margin: 0;
+  size: A4;
+}
+
 @media print {
   /* Hide toasts and notifications */
   [data-sonner-toaster],
@@ -395,6 +400,25 @@
   [aria-live="polite"] {
     display: none !important;
     visibility: hidden !important;
+  }
+
+  /* Force white background and black text everywhere */
+  body, html {
+    background: white !important;
+    color: black !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    margin: 0 !important;
+    padding: 10mm 8mm !important;
+  }
+
+  /* Hide navigation, sidebar, buttons */
+  nav, aside, header,
+  button:not(.print-visible),
+  [data-sidebar],
+  .print\:hidden {
+    display: none !important;
   }
 }
 

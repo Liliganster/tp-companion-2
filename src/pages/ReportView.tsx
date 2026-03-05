@@ -444,53 +444,70 @@ export default function ReportView() {
         const autoTableModule = await import("jspdf-autotable");
         const autoTable = autoTableModule.default;
 
-        const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+        const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
         const pageWidth = doc.internal.pageSize.getWidth();
         const margin = 40;
-        const headerBottomY = 120;
         const availableWidth = pageWidth - margin * 2;
 
         const drawLabelValueLeft = (x: number, y: number, label: string, value: string) => {
           const labelText = `${label}: `;
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(11);
+          doc.setFontSize(9);
           doc.text(labelText, x, y);
           const labelWidth = doc.getTextWidth(labelText);
           doc.setFont("helvetica", "normal");
-          doc.setFontSize(11); // Ensure value is also 11
-          doc.text(value, x + labelWidth, y, { maxWidth: pageWidth / 2 - margin - (x + labelWidth) });
+          doc.setFontSize(9);
+          doc.text(value, x + labelWidth, y);
         };
 
         const drawLabelValueRight = (rightEdge: number, y: number, label: string, value: string) => {
-          const labelText = `${label}: `;
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(11);
-          const valueWidth = doc.getTextWidth(value);
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(11);
-          const labelWidth = doc.getTextWidth(labelText);
-          const minStartX = pageWidth / 2 + 20;
-          const startX = Math.max(minStartX, rightEdge - (labelWidth + valueWidth));
-          doc.text(labelText, startX, y);
+          doc.setFontSize(9);
+          const fullText = `${label}: ${value}`;
+          const textWidth = doc.getTextWidth(fullText);
+          const startX = rightEdge - textWidth;
+          doc.text(`${label}: `, startX, y);
+          const labelWidth = doc.getTextWidth(`${label}: `);
           doc.setFont("helvetica", "normal");
-          doc.setFontSize(11);
-          doc.text(value, startX + labelWidth, y, { maxWidth: rightEdge - (startX + labelWidth) });
+          doc.setFontSize(9);
+          doc.text(value, startX + labelWidth, y);
+        };
+
+        // Helper to draw "label: VALUE" with bold value
+        const drawMetricBold = (x: number, y: number, label: string, value: string) => {
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(9);
+          const labelText = `${label}: `;
+          doc.text(labelText, x, y);
+          const labelW = doc.getTextWidth(labelText);
+          doc.setFont("helvetica", "bold");
+          doc.text(value, x + labelW, y);
+          return doc.getTextWidth(labelText + value);
         };
 
         doc.setTextColor(0, 0, 0);
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(14);
-        doc.text(t("reportView.reportTitle"), pageWidth / 2, 44, { align: "center" });
 
+        // Title
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(15);
+        doc.text(t("reportView.reportTitle"), pageWidth / 2, 55, { align: "center" });
+
+        // Period
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(11);
-        doc.text(`${t("reportView.periodLabel")}: ${period}`, pageWidth / 2, 64, { align: "center" });
+        doc.setFontSize(10);
+        doc.text(`${t("reportView.periodLabel")}: ${period}`, pageWidth / 2, 72, { align: "center" });
+
+        // App name below period
+        doc.setFontSize(8);
+        doc.setTextColor(160, 160, 160);
+        doc.text("Fahrtenbuch Pro", pageWidth / 2, 84, { align: "center" });
+        doc.setTextColor(0, 0, 0);
 
         const leftX = margin;
         const rightEdge = pageWidth - margin;
-        const metaY1 = 82;
-        const metaY2 = 96;
-        const metaY3 = 110;
+        const metaY1 = 100;
+        const metaY2 = 113;
+        const metaY3 = 126;
 
         drawLabelValueLeft(leftX, metaY1, t("reportView.driverLabel"), driver);
         drawLabelValueLeft(leftX, metaY2, t("reportView.licensePlateLabel"), licensePlate);
@@ -500,15 +517,16 @@ export default function ReportView() {
         drawLabelValueRight(rightEdge, metaY2, t("reportView.passengerSurchargeLabel"), `${profile.passengerSurcharge || "0"} €`);
         drawLabelValueRight(rightEdge, metaY3, t("reportView.ratePerKmLabel"), `${profile.ratePerKm || "0"} €`);
 
+        const headerBottomY = 140;
         doc.setDrawColor(0, 0, 0);
         doc.setLineWidth(0.5);
         doc.line(margin, headerBottomY, pageWidth - margin, headerBottomY);
 
-        // Odometer summary card — works with 1 or 2 snapshots
+        // Odometer summary card
         const pdfOdoRatio = displayOdoRatio;
         let tableStartY = headerBottomY + 18;
         if (pdfOdoRatio) {
-          const cardH = 50; // Increased to 50 for 11pt
+          const cardH = 62;
           const cardY = headerBottomY + 6;
           doc.setFillColor(248, 248, 248);
           doc.roundedRect(margin, cardY, availableWidth, cardH, 2, 2, "F");
@@ -518,90 +536,52 @@ export default function ReportView() {
 
           // Title row
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(9); // Standardized title
+          doc.setFontSize(7);
           doc.setTextColor(100, 100, 100);
-          doc.text(t("odometer.calcTitle").toUpperCase(), margin + 6, cardY + 13);
+          doc.text(t("odometer.calcTitle").toUpperCase(), margin + 8, cardY + 12);
 
-          // Metrics row — 11pt font, evenly spaced
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(11);
+          // Metrics row 1 — totalKm, workKm, privateKm with bold values
           doc.setTextColor(30, 30, 30);
-          const metrics = [
-            `${t("odometer.totalKm")}: ${Number(pdfOdoRatio.totalKm).toFixed(0)} km`,
-            `${t("odometer.workKm")}: ${Number(pdfOdoRatio.workKm).toFixed(0)} km`,
-            `${t("odometer.privateKm")}: ${Number(pdfOdoRatio.privateKm).toFixed(0)} km`,
-            `${t("odometer.workPct")}: ${Number(pdfOdoRatio.pct).toFixed(1)} %`,
+          const mX = margin + 8;
+          const mY1 = cardY + 26;
+          const metricItems = [
+            { label: t("odometer.totalKm"), value: `${Number(pdfOdoRatio.totalKm).toFixed(0)} km` },
+            { label: t("odometer.workKm"), value: `${Number(pdfOdoRatio.workKm).toFixed(0)} km` },
+            { label: t("odometer.privateKm"), value: `${Number(pdfOdoRatio.privateKm).toFixed(0)} km` },
           ];
-          const colW = availableWidth / metrics.length;
-          metrics.forEach((text, i) => {
-            doc.text(text, margin + 6 + colW * i, cardY + 30);
+          const mColW = (availableWidth - 16) / 3;
+          metricItems.forEach((item, i) => {
+            drawMetricBold(mX + mColW * i, mY1, item.label, item.value);
           });
+
+          // Metrics row 2 — workPct
+          const mY2 = cardY + 40;
+          drawMetricBold(mX, mY2, t("odometer.workPct"), `${Number(pdfOdoRatio.pct).toFixed(1)} %`);
 
           // Footer note
           doc.setFont("helvetica", "normal");
-          doc.setFontSize(9);
+          doc.setFontSize(7);
           doc.setTextColor(140, 140, 140);
           const isSingleSnap = pdfOdoRatio.startSnapshot.id === pdfOdoRatio.endSnapshot.id;
           const snapNote = isSingleSnap
-            ? `${pdfOdoRatio.startSnapshot.snapshot_date} | ${Number(pdfOdoRatio.startSnapshot.reading_km).toFixed(0)} km`
+            ? `${pdfOdoRatio.startSnapshot.snapshot_date} | ${Number(pdfOdoRatio.startSnapshot.reading_km).toFixed(0)}${pdfOdoRatio.startSnapshot.extraction_status === "user_edited" ? " (mod.)" : ""} km`
             : `${pdfOdoRatio.startSnapshot.snapshot_date} \u2192 ${pdfOdoRatio.endSnapshot.snapshot_date}  |  ${Number(pdfOdoRatio.startSnapshot.reading_km).toFixed(0)} \u2192 ${Number(pdfOdoRatio.endSnapshot.reading_km).toFixed(0)} km`;
-          doc.text(snapNote, margin + 6, cardY + 44);
+          doc.text(snapNote, mX, cardY + 52);
 
           doc.setDrawColor(0, 0, 0);
           doc.setTextColor(0, 0, 0);
-          tableStartY = cardY + cardH + 10;
+          tableStartY = cardY + cardH + 12;
         }
 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(9);
 
-        const computeColumnWidths = () => {
-          const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
-          const pad = 8;
-
-          // 6 columns: Date, Project, Route, Passengers, Distance, Reimbursement
-          const min = [65, 90, 300, 60, 65, 75];
-          const max = [75, 120, 500, 70, 80, 95];
-
-          const desired = pdfHeaders.map((header, colIndex) => {
-            let maxTextWidth = doc.getTextWidth(String(header));
-            for (const row of pdfRows) {
-              const raw = row[colIndex] ?? "";
-              const text =
-                colIndex === 2 ? String(raw).slice(0, 80) : String(raw);
-              maxTextWidth = Math.max(maxTextWidth, doc.getTextWidth(text));
-            }
-            return clamp(maxTextWidth + pad, min[colIndex] ?? 50, max[colIndex] ?? 80);
-          });
-
-          let widths = desired.slice();
-          const sum = () => widths.reduce((acc, w) => acc + w, 0);
-
-          if (sum() > availableWidth) {
-            const reducible = [2, 1, 0, 4, 5];
-            for (let iteration = 0; iteration < 4 && sum() > availableWidth; iteration++) {
-              const overflow = sum() - availableWidth;
-              const totalSlack = reducible.reduce((acc, i) => acc + Math.max(0, widths[i] - min[i]), 0);
-              if (totalSlack <= 0) break;
-
-              for (const i of reducible) {
-                const slack = Math.max(0, widths[i] - min[i]);
-                if (!slack) continue;
-                const reduce = Math.min(slack, overflow * (slack / totalSlack));
-                widths[i] -= reduce;
-              }
-            }
-          } else if (sum() < availableWidth) {
-            const extra = availableWidth - sum();
-            const routeIndex = 2;
-            widths[routeIndex] = Math.min(max[routeIndex], widths[routeIndex] + extra);
-          }
-
-          widths = widths.map((w) => Math.floor(w));
-          return widths;
-        };
-
-        const columnWidths = computeColumnWidths();
+        // Simple proportional widths for portrait A4 (535pt available)
+        // Route gets all remaining space after allocating fixed widths
+        const fixedWidths = [55, 82, 0, 55, 72, 72]; // Date, Project, Route(placeholder), Passengers, Distance, Reimbursement
+        const fixedTotal = fixedWidths.reduce((a, b) => a + b, 0);
+        fixedWidths[2] = availableWidth - fixedTotal; // Route = all remaining space
+        const columnWidths = fixedWidths;
 
         autoTable(doc, {
           head: [pdfHeaders],
@@ -617,30 +597,40 @@ export default function ReportView() {
           startY: tableStartY,
           theme: "plain",
           styles: { 
+            font: "helvetica",
             fontSize: 9, 
-            cellPadding: { top: 6, right: 8, bottom: 6, left: 8 }, 
+            cellPadding: { top: 5, right: 4, bottom: 5, left: 4 }, 
             textColor: [0, 0, 0], 
             valign: "middle",
             overflow: "linebreak",
+            lineWidth: { bottom: 0.3 },
+            lineColor: [220, 220, 220],
           },
           headStyles: { 
+            font: "helvetica",
             fillColor: [255, 255, 255], 
             textColor: [0, 0, 0], 
             fontStyle: "bold", 
             fontSize: 9,
             valign: "middle",
+            cellPadding: { top: 4, right: 4, bottom: 4, left: 4 },
+            lineWidth: { bottom: 0.5 },
+            lineColor: [160, 160, 160],
           },
           footStyles: { 
+            font: "helvetica",
             fillColor: [255, 255, 255], 
             textColor: [0, 0, 0], 
             fontSize: 9,
             fontStyle: "bold",
+            lineWidth: { top: 0.8 },
+            lineColor: [0, 0, 0],
           },
           margin: { left: margin, right: margin },
           columnStyles: {
             0: { cellWidth: columnWidths[0] },
             1: { cellWidth: columnWidths[1] },
-            2: { cellWidth: columnWidths[2] },
+            2: { cellWidth: columnWidths[2], overflow: "linebreak" },
             3: { cellWidth: columnWidths[3], halign: "center" },
             4: { cellWidth: columnWidths[4], halign: "right" },
             5: { cellWidth: columnWidths[5], halign: "right" },
@@ -700,48 +690,70 @@ export default function ReportView() {
         const autoTableModule = await import("jspdf-autotable");
         const autoTable = autoTableModule.default;
 
-        const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+        const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
         const pageWidth = doc.internal.pageSize.getWidth();
         const margin = 40;
-        const headerBottomY = 120;
         const availableWidth = pageWidth - margin * 2;
 
         const drawLabelValueLeft = (x: number, y: number, label: string, value: string) => {
           const labelText = `${label}: `;
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(11);
+          doc.setFontSize(9);
           doc.text(labelText, x, y);
           const labelWidth = doc.getTextWidth(labelText);
           doc.setFont("helvetica", "normal");
-          doc.setFontSize(11);
-          doc.text(value, x + labelWidth, y, { maxWidth: pageWidth / 2 - margin - (x + labelWidth) });
+          doc.setFontSize(9);
+          doc.text(value, x + labelWidth, y);
         };
 
         const drawLabelValueRight = (rightEdge: number, y: number, label: string, value: string) => {
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(10);
+          doc.setFontSize(9);
           const fullText = `${label}: ${value}`;
           const textWidth = doc.getTextWidth(fullText);
           const startX = rightEdge - textWidth;
           doc.text(`${label}: `, startX, y);
           const labelWidth = doc.getTextWidth(`${label}: `);
           doc.setFont("helvetica", "normal");
+          doc.setFontSize(9);
           doc.text(value, startX + labelWidth, y);
         };
 
+        // Helper to draw "label: VALUE" with bold value
+        const drawMetricBold = (x: number, y: number, label: string, value: string) => {
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(9);
+          const labelText = `${label}: `;
+          doc.text(labelText, x, y);
+          const labelW = doc.getTextWidth(labelText);
+          doc.setFont("helvetica", "bold");
+          doc.text(value, x + labelW, y);
+          return doc.getTextWidth(labelText + value);
+        };
+
         doc.setTextColor(0, 0, 0);
+
+        // Title
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(14);
-        doc.text(t("reportView.reportTitle"), pageWidth / 2, 44, { align: "center" });
+        doc.setFontSize(15);
+        doc.text(t("reportView.reportTitle"), pageWidth / 2, 55, { align: "center" });
+
+        // Period
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(11);
-        doc.text(`${t("reportView.periodLabel")}: ${period}`, pageWidth / 2, 64, { align: "center" });
+        doc.setFontSize(10);
+        doc.text(`${t("reportView.periodLabel")}: ${period}`, pageWidth / 2, 72, { align: "center" });
+
+        // App name below period
+        doc.setFontSize(8);
+        doc.setTextColor(160, 160, 160);
+        doc.text("Fahrtenbuch Pro", pageWidth / 2, 84, { align: "center" });
+        doc.setTextColor(0, 0, 0);
 
         const leftX = margin;
         const rightEdge = pageWidth - margin;
-        const metaY1 = 82;
-        const metaY2 = 96;
-        const metaY3 = 110;
+        const metaY1 = 100;
+        const metaY2 = 113;
+        const metaY3 = 126;
 
         drawLabelValueLeft(leftX, metaY1, t("reportView.driverLabel"), driver);
         drawLabelValueLeft(leftX, metaY2, t("reportView.licensePlateLabel"), licensePlate);
@@ -750,15 +762,16 @@ export default function ReportView() {
         drawLabelValueRight(rightEdge, metaY2, t("reportView.passengerSurchargeLabel"), `${profile.passengerSurcharge || "0"} €`);
         drawLabelValueRight(rightEdge, metaY3, t("reportView.ratePerKmLabel"), `${profile.ratePerKm || "0"} €`);
 
+        const headerBottomY = 140;
         doc.setDrawColor(0, 0, 0);
         doc.setLineWidth(0.5);
         doc.line(margin, headerBottomY, pageWidth - margin, headerBottomY);
 
-        // Odometer summary card — works with 1 or 2 snapshots
+        // Odometer summary card
         const zipOdoRatio = displayOdoRatio;
         let tableStartY = headerBottomY + 18;
         if (zipOdoRatio) {
-          const cardH = 50;
+          const cardH = 62;
           const cardY = headerBottomY + 6;
           doc.setFillColor(248, 248, 248);
           doc.roundedRect(margin, cardY, availableWidth, cardH, 2, 2, "F");
@@ -766,84 +779,53 @@ export default function ReportView() {
           doc.setLineWidth(0.3);
           doc.roundedRect(margin, cardY, availableWidth, cardH, 2, 2, "S");
 
-          // Title
+          // Title row
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(9);
+          doc.setFontSize(7);
           doc.setTextColor(100, 100, 100);
-          doc.text(t("odometer.calcTitle").toUpperCase(), margin + 6, cardY + 13);
+          doc.text(t("odometer.calcTitle").toUpperCase(), margin + 8, cardY + 12);
 
-          // Metrics row — 11pt
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(11);
+          // Metrics row 1 — totalKm, workKm, privateKm with bold values
           doc.setTextColor(30, 30, 30);
-          const zipMetrics = [
-            `${t("odometer.totalKm")}: ${Number(zipOdoRatio.totalKm).toFixed(0)} km`,
-            `${t("odometer.workKm")}: ${Number(zipOdoRatio.workKm).toFixed(0)} km`,
-            `${t("odometer.privateKm")}: ${Number(zipOdoRatio.privateKm).toFixed(0)} km`,
-            `${t("odometer.workPct")}: ${Number(zipOdoRatio.pct).toFixed(1)} %`,
+          const mX = margin + 8;
+          const mY1 = cardY + 26;
+          const metricItems = [
+            { label: t("odometer.totalKm"), value: `${Number(zipOdoRatio.totalKm).toFixed(0)} km` },
+            { label: t("odometer.workKm"), value: `${Number(zipOdoRatio.workKm).toFixed(0)} km` },
+            { label: t("odometer.privateKm"), value: `${Number(zipOdoRatio.privateKm).toFixed(0)} km` },
           ];
-          const zipColW = availableWidth / zipMetrics.length;
-          zipMetrics.forEach((text, i) => {
-            doc.text(text, margin + 6 + zipColW * i, cardY + 30);
+          const mColW = (availableWidth - 16) / 3;
+          metricItems.forEach((item, i) => {
+            drawMetricBold(mX + mColW * i, mY1, item.label, item.value);
           });
 
-          // Note
+          // Metrics row 2 — workPct
+          const mY2 = cardY + 40;
+          drawMetricBold(mX, mY2, t("odometer.workPct"), `${Number(zipOdoRatio.pct).toFixed(1)} %`);
+
+          // Footer note
           doc.setFont("helvetica", "normal");
-          doc.setFontSize(9);
+          doc.setFontSize(7);
           doc.setTextColor(140, 140, 140);
           const zipIsSingle = zipOdoRatio.startSnapshot.id === zipOdoRatio.endSnapshot.id;
           const zipNote = zipIsSingle
-            ? `${zipOdoRatio.startSnapshot.snapshot_date} | ${Number(zipOdoRatio.startSnapshot.reading_km).toFixed(0)} km`
+            ? `${zipOdoRatio.startSnapshot.snapshot_date} | ${Number(zipOdoRatio.startSnapshot.reading_km).toFixed(0)}${zipOdoRatio.startSnapshot.extraction_status === "user_edited" ? " (mod.)" : ""} km`
             : `${zipOdoRatio.startSnapshot.snapshot_date} \u2192 ${zipOdoRatio.endSnapshot.snapshot_date}  |  ${Number(zipOdoRatio.startSnapshot.reading_km).toFixed(0)} \u2192 ${Number(zipOdoRatio.endSnapshot.reading_km).toFixed(0)} km`;
-          doc.text(zipNote, margin + 6, cardY + 44);
+          doc.text(zipNote, mX, cardY + 52);
 
           doc.setDrawColor(0, 0, 0);
           doc.setTextColor(0, 0, 0);
-          tableStartY = cardY + cardH + 10;
+          tableStartY = cardY + cardH + 12;
         }
 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(9);
 
-        const computeColumnWidths = () => {
-          const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
-          const pad = 8;
-          // 6 columns: Date, Project, Route, Passengers, Distance, Reimbursement
-          const min = [65, 90, 300, 60, 65, 75];
-          const max = [75, 120, 500, 70, 80, 95];
-          const desired = pdfHeaders.map((header, colIndex) => {
-            let maxTextWidth = doc.getTextWidth(String(header));
-            for (const row of pdfRows) {
-              const raw = row[colIndex] ?? "";
-              const text = colIndex === 2 ? String(raw).slice(0, 80) : String(raw);
-              maxTextWidth = Math.max(maxTextWidth, doc.getTextWidth(text));
-            }
-            return clamp(maxTextWidth + pad, min[colIndex] ?? 50, max[colIndex] ?? 80);
-          });
-          let widths = desired.slice();
-          const sum = () => widths.reduce((acc, w) => acc + w, 0);
-          if (sum() > availableWidth) {
-            const reducible = [2, 1, 0, 4, 5];
-            for (let iteration = 0; iteration < 4 && sum() > availableWidth; iteration++) {
-              const overflow = sum() - availableWidth;
-              const totalSlack = reducible.reduce((acc, i) => acc + Math.max(0, widths[i] - min[i]), 0);
-              if (totalSlack <= 0) break;
-              for (const i of reducible) {
-                const slack = Math.max(0, widths[i] - min[i]);
-                if (!slack) continue;
-                const reduce = Math.min(slack, overflow * (slack / totalSlack));
-                widths[i] -= reduce;
-              }
-            }
-          } else if (sum() < availableWidth) {
-            const extra = availableWidth - sum();
-            widths[2] = Math.min(max[2], widths[2] + extra);
-          }
-          widths = widths.map((w) => Math.floor(w));
-          return widths;
-        };
-
-        const columnWidths = computeColumnWidths();
+        // Simple proportional widths for portrait A4
+        const fixedWidths = [55, 82, 0, 55, 72, 72];
+        const fixedTotal = fixedWidths.reduce((a, b) => a + b, 0);
+        fixedWidths[2] = availableWidth - fixedTotal;
+        const columnWidths = fixedWidths;
         autoTable(doc, {
           head: [pdfHeaders],
           body: pdfRows,
@@ -856,30 +838,40 @@ export default function ReportView() {
           startY: tableStartY,
           theme: "plain",
           styles: { 
+            font: "helvetica",
             fontSize: 9, 
-            cellPadding: { top: 6, right: 8, bottom: 6, left: 8 }, 
+            cellPadding: { top: 5, right: 4, bottom: 5, left: 4 }, 
             textColor: [0, 0, 0], 
             valign: "middle",
             overflow: "linebreak",
+            lineWidth: { bottom: 0.3 },
+            lineColor: [220, 220, 220],
           },
           headStyles: { 
+            font: "helvetica",
             fillColor: [255, 255, 255], 
             textColor: [0, 0, 0], 
             fontStyle: "bold", 
             fontSize: 9,
             valign: "middle",
+            cellPadding: { top: 4, right: 4, bottom: 4, left: 4 },
+            lineWidth: { bottom: 0.5 },
+            lineColor: [160, 160, 160],
           },
           footStyles: { 
+            font: "helvetica",
             fillColor: [255, 255, 255], 
             textColor: [0, 0, 0], 
             fontSize: 9,
             fontStyle: "bold",
+            lineWidth: { top: 0.8 },
+            lineColor: [0, 0, 0],
           },
           margin: { left: margin, right: margin },
           columnStyles: {
             0: { cellWidth: columnWidths[0] },
             1: { cellWidth: columnWidths[1] },
-            2: { cellWidth: columnWidths[2] },
+            2: { cellWidth: columnWidths[2], overflow: "linebreak" },
             3: { cellWidth: columnWidths[3], halign: "center" },
             4: { cellWidth: columnWidths[4], halign: "right" },
             5: { cellWidth: columnWidths[5], halign: "right" },
@@ -965,7 +957,7 @@ export default function ReportView() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background print:bg-white print:min-h-0">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-background border-b border-border px-4 sm:px-6 py-4 print:hidden">
         <div className="max-w-[1800px] mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -1019,15 +1011,16 @@ export default function ReportView() {
       </div>
 
       {/* Report Content */}
-      <div className="p-4 sm:p-6 overflow-auto print:p-0 print:overflow-visible print:bg-white print:text-black">
-        <div className="max-w-[1800px] mx-auto print:max-w-none">
-          <div className="bg-slate-800 text-white rounded-lg p-4 sm:p-6 lg:p-8 print:bg-white print:text-black print:rounded-none print:p-8">
+      <div className="p-4 sm:p-6 overflow-auto print:p-0 print:m-0 print:overflow-visible print:bg-white print:text-black">
+        <div className="max-w-[1800px] mx-auto print:max-w-none print:m-0">
+          <div className="bg-slate-800 text-white rounded-lg p-4 sm:p-6 lg:p-8 print:bg-white print:text-black print:rounded-none print:p-2 print:shadow-none">
             {/* Report Header */}
             <div className="text-center mb-6">
-              <h1 className="text-lg sm:text-xl font-bold mb-1">{t("reportView.reportTitle")}</h1>
+              <h1 className="text-lg sm:text-xl font-bold mb-1 print:text-black">{t("reportView.reportTitle")}</h1>
               <p className="text-xs sm:text-sm text-slate-300 print:text-black">
                 {t("reportView.periodLabel")}: {period}
               </p>
+              <p className="text-[10px] text-slate-400 print:text-gray-400 mt-1">Fahrtenbuch Pro</p>
             </div>
 
             {/* Report Meta Info */}
@@ -1098,8 +1091,8 @@ export default function ReportView() {
 
             {/* Report Table */}
             <div className="overflow-x-auto -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 print:overflow-visible print:mx-0 print:px-0">
-              <table className="w-full text-xs sm:text-sm min-w-[700px] print:min-w-0 print:text-[9px] print:leading-tight table-fixed print:table-fixed">
-                <colgroup>
+              <table className="w-full text-xs sm:text-sm min-w-[700px] print:min-w-0 print:text-[9pt] print:leading-normal table-fixed print:table-auto">
+                <colgroup className="print:hidden">
                   <col style={{ width: "8%" }} />
                   <col style={{ width: "12%" }} />
                   <col style={{ width: "12%" }} />
@@ -1109,42 +1102,43 @@ export default function ReportView() {
                   <col style={{ width: "14%" }} />
                 </colgroup>
                 <thead>
-                  <tr className="border-b border-slate-600 print:border-black">
-                    <th className="text-left py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap">{t("reportView.colDate")}</th>
-                    <th className="text-left py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap">{t("reportView.colProject")}</th>
-                    <th className="text-left py-3 px-2 print:py-2 print:px-1 font-semibold hidden md:table-cell leading-tight">
+                  <tr className="border-b border-slate-600 print:border-gray-300">
+                    <th className="text-left py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap print:text-black">{t("reportView.colDate")}</th>
+                    <th className="text-left py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap print:text-black">{t("reportView.colProject")}</th>
+                    <th className="text-left py-3 px-2 print:py-2 print:px-2 font-semibold hidden md:table-cell print:hidden leading-tight">
                       {companyOrClientLabelHtml}
                     </th>
-                    <th className="text-left py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap">{t("reportView.colRoute")}</th>
-                    <th className="text-center py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap hidden sm:table-cell">
+                    <th className="text-left py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap print:text-black">{t("reportView.colRoute")}</th>
+                    <th className="text-center py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap hidden sm:table-cell print:table-cell print:text-black">
                       {t("reportView.colPassengersShort")}
                     </th>
-                    <th className="text-right py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap">{t("reportView.colDistanceKm")}</th>
-                    <th className="text-right py-3 px-2 print:py-2 print:px-1 font-semibold whitespace-nowrap">{t("reportView.colReimbursement")}</th>
+                    <th className="text-right py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap print:text-black">{t("reportView.colDistanceKm")}</th>
+                    <th className="text-right py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap print:text-black">{t("reportView.colReimbursement")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {trips.map((trip, index) => (
-                    <tr key={index} className="border-b border-slate-700/50 print:border-black">
-                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-1 align-top whitespace-nowrap">
+                    <tr key={index} className="border-b border-slate-700/50 print:border-gray-200">
+                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top whitespace-nowrap print:text-black">
                         {trip.date}
                       </td>
-                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-1 align-top overflow-hidden text-ellipsis whitespace-nowrap">
+                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top overflow-hidden text-ellipsis whitespace-nowrap print:text-black">
                         {trip.project}
                       </td>
-                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-1 align-top hidden md:table-cell overflow-hidden text-ellipsis whitespace-nowrap">
+                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top hidden md:table-cell print:hidden overflow-hidden text-ellipsis whitespace-nowrap">
                         {trip.producer}
                       </td>
-                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-1 align-top text-slate-300 max-w-[200px] sm:max-w-none truncate sm:whitespace-normal print:text-black print:truncate-none print:max-w-none print:whitespace-normal print:break-words">
-                        {trip.route.join(" -> ")}
+                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top text-slate-300 max-w-[200px] sm:max-w-none truncate sm:whitespace-normal print:text-black print:max-w-none print:whitespace-normal print:break-words print:overflow-visible">
+                        <span className="hidden print:inline">{trip.route.join(" > ")}</span>
+                        <span className="print:hidden">{trip.route.join(" -> ")}</span>
                       </td>
-                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-1 align-top text-center hidden sm:table-cell">
+                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top text-center hidden sm:table-cell print:table-cell print:text-black">
                         {trip.passengers}
                       </td>
-                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-1 align-top text-right whitespace-nowrap">
-                        {trip.distance.toFixed(1)}
+                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top text-right whitespace-nowrap print:text-black">
+                        {trip.distance.toFixed(1)} <span className="hidden print:inline">km</span>
                       </td>
-                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-1 align-top text-right font-semibold whitespace-nowrap text-green-500 print:text-black">
+                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top text-right font-semibold whitespace-nowrap text-green-500 print:text-black">
                         {trip.reimbursement.toFixed(2)} €
                       </td>
                     </tr>
@@ -1163,16 +1157,17 @@ export default function ReportView() {
                       {t("reportView.totalShort")}: {totalReimbursement.toFixed(2)} €
                     </td>
                   </tr>
-                  <tr className="hidden print:table-row border-t-2 border-black">
-                    <td colSpan={4} className="py-2 px-1">
+                  <tr className="hidden print:table-row border-t border-gray-300">
+                    <td colSpan={3} className="py-2 px-2">
                     </td>
-                    <td className="py-2 px-1">
+                    <td className="py-2 px-2 text-right font-bold print:text-black">
+                      {t("reportView.totalShort")}:
                     </td>
-                    <td className="py-2 px-1 text-right font-semibold text-[9px] whitespace-nowrap">
-                      {t("reportView.totalShort")}: {totalDistance.toFixed(1)} km
+                    <td className="py-2 px-2 text-right font-bold print:text-black whitespace-nowrap">
+                      {totalDistance.toFixed(1)} km
                     </td>
-                    <td className="py-2 px-1 text-right font-semibold text-[9px] whitespace-nowrap">
-                      {t("reportView.totalShort")}: {totalReimbursement.toFixed(2)} €
+                    <td className="py-2 px-2 text-right font-bold print:text-black whitespace-nowrap">
+                      {totalReimbursement.toFixed(2)} €
                     </td>
                   </tr>
                 </tfoot>
