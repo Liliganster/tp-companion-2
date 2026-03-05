@@ -369,34 +369,57 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     projectNameRaw: string,
     producerRaw: string | undefined,
     sourceLabel: string,
+    sessionCache?: Map<string, string>,
   ): Promise<string | undefined> => {
     const trimmed = String(projectNameRaw ?? "").trim();
     if (!trimmed) return undefined;
 
-    const existing = projects.find((p) => p.name.trim().toLowerCase() === trimmed.toLowerCase());
-    if (existing) return existing.id;
+    const key = trimmed.toLowerCase();
 
+    // 1. Check in-session cache first (avoids re-creating during same import run)
+    if (sessionCache?.has(key)) return sessionCache.get(key);
+
+    // 2. Check existing projects from context
+    const existing = projects.find((p) => p.name.trim().toLowerCase() === key);
+    if (existing) {
+      sessionCache?.set(key, existing.id);
+      return existing.id;
+    }
+
+    // 3. Create new project
     const producer = String(producerRaw ?? "").trim();
     const newProjectId = uuidv4();
-    await addProject({
-      id: newProjectId,
-      name: trimmed,
-      producer,
-      description: `Created from CSV import: ${sourceLabel}`,
-      ratePerKm: 0.30,
-      starred: false,
-      trips: 0,
-      totalKm: 0,
-      documents: 0,
-      invoices: 0,
-      estimatedCost: 0,
-      shootingDays: 0,
-      kmPerDay: 0,
-      co2Emissions: 0,
-      createdAt: new Date().toISOString(),
-    });
-    return newProjectId;
+    try {
+      await addProject({
+        id: newProjectId,
+        name: trimmed,
+        producer,
+        description: `Created from CSV import: ${sourceLabel}`,
+        ratePerKm: 0.30,
+        starred: false,
+        trips: 0,
+        totalKm: 0,
+        documents: 0,
+        invoices: 0,
+        estimatedCost: 0,
+        shootingDays: 0,
+        kmPerDay: 0,
+        co2Emissions: 0,
+        createdAt: new Date().toISOString(),
+      });
+      sessionCache?.set(key, newProjectId);
+      return newProjectId;
+    } catch (_err) {
+      // If creation failed (e.g. already exists on server), try fetching the existing one
+      const refetch = projects.find((p) => p.name.trim().toLowerCase() === key);
+      if (refetch) {
+        sessionCache?.set(key, refetch.id);
+        return refetch.id;
+      }
+      return undefined;
+    }
   };
+
 
   const computeDistanceKmIfMissing = async (
     routeValues: string[],
@@ -579,11 +602,13 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
       let ok = 0;
       let failed = 0;
+      const projectSessionCache = new Map<string, string>();
 
       // sequential to avoid rate limits and keep ordering
       for (const trip of parsedTrips) {
         try {
-          const projectId = await resolveProjectIdByName(trip.project, trip.producer, sourceLabel);
+          const projectId = await resolveProjectIdByName(trip.project, trip.producer, sourceLabel, projectSessionCache);
+
 
           let distance = trip.distance;
           if (!Number.isFinite(distance) || distance <= 0) {
