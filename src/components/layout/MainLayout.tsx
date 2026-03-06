@@ -33,7 +33,7 @@ export function MainLayout({ children, backgroundVariant = "default" }: MainLayo
         <MobileHeader onSettingsClick={() => setSettingsOpen(true)} />
         
         <main className="flex-1 lg:pl-0 pt-16 lg:pt-0 overflow-x-hidden lg:h-screen lg:overflow-hidden">
-          <div className="p-4 lg:p-8 min-h-screen lg:min-h-0 lg:h-full lg:overflow-y-auto">
+          <div className="p-5 lg:p-5 min-h-screen lg:min-h-0 lg:h-full lg:overflow-y-auto">
             {children}
           </div>
         </main>

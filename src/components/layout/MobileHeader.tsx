@@ -91,7 +91,7 @@ export function MobileHeader({
                     setOpen(false);
                     void signOut();
                   }}
-                  className="nav-item w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                  className="nav-item w-full text-red-500 hover:text-red-600 hover:bg-red-500/10"
                 >
                   <LogOut className="w-5 h-5" />
                   <span>{t("nav.logout")}</span>
@@ -99,8 +99,8 @@ export function MobileHeader({
 
                 {/* User Profile */}
                 <div className="flex items-center gap-3 pt-3 border-t border-border/50">
-                  <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-                    <span className="text-sm font-medium text-muted-foreground">{profileInitial}</span>
+                  <div className="w-9 h-9 rounded-full bg-[#129446] flex items-center justify-center shrink-0">
+                    <span className="text-sm font-medium text-white">{profileInitial}</span>
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{profile.fullName}</p>

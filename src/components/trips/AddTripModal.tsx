@@ -4,9 +4,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, GripVertical, X, MapPin, Calendar, Home, Route, Loader2, Check, ChevronsUpDown, FileUp } from "lucide-react";
+import { Plus, GripVertical, X, MapPin, Calendar, Home, Route, Loader2, Check, ChevronsUpDown, FileUp, Camera, Info } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn, uuidv4 } from "@/lib/utils";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { Trip, useTrips } from "@/contexts/TripsContext";
@@ -1000,9 +1001,19 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
           </div>
 
           {/* Per-trip expenses */}
-          <p className="text-xs text-muted-foreground -mb-2">
-            {t("tripModal.expensesHint")}
-          </p>
+          <div className="flex items-center gap-1.5 -mb-2">
+            <span className="text-sm font-medium text-foreground">{t("tripModal.expenses") ?? "Gastos"}</span>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="w-3.5 h-3.5 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent side="top" align="start" collisionPadding={16} className="max-w-[320px] text-xs z-[9999]">
+                  <span>{t("tripModal.expensesHintBefore")} <Camera className="w-3 h-3 inline-block align-text-bottom" /> {t("tripModal.expensesHintAfter")}</span>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="tollAmount">{t("tripModal.toll")}</Label>

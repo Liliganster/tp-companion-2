@@ -33,18 +33,18 @@ export function RecentTrips() {
   const { trips, loading } = useTrips();
   const recentTrips = trips.slice(0, 3).map((trip) => toRecentTrip(trip));
   return (
-    <div className="glass-card p-5 animate-fade-in animation-delay-200">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-semibold text-lg">{t("dashboard.recentTrips")}</h2>
+    <div className="glass-card p-4 animate-fade-in animation-delay-200 flex flex-col h-full">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="font-semibold text-sm">{t("dashboard.recentTrips")}</h2>
         <Button variant="ghost" size="sm" asChild>
-          <Link to="/trips" className="flex items-center gap-1">
+          <Link to="/trips" className="flex items-center gap-1 text-[#129446] hover:text-[#129446]/80">
             {t("dashboard.viewAll")}
             <ArrowRight className="w-4 h-4" />
           </Link>
         </Button>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-2 flex-1">
         {!loading && recentTrips.length === 0 ? (
           <div className="text-sm text-muted-foreground">No hay viajes recientes.</div>
         ) : null}
@@ -60,7 +60,7 @@ export function RecentTrips() {
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1.5">
                   <Calendar className="w-3.5 h-3.5" />
                   <span>{new Date(trip.date).toLocaleDateString(locale)}</span>
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-primary/20 text-primary">
+                  <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-[#129446]/20 text-[#129446]">
                     {trip.project}
                   </span>
                 </div>

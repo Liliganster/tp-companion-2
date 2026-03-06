@@ -681,14 +681,14 @@ export default function Projects() {
                     />
                   </TableHead>
 
-                  <TableHead className="text-foreground font-semibold whitespace-nowrap">{t("projects.tableProject")}</TableHead>
-                  <TableHead className="text-foreground font-semibold whitespace-nowrap hidden sm:table-cell">{t("projects.tableCompany")}</TableHead>
-                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("projects.tableTrips")}</TableHead>
-                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("projects.tableInvoices")}</TableHead>
-                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("projects.tableDocuments")}</TableHead>
-                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden md:table-cell">{t("projects.tableCo2")}</TableHead>
-                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("projects.tableCost")}</TableHead>
-                  <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden md:table-cell">{t("projects.tableTotalKm")}</TableHead>
+                  <TableHead className="text-white font-semibold whitespace-nowrap">{t("projects.tableProject")}</TableHead>
+                  <TableHead className="text-white font-semibold whitespace-nowrap hidden sm:table-cell">{t("projects.tableCompany")}</TableHead>
+                  <TableHead className="text-white font-semibold text-right whitespace-nowrap">{t("projects.tableTrips")}</TableHead>
+                  <TableHead className="text-white font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("projects.tableInvoices")}</TableHead>
+                  <TableHead className="text-white font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("projects.tableDocuments")}</TableHead>
+                  <TableHead className="text-white font-semibold text-right whitespace-nowrap hidden md:table-cell">{t("projects.tableCo2")}</TableHead>
+                  <TableHead className="text-white font-semibold text-right whitespace-nowrap">{t("projects.tableCost")}</TableHead>
+                  <TableHead className="text-white font-semibold text-right whitespace-nowrap hidden md:table-cell">{t("projects.tableTotalKm")}</TableHead>
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -706,7 +706,7 @@ export default function Projects() {
                     return (
                       <TableRow
                         key={project.id}
-                        className={`hover:bg-secondary/30 border-border/30 animate-slide-up cursor-pointer ${selectedIds.has(project.id) ? 'bg-primary/10' : ''}`}
+                        className={`hover:bg-secondary/30 border-border/30 animate-slide-up cursor-pointer ${selectedIds.has(project.id) ? 'bg-primary/10' : index % 2 === 1 ? 'bg-muted/30' : ''}`}
                         style={{ animationDelay: `${index * 50}ms` }}
                         role="button"
                         tabIndex={0}
@@ -737,7 +737,7 @@ export default function Projects() {
                               className="shrink-0 opacity-60 hover:opacity-100 transition-opacity"
                             >
                               {project.starred ? (
-                                <Star className="w-4 h-4 text-warning fill-warning" />
+                                <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
                               ) : (
                                 <StarOff className="w-4 h-4" />
                               )}

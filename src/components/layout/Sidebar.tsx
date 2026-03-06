@@ -113,13 +113,13 @@ export function Sidebar({
           to="/plans"
           className={cn(
             "block w-full rounded-lg p-3 transition-colors",
-            "border border-white/10 bg-white/5 hover:bg-white/10",
+            "border border-violet-500/60 bg-violet-500/10 hover:bg-violet-500/20",
             collapsed && "p-2"
           )}
           title={collapsed ? t("nav.plans") : undefined}
         >
           <div className={cn("flex w-full items-center gap-2", collapsed && "justify-center gap-0")}>
-            <Crown className="w-5 h-5 shrink-0 text-muted-foreground" />
+            <Crown className="w-5 h-5 shrink-0 text-yellow-400" />
             {!collapsed && (
               <div className="flex flex-col">
                 <span className="text-sm font-semibold text-foreground">
@@ -140,15 +140,15 @@ export function Sidebar({
           <Settings className="w-5 h-5 shrink-0" />
           {!collapsed && <span>{t("nav.settings")}</span>}
         </button>
-        <button onClick={() => signOut()} className={cn("nav-item w-full text-destructive hover:text-destructive hover:bg-destructive/10", collapsed && "justify-center px-2")} title={collapsed ? t("nav.logout") : undefined}>
+        <button onClick={() => signOut()} className={cn("nav-item w-full text-red-500 hover:text-red-600 hover:bg-red-500/10", collapsed && "justify-center px-2")} title={collapsed ? t("nav.logout") : undefined}>
           <LogOut className="w-5 h-5 shrink-0" />
           {!collapsed && <span>{t("nav.logout")}</span>}
         </button>
 
         {/* User Profile */}
         <div className={cn("flex items-center gap-3 pt-3 border-t border-border/50", collapsed && "justify-center")}>
-          <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-            <span className="text-sm font-medium text-muted-foreground">{profileInitial}</span>
+          <div className="w-9 h-9 rounded-full bg-[#129446] flex items-center justify-center shrink-0">
+            <span className="text-sm font-medium text-white">{profileInitial}</span>
           </div>
           {!collapsed && <div className="min-w-0 flex-1">
               <p className="text-sm font-medium truncate text-foreground">{profile.fullName}</p>

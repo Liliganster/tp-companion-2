@@ -46,11 +46,11 @@ export function KPICard({
   return (
     <div
       className={cn(
-        "relative glass-card p-5 animate-fade-in transition-colors duration-200 hover:bg-accent/40",
+        "relative glass-card p-4 animate-fade-in transition-colors duration-200 hover:bg-accent/40 flex flex-col",
         className
       )}
     >
-      <div className="flex items-start justify-between mb-3">
+      <div className="flex items-start justify-between mb-2">
         <div
           className={cn(
             "p-2.5 rounded-xl border border-border bg-card/60",
@@ -80,7 +80,7 @@ export function KPICard({
         ) : null}
       </div>
 
-      <div>
+      <div className="flex-1">
         {!hideTitle && <p className="text-sm text-muted-foreground mb-1">{title}</p>}
         {leading}
         <div
@@ -98,8 +98,8 @@ export function KPICard({
         {trend && trendLabelPlacement === "below" && (
           <p className="text-xs text-muted-foreground mt-1">{trend.label}</p>
         )}
-        {action && <div className="mt-2">{action}</div>}
       </div>
+      {action && <div className="mt-auto pt-2">{action}</div>}
     </div>
   );
 }

@@ -1103,22 +1103,22 @@ export default function ReportView() {
                 </colgroup>
                 <thead>
                   <tr className="border-b border-slate-600 print:border-gray-300">
-                    <th className="text-left py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap print:text-black">{t("reportView.colDate")}</th>
-                    <th className="text-left py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap print:text-black">{t("reportView.colProject")}</th>
-                    <th className="text-left py-3 px-2 print:py-2 print:px-2 font-semibold hidden md:table-cell print:hidden leading-tight">
+                    <th className="text-left py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap text-white print:text-black">{t("reportView.colDate")}</th>
+                    <th className="text-left py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap text-white print:text-black">{t("reportView.colProject")}</th>
+                    <th className="text-left py-3 px-2 print:py-2 print:px-2 font-semibold hidden md:table-cell print:hidden leading-tight text-white">
                       {companyOrClientLabelHtml}
                     </th>
-                    <th className="text-left py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap print:text-black">{t("reportView.colRoute")}</th>
-                    <th className="text-center py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap hidden sm:table-cell print:table-cell print:text-black">
+                    <th className="text-left py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap text-white print:text-black">{t("reportView.colRoute")}</th>
+                    <th className="text-center py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap hidden sm:table-cell print:table-cell text-white print:text-black">
                       {t("reportView.colPassengersShort")}
                     </th>
-                    <th className="text-right py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap print:text-black">{t("reportView.colDistanceKm")}</th>
-                    <th className="text-right py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap print:text-black">{t("reportView.colReimbursement")}</th>
+                    <th className="text-right py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap text-white print:text-black">{t("reportView.colDistanceKm")}</th>
+                    <th className="text-right py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap text-white print:text-black">{t("reportView.colReimbursement")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {trips.map((trip, index) => (
-                    <tr key={index} className="border-b border-slate-700/50 print:border-gray-200">
+                    <tr key={index} className={`border-b border-slate-700/50 print:border-gray-200 ${index % 2 === 1 ? 'bg-muted/30' : ''}`}>
                       <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top whitespace-nowrap print:text-black">
                         {trip.date}
                       </td>

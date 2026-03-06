@@ -92,7 +92,7 @@ export default function Trips() {
     return Array.from(all).filter((p) => p.trim() !== "").sort((a, b) => a.localeCompare(b));
   }, [trips, projects]);
   // removed setProjects
-  const [dateSort, setDateSort] = useState<"desc" | "asc">("desc");
+  const [dateSort, setDateSort] = useState<"desc" | "asc">("asc");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -559,16 +559,16 @@ export default function Trips() {
                     </span>
                   )}
                   {trip.specialOrigin === "continue" && (
-                    <Badge variant="secondary" className="w-fit text-[10px] sm:text-xs">
+                    <Badge variant="secondary" className="w-fit text-[10px] sm:text-xs bg-yellow-500/20 text-yellow-300 border-transparent">
                       {t("trips.continuation")}
                     </Badge>
                   )}
                   {trip.specialOrigin === "return" && (
-                    <Badge variant="secondary" className="w-fit text-[10px] sm:text-xs">
+                    <Badge variant="secondary" className="w-fit text-[10px] sm:text-xs bg-red-500/20 text-red-400 border-transparent">
                       {t("trips.returnTrip")}
                     </Badge>
                   )}
-                  <span className="text-[10px] sm:text-xs text-primary truncate max-w-[150px] sm:max-w-none">
+                  <span className="text-[10px] sm:text-xs truncate max-w-[150px] sm:max-w-none px-1.5 py-0.5 rounded bg-[#129446]/20 text-[#129446]">
                     {trip.project}
                   </span>
                 </div>
@@ -683,16 +683,16 @@ export default function Trips() {
       <div className="hidden lg:block glass-card overflow-hidden animate-fade-in animation-delay-200">
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader className="sticky top-0 z-10 bg-background">
+            <TableHeader className="sticky top-0 z-10">
               <TableRow className="hover:bg-transparent border-border/50">
                 <TableHead className="w-10">
                   <Checkbox checked={isAllSelected} onCheckedChange={toggleSelectAll} aria-label={t("projects.selectAll")} />
                 </TableHead>
-                <TableHead className="text-foreground font-semibold whitespace-nowrap">
+                <TableHead className="text-white font-semibold whitespace-nowrap">
                   <button
                     type="button"
                     onClick={() => setDateSort((prev) => (prev === "asc" ? "desc" : "asc"))}
-                    className="inline-flex items-center gap-1 hover:text-foreground"
+                    className="inline-flex items-center gap-1 hover:text-white"
                     aria-label={tf("trips.sortByDate", {
                       order: dateSort === "asc" ? t("trips.sortAsc") : t("trips.sortDesc"),
                     })}
@@ -705,21 +705,21 @@ export default function Trips() {
                     </span>
                   </button>
                 </TableHead>
-                <TableHead className="text-foreground font-semibold whitespace-nowrap">{t("trips.route")}</TableHead>
-                <TableHead className="text-foreground font-semibold whitespace-nowrap">{t("trips.project")}</TableHead>
-                <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.co2")}</TableHead>
-                <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.receipts")}</TableHead>
-                <TableHead className="text-foreground font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("trips.passengers")}</TableHead>
-                <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.expenses")}</TableHead>
-                <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.reimbursement")}</TableHead>
-                <TableHead className="text-foreground font-semibold text-right whitespace-nowrap">{t("trips.distance")}</TableHead>
+                <TableHead className="text-white font-semibold whitespace-nowrap">{t("trips.route")}</TableHead>
+                <TableHead className="text-white font-semibold whitespace-nowrap">{t("trips.project")}</TableHead>
+                <TableHead className="text-white font-semibold text-right whitespace-nowrap">{t("trips.co2")}</TableHead>
+                <TableHead className="text-white font-semibold text-right whitespace-nowrap">{t("trips.receipts")}</TableHead>
+                <TableHead className="text-white font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("trips.passengers")}</TableHead>
+                <TableHead className="text-white font-semibold text-right whitespace-nowrap">{t("trips.expenses")}</TableHead>
+                <TableHead className="text-white font-semibold text-right whitespace-nowrap">{t("trips.reimbursement")}</TableHead>
+                <TableHead className="text-white font-semibold text-right whitespace-nowrap">{t("trips.distance")}</TableHead>
                 <TableHead className="w-10"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {visibleTrips.map((trip, index) => <TableRow
                 key={trip.id}
-                className={`hover:bg-secondary/30 border-border/30 animate-slide-up cursor-pointer [&>td:nth-child(9)]:text-green-500 ${selectedIds.has(trip.id) ? 'bg-primary/10' : ''}`}
+                className={`hover:bg-secondary/30 border-border/30 animate-slide-up cursor-pointer [&>td:nth-child(9)]:text-green-500 ${selectedIds.has(trip.id) ? 'bg-primary/10' : index % 2 === 1 ? 'bg-muted/30' : ''}`}
                 style={{
                   animationDelay: `${index * 50}ms`
                 }}
@@ -755,8 +755,8 @@ export default function Trips() {
                         <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-400" />
                       </span>
                     )}
-                    {trip.specialOrigin === "continue" && <Badge variant="secondary">{t("trips.continuation")}</Badge>}
-                    {trip.specialOrigin === "return" && <Badge variant="secondary">{t("trips.returnTrip")}</Badge>}
+                    {trip.specialOrigin === "continue" && <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-300 border-transparent">{t("trips.continuation")}</Badge>}
+                    {trip.specialOrigin === "return" && <Badge variant="secondary" className="bg-red-500/20 text-red-400 border-transparent">{t("trips.returnTrip")}</Badge>}
                   </div>
                 </TableCell>
                 <TableCell>

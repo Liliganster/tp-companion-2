@@ -3,9 +3,10 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { NotificationDropdown } from "@/components/dashboard/NotificationDropdown";
 import { RecentTrips } from "@/components/dashboard/RecentTrips";
+import { ProjectsRingCard } from "@/components/dashboard/ProjectsRingCard";
 import { ProjectChart } from "@/components/dashboard/ProjectChart";
 import { Button } from "@/components/ui/button";
-import { ArrowDown, ArrowUp, Plus, Settings, Sparkles, Check, AlertCircle, Loader2, Car } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowRight, Plus, Settings, Sparkles, Check, AlertCircle, Loader2, Car } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useProjects } from "@/contexts/ProjectsContext";
@@ -111,18 +112,6 @@ export default function Index() {
 
         const contentType = response.headers.get("content-type") ?? "";
         if (!contentType.includes("application/json")) {
-          if (import.meta.env.DEV) {
-            logger.warn("[Index] AI quota polling disabled in dev: /api/user/ai-quota returned non-JSON", {
-              contentType,
-            });
-            aiQuotaPollingDisabled.current = true;
-            if (!cancelled) {
-              setAiBypassEnabled(false);
-              setAiLimitFromApi(limits.aiJobsPerMonth);
-              setAiUsedThisMonth(null);
-            }
-            return;
-          }
           throw new Error("AI quota endpoint did not return JSON");
         }
 
@@ -134,11 +123,29 @@ export default function Index() {
           setAiUsedThisMonth(data.used);
         }
       } catch (e) {
-        if (import.meta.env.DEV && e instanceof SyntaxError) {
-          logger.warn("[Index] AI quota polling disabled in dev: invalid JSON response", e);
-          aiQuotaPollingDisabled.current = true;
-        } else {
-          logger.warn("Error fetching AI quota", e);
+        logger.warn("Error fetching AI quota from API, trying Supabase fallback", e);
+        // Fallback: count callsheet_jobs directly from Supabase client
+        try {
+          const { supabase } = await import("@/lib/supabaseClient");
+          if (supabase && user?.id) {
+            const startOfMonth = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)).toISOString();
+            const { count, error } = await supabase
+              .from("callsheet_jobs")
+              .select("id", { count: "exact" })
+              .range(0, 0)
+              .eq("user_id", user.id)
+              .eq("status", "done")
+              .gte("processed_at", startOfMonth);
+            if (!error && typeof count === "number" && !cancelled) {
+              setAiUsedThisMonth(count);
+              setAiLimitFromApi(limits.aiJobsPerMonth);
+              setAiBypassEnabled(false);
+              aiQuotaPollingDisabled.current = true;
+              return;
+            }
+          }
+        } catch (fallbackErr) {
+          logger.warn("Supabase fallback for AI quota also failed", fallbackErr);
         }
         if (!cancelled) setAiUsedThisMonth(null);
       } finally {
@@ -153,8 +160,15 @@ export default function Index() {
     };
   }, [user?.id, getAccessToken, limits.aiJobsPerMonth]);
 
-  const kpiTitleClassName = "text-base font-semibold leading-tight text-foreground uppercase tracking-wide";
-  const kpiTitleWrapperClassName = "p-0 rounded-none bg-transparent";
+  const hour = new Date().getHours();
+  const greeting = hour >= 6 && hour < 12
+    ? t("dashboard.greetingMorning")
+    : hour >= 12 && hour < 20
+      ? t("dashboard.greetingAfternoon")
+      : t("dashboard.greetingEvening");
+
+  const kpiTitleClassName = "text-sm font-semibold leading-tight text-foreground uppercase tracking-wide";
+  const kpiTitleWrapperClassName = "p-0 rounded-none bg-transparent border-0";
 
   const { emissionsInput, isLoading: isLoadingEmissionsData } = useEmissionsInput();
 
@@ -215,30 +229,28 @@ export default function Index() {
   );
 
   return <MainLayout>
-      <div className="page-container">
+      <div className="page-container lg:h-full lg:flex lg:flex-col lg:gap-3 lg:py-1">
         {/* Header */}
-        <div className="glass-panel p-6 md:p-8 animate-fade-in">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
+        <div className="glass-panel p-4 md:p-5 animate-fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
               <div>
-                <h1 className="text-foreground text-2xl sm:text-3xl md:text-[31px] font-semibold leading-tight tracking-tight">
-                  {t("dashboard.welcomeBackPrefix")} <span className="text-foreground">{profile.fullName.split(" ")[0]}</span>
+                <h1 className="text-foreground text-xl sm:text-2xl font-semibold leading-tight tracking-tight">
+                  {greeting} <span className="text-foreground">{profile.fullName.split(" ")[0]}</span>
                 </h1>
                 <p className="text-muted-foreground mt-1">
                   {t("dashboard.subtitle")}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              {/* Trips Quota */}
-              <div className="flex items-center gap-2 px-4 py-2.5 border rounded-lg border-border bg-muted">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 px-3 py-1.5 border rounded-lg border-border bg-muted">
                 <Car className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm font-medium tabular-nums text-foreground">{tripCounts.total}/{limits.maxActiveTrips}</span>
+                <span className="text-xs font-medium tabular-nums text-foreground">{tripCounts.total}/{limits.maxActiveTrips}</span>
               </div>
-              {/* AI Quota */}
-              <div className="flex items-center gap-2 px-4 py-2.5 border rounded-lg border-border bg-muted">
+              <div className="flex items-center gap-2 px-3 py-1.5 border rounded-lg border-border bg-muted">
                 <Sparkles className="w-4 h-4 text-muted-foreground" />
-                <span className={`text-sm font-medium tabular-nums ${aiQuotaTextColor}`}>{aiQuotaText}</span>
+                <span className={`text-xs font-medium tabular-nums ${aiQuotaTextColor}`}>{aiQuotaText}</span>
               </div>
               {/* Warnings Bell */}
               <NotificationDropdown />
@@ -247,23 +259,56 @@ export default function Index() {
         </div>
 
         {/* KPI Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <KPICard
             title="DISTANCIA TOTAL"
             value={<div className="mt-1">
-              <div className="text-3xl font-bold text-foreground mb-3">{totalKm.toLocaleString(locale)} <span className="text-lg text-muted-foreground font-medium">km</span></div>
-              <div className="grid gap-2">
-                <StatusRow 
-                  label={t("dashboard.thisMonth")} 
-                  value={`${kmThisMonth.toLocaleString(locale)} km`} 
-                  status="neutral"
-                />
-                <StatusRow 
-                  label={t("dashboard.trend")} 
-                  value={`${Math.abs(distanceTrendValue)}%`} 
-                  status={distanceTrendPositive ? "success" : "destructive"}
-                  icon={distanceTrendPositive ? ArrowUp : ArrowDown}
-                />
+              <div className="grid grid-cols-2 gap-3">
+                {/* Left: stats */}
+                <div className="min-w-0 flex flex-col">
+                  <div className="text-2xl font-bold text-foreground mb-2">{totalKm.toLocaleString(locale)} <span className="text-sm text-muted-foreground font-medium">km</span></div>
+                  <div className="grid gap-1.5">
+                    <StatusRow 
+                      label={t("dashboard.thisMonth")} 
+                      value={`${kmThisMonth.toLocaleString(locale)} km`} 
+                      status="neutral"
+                    />
+                    <StatusRow 
+                      label={t("dashboard.trend")} 
+                      value={`${Math.abs(distanceTrendValue)}%`} 
+                      status={distanceTrendPositive ? "success" : "destructive"}
+                      icon={distanceTrendPositive ? ArrowUp : ArrowDown}
+                    />
+                  </div>
+                </div>
+                {/* Right: ring chart */}
+                <div className="flex flex-col items-center">
+                  <svg width={120} height={120} viewBox="0 0 120 120">
+                    {/* Last month (inner - older) */}
+                    <circle cx={60} cy={60} r={38} fill="none" stroke="hsl(var(--muted) / 0.3)" strokeWidth={10} />
+                    <circle cx={60} cy={60} r={38} fill="none" stroke="#3b82f6" strokeWidth={10}
+                      strokeDasharray={`${(kmPrevMonth / Math.max(kmThisMonth, kmPrevMonth, 1)) * 2 * Math.PI * 38} ${2 * Math.PI * 38}`}
+                      strokeDashoffset={2 * Math.PI * 38 * 0.25} strokeLinecap="round" className="transition-all duration-700" />
+                    {/* This month (outer - newer) */}
+                    <circle cx={60} cy={60} r={51} fill="none" stroke="hsl(var(--muted) / 0.3)" strokeWidth={10} />
+                    <circle cx={60} cy={60} r={51} fill="none" stroke="#129446" strokeWidth={10}
+                      strokeDasharray={`${(kmThisMonth / Math.max(kmThisMonth, kmPrevMonth, 1)) * 2 * Math.PI * 51} ${2 * Math.PI * 51}`}
+                      strokeDashoffset={2 * Math.PI * 51 * 0.25} strokeLinecap="round" className="transition-all duration-700" />
+                    <text x={60} y={60} textAnchor="middle" dominantBaseline="central" className="fill-foreground font-bold" fontSize={16}>
+                      {kmThisMonth.toLocaleString(locale)}
+                    </text>
+                  </svg>
+                  <div className="flex gap-2 mt-0.5">
+                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <span className="w-2 h-2 rounded-full bg-[#129446]" />
+                      {t("dashboard.thisMonth")}
+                    </div>
+                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <span className="w-2 h-2 rounded-full bg-[#3b82f6]" />
+                      {t("dashboard.lastMonth")}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>}
             icon={<div className={kpiTitleClassName}>{t("dashboard.totalDistance")}</div>}
@@ -271,68 +316,82 @@ export default function Index() {
             hideTitle
             variant="primary"
             valueGradient={false}
-            action={<Link to="/trips" className="fb-link text-xs mt-2 inline-block">{t("dashboard.viewTrips")}</Link>}
+            action={<Link to="/trips" className="text-sm font-medium text-[#129446] hover:text-[#129446]/80 mt-2 inline-flex items-center gap-1">{t("dashboard.viewTrips")} <ArrowRight className="w-4 h-4" /></Link>}
           />
           
-          <KPICard
-            title="PROYECTOS ACTIVOS"
-            value={dashboardProjects.length}
-            icon={<div className={kpiTitleClassName}>{t("dashboard.activeProjects")}</div>}
-            iconWrapperClassName={kpiTitleWrapperClassName}
-            hideTitle
-            variant="accent"
-            valueClassName="text-foreground"
-            action={<Link to="/projects" className="fb-link text-xs">{t("dashboard.viewProjects")}</Link>}
-          />
+          <ProjectsRingCard />
 
           <KPICard
             title={"EMISIONES CO\u2082"}
             icon={<div className={kpiTitleClassName}>{t("dashboard.co2Emissions")}</div>}
             iconWrapperClassName={kpiTitleWrapperClassName}
             hideTitle
-            headerRight={
-              <div className="text-6xl font-black tracking-tighter ml-4 text-foreground">
-                {co2Rating}
-              </div>
-            }
             value={isLoadingEmissionsData ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
               </div>
             ) : (
               <div className="mt-1">
-              <div className="flex flex-col gap-2">
-                <StatusRow 
-                  label={t("dashboard.thisMonth")} 
-                  value={`${co2ThisMonth.toFixed(0)} kg`}
-                  status={co2Rating === "A" ? "success" : co2Rating === "B" || co2Rating === "C" ? "warning" : "destructive"}
-                />
-                 <StatusRow 
-                  label={t("dashboard.trend")}
-                  value={`${Math.abs(co2TrendValue)}%`}
-                  status={co2TrendPositive ? "success" : "neutral"} 
-                  icon={co2TrendPositive ? ArrowUp : ArrowDown}
-                />
-                <StatusRow 
-                  label={t("dashboard.status")}
-                  value={co2Rating === "A" ? t("dashboard.excellent") : co2Rating === "B" ? t("dashboard.good") : t("dashboard.improvable")}
-                  status={co2Rating === "A" ? "success" : "neutral"}
-                  icon={co2Rating === "A" ? Check : AlertCircle}
-                />
-                <StatusRow
-                  label={t("dashboard.equivalentTrees")}
-                  value={`${treesThisMonth}`}
-                  status="neutral"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                {/* Left: stats */}
+                <div className="min-w-0 flex flex-col">
+                  <div className="text-2xl font-bold text-foreground mb-2">{co2ThisMonth.toFixed(0)} <span className="text-sm text-muted-foreground font-medium">kg</span></div>
+                  <div className="grid gap-1.5">
+                    <StatusRow 
+                      label={t("dashboard.trend")}
+                      value={`${Math.abs(co2TrendValue)}%`}
+                      status={co2TrendPositive ? "destructive" : "success"} 
+                      icon={co2TrendPositive ? ArrowUp : ArrowDown}
+                    />
+                    <StatusRow 
+                      label={t("dashboard.status")}
+                      value={co2Rating === "A" ? t("dashboard.excellent") : co2Rating === "B" ? t("dashboard.good") : t("dashboard.improvable")}
+                      status={co2Rating === "A" ? "success" : "neutral"}
+                      icon={co2Rating === "A" ? Check : AlertCircle}
+                    />
+                    <StatusRow
+                      label={t("dashboard.equivalentTrees")}
+                      value={`${treesThisMonth}`}
+                      status="neutral"
+                    />
+                  </div>
+                </div>
+                {/* Right: ring chart */}
+                <div className="flex flex-col items-center">
+                  {(() => {
+                    const maxCo2 = 1500;
+                    const ratio = Math.min(co2ThisMonth / maxCo2, 1);
+                    const ratingColor = co2Rating === "A" ? "#129446" : co2Rating === "B" ? "#3b82f6" : co2Rating === "C" ? "#f59e0b" : "#ef4444";
+                    const r = 51;
+                    const circumference = 2 * Math.PI * r;
+                    return (
+                      <svg width={120} height={120} viewBox="0 0 120 120">
+                        <circle cx={60} cy={60} r={r} fill="none" stroke="hsl(var(--muted) / 0.3)" strokeWidth={10} />
+                        <circle cx={60} cy={60} r={r} fill="none" stroke={ratingColor} strokeWidth={10}
+                          strokeDasharray={`${ratio * circumference} ${circumference}`}
+                          strokeDashoffset={circumference * 0.25} strokeLinecap="round" className="transition-all duration-700" />
+                        <text x={60} y={60} textAnchor="middle" dominantBaseline="central" className="fill-foreground font-bold" fontSize={32}>
+                          {co2Rating}
+                        </text>
+                      </svg>
+                    );
+                  })()}
+                  <div className="flex gap-2 mt-0.5">
+                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: co2Rating === "A" ? "#129446" : co2Rating === "B" ? "#3b82f6" : co2Rating === "C" ? "#f59e0b" : "#ef4444" }} />
+                      CO₂ {t("dashboard.thisMonth")}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
             )}
-            action={<Link to="/advanced/emissions" className="text-xs text-primary hover:underline mt-2 inline-block">{t("dashboard.viewCo2")}</Link>}
+            action={<Link to="/advanced/emissions" className="text-sm font-medium text-[#129446] hover:text-[#129446]/80 mt-2 inline-flex items-center gap-1">{t("dashboard.viewCo2")} <ArrowRight className="w-4 h-4" /></Link>}
           />
         </div>
 
         {/* Main content grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:flex-1 lg:min-h-0">
           <ProjectChart />
           <RecentTrips />
         </div>
