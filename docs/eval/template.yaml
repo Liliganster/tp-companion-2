@@ -1,0 +1,19 @@
+# Copia este archivo con el nombre del PDF (ej. FUNDBOX_Dispo_DT_4.yaml) y rellénalo a mano.
+archivo: "NOMBRE_DEL_PDF.pdf"
+fecha: "AAAA-MM-DD"          # fecha del día de rodaje
+proyecto: ""                 # nombre de la producción
+productora: ""               # si aparece (aunque sea solo logo); vacío si no
+
+# EN ORDEN de rodaje. La dirección es a donde CONDUCE el conductor
+# (si hay meeting point / Parkplatz asociado, esa es la dirección).
+localizaciones:
+  - etiqueta: ""             # texto literal de la callsheet (con erratas si las hay)
+    direccion: ""            # dirección real, completa y geocodificable
+    enlace_maps: ""          # enlace de Google Maps si la callsheet lo trae; vacío si no
+
+# Cosas que aparecen en la callsheet pero NO son destino del viaje
+# (lunch, production office, hospital de referencia...)
+excluidas:
+  - ""
+
+notas: ""                    # cualquier cosa rara: fecha sin año, errata en la calle, etc.

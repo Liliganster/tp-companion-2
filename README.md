@@ -1,144 +1,83 @@
-# Welcome to your Lovable project
+# Fahrtenbuch Pro
 
-## Project info
+**Callsheet hochladen. Kilometergeld-Abrechnung fertig.**
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+Kilometergeld para crew de cine en Austria: sube la callsheet, la IA extrae los viajes del día y al final del mes generas el informe PDF que se entrega a producción. Dominio: [fahrtenbuchpro.com](https://fahrtenbuchpro.com).
 
-## How can I edit this code?
+- **Flujo**: callsheet (PDF) → extracción IA de localizaciones → viajes con ruta y km → informe mensual PDF.
+- **Reglas austríacas** (Kilometergeld oficial), mapa europeo: los rodajes pueden cruzar a DE/CZ/HU.
+- **Idiomas**: alemán, inglés y español.
 
-There are several ways of editing your application.
+El plan de producto por fases está en [PLAN.md](PLAN.md).
 
-**Use Lovable**
+## Stack
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+- Vite + React 18 + TypeScript, shadcn/ui, Tailwind CSS
+- Supabase (auth + base de datos)
+- Funciones serverless en Vercel (carpeta `api/`): extracción de callsheets (Gemini), proxies de Google Maps
+- jsPDF para el informe
 
-Changes made via Lovable will be committed automatically to this repo.
+## Desarrollo local
 
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+Requisitos: Node.js 20+ y npm.
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+npm install
+npm run dev        # Vite en http://localhost:8080
 ```
 
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## Google Maps (Trips map)
-
-The trip detail modal uses Google Maps to render the route on an interactive map.
-
-### Environment variables
-
-Create a `.env.local` (ignored by git) with:
+Otros comandos:
 
 ```sh
-# Supabase (Auth)
+npm run build      # valida el env y hace build de producción
+npm run typecheck  # tsc --noEmit
+npm run lint       # eslint
+npm run test:run   # tests unitarios (vitest)
+npm run test:e2e   # e2e (playwright)
+```
+
+### Variables de entorno
+
+Crea un `.env.local` (ignorado por git). Referencia completa en [.env.example](.env.example) y [.env.local.example](.env.local.example). Las principales:
+
+```sh
+# Supabase (cliente)
 VITE_SUPABASE_URL=...
 VITE_SUPABASE_ANON_KEY=...
 
-# Client (will be visible in the browser; restrict by HTTP referrer + limit APIs to "Maps JavaScript API")
+# Google Maps
+# Clave de navegador: restringir por HTTP referrer y limitar a "Maps JavaScript API"
 VITE_GOOGLE_MAPS_BROWSER_KEY=...
-
-# Server-only (keep secret; used by /api/google/* proxies for Directions/Geocoding/Places)
+# Clave de servidor (secreta): Directions/Geocoding/Places vía proxies /api/google/*
 GOOGLE_MAPS_SERVER_KEY=...
 
-# Google OAuth (Calendar/Drive)
-GOOGLE_OAUTH_CLIENT_ID=...
-GOOGLE_OAUTH_CLIENT_SECRET=...
-GOOGLE_OAUTH_REDIRECT_URI=http://localhost:8080/api/google/oauth/callback
-GOOGLE_OAUTH_STATE_SECRET=... # random secret for signing state
+# Extractor de callsheets (Gemini)
+GEMINI_API_KEY=...
 
-# Electricity Maps (real-time grid CO₂ intensity for Austria "AT")
-ELECTRICITY_MAPS_API_KEY=...
-ELECTRICITY_MAPS_DEFAULT_ZONE=AT
-
-# Climatiq (gasoline/diesel emissions factor, kg CO₂e/L)
-CLIMATIQ_API_KEY=...
-# Used by `/api/climatiq/fuel-factor` (Data API `/data/v1/search` + `/data/v1/estimate`).
-
-# Supabase server (for /api/google/* Calendar/Drive)
+# Supabase servidor (funciones api/)
 SUPABASE_URL=...
 SUPABASE_SERVICE_ROLE_KEY=...
 ```
 
-### Local dev: Calendar/Drive OAuth
+> Nota: la integración con Google OAuth (Calendar/Drive) y las APIs de Climatiq / Electricity Maps existen en el código pero están en proceso de hibernación/sustitución (ver PLAN.md, Fase 1). Sus variables siguen documentadas en `.env.example`.
 
-In production, `/api/google/*` is served by Vercel functions (folder `api/`). In local dev, `npm run dev` only starts Vite, so the OAuth/Calendar/Drive endpoints are not available unless you run them too.
+### Funciones API en local
 
-This repo supports a dev proxy for those endpoints:
+En producción, `api/` se sirve como funciones de Vercel. `npm run dev` solo arranca Vite, así que para probar los endpoints `/api/*` en local:
 
-1. Start the Vercel functions locally (separate terminal):
+1. En una terminal aparte: `npx vercel dev --listen 3000`
+2. Añade a `.env.local`: `VERCEL_DEV_API_ORIGIN=http://localhost:3000`
+3. Arranca Vite: `npm run dev`
 
-```sh
-npx vercel dev --listen 3000
-```
+Vite hace proxy de `/api/*` al servidor de Vercel dev.
 
-2. Add this to your `.env.local`:
+## Despliegue
 
-```sh
-VERCEL_DEV_API_ORIGIN=http://localhost:3000
-```
+Vercel (config en [vercel.json](vercel.json)). Guía de configuración: [VERCEL_SETUP.md](VERCEL_SETUP.md).
 
-3. Start Vite:
+## Documentación
 
-```sh
-npm run dev
-```
-
-Now `http://localhost:8080/api/google/oauth/*` and `http://localhost:8080/api/google/calendar/*` will be proxied to the local Vercel dev server.
-
-### Security note
-
-For interactive maps, the **Maps JavaScript API key must be sent to the browser**. The recommended approach is:
-
-- Use a **browser-restricted key** for `VITE_GOOGLE_MAPS_BROWSER_KEY` (HTTP referrer restrictions + only "Maps JavaScript API").
-- Use a **server key** for `GOOGLE_MAPS_SERVER_KEY` and call Directions/Geocoding/Places via the serverless proxies (`/api/google/*`).
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+- [PLAN.md](PLAN.md) — plan maestro por fases
+- [TESTING_GUIDE.md](TESTING_GUIDE.md) — guía de tests
+- [BACKUP_RECOVERY.md](BACKUP_RECOVERY.md) — copias y recuperación
+- [docs/archive/](docs/archive/) — auditorías y documentos históricos
