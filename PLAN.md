@@ -75,9 +75,9 @@ Todo es *ocultar y desconectar* (hibernar), no borrar. Reversible.
 
 ## Fase 3 — El informe del que se presume
 
-- [ ] Rediseño del PDF (`src/pages/ReportView.tsx` + jspdf): cabecera con datos del freelancer y de la producción, tabla de viajes (fecha, ruta, propósito, km, tarifa, importe), gastos con anexo de recibos, total destacado, línea de CO₂ **con fuente citada (Umweltbundesamt)** + árboles equivalentes. En alemán. Tipografía/márgenes impecables.
-- [ ] Verificar que cubre lo que la Aufnahmeleitung necesita para pagar Kilometergeld (0,50 €/km oficial 2026). Validar formato con 2-3 pilotos.
-- [ ] Pie discreto *"Erstellt mit Fahrtenbuch Pro"* → bucle viral.
+- [x] Rediseño del PDF — hecho 2026-07-09 (`src/lib/reportPdf.ts`, ÚNICA implementación; antes vivía duplicada 2× dentro de ReportView). Cabecera freelancer (conductor, dirección, matrícula) + producción (proyecto, productora, Mitfahrer-Zuschlag); tabla fecha · ruta · propósito · (pasajeros) · km · €/km · importe con la tarifa POR VIAJE (el override del viaje manda — antes el informe ignoraba los overrides: bug de dinero); tabla de Auslagen (peaje/parking/combustible/otros) con nota "Belege im Anhang (ZIP-Export)"; total destacado (caja negra); línea de CO2 con fuente citada (Umweltbundesamt/JEC tank-to-wheel; Ember/OWID para red) + árboles equivalentes; línea de firma; números formateados por locale (1.234,56 €). **Idioma del PDF independiente de la UI: alemán por defecto**, selector DE/EN/ES en la vista. La vista en pantalla ganó el bloque resumen (total destacado + CO2). Odómetro fuera del informe (feature hibernada, gate FEATURES.odometer).
+- [ ] Verificar que cubre lo que la Aufnahmeleitung necesita para pagar Kilometergeld (0,50 €/km oficial 2026). Validar formato con 2-3 pilotos. *Pendiente de decisión: semántica del Mitfahrer-Zuschlag (hoy se suma un importe fijo por pasajero y viaje; el oficial austríaco es por km) — validar con los pilotos.*
+- [x] Pie discreto *"Erstellt mit Fahrtenbuch Pro · fahrtenbuchpro.com"* en todas las páginas + numeración "Seite n von N" → bucle viral.
 
 **Hecho cuando**: un piloto entrega el informe a una producción real y no le piden cambios.
 

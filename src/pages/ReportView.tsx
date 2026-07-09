@@ -1,4 +1,5 @@
-﻿import { useNavigate, useSearchParams } from "react-router-dom";
+import { useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -6,6 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Download, Printer, ArrowLeft, FileSpreadsheet, FileText, FileDown, Save, Archive } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTrips } from "@/contexts/TripsContext";
@@ -16,14 +18,20 @@ import { usePlan } from "@/contexts/PlanContext";
 import { useI18n } from "@/hooks/use-i18n";
 import { buildProjectZip } from "@/hooks/use-project-export";
 import { useOdometer } from "@/contexts/OdometerContext";
+import { buildReportPdf, type ReportPdfExpenseRow } from "@/lib/reportPdf";
+import { TREE_KG_CO2_PER_YEAR } from "@/lib/emissionFactors";
+import { FEATURES } from "@/lib/features";
+import type { AppLanguage } from "@/lib/i18n";
 
 interface ReportTrip {
   date: string;
   project: string;
   producer: string;
   route: string[];
+  purpose: string;
   passengers: number;
   distance: number;
+  rate: number;
   reimbursement: number;
 }
 
@@ -101,6 +109,9 @@ export default function ReportView() {
   const { reports, addReport } = useReports();
   const { planTier, limits } = usePlan();
   const { computeRatio, getImageUrl, snapshots: odoSnapshots } = useOdometer();
+  // El PDF va dirigido a la producción (Aufnahmeleitung) → alemán por defecto,
+  // independiente del idioma de la UI (Fase 3 del PLAN.md).
+  const [pdfLang, setPdfLang] = useState<AppLanguage>("de");
   const reportId = searchParams.get("reportId");
   const savedReport = reportId ? reports.find((r) => r.id === reportId) : undefined;
 
@@ -229,15 +240,23 @@ export default function ReportView() {
     const passengers = Number.isFinite(trip.passengers) ? trip.passengers : 0;
     const distance = Number.isFinite(trip.distance) ? trip.distance : 0;
     const producer = trip.clientName || getProducerForProject(trip.project);
-    const reimbursement = (distance * ratePerKm) + (passengers * passengerSurcharge);
+    // Tarifa por viaje: el override del viaje manda (igual que la página de
+    // Viajes); si no hay, la tarifa del perfil.
+    const rate =
+      typeof trip.ratePerKmOverride === "number" && Number.isFinite(trip.ratePerKmOverride)
+        ? trip.ratePerKmOverride
+        : ratePerKm;
+    const reimbursement = (distance * rate) + (passengers * passengerSurcharge);
 
     return {
       date: dateLabel,
       project: trip.project,
       producer,
       route: trip.route,
+      purpose: trip.purpose ?? "",
       passengers,
       distance,
+      rate,
       reimbursement,
     };
   });
@@ -245,6 +264,32 @@ export default function ReportView() {
   const trips = reportTrips;
   const totalDistance = trips.reduce((acc, trip) => acc + (Number.isFinite(trip.distance) ? trip.distance : 0), 0);
   const totalReimbursement = trips.reduce((acc, trip) => acc + (Number.isFinite(trip.reimbursement) ? trip.reimbursement : 0), 0);
+
+  // Gastos por viaje (peaje/parking/combustible/otros) → tabla de Auslagen del PDF
+  const reportExpenses: ReportPdfExpenseRow[] = filteredTrips.flatMap((trip, index) => {
+    const dateLabel = reportTrips[index]?.date ?? trip.date;
+    const kinds: Array<{ kind: ReportPdfExpenseRow["kind"]; amount: number | null | undefined }> = [
+      { kind: "toll", amount: trip.tollAmount },
+      { kind: "parking", amount: trip.parkingAmount },
+      { kind: "fuel", amount: trip.fuelAmount },
+      { kind: "other", amount: trip.otherExpenses },
+    ];
+    return kinds
+      .filter((k) => typeof k.amount === "number" && Number.isFinite(k.amount) && k.amount > 0)
+      .map((k) => ({ date: dateLabel, kind: k.kind, amount: k.amount as number }));
+  });
+  const totalExpenses = reportExpenses.reduce((acc, e) => acc + e.amount, 0);
+  const grandTotal = totalReimbursement + totalExpenses;
+  const totalCo2 = filteredTrips.reduce((acc, trip) => acc + (Number.isFinite(trip.co2) ? trip.co2 : 0), 0);
+  const hasReceipts = filteredTrips.some((trip) =>
+    (trip.documents ?? []).some((d) => String(d.kind ?? "").endsWith("_receipt") || d.kind === "invoice"),
+  );
+  const producerHeader =
+    effectiveProject !== "all"
+      ? getProducerForProject(effectiveProject)
+      : Array.from(new Set(reportTrips.map((trip) => trip.producer).filter(Boolean))).length === 1
+        ? reportTrips.find((trip) => trip.producer)?.producer ?? ""
+        : "";
 
   // Synthetic ratio from 1 snapshot: reading_km = totalKm, workKm = trips total distance
   const synthOdoRatio = (!odometerRatio && fallbackOdoSnap && fallbackOdoSnap.reading_km > 0)
@@ -299,17 +344,10 @@ export default function ReportView() {
     t("reportView.colProject"),
     companyOrClientLabel,
     t("reportView.colRoute"),
+    t("reportPdf.colPurpose"),
     t("reportView.colPassengers"),
     t("reportView.colDistanceKm"),
-    t("reportView.colReimbursement"),
-  ];
-
-  const pdfHeaders = [
-    t("reportView.colDate"),
-    t("reportView.colProject"),
-    t("reportView.colRoute"),
-    t("reportView.colPassengersShort"),
-    t("reportView.colDistanceKm"),
+    t("reportPdf.colRate"),
     t("reportView.colReimbursement"),
   ];
 
@@ -318,24 +356,41 @@ export default function ReportView() {
     trip.project,
     trip.producer,
     trip.route.join(" -> "),
+    trip.purpose,
     trip.passengers,
     trip.distance,
+    trip.rate.toFixed(2),
     trip.reimbursement.toFixed(2),
   ]);
 
-  const pdfRows = trips.map((trip) => {
-    // Clean route: normalize whitespace and join with " > "
-    const cleanRoute = (str: string) => str.replace(/\r?\n|\r/g, ", ").replace(/\s+/g, " ").trim();
-    const routeStr = trip.route.map(cleanRoute).join(" > ");
-    return [
-      trip.date,
-      trip.project,
-      routeStr,
-      String(trip.passengers),
-      trip.distance.toFixed(1) + " km",
-      trip.reimbursement.toFixed(2) + " \u20ac",
-    ];
-  });
+  // Clean route: normalize whitespace and join with " > "
+  const cleanRoute = (str: string) => str.replace(/\r?\n|\r/g, ", ").replace(/\s+/g, " ").trim();
+
+  // \u00daNICA implementaci\u00f3n del PDF (src/lib/reportPdf.ts) \u2014 usada por el export
+  // PDF y por el ZIP. En el idioma elegido (alem\u00e1n por defecto).
+  const buildPdfDoc = () =>
+    buildReportPdf({
+      lang: pdfLang,
+      period,
+      driver,
+      address,
+      licensePlate,
+      projectLabel,
+      producer: producerHeader,
+      passengerSurcharge,
+      trips: trips.map((trip) => ({
+        date: trip.date,
+        routeText: trip.route.map(cleanRoute).join(" > "),
+        purpose: trip.purpose,
+        passengers: trip.passengers,
+        distanceKm: trip.distance,
+        ratePerKm: trip.rate,
+        amount: trip.reimbursement,
+      })),
+      expenses: reportExpenses,
+      co2Kg: totalCo2,
+      hasReceipts,
+    });
 
   const canSave = !savedReport && filteredTrips.length > 0;
 
@@ -440,218 +495,7 @@ export default function ReportView() {
           return;
         }
 
-        const { jsPDF } = await import("jspdf");
-        const autoTableModule = await import("jspdf-autotable");
-        const autoTable = autoTableModule.default;
-
-        const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const margin = 40;
-        const availableWidth = pageWidth - margin * 2;
-
-        const drawLabelValueLeft = (x: number, y: number, label: string, value: string) => {
-          const labelText = `${label}: `;
-          doc.setFont("helvetica", "bold");
-          doc.setFontSize(9);
-          doc.text(labelText, x, y);
-          const labelWidth = doc.getTextWidth(labelText);
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(9);
-          doc.text(value, x + labelWidth, y);
-        };
-
-        const drawLabelValueRight = (rightEdge: number, y: number, label: string, value: string) => {
-          doc.setFont("helvetica", "bold");
-          doc.setFontSize(9);
-          const fullText = `${label}: ${value}`;
-          const textWidth = doc.getTextWidth(fullText);
-          const startX = rightEdge - textWidth;
-          doc.text(`${label}: `, startX, y);
-          const labelWidth = doc.getTextWidth(`${label}: `);
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(9);
-          doc.text(value, startX + labelWidth, y);
-        };
-
-        // Helper to draw "label: VALUE" with bold value
-        const drawMetricBold = (x: number, y: number, label: string, value: string) => {
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(9);
-          const labelText = `${label}: `;
-          doc.text(labelText, x, y);
-          const labelW = doc.getTextWidth(labelText);
-          doc.setFont("helvetica", "bold");
-          doc.text(value, x + labelW, y);
-          return doc.getTextWidth(labelText + value);
-        };
-
-        doc.setTextColor(0, 0, 0);
-
-        // Title
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(15);
-        doc.text(t("reportView.reportTitle"), pageWidth / 2, 55, { align: "center" });
-
-        // Period
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(10);
-        doc.text(`${t("reportView.periodLabel")}: ${period}`, pageWidth / 2, 72, { align: "center" });
-
-        // App name below period
-        doc.setFontSize(8);
-        doc.setTextColor(160, 160, 160);
-        doc.text("Fahrtenbuch Pro", pageWidth / 2, 84, { align: "center" });
-        doc.setTextColor(0, 0, 0);
-
-        const leftX = margin;
-        const rightEdge = pageWidth - margin;
-        const metaY1 = 100;
-        const metaY2 = 113;
-        const metaY3 = 126;
-
-        drawLabelValueLeft(leftX, metaY1, t("reportView.driverLabel"), driver);
-        drawLabelValueLeft(leftX, metaY2, t("reportView.licensePlateLabel"), licensePlate);
-        drawLabelValueLeft(leftX, metaY3, t("reportView.addressLabel"), address);
-
-        drawLabelValueRight(rightEdge, metaY1, t("reportView.projectLabel"), projectLabel);
-        drawLabelValueRight(rightEdge, metaY2, t("reportView.passengerSurchargeLabel"), `${profile.passengerSurcharge || "0"} €`);
-        drawLabelValueRight(rightEdge, metaY3, t("reportView.ratePerKmLabel"), `${profile.ratePerKm || "0"} €`);
-
-        const headerBottomY = 140;
-        doc.setDrawColor(0, 0, 0);
-        doc.setLineWidth(0.5);
-        doc.line(margin, headerBottomY, pageWidth - margin, headerBottomY);
-
-        // Odometer summary card
-        const pdfOdoRatio = displayOdoRatio;
-        let tableStartY = headerBottomY + 18;
-        if (pdfOdoRatio) {
-          const cardH = 62;
-          const cardY = headerBottomY + 6;
-          doc.setFillColor(248, 248, 248);
-          doc.roundedRect(margin, cardY, availableWidth, cardH, 2, 2, "F");
-          doc.setDrawColor(200, 200, 200);
-          doc.setLineWidth(0.3);
-          doc.roundedRect(margin, cardY, availableWidth, cardH, 2, 2, "S");
-
-          // Title row
-          doc.setFont("helvetica", "bold");
-          doc.setFontSize(7);
-          doc.setTextColor(100, 100, 100);
-          doc.text(t("odometer.calcTitle").toUpperCase(), margin + 8, cardY + 12);
-
-          // Metrics row 1 — totalKm, workKm, privateKm with bold values
-          doc.setTextColor(30, 30, 30);
-          const mX = margin + 8;
-          const mY1 = cardY + 26;
-          const metricItems = [
-            { label: t("odometer.totalKm"), value: `${Number(pdfOdoRatio.totalKm).toFixed(0)} km` },
-            { label: t("odometer.workKm"), value: `${Number(pdfOdoRatio.workKm).toFixed(0)} km` },
-            { label: t("odometer.privateKm"), value: `${Number(pdfOdoRatio.privateKm).toFixed(0)} km` },
-          ];
-          const mColW = (availableWidth - 16) / 3;
-          metricItems.forEach((item, i) => {
-            drawMetricBold(mX + mColW * i, mY1, item.label, item.value);
-          });
-
-          // Metrics row 2 — workPct
-          const mY2 = cardY + 40;
-          drawMetricBold(mX, mY2, t("odometer.workPct"), `${Number(pdfOdoRatio.pct).toFixed(1)} %`);
-
-          // Footer note
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(7);
-          doc.setTextColor(140, 140, 140);
-          const isSingleSnap = pdfOdoRatio.startSnapshot.id === pdfOdoRatio.endSnapshot.id;
-          const snapNote = isSingleSnap
-            ? `${pdfOdoRatio.startSnapshot.snapshot_date} | ${Number(pdfOdoRatio.startSnapshot.reading_km).toFixed(0)}${pdfOdoRatio.startSnapshot.extraction_status === "user_edited" ? " (mod.)" : ""} km`
-            : `${pdfOdoRatio.startSnapshot.snapshot_date} \u2192 ${pdfOdoRatio.endSnapshot.snapshot_date}  |  ${Number(pdfOdoRatio.startSnapshot.reading_km).toFixed(0)} \u2192 ${Number(pdfOdoRatio.endSnapshot.reading_km).toFixed(0)} km`;
-          doc.text(snapNote, mX, cardY + 52);
-
-          doc.setDrawColor(0, 0, 0);
-          doc.setTextColor(0, 0, 0);
-          tableStartY = cardY + cardH + 12;
-        }
-
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
-
-        // Simple proportional widths for portrait A4 (535pt available)
-        // Route gets all remaining space after allocating fixed widths
-        const fixedWidths = [55, 82, 0, 55, 72, 72]; // Date, Project, Route(placeholder), Passengers, Distance, Reimbursement
-        const fixedTotal = fixedWidths.reduce((a, b) => a + b, 0);
-        fixedWidths[2] = availableWidth - fixedTotal; // Route = all remaining space
-        const columnWidths = fixedWidths;
-
-        autoTable(doc, {
-          head: [pdfHeaders],
-          body: pdfRows,
-          foot: [
-            [
-              { content: "", colSpan: 3, styles: { fillColor: [255, 255, 255] } },
-              { content: `${t("reportView.totalShort")}:`, styles: { halign: "right", fillColor: [255, 255, 255] } },
-              { content: `${totalDistance.toFixed(1)} km`, styles: { halign: "right", fontStyle: "bold" } },
-              { content: `${totalReimbursement.toFixed(2)} €`, styles: { halign: "right", fontStyle: "bold" } },
-            ],
-          ],
-          startY: tableStartY,
-          theme: "plain",
-          styles: { 
-            font: "helvetica",
-            fontSize: 9, 
-            cellPadding: { top: 5, right: 4, bottom: 5, left: 4 }, 
-            textColor: [0, 0, 0], 
-            valign: "middle",
-            overflow: "linebreak",
-            lineWidth: { bottom: 0.3 },
-            lineColor: [220, 220, 220],
-          },
-          headStyles: { 
-            font: "helvetica",
-            fillColor: [255, 255, 255], 
-            textColor: [0, 0, 0], 
-            fontStyle: "bold", 
-            fontSize: 9,
-            valign: "middle",
-            cellPadding: { top: 4, right: 4, bottom: 4, left: 4 },
-            lineWidth: { bottom: 0.5 },
-            lineColor: [160, 160, 160],
-          },
-          footStyles: { 
-            font: "helvetica",
-            fillColor: [255, 255, 255], 
-            textColor: [0, 0, 0], 
-            fontSize: 9,
-            fontStyle: "bold",
-            lineWidth: { top: 0.8 },
-            lineColor: [0, 0, 0],
-          },
-          margin: { left: margin, right: margin },
-          columnStyles: {
-            0: { cellWidth: columnWidths[0] },
-            1: { cellWidth: columnWidths[1] },
-            2: { cellWidth: columnWidths[2], overflow: "linebreak" },
-            3: { cellWidth: columnWidths[3], halign: "center" },
-            4: { cellWidth: columnWidths[4], halign: "right" },
-            5: { cellWidth: columnWidths[5], halign: "right" },
-          },
-          didDrawPage: (data: { table?: { head?: Array<{ cells?: Record<string, { x: number; width: number; y: number; height: number }> }> } }) => {
-            // Draw line under header row
-            if (data.table?.head?.[0]) {
-              const headerCells = data.table.head[0].cells;
-              if (headerCells) {
-                const firstCell = headerCells[0];
-                const lastCell = headerCells[Object.keys(headerCells).length - 1];
-                if (firstCell && lastCell) {
-                  doc.setDrawColor(180, 180, 180);
-                  doc.setLineWidth(0.5);
-                  doc.line(firstCell.x, firstCell.y + firstCell.height, lastCell.x + lastCell.width, lastCell.y + lastCell.height);
-                }
-              }
-            }
-          },
-        });
-
+        const doc = await buildPdfDoc();
         doc.save(`${fileBase}.pdf`);
 
         toast({
@@ -686,212 +530,7 @@ export default function ReportView() {
     (async () => {
       try {
         // 1. Generate PDF blob in-memory
-        const { jsPDF } = await import("jspdf");
-        const autoTableModule = await import("jspdf-autotable");
-        const autoTable = autoTableModule.default;
-
-        const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const margin = 40;
-        const availableWidth = pageWidth - margin * 2;
-
-        const drawLabelValueLeft = (x: number, y: number, label: string, value: string) => {
-          const labelText = `${label}: `;
-          doc.setFont("helvetica", "bold");
-          doc.setFontSize(9);
-          doc.text(labelText, x, y);
-          const labelWidth = doc.getTextWidth(labelText);
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(9);
-          doc.text(value, x + labelWidth, y);
-        };
-
-        const drawLabelValueRight = (rightEdge: number, y: number, label: string, value: string) => {
-          doc.setFont("helvetica", "bold");
-          doc.setFontSize(9);
-          const fullText = `${label}: ${value}`;
-          const textWidth = doc.getTextWidth(fullText);
-          const startX = rightEdge - textWidth;
-          doc.text(`${label}: `, startX, y);
-          const labelWidth = doc.getTextWidth(`${label}: `);
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(9);
-          doc.text(value, startX + labelWidth, y);
-        };
-
-        // Helper to draw "label: VALUE" with bold value
-        const drawMetricBold = (x: number, y: number, label: string, value: string) => {
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(9);
-          const labelText = `${label}: `;
-          doc.text(labelText, x, y);
-          const labelW = doc.getTextWidth(labelText);
-          doc.setFont("helvetica", "bold");
-          doc.text(value, x + labelW, y);
-          return doc.getTextWidth(labelText + value);
-        };
-
-        doc.setTextColor(0, 0, 0);
-
-        // Title
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(15);
-        doc.text(t("reportView.reportTitle"), pageWidth / 2, 55, { align: "center" });
-
-        // Period
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(10);
-        doc.text(`${t("reportView.periodLabel")}: ${period}`, pageWidth / 2, 72, { align: "center" });
-
-        // App name below period
-        doc.setFontSize(8);
-        doc.setTextColor(160, 160, 160);
-        doc.text("Fahrtenbuch Pro", pageWidth / 2, 84, { align: "center" });
-        doc.setTextColor(0, 0, 0);
-
-        const leftX = margin;
-        const rightEdge = pageWidth - margin;
-        const metaY1 = 100;
-        const metaY2 = 113;
-        const metaY3 = 126;
-
-        drawLabelValueLeft(leftX, metaY1, t("reportView.driverLabel"), driver);
-        drawLabelValueLeft(leftX, metaY2, t("reportView.licensePlateLabel"), licensePlate);
-        drawLabelValueLeft(leftX, metaY3, t("reportView.addressLabel"), address);
-        drawLabelValueRight(rightEdge, metaY1, t("reportView.projectLabel"), projectLabel);
-        drawLabelValueRight(rightEdge, metaY2, t("reportView.passengerSurchargeLabel"), `${profile.passengerSurcharge || "0"} €`);
-        drawLabelValueRight(rightEdge, metaY3, t("reportView.ratePerKmLabel"), `${profile.ratePerKm || "0"} €`);
-
-        const headerBottomY = 140;
-        doc.setDrawColor(0, 0, 0);
-        doc.setLineWidth(0.5);
-        doc.line(margin, headerBottomY, pageWidth - margin, headerBottomY);
-
-        // Odometer summary card
-        const zipOdoRatio = displayOdoRatio;
-        let tableStartY = headerBottomY + 18;
-        if (zipOdoRatio) {
-          const cardH = 62;
-          const cardY = headerBottomY + 6;
-          doc.setFillColor(248, 248, 248);
-          doc.roundedRect(margin, cardY, availableWidth, cardH, 2, 2, "F");
-          doc.setDrawColor(200, 200, 200);
-          doc.setLineWidth(0.3);
-          doc.roundedRect(margin, cardY, availableWidth, cardH, 2, 2, "S");
-
-          // Title row
-          doc.setFont("helvetica", "bold");
-          doc.setFontSize(7);
-          doc.setTextColor(100, 100, 100);
-          doc.text(t("odometer.calcTitle").toUpperCase(), margin + 8, cardY + 12);
-
-          // Metrics row 1 — totalKm, workKm, privateKm with bold values
-          doc.setTextColor(30, 30, 30);
-          const mX = margin + 8;
-          const mY1 = cardY + 26;
-          const metricItems = [
-            { label: t("odometer.totalKm"), value: `${Number(zipOdoRatio.totalKm).toFixed(0)} km` },
-            { label: t("odometer.workKm"), value: `${Number(zipOdoRatio.workKm).toFixed(0)} km` },
-            { label: t("odometer.privateKm"), value: `${Number(zipOdoRatio.privateKm).toFixed(0)} km` },
-          ];
-          const mColW = (availableWidth - 16) / 3;
-          metricItems.forEach((item, i) => {
-            drawMetricBold(mX + mColW * i, mY1, item.label, item.value);
-          });
-
-          // Metrics row 2 — workPct
-          const mY2 = cardY + 40;
-          drawMetricBold(mX, mY2, t("odometer.workPct"), `${Number(zipOdoRatio.pct).toFixed(1)} %`);
-
-          // Footer note
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(7);
-          doc.setTextColor(140, 140, 140);
-          const zipIsSingle = zipOdoRatio.startSnapshot.id === zipOdoRatio.endSnapshot.id;
-          const zipNote = zipIsSingle
-            ? `${zipOdoRatio.startSnapshot.snapshot_date} | ${Number(zipOdoRatio.startSnapshot.reading_km).toFixed(0)}${zipOdoRatio.startSnapshot.extraction_status === "user_edited" ? " (mod.)" : ""} km`
-            : `${zipOdoRatio.startSnapshot.snapshot_date} \u2192 ${zipOdoRatio.endSnapshot.snapshot_date}  |  ${Number(zipOdoRatio.startSnapshot.reading_km).toFixed(0)} \u2192 ${Number(zipOdoRatio.endSnapshot.reading_km).toFixed(0)} km`;
-          doc.text(zipNote, mX, cardY + 52);
-
-          doc.setDrawColor(0, 0, 0);
-          doc.setTextColor(0, 0, 0);
-          tableStartY = cardY + cardH + 12;
-        }
-
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
-
-        // Simple proportional widths for portrait A4
-        const fixedWidths = [55, 82, 0, 55, 72, 72];
-        const fixedTotal = fixedWidths.reduce((a, b) => a + b, 0);
-        fixedWidths[2] = availableWidth - fixedTotal;
-        const columnWidths = fixedWidths;
-        autoTable(doc, {
-          head: [pdfHeaders],
-          body: pdfRows,
-          foot: [[
-            { content: "", colSpan: 3, styles: { fillColor: [255, 255, 255] } },
-            { content: `${t("reportView.totalShort")}:`, styles: { halign: "right", fillColor: [255, 255, 255] } },
-            { content: `${totalDistance.toFixed(1)} km`, styles: { halign: "right", fontStyle: "bold" } },
-            { content: `${totalReimbursement.toFixed(2)} €`, styles: { halign: "right", fontStyle: "bold" } },
-          ]],
-          startY: tableStartY,
-          theme: "plain",
-          styles: { 
-            font: "helvetica",
-            fontSize: 9, 
-            cellPadding: { top: 5, right: 4, bottom: 5, left: 4 }, 
-            textColor: [0, 0, 0], 
-            valign: "middle",
-            overflow: "linebreak",
-            lineWidth: { bottom: 0.3 },
-            lineColor: [220, 220, 220],
-          },
-          headStyles: { 
-            font: "helvetica",
-            fillColor: [255, 255, 255], 
-            textColor: [0, 0, 0], 
-            fontStyle: "bold", 
-            fontSize: 9,
-            valign: "middle",
-            cellPadding: { top: 4, right: 4, bottom: 4, left: 4 },
-            lineWidth: { bottom: 0.5 },
-            lineColor: [160, 160, 160],
-          },
-          footStyles: { 
-            font: "helvetica",
-            fillColor: [255, 255, 255], 
-            textColor: [0, 0, 0], 
-            fontSize: 9,
-            fontStyle: "bold",
-            lineWidth: { top: 0.8 },
-            lineColor: [0, 0, 0],
-          },
-          margin: { left: margin, right: margin },
-          columnStyles: {
-            0: { cellWidth: columnWidths[0] },
-            1: { cellWidth: columnWidths[1] },
-            2: { cellWidth: columnWidths[2], overflow: "linebreak" },
-            3: { cellWidth: columnWidths[3], halign: "center" },
-            4: { cellWidth: columnWidths[4], halign: "right" },
-            5: { cellWidth: columnWidths[5], halign: "right" },
-          },
-          didDrawPage: (data: { table?: { head?: Array<{ cells?: Record<string, { x: number; width: number; y: number; height: number }> }> } }) => {
-            if (data.table?.head?.[0]) {
-              const headerCells = data.table.head[0].cells;
-              if (headerCells) {
-                const firstCell = headerCells[0];
-                const lastCell = headerCells[Object.keys(headerCells).length - 1];
-                if (firstCell && lastCell) {
-                  doc.setDrawColor(180, 180, 180);
-                  doc.setLineWidth(0.5);
-                  doc.line(firstCell.x, firstCell.y + firstCell.height, lastCell.x + lastCell.width, lastCell.y + lastCell.height);
-                }
-              }
-            }
-          },
-        });
-
+        const doc = await buildPdfDoc();
         const pdfBlob = doc.output("blob");
         const pdfFileName = `${fileBase}.pdf`;
 
@@ -902,9 +541,9 @@ export default function ReportView() {
           trips: filteredTrips,
         });
 
-        // 3. Odometer photos (Pro only, non-fatal)
+        // 3. Odometer photos (Pro only, non-fatal; feature hibernada en Fase 1)
         let finalZipBlob = zipBlob;
-        if (planTier === "pro" && odometerRatio) {
+        if (FEATURES.odometer && planTier === "pro" && odometerRatio) {
           try {
             const JSZipModule = await import("jszip");
             const JSZipCls = JSZipModule.default;
@@ -967,6 +606,16 @@ export default function ReportView() {
             <span className="sm:hidden">{t("reportView.backShort")}</span>
           </Button>
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <Select value={pdfLang} onValueChange={(v) => setPdfLang(v as AppLanguage)}>
+              <SelectTrigger className="h-9 w-[150px]" aria-label={t("reportView.pdfLanguage")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value="de">PDF: Deutsch</SelectItem>
+                <SelectItem value="en">PDF: English</SelectItem>
+                <SelectItem value="es">PDF: Español</SelectItem>
+              </SelectContent>
+            </Select>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -1051,8 +700,8 @@ export default function ReportView() {
 
             <hr className="hidden print:block border-black mb-4" />
 
-            {/* Odometer Summary Card — works with 1 or 2+ snapshots */}
-            {displayOdoRatio && (
+            {/* Odometer Summary Card — feature hibernada (Fase 1) */}
+            {FEATURES.odometer && displayOdoRatio && (
               <div className="mb-4 rounded-lg bg-slate-700/50 border border-slate-600/60 print:bg-gray-50 print:border-gray-200 p-3 sm:p-4">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 print:text-gray-500 mb-2">
                   {t("odometer.calcTitle")}
@@ -1172,6 +821,29 @@ export default function ReportView() {
                   </tr>
                 </tfoot>
               </table>
+            </div>
+
+            {/* Resumen: total destacado + CO2 con fuente (Fase 3) */}
+            <div className="mt-6 flex flex-col items-end gap-1 text-xs sm:text-sm print:text-black">
+              <p className="text-slate-400 print:text-gray-500">
+                {t("reportPdf.tripsLabel")}: {trips.length} · {t("reportPdf.totalKmLabel")}: {totalDistance.toFixed(1)} km
+              </p>
+              <p>
+                {t("reportPdf.travelCosts")}: <span className="font-semibold">{totalReimbursement.toFixed(2)} €</span>
+              </p>
+              {totalExpenses > 0 && (
+                <p>
+                  {t("reportPdf.expensesTitle")}: <span className="font-semibold">{totalExpenses.toFixed(2)} €</span>
+                </p>
+              )}
+              <p className="mt-1 rounded-md bg-black text-white print:bg-black print:text-white px-4 py-2 text-sm sm:text-base font-bold">
+                {t("reportPdf.grandTotal")}: {grandTotal.toFixed(2)} €
+              </p>
+              {totalCo2 > 0 && (
+                <p className="mt-2 text-[10px] text-slate-400 print:text-gray-500 text-right">
+                  {tf("reportPdf.co2Line", { kg: totalCo2.toFixed(1), trees: (totalCo2 / TREE_KG_CO2_PER_YEAR).toFixed(1) })}
+                </p>
+              )}
             </div>
 
             {!savedReport && (
