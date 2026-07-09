@@ -130,7 +130,8 @@ export default function Index() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h1 className="text-foreground text-xl sm:text-2xl font-semibold leading-tight tracking-tight">
-                {greeting} <span className="text-foreground">{profile.fullName.split(" ")[0]}</span>
+                {greeting}
+                {profile.fullName.trim() ? <span className="text-foreground"> {profile.fullName.trim()}</span> : null}
               </h1>
               <p className="text-muted-foreground mt-1">{t("dashboard.subtitle")}</p>
             </div>
