@@ -1,26 +1,9 @@
 import { supabaseAdmin } from "../src/lib/supabaseServer.js";
-import { generateContentFromPDF } from "../src/lib/ai/geminiClient.js";
-import { buildUniversalExtractorPrompt } from "../src/lib/ai/prompts.js";
-import { extractionSchema } from "../src/lib/ai/schema.js";
-import { CallsheetExtractionResultSchema } from "../src/lib/ai/validation.js";
 import { captureServerException, withApiObservability } from "./_utils/observability.js";
 import { enforceRateLimit } from "./_utils/rateLimit.js";
 import { checkAiMonthlyQuota } from "./_utils/aiQuota.js";
 import { calculateNextRetry, DEFAULT_RETRY_STRATEGY } from "./_utils/retry.js";
-import {
-  buildCallsheetPdfHintText,
-  normalizeExtractedCallsheetLocations,
-  filterHallucinatedLocations,
-  postProcessLocationsForGeocoding,
-} from "./_utils/callsheetLocationHints.js";
-import { classifyLabeledLocations } from "./_utils/callsheetLabels.js";
-import { parsePdfWithTimeout } from "./_utils/pdf-parser.js";
-import { resolveCallsheetDate } from "./_utils/callsheetDate.js";
-import {
-  extractMapsLinkCandidates,
-  matchMapsLinkToLocation,
-  resolveMapsLink,
-} from "./_utils/callsheetMapsLinks.js";
+import { extractCallsheet } from "./_utils/callsheetExtraction.js";
 import {
   CALLSHEET_PARALLEL_BATCH_SIZE,
   getCallsheetWorkerFetchLimit,
@@ -29,8 +12,6 @@ import {
   shouldSelfTriggerCallsheetBatch,
 } from "./_utils/callsheetWorker.js";
 import { startRuntimeWatchdog } from "./_utils/runtimeWatchdog.js";
-import { geocodeAddressCached } from "./_utils/googleCache.js";
-import { isImageCallsheetMime, resolveCallsheetMime } from "../src/lib/callsheetMime.js";
 
 const CALLSHEET_WORKER_RUNTIME_WARNING_MS = 55_000;
 
@@ -306,57 +287,6 @@ export default withApiObservability(async function handler(req: any, res: any, {
           }
         }
 
-        // Cache: if results already exist for this job, don't call Gemini again.
-        const { data: existingResult, error: existingError } = await supabaseAdmin
-          .from("callsheet_results")
-          .select("job_id")
-          .eq("job_id", job.id)
-          .maybeSingle();
-
-        if (existingError) {
-          log.warn({ jobId: job.id, existingError }, "callsheet_existing_result_check_failed");
-        } else if (existingResult?.job_id) {
-          await supabaseAdmin.from("callsheet_jobs").update({ status: "done" }).eq("id", job.id).eq("status", "processing");
-          processedResults.push({ id: job.id, status: "done", cached: true });
-          log.info({ jobId: job.id }, "callsheet_job_cached_done");
-          return;
-        }
-
-        // A. Download PDF
-        const { data: fileData, error: downloadError } = await supabaseAdmin.storage
-          .from("callsheets")
-          .download(claimed.storage_path);
-
-        if (downloadError) {
-          log.error({ jobId: job.id, downloadError }, "callsheet_download_error");
-          throw new Error(`Failed to download PDF: ${downloadError.message}`);
-        }
-        if (!fileData) {
-          throw new Error("Failed to download PDF: no data returned");
-        }
-
-        log.info({ jobId: job.id, bytes: fileData.size }, "callsheet_downloaded");
-
-        // Validate file size (max 15MB to prevent timeouts and reduce Gemini API latency)
-        const maxFileSizeBytes = 15 * 1024 * 1024; // 15MB
-        if (fileData.size > maxFileSizeBytes) {
-          const sizeMB = Math.round(fileData.size / 1024 / 1024);
-          const reason = `file_too_large:${sizeMB}MB_exceeds_15MB_limit`;
-          await supabaseAdmin
-            .from("callsheet_jobs")
-            .update({ status: "failed", needs_review_reason: reason })
-            .eq("id", job.id)
-            .eq("status", "processing");
-          processedResults.push({ id: job.id, status: "failed", error: reason });
-          log.warn({ jobId: job.id, sizeMB }, "callsheet_pdf_too_large");
-          return;
-        }
-
-        const arrayBuffer = await fileData.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-
-        // B. Process PDF with Gemini Vision
-        
         // Fetch AI user settings — reuse the profile cached during plan-limit checks (no extra DB query).
         let userSettings = undefined;
         if (userId) {
@@ -370,18 +300,6 @@ export default withApiObservability(async function handler(req: any, res: any, {
           }
         }
 
-        const { data: preAiJob } = await supabaseAdmin
-          .from("callsheet_jobs")
-          .select("status")
-          .eq("id", jobId)
-          .maybeSingle();
-
-        if (String((preAiJob as any)?.status ?? "") === "cancelled") {
-          log.info({ jobId }, "callsheet_job_cancelled_pre_ai");
-          processedResults.push({ id: jobId, status: "cancelled" });
-          return;
-        }
-
         const selectedAiProvider = userSettings ? "openrouter" : "gemini";
         const selectedAiModel = userSettings?.openrouterModel || "gemini-2.5-flash";
         log.info(
@@ -393,250 +311,46 @@ export default withApiObservability(async function handler(req: any, res: any, {
           "callsheet_ai_start",
         );
 
-        const aiStartTime = Date.now();
+        // Núcleo COMPARTIDO con /api/callsheets/process (Fase 2: pipelines
+        // unificados en api/_utils/callsheetExtraction.ts). Aquí solo queda
+        // la traducción del resultado a estados del job.
+        const outcome = await extractCallsheet({
+          jobId,
+          storagePath: String(claimed.storage_path ?? ""),
+          userSettings,
+          referenceIso: String((job as any).created_at ?? new Date().toISOString()),
+          skipGeocode,
+          checkCancellation: true,
+          log,
+        });
 
-        // Mime real por la extensión de storage (Fase 2): las dispos también
-        // llegan como foto de WhatsApp (JPG/PNG) — Gemini las lee nativamente.
-        const mimeType = resolveCallsheetMime(String(claimed.storage_path ?? ""));
-        const isImageCallsheet = isImageCallsheetMime(mimeType);
-
-        // Texto nativo del PDF COMPLETO (sin OCR/Tesseract — Fase 2 del PLAN.md).
-        // Antes: Tesseract sobre 2 páginas (16-52 s medidos) y el filtro de
-        // alucinaciones validaba contra un texto DISTINTO del que veía la IA.
-        // Ahora el filtro valida contra el mismo documento completo. PDFs
-        // escaneados sin capa de texto e imágenes → sin hints, y el filtro no
-        // descarta nada (no puede demostrar alucinación).
-        const textStartTime = Date.now();
-        let pdfText = "";
-        if (!isImageCallsheet) {
-          try {
-            const parsed = await parsePdfWithTimeout(buffer, 10_000);
-            pdfText = String(parsed?.text ?? "");
-          } catch (textErr) {
-            log.warn({ jobId: job.id, err: textErr }, "callsheet_pdf_text_unavailable");
+        if (!outcome.ok) {
+          if (outcome.kind === "cancelled") {
+            processedResults.push({ id: jobId, status: "cancelled" });
+            return;
           }
-          log.info(
-            { jobId: job.id, textChars: pdfText.length, textDurationMs: Date.now() - textStartTime },
-            "callsheet_pdf_text_extracted",
-          );
-        }
-
-        const pdfHintText = buildCallsheetPdfHintText(pdfText);
-
-        // Send FULL document to Gemini Vision + native text excerpt as context
-        const attachedTag = isImageCallsheet ? "[IMAGE ATTACHED]" : "[PDF ATTACHED]";
-        const promptSource = pdfHintText
-          ? `${attachedTag}\n\nDOCUMENT TEXT EXCERPT (use for projectName/date/company):\n${pdfHintText}`
-          : attachedTag;
-        const systemInstruction = buildUniversalExtractorPrompt(promptSource);
-
-        const aiResult = await generateContentFromPDF(
-          "gemini-2.5-flash",
-          systemInstruction,
-          buffer,
-          mimeType,
-          extractionSchema,
-          userSettings
-        );
-        const aiDuration = Date.now() - aiStartTime;
-        const resultText = aiResult.text;
-
-        log.info(
-          {
-            jobId: job.id,
-            aiProvider: aiResult.provider,
-            aiModel: aiResult.model,
-            aiVendor: aiResult.vendor,
-          },
-          "callsheet_ai_call",
-        );
-
-        log.info(
-          {
-            jobId: job.id,
-            aiProvider: aiResult.provider,
-            aiModel: aiResult.model,
-            aiVendor: aiResult.vendor,
-            length: resultText?.length || 0,
-            durationMs: aiDuration,
-          },
-          "callsheet_ai_response",
-        );
-
-        // Initialize extraction log data
-        const extractionLogData: any = {
-          user_id: String((job as any).user_id ?? ""),
-          job_id: job.id,
-          job_type: "callsheet",
-          gemini_duration_ms: aiDuration,
-          ai_provider: aiResult.provider,
-          ai_model: aiResult.model,
-          ai_vendor: aiResult.vendor,
-        };
-
-        let extractedJson: any = null;
-        try {
-          extractedJson = JSON.parse(resultText);
-        } catch {
-          extractedJson = JSON.parse(resultText.replace(/```json|```/g, "").trim());
-        }
-
-        if (!extractedJson) throw new Error("Empty extraction result");
-
-        const validated = CallsheetExtractionResultSchema.safeParse(extractedJson);
-        if (!validated.success) {
-          const reason = `invalid_callsheet_extraction:${validated.error.issues.map((i) => i.message).join("; ")}`;
+          if (outcome.kind === "download_failed") {
+            // lanzar → el catch programa el reintento con backoff
+            throw new Error(`Failed to download document: ${outcome.message}`);
+          }
+          // file_too_large | invalid_extraction → fallo definitivo revisable
           await supabaseAdmin
             .from("callsheet_jobs")
-            .update({ status: "failed", needs_review_reason: reason })
-            .eq("id", job.id)
+            .update({ status: "failed", needs_review_reason: outcome.message })
+            .eq("id", jobId)
             .eq("status", "processing");
-          processedResults.push({ id: job.id, status: "failed", error: reason });
-          log.warn({ jobId: job.id, reason }, "callsheet_extraction_invalid");
+          processedResults.push({ id: jobId, status: "failed", error: outcome.message });
           return;
         }
 
-        // Contrato híbrido: el modelo devuelve {label, address} solo de rodaje;
-        // el clasificador descarta fugas de logística (BASIS/PARKEN/…) por etiqueta.
-        const { filming, dropped } = classifyLabeledLocations(validated.data.locations as any);
-        if (dropped.length > 0) {
-          log.info({ jobId: job.id, dropped: dropped.map((d: any) => `${d.label}|${d.reason}`) }, "callsheet_labels_dropped");
-          try {
-            await supabaseAdmin.from("callsheet_excluded_blocks").insert(
-              dropped.map((d: any) => ({ job_id: job.id, label: d.label || null, evidence_text: d.address, reason: d.reason })),
-            );
-          } catch { /* auditoría best-effort */ }
-        }
-        const filmingAddresses = filming.map((f: any) => f.address);
-
-        const normalizedAiLocations = normalizeExtractedCallsheetLocations({
-          locations: filmingAddresses,
-          pdfText,
-        });
-        // Evidence: etiqueta + dirección literales del documento
-        const evidenceLocations = filming.map((f: any) => (f.label ? `${f.label}: ${f.address}` : f.address));
-        const locationLabels = filming.map((f: any) => f.label);
-        const extracted = {
-          ...validated.data,
-          locations:
-            normalizedAiLocations.length > 0
-              ? normalizedAiLocations
-              : filmingAddresses,
-        };
-        if (extracted.locations.length === 0) extracted.locations = ["No location found"];
-
-        // (la torre de regex de logística queda jubilada: el clasificador por
-        // etiqueta ya hizo este trabajo con información fiable)
-
-        // Filter out hallucinated locations (addresses the AI invented)
-        const verifiedLocations = filterHallucinatedLocations({
-          locations: extracted.locations,
-          pdfText,
-        });
-        // Keep filtered result even if empty (sentinel already set above if needed)
-        extracted.locations = verifiedLocations.length > 0 ? verifiedLocations : extracted.locations;
-        log.info({ jobId: job.id, aiLocs: validated.data.locations.length, verified: verifiedLocations.length, final: extracted.locations.length }, "callsheet_hallucination_filter");
-
-        // Code-side normalization for geocoding (Bezirk expansion, abbreviations)
-        const geocodingLocations = postProcessLocationsForGeocoding(extracted.locations);
-
-        log.info({ jobId: job.id, locations: extracted.locations.length }, "callsheet_extraction_parsed");
-
-        // D. Save Results
-        // Note: no pre-save cancel check — the atomic `.update().eq("status","processing")` below
-        // handles cancellation safely, and skipping this check saves one DB roundtrip.
-        // El año lo decide el CÓDIGO cuando el documento no lo trae impreso
-        // (la IA lo inventaba; caso medido en la línea base del eval).
-        const resolvedDate = resolveCallsheetDate({
-          date: extracted.date,
-          dateRaw: validated.data.dateRaw ?? null,
-          dateYearInDocument: validated.data.dateYearInDocument ?? null,
-          referenceIso: String((job as any).created_at ?? new Date().toISOString()),
-        });
-        if (resolvedDate !== extracted.date) {
-          log.info({ jobId: job.id, aiDate: extracted.date, resolvedDate, dateRaw: validated.data.dateRaw }, "callsheet_date_year_resolved");
+        if (outcome.cached) {
+          await supabaseAdmin.from("callsheet_jobs").update({ status: "done" }).eq("id", jobId).eq("status", "processing");
+          processedResults.push({ id: jobId, status: "done", cached: true });
+          return;
         }
 
-        const { error: resultInsertError } = await supabaseAdmin.from("callsheet_results").insert({
-          job_id: job.id,
-          date_value: resolvedDate,
-          project_value: extracted.projectName,
-          producer_value: extracted.productionCompanies?.[0],
-          date_evidence: validated.data.dateRaw ?? null,
-        });
-
-        if (resultInsertError) {
-          log.error({ jobId: job.id, resultInsertError }, "callsheet_result_insert_failed");
-          throw new Error(`Failed to insert result: ${resultInsertError.message}`);
-        }
-
-        log.info({ jobId: job.id }, "callsheet_result_saved");
-
-        if (Array.isArray(extracted.locations)) {
-          const locs: any[] = [];
-
-          // Enlaces de Google Maps del propio documento = fuente primaria
-          // (Fase 2): apuntan al sitio conducible exacto y resolverlos es
-          // gratis (solo HTTP). Si una localización tiene enlace asociado,
-          // gana al geocoding por texto.
-          const mapsLinkCandidates = extractMapsLinkCandidates(pdfText);
-
-          // Parallelize geocoding to avoid sequential API calls (70% speed improvement)
-          const geoStartTime = Date.now();
-          const geoResults = await Promise.all(
-            geocodingLocations.map(async (locStr, index) => {
-              const linkUrl = matchMapsLinkToLocation(extracted.locations[index] ?? locStr, mapsLinkCandidates, {
-                totalLocations: extracted.locations.length,
-              });
-              if (linkUrl) {
-                const resolved = await resolveMapsLink(linkUrl);
-                if (resolved) {
-                  log.info({ jobId: job.id, locStr, linkUrl, label: resolved.label }, "callsheet_maps_link_resolved");
-                  return {
-                    formatted_address: resolved.label ?? locStr,
-                    lat: resolved.lat,
-                    lng: resolved.lng,
-                    place_id: null,
-                    quality: "maps_link",
-                  };
-                }
-              }
-              return skipGeocode ? null : geocodeAddressCached(locStr);
-            })
-          );
-          const geoDuration = Date.now() - geoStartTime;
-          log.info({ jobId: job.id, locations: extracted.locations.length, durationMs: geoDuration }, "geocoding_completed");
-
-          // Update extraction log with geocoding data
-          extractionLogData.geocoding_duration_ms = geoDuration;
-          extractionLogData.geocoding_locations = extracted.locations.length;
-
-          extracted.locations.forEach((locStr, index) => {
-            const geo = geoResults[index];
-            locs.push({
-              job_id: job.id,
-              name_raw: /\d/.test(locStr) ? null : locStr,
-              address_raw: locStr,
-              label_source: locationLabels[index] || "EXTRACTED",
-              evidence_text: evidenceLocations[index] ?? locStr,
-              formatted_address: geo?.formatted_address,
-              lat: geo?.lat,
-              lng: geo?.lng,
-              place_id: geo?.place_id,
-              geocode_quality: geo?.quality,
-            });
-          });
-
-          if (locs.length > 0) {
-            const { error: locsInsertError } = await supabaseAdmin.from("callsheet_locations").insert(locs);
-            if (locsInsertError) {
-              log.error({ jobId: job.id, locsInsertError }, "callsheet_locations_insert_failed");
-              throw new Error(`Failed to insert locations: ${locsInsertError.message}`);
-            }
-            log.info({ jobId: job.id, locations: locs.length }, "callsheet_locations_saved");
-          }
-        }
-
+        // Done atómico (cancel-safe): si el usuario canceló durante la IA,
+        // el update no encuentra "processing" y no se marca done.
         const { data: doneRow, error: doneError } = await supabaseAdmin
           .from("callsheet_jobs")
           .update({ status: "done", retry_count: currentRetry })
@@ -652,24 +366,33 @@ export default withApiObservability(async function handler(req: any, res: any, {
           return;
         }
 
-        // Log extraction metrics to database
-        extractionLogData.total_duration_ms = Date.now() - (job as any).processing_started_at 
-          ? new Date((job as any).processing_started_at).getTime() 
-          : Date.now();
+        // Métricas de la extracción (best-effort)
         try {
-          await supabaseAdmin.from("ai_extraction_logs").insert(extractionLogData);
+          const startedAtMs = Date.parse(String((claimed as any).processed_at ?? ""));
+          await supabaseAdmin.from("ai_extraction_logs").insert({
+            user_id: String((job as any).user_id ?? ""),
+            job_id: jobId,
+            job_type: "callsheet",
+            gemini_duration_ms: outcome.aiDurationMs,
+            ai_provider: outcome.aiProvider,
+            ai_model: outcome.aiModel,
+            ai_vendor: outcome.aiVendor,
+            geocoding_duration_ms: outcome.geocodingDurationMs,
+            geocoding_locations: outcome.locationsCount,
+            total_duration_ms: Number.isFinite(startedAtMs) ? Date.now() - startedAtMs : null,
+          });
         } catch (err) {
           log.warn({ jobId, err }, "failed_to_log_extraction_metrics");
         }
 
-        if (selectedAiProvider !== 'openrouter') {
-            await recordUsage({
+        if (outcome.aiProvider !== "openrouter") {
+          await recordUsage({
             userId: String((claimed as any).user_id ?? (job as any).user_id ?? ""),
             jobId,
             runAt: (claimed as any).processed_at ?? null,
           });
-          }
-          log.info({ jobId, retryCount: currentRetry }, "callsheet_job_done");
+        }
+        log.info({ jobId, retryCount: currentRetry }, "callsheet_job_done");
         processedResults.push({ id: jobId, status: "success", retries: currentRetry });
       } catch (jobErr: any) {
         log.error({ jobId, err: jobErr, retryCount: currentRetry }, "callsheet_job_failed");
