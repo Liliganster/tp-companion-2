@@ -15,6 +15,7 @@ import { useProjects } from "@/contexts/ProjectsContext";
 import { calculateTripEmissions } from "@/lib/emissions";
 import { buildTripDuplicateKey } from "@/lib/trip-warnings";
 import { parseLocaleNumber } from "@/lib/number";
+import { resolveCallsheetMime } from "@/lib/callsheetMime";
 import { useTrips, type Trip } from "@/contexts/TripsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEmissionsInput } from "@/hooks/use-emissions-input";
@@ -408,7 +409,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             {
               id: `${job.id}-callsheet`,
               name: storagePath.split("/").pop() || "Callsheet",
-              mimeType: "application/pdf",
+              mimeType: resolveCallsheetMime(storagePath),
               storagePath,
               createdAt: new Date().toISOString(),
             },

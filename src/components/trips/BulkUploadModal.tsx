@@ -30,6 +30,7 @@ import { logger } from "@/lib/logger";
 import { FEATURES } from "@/lib/features";
 import { findProjectByCompatibleName } from "@/lib/projects";
 import { buildTripDuplicateKey } from "@/lib/trip-warnings";
+import { CALLSHEET_ACCEPT, isSupportedCallsheetFile, resolveCallsheetMime } from "@/lib/callsheetMime";
 
 interface SavedTrip {
   id: string;
@@ -264,7 +265,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
           rows.map((r) => {
             const path = String(r.storage_path ?? "");
             const fileName = path.split("/").pop() || "callsheet.pdf";
-            return [String(r.id), { fileName, mimeType: "application/pdf", storagePath: path }];
+            return [String(r.id), { fileName, mimeType: resolveCallsheetMime(path), storagePath: path }];
           }),
         ),
       );
@@ -1059,7 +1060,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     }
 
     for (const file of nextFiles) {
-      if (file.type !== "application/pdf") {
+      if (!isSupportedCallsheetFile(file)) {
         toast.error(t("bulk.errorOnlyPdf"));
         if (fileInputRef.current) fileInputRef.current.value = "";
         return;
@@ -1760,7 +1761,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
               {
                 id: crypto.randomUUID(),
                 name: meta.fileName || t("bulk.originalDocumentName"),
-                mimeType: meta.mimeType || "application/pdf",
+                mimeType: meta.mimeType || resolveCallsheetMime(meta.storagePath),
                 storagePath: meta.storagePath,
                 bucketId: "callsheets",
                 kind: "document",
@@ -1915,7 +1916,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
         documents: currentMeta.storagePath ? [{
             id: crypto.randomUUID(),
             name: currentMeta.fileName || "Documento Original",
-            mimeType: currentMeta.mimeType || "application/pdf",
+            mimeType: currentMeta.mimeType || resolveCallsheetMime(currentMeta.storagePath),
             storagePath: currentMeta.storagePath,
             createdAt: new Date().toISOString()
         }] : undefined
@@ -2052,10 +2053,10 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
           <TabsContent value="ai" className="space-y-6">
             <input 
-                type="file" 
-                ref={fileInputRef} 
-                className="hidden" 
-                accept="application/pdf"
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept={CALLSHEET_ACCEPT}
                 multiple
                 onChange={handleFileSelect}
             />

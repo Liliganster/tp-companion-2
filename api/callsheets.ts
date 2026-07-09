@@ -26,31 +26,9 @@ import {
   matchMapsLinkToLocation,
   resolveMapsLink,
 } from "./_utils/callsheetMapsLinks.js";
+import { geocodeAddressCached } from "./_utils/googleCache.js";
+import { isImageCallsheetMime, resolveCallsheetMime } from "../src/lib/callsheetMime.js";
 import { z } from "zod";
-
-// ─── Geocoding (same logic as worker.ts) ─────────────────────────────────────
-async function geocodeAddress(address: string) {
-  const apiKey = process.env.GOOGLE_MAPS_SERVER_KEY;
-  if (!apiKey) return null;
-  try {
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`;
-    const response = await fetch(url);
-    const data: any = await response.json();
-    if (data.status === "OK" && data.results?.length > 0) {
-      const result = data.results[0];
-      return {
-        formatted_address: result.formatted_address as string,
-        lat: result.geometry.location.lat as number,
-        lng: result.geometry.location.lng as number,
-        place_id: result.place_id as string,
-        quality: result.geometry.location_type as string,
-      };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
 
 const NON_DONE_CALLSHEET_STATUSES = ["created", "queued", "processing", "failed", "cancelled", "out_of_quota"] as const;
 const CALLSHEET_PROCESS_STALE_MS = 90_000;
@@ -172,31 +150,36 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
       ? { openrouterEnabled: true, openrouterApiKey: profile.openrouter_api_key, openrouterModel: profile.openrouter_model }
       : undefined;
 
-    // 5. Texto nativo del PDF completo (sin OCR/Tesseract — igual que api/worker.ts).
+    // 5. Mime real por extensión (las dispos también llegan como foto) y
+    // texto nativo del PDF completo (sin OCR/Tesseract — igual que api/worker.ts).
     const buffer = Buffer.from(await fileData.arrayBuffer());
+    const mimeType = resolveCallsheetMime(String(job.storage_path ?? ""));
+    const isImageCallsheet = isImageCallsheetMime(mimeType);
     let pdfText = "";
-    try {
-      const parsed = await parsePdfWithTimeout(buffer, 10_000);
-      pdfText = String(parsed?.text ?? "");
-    } catch (textErr) {
-      log.warn({ jobId, err: textErr }, "callsheet_pdf_text_unavailable");
+    if (!isImageCallsheet) {
+      try {
+        const parsed = await parsePdfWithTimeout(buffer, 10_000);
+        pdfText = String(parsed?.text ?? "");
+      } catch (textErr) {
+        log.warn({ jobId, err: textErr }, "callsheet_pdf_text_unavailable");
+      }
+      log.info({ jobId, textChars: pdfText.length }, "callsheet_pdf_text_extracted");
     }
-    log.info({ jobId, textChars: pdfText.length }, "callsheet_pdf_text_extracted");
 
     const pdfHintText = buildCallsheetPdfHintText(pdfText);
 
-    // 6. Call Gemini Vision with FULL PDF + native text excerpt as context
+    // 6. Call Gemini Vision with FULL document + native text excerpt as context
+    const attachedTag = isImageCallsheet ? "[IMAGE ATTACHED]" : "[PDF ATTACHED]";
     const promptSource = pdfHintText
-      ? `[PDF ATTACHED]\n\nDOCUMENT TEXT EXCERPT (use for projectName/date/company):\n${pdfHintText}`
-      : "[PDF ATTACHED]";
+      ? `${attachedTag}\n\nDOCUMENT TEXT EXCERPT (use for projectName/date/company):\n${pdfHintText}`
+      : attachedTag;
     const prompt = buildUniversalExtractorPrompt(promptSource);
-    
-    // Send full PDF to Gemini Vision (not just images)
+
     const aiResult = await generateContentFromPDF(
       "gemini-2.5-flash",
       prompt,
       buffer,
-      "application/pdf",
+      mimeType,
       extractionSchema,
       userSettings
     );
@@ -293,7 +276,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
               };
             }
           }
-          return geocodeAddress(addr);
+          return geocodeAddressCached(addr);
         })
       );
       log.info({ jobId, geocoded: geoResults.filter(Boolean).length, total: extracted.locations.length }, "callsheet_process_geocoding_done");

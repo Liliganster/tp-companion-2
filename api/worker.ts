@@ -3,7 +3,7 @@ import { generateContentFromPDF } from "../src/lib/ai/geminiClient.js";
 import { buildUniversalExtractorPrompt } from "../src/lib/ai/prompts.js";
 import { extractionSchema } from "../src/lib/ai/schema.js";
 import { CallsheetExtractionResultSchema } from "../src/lib/ai/validation.js";
-import { captureServerException, logger, withApiObservability } from "./_utils/observability.js";
+import { captureServerException, withApiObservability } from "./_utils/observability.js";
 import { enforceRateLimit } from "./_utils/rateLimit.js";
 import { checkAiMonthlyQuota } from "./_utils/aiQuota.js";
 import { calculateNextRetry, DEFAULT_RETRY_STRATEGY } from "./_utils/retry.js";
@@ -29,38 +29,10 @@ import {
   shouldSelfTriggerCallsheetBatch,
 } from "./_utils/callsheetWorker.js";
 import { startRuntimeWatchdog } from "./_utils/runtimeWatchdog.js";
+import { geocodeAddressCached } from "./_utils/googleCache.js";
+import { isImageCallsheetMime, resolveCallsheetMime } from "../src/lib/callsheetMime.js";
 
 const CALLSHEET_WORKER_RUNTIME_WARNING_MS = 55_000;
-
-// Geocoding function with direct access to env vars
-async function geocodeAddress(address: string) {
-  const apiKey = process.env.GOOGLE_MAPS_SERVER_KEY;
-  if (!apiKey) {
-    logger.warn("Missing GOOGLE_MAPS_SERVER_KEY");
-    return null;
-  }
-
-  try {
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`;
-    const response = await fetch(url);
-    const data: any = await response.json();
-
-    if (data.status === "OK" && data.results && data.results.length > 0) {
-      const result = data.results[0];
-      return {
-        formatted_address: result.formatted_address,
-        lat: result.geometry.location.lat,
-        lng: result.geometry.location.lng,
-        place_id: result.place_id,
-        quality: result.geometry.location_type
-      };
-    }
-    return null;
-  } catch (error) {
-    logger.error({ err: error }, "Geocoding error");
-    return null;
-  }
-}
 
 export default withApiObservability(async function handler(req: any, res: any, { log, requestId }) {
   // CRON authentication
@@ -365,11 +337,11 @@ export default withApiObservability(async function handler(req: any, res: any, {
 
         log.info({ jobId: job.id, bytes: fileData.size }, "callsheet_downloaded");
 
-        // Validate PDF size (max 15MB to prevent timeouts and reduce Gemini API latency)
+        // Validate file size (max 15MB to prevent timeouts and reduce Gemini API latency)
         const maxFileSizeBytes = 15 * 1024 * 1024; // 15MB
         if (fileData.size > maxFileSizeBytes) {
           const sizeMB = Math.round(fileData.size / 1024 / 1024);
-          const reason = `pdf_too_large:${sizeMB}MB_exceeds_15MB_limit`;
+          const reason = `file_too_large:${sizeMB}MB_exceeds_15MB_limit`;
           await supabaseAdmin
             .from("callsheet_jobs")
             .update({ status: "failed", needs_review_reason: reason })
@@ -423,39 +395,46 @@ export default withApiObservability(async function handler(req: any, res: any, {
 
         const aiStartTime = Date.now();
 
+        // Mime real por la extensión de storage (Fase 2): las dispos también
+        // llegan como foto de WhatsApp (JPG/PNG) — Gemini las lee nativamente.
+        const mimeType = resolveCallsheetMime(String(claimed.storage_path ?? ""));
+        const isImageCallsheet = isImageCallsheetMime(mimeType);
+
         // Texto nativo del PDF COMPLETO (sin OCR/Tesseract — Fase 2 del PLAN.md).
         // Antes: Tesseract sobre 2 páginas (16-52 s medidos) y el filtro de
         // alucinaciones validaba contra un texto DISTINTO del que veía la IA.
         // Ahora el filtro valida contra el mismo documento completo. PDFs
-        // escaneados sin capa de texto → sin hints, y el filtro no descarta
-        // nada (no puede demostrar alucinación).
+        // escaneados sin capa de texto e imágenes → sin hints, y el filtro no
+        // descarta nada (no puede demostrar alucinación).
         const textStartTime = Date.now();
         let pdfText = "";
-        try {
-          const parsed = await parsePdfWithTimeout(buffer, 10_000);
-          pdfText = String(parsed?.text ?? "");
-        } catch (textErr) {
-          log.warn({ jobId: job.id, err: textErr }, "callsheet_pdf_text_unavailable");
+        if (!isImageCallsheet) {
+          try {
+            const parsed = await parsePdfWithTimeout(buffer, 10_000);
+            pdfText = String(parsed?.text ?? "");
+          } catch (textErr) {
+            log.warn({ jobId: job.id, err: textErr }, "callsheet_pdf_text_unavailable");
+          }
+          log.info(
+            { jobId: job.id, textChars: pdfText.length, textDurationMs: Date.now() - textStartTime },
+            "callsheet_pdf_text_extracted",
+          );
         }
-        log.info(
-          { jobId: job.id, textChars: pdfText.length, textDurationMs: Date.now() - textStartTime },
-          "callsheet_pdf_text_extracted",
-        );
 
         const pdfHintText = buildCallsheetPdfHintText(pdfText);
 
-        // Send FULL PDF to Gemini Vision + native text excerpt as context
+        // Send FULL document to Gemini Vision + native text excerpt as context
+        const attachedTag = isImageCallsheet ? "[IMAGE ATTACHED]" : "[PDF ATTACHED]";
         const promptSource = pdfHintText
-          ? `[PDF ATTACHED]\n\nDOCUMENT TEXT EXCERPT (use for projectName/date/company):\n${pdfHintText}`
-          : "[PDF ATTACHED]";
+          ? `${attachedTag}\n\nDOCUMENT TEXT EXCERPT (use for projectName/date/company):\n${pdfHintText}`
+          : attachedTag;
         const systemInstruction = buildUniversalExtractorPrompt(promptSource);
-        
-        // Send full PDF to Gemini Vision (not just images)
+
         const aiResult = await generateContentFromPDF(
           "gemini-2.5-flash",
           systemInstruction,
           buffer,
-          "application/pdf",
+          mimeType,
           extractionSchema,
           userSettings
         );
@@ -622,7 +601,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
                   };
                 }
               }
-              return skipGeocode ? null : geocodeAddress(locStr);
+              return skipGeocode ? null : geocodeAddressCached(locStr);
             })
           );
           const geoDuration = Date.now() - geoStartTime;

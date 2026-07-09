@@ -6,6 +6,13 @@
 import { requireSupabaseUser, sendJson, supabaseGetGoogleConnection, supabaseUpsertGoogleConnection, supabaseDeleteGoogleConnection } from "./_utils/supabase.js";
 import { enforceRateLimit } from "./_utils/rateLimit.js";
 import { buildGoogleAuthUrl, buildSignedState, verifySignedState, exchangeCodeForTokens, getGoogleAccountEmail, refreshAccessToken } from "./_utils/googleOAuth.js";
+import { cacheGet, cacheSet } from "./_utils/googleCache.js";
+import {
+  DIRECTIONS_CACHE_TTL_MS,
+  GEOCODE_CACHE_TTL_MS,
+  buildApiGeocodeCacheKey,
+  buildDirectionsCacheKey,
+} from "./_utils/geocode.js";
 
 // ─── shared helper (was google/_utils.ts) ───────────────────────────────────
 async function getGoogleAccessTokenForUser(userId: string) {
@@ -126,6 +133,14 @@ async function handleGeocode(req: any, res: any) {
   if (typeof address !== "string" || !address.trim()) return badRequest(res, "address is required");
   if (address.length > 220) return badRequest(res, "address too long");
 
+  // Caché en Supabase (Fase 2): los rodajes repiten localizaciones semanas.
+  const cacheKey = buildApiGeocodeCacheKey({ address, region, components });
+  const cached = await cacheGet(cacheKey, GEOCODE_CACHE_TTL_MS);
+  if (cached) {
+    res.statusCode = 200; res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify(cached)); return;
+  }
+
   const params = new URLSearchParams({ address, key });
   const derivedLanguage = languageForRegion(region);
   if (derivedLanguage) params.set("language", derivedLanguage);
@@ -145,8 +160,10 @@ async function handleGeocode(req: any, res: any) {
     res.end(JSON.stringify({ error: data.status ?? "UNKNOWN", message: data.error_message })); return;
   }
   const result = data.results[0];
+  const payload = { location: result?.geometry?.location ?? null, formattedAddress: result?.formatted_address ?? "", placeId: result?.place_id ?? "" };
+  await cacheSet(cacheKey, "geocode_api", payload);
   res.statusCode = 200; res.setHeader("Content-Type", "application/json");
-  res.end(JSON.stringify({ location: result?.geometry?.location ?? null, formattedAddress: result?.formatted_address ?? "", placeId: result?.place_id ?? "" }));
+  res.end(JSON.stringify(payload));
 }
 
 // ─── /api/google/directions ──────────────────────────────────────────────────
@@ -178,6 +195,16 @@ async function handleDirections(req: any, res: any) {
   if (origin.length > 180 || destination.length > 180) return badRequest(res, "origin/destination too long");
   if (waypoints.length > 8) return badRequest(res, "too many waypoints");
 
+  // Caché en Supabase (Fase 2): la distancia de una ruta repetida no cambia;
+  // TTL de 30 días por si hay obras/cortes. La duración con tráfico puede
+  // quedar desfasada — para Kilometergeld solo importan los km.
+  const cacheKey = buildDirectionsCacheKey({ origin, destination, waypoints, region });
+  const cached = await cacheGet(cacheKey, DIRECTIONS_CACHE_TTL_MS);
+  if (cached) {
+    res.statusCode = 200; res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify(cached)); return;
+  }
+
   const params = new URLSearchParams({ origin, destination, key, mode: "driving", units: "metric", departure_time: "now" });
   const derivedLanguage = languageForRegion(region);
   if (derivedLanguage) params.set("language", derivedLanguage);
@@ -208,8 +235,10 @@ async function handleDirections(req: any, res: any) {
     : [];
   const totalDistanceMeters = legs.reduce((acc: number, leg: any) => acc + (typeof leg?.distanceMeters === "number" ? leg.distanceMeters : 0), 0);
 
+  const payload = { overviewPolyline: route?.overview_polyline?.points ?? "", bounds: route?.bounds ?? null, legs, totalDistanceMeters };
+  await cacheSet(cacheKey, "directions", payload);
   res.statusCode = 200; res.setHeader("Content-Type", "application/json");
-  res.end(JSON.stringify({ overviewPolyline: route?.overview_polyline?.points ?? "", bounds: route?.bounds ?? null, legs, totalDistanceMeters }));
+  res.end(JSON.stringify(payload));
 }
 
 // ─── /api/google/places-autocomplete ────────────────────────────────────────

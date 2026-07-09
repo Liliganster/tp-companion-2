@@ -4,6 +4,7 @@ import { usePlan } from "@/contexts/PlanContext";
 import { supabase } from "@/lib/supabaseClient";
 import { formatSupabaseError } from "@/lib/supabaseErrors";
 import { cascadeDeleteCallsheetJobById } from "@/lib/cascadeDelete";
+import { CALLSHEET_ACCEPT, isSupportedCallsheetFile } from "@/lib/callsheetMime";
 import { Button } from "@/components/ui/button";
 import { Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -45,8 +46,8 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
     }
 
     for (const file of files) {
-      if (file.type !== "application/pdf") {
-        toast.error("Solo se permiten archivos PDF");
+      if (!isSupportedCallsheetFile(file)) {
+        toast.error("Solo se permiten PDF o imágenes (JPG, PNG, WebP, HEIC)");
         e.target.value = "";
         return;
       }
@@ -163,7 +164,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
     <div className="flex items-center gap-2">
       <input
         type="file"
-        accept="application/pdf"
+        accept={CALLSHEET_ACCEPT}
         id="callsheet-upload"
         className="hidden"
         multiple
