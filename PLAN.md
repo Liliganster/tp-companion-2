@@ -98,15 +98,16 @@ Rediseño de `src/pages/Index.tsx`. Regla: arriba todo es accionable, abajo todo
 
 ## Fase 5 — Solidez (en paralelo con Fase 6)
 
-- [x] Tests donde hay dinero/datos — hecho 2026-07-09 (18 tests nuevos, 81 en total): `emissions.test.ts` (gasolina/diésel/EV/fallback/prioridades/árboles), `tripMoney.test.ts` (tarifa por viaje, kilometraje, gastos, € a facturar, coste del coche — la MISMA fuente que usa el informe: ReportView refactorizado a `rateForTrip`), `cascadeDelete.test.ts` (stub de Supabase: borra storage+job+viaje; NO borra el callsheet compartido si otro viaje lo referencia; borra el proyecto huérfano). *Pendiente: e2e con navegador "login → viaje → informe" (requiere montar Playwright — decidir si antes o después de los pilotos).*
+- [x] Tests donde hay dinero/datos — hecho 2026-07-09 (18 tests nuevos, 81 en total): `emissions.test.ts` (gasolina/diésel/EV/fallback/prioridades/árboles), `tripMoney.test.ts` (tarifa por viaje, kilometraje, gastos, € a facturar, coste del coche — la MISMA fuente que usa el informe: ReportView refactorizado a `rateForTrip`), `cascadeDelete.test.ts` (stub de Supabase: borra storage+job+viaje; NO borra el callsheet compartido si otro viaje lo referencia; borra el proyecto huérfano).
+- [x] **E2E de navegador "login → crear viaje → generar informe"** — hecho 2026-07-10 (`e2e/money-flow.spec.ts`, Playwright + Chromium instalados; `npm run test:e2e`). Corre contra el dev server y el Supabase real con el usuario smoke; el viaje lleva marcador en el propósito y se limpia por Supabase antes/después. Verifica la PERSISTENCIA en BD (no solo el update optimista) antes de recargar — hallazgo real del propio test: navegar justo tras guardar aborta el insert en vuelo. Los 4 specs e2e en verde (money-flow + a11y + legal links).
 - [x] Matar los `any` del núcleo — hecho: `TripsContext.tsx` 13→0 (tipos `TripRow`/`TripDocumentRow` en `schemas.ts` para las filas de Supabase), `geminiClient.ts` 11→0 (`JsonSchema`, mensajes y respuestas tipadas). *La validación Zod en runtime de filas se descartó por ahora: una fila que no valide haría desaparecer viajes; los tipos estructurales dan la seguridad de compilación sin ese riesgo.*
 - [x] Sustituir `xlsx` 0.18.5 (CVEs sin parche) — hecho: desinstalado; `exceljs` con import dinámico (`src/lib/xlsxExport.ts`) en ReportView y AdvancedEmissions (hibernada).
 - [x] `console.log` de `ProjectDetailModal.tsx` (40) → `logger` — hecho.
-- [ ] Trocear componentes gigantes SOLO de forma oportunista al tocarlos: `BulkUploadModal` (~2.400 líneas), `ProjectDetailModal` (~1.700), `AddTripModal` (~1.400), `CalendarPage` (~1.100). *ReportView ya adelgazó ~500 líneas al extraer reportPdf.ts en Fase 3.*
+- [x] Trocear componentes gigantes → **convertido en REGLA permanente, no en tarea** (decisión 2026-07-10): solo se trocean al tocarlos por otro motivo; hacerlo proactivamente añade riesgo sin valor. Candidatos cuando toque: `BulkUploadModal` (~2.400 líneas), `ProjectDetailModal` (~1.700), `AddTripModal` (~1.400), `CalendarPage` (~1.100). *ReportView ya adelgazó ~500 líneas al extraer reportPdf.ts en Fase 3.*
 - [x] Rutas: layout route `<ProtectedLayout>` con `<Outlet/>` en vez de 12 `<RequireAuth>` repetidos — hecho.
 - [x] Nota registrada de Fase 5: deps del `useCallback` de `materializeTripFromJob` — revisado; `trips` era fresco solo de forma transitiva (vía `hasTripForJob`), ahora está explícito en las deps.
 
-**Hecho cuando**: tests cubren los flujos de dinero ✓, typecheck sin `any` en el núcleo de datos ✓. (Solo queda el e2e de navegador y el troceo oportunista.)
+**Hecho cuando**: tests cubren los flujos de dinero ✓, typecheck sin `any` en el núcleo de datos ✓. **FASE 5 COMPLETA** (2026-07-10).
 
 ## Fase 6 — Lanzamiento
 
