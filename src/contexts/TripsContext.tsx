@@ -10,7 +10,7 @@ import { useEmissionsInput } from "@/hooks/use-emissions-input";
 import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
 import { useClimatiqFuelFactor } from "@/hooks/use-climatiq";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { TripInputSchema } from "@/lib/schemas";
+import { TripInputSchema, type TripDocumentRow, type TripRow } from "@/lib/schemas";
 import { isOffline, readOfflineCache, writeOfflineCache } from "@/lib/offlineCache";
 import { logger } from "@/lib/logger";
 
@@ -115,29 +115,25 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         return [];
       }
 
-      const mapped = (data ?? []).map((t: any) => ({
+      const rows = (data ?? []) as TripRow[];
+      const mapped: Trip[] = rows.map((t) => ({
         id: t.id,
         date: t.trip_date || t.date_value || "",
         route: t.route || [],
-        project: t.projects?.name || (() => {
-          const docs = t.documents || [];
-          const meta = docs.find((d: any) => d.kind === "client_meta");
-          return meta?.name || "Unknown";
-        })(),
+        project:
+          t.projects?.name ||
+          (t.documents ?? []).find((d) => d.kind === "client_meta")?.name ||
+          "Unknown",
         projectId: t.project_id,
-        clientName: (() => {
-            const docs = t.documents || [];
-            const meta = docs.find((d: any) => d.kind === "client_meta");
-            return meta?.name || undefined;
-        })(),
-        callsheet_job_id: t.callsheet_job_id,
+        clientName: (t.documents ?? []).find((d) => d.kind === "client_meta")?.name || undefined,
+        callsheet_job_id: t.callsheet_job_id ?? undefined,
         purpose: t.purpose || "",
         passengers: t.passengers || 0,
-        invoice: t.invoice_number,
-        distance: t.distance_km || 0,
+        invoice: t.invoice_number ?? undefined,
+        distance: Number(t.distance_km) || 0,
         co2: 0, // Will be recalculated using API data in the trips memo
         ratePerKmOverride: t.rate_per_km_override,
-        specialOrigin: t.special_origin,
+        specialOrigin: t.special_origin ?? undefined,
         // Trip expenses
         tollAmount: t.toll_amount ?? null,
         parkingAmount: t.parking_amount ?? null,
@@ -145,7 +141,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         fuelAmount: t.fuel_amount ?? null,
         fuelLiters: Number.isFinite(Number(t.fuel_liters)) ? Number(t.fuel_liters) : null,
         evKwhUsed: Number.isFinite(Number(t.ev_kwh_used)) ? Number(t.ev_kwh_used) : null,
-        documents: (t.documents || []).filter((d: any) => d.kind !== "client_meta"),
+        documents: (t.documents ?? []).filter((d) => d.kind !== "client_meta") as Trip["documents"],
       }));
 
       if (offlineCacheKey) writeOfflineCache(offlineCacheKey, mapped);
@@ -217,8 +213,8 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "trips", filter: `user_id=eq.${user.id}` },
-        (payload: any) => {
-          const next = payload?.new as any;
+        (payload) => {
+          const next = payload?.new as TripRow | undefined;
           if (!next?.id) return;
           queryClient.setQueryData<Trip[]>(queryKey, (prev) =>
             (prev ?? []).map((t) =>
@@ -228,15 +224,11 @@ export function TripsProvider({ children }: { children: ReactNode }) {
                     fuelAmount: next.fuel_amount ?? null,
                     fuelLiters: Number.isFinite(Number(next.fuel_liters)) ? Number(next.fuel_liters) : null,
                     evKwhUsed: Number.isFinite(Number(next.ev_kwh_used)) ? Number(next.ev_kwh_used) : null,
-                    documents: (next.documents || []).filter((d: any) => d.kind !== "client_meta"),
-                    clientName: (() => {
-                        const docs = next.documents || [];
-                        const meta = docs.find((d: any) => d.kind === "client_meta");
-                        return meta?.name || undefined;
-                    })(),
-                    project: t.projectId 
-                        ? t.project 
-                        : (next.documents || []).find((d: any) => d.kind === "client_meta")?.name || "Unknown",
+                    documents: (next.documents ?? []).filter((d) => d.kind !== "client_meta") as Trip["documents"],
+                    clientName: (next.documents ?? []).find((d) => d.kind === "client_meta")?.name || undefined,
+                    project: t.projectId
+                        ? t.project
+                        : (next.documents ?? []).find((d) => d.kind === "client_meta")?.name || "Unknown",
                     // Don't update co2 from DB - always recalculate using API data
                     distance: Number.isFinite(Number(next.distance_km)) ? Number(next.distance_km) : t.distance,
                   }
@@ -321,15 +313,14 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     queryClient.setQueryData<Trip[]>(queryKey, [normalizedTrip, ...prevTrips]);
 
     // Handle Client Name metadata in documents
-    let documentsToSave = normalizedTrip.documents || [];
+    let documentsToSave: TripDocumentRow[] = normalizedTrip.documents || [];
     if (!normalizedTrip.projectId && normalizedTrip.project && normalizedTrip.project !== "Unknown") {
-        const meta = {
-            id: crypto.randomUUID(),
-            kind: "client_meta",
-            name: normalizedTrip.project,
-            createdAt: new Date().toISOString()
-        };
-        documentsToSave = [...documentsToSave, meta] as any;
+        // Pseudo-doc "client_meta": conserva el nombre de cliente/proyecto libre
+        // dentro del jsonb de documents (no es un adjunto real).
+        documentsToSave = [
+          ...documentsToSave,
+          { id: crypto.randomUUID(), kind: "client_meta", name: normalizedTrip.project, createdAt: new Date().toISOString() },
+        ];
     }
 
     const dbPayload = {
@@ -402,7 +393,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       nextPatch.co2 = calculateTripEmissions({ distanceKm, ...emissionsInput }).co2Kg;
     }
 
-    const cachedProjects = (queryClient.getQueryData(["projects", user.id]) ?? []) as Array<any>;
+    const cachedProjects = (queryClient.getQueryData(["projects", user.id]) ?? []) as Array<{ id?: string; name?: string }>;
     const normalizeKey = (value: string) => value.replace(/\s+/g, " ").trim().toLowerCase();
 
     // If the caller passes only a project name (common when saving from generic forms),
@@ -431,7 +422,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
             .maybeSingle();
 
           if (!error && data?.id) {
-            nextPatch.projectId = String((data as any).id).trim();
+            nextPatch.projectId = String(data.id).trim();
           }
         } catch {
           // ignore
@@ -479,7 +470,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       (prev ?? []).map((t) => (t.id === id ? { ...t, ...nextPatch } : t)),
     );
 
-    const dbPatch: any = {};
+    const dbPatch: Record<string, unknown> = {};
     if (safePatch.date !== undefined) {
       dbPatch.trip_date = safePatch.date;
     }
@@ -508,15 +499,17 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     if (safePatch.clientName !== undefined) {
         // Fetch current documents if not in patch
       const currentDocs = nextDocuments || (trips.find(t => t.id === id)?.documents || []);
-      const filtered = currentDocs.filter((d: any) => d.kind !== "client_meta");
-        
+      const filtered: TripDocumentRow[] = currentDocs.filter((d) => d.kind !== "client_meta");
+
         if (safePatch.clientName) {
+            // Pseudo-doc "client_meta": guarda el nombre de cliente en el jsonb
+            // de documents (no es un adjunto real).
             filtered.push({
                 id: crypto.randomUUID(),
                 kind: "client_meta",
                 name: safePatch.clientName,
                 createdAt: new Date().toISOString()
-            } as any);
+            });
         }
         dbPatch.documents = filtered;
     } else if (safePatch.documents !== undefined) {
@@ -561,8 +554,8 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       }
 
       const callsheetPaths = (prevTrip?.documents ?? existingTrip?.documents ?? [])
-        .filter((d: any) => String(d?.bucketId ?? "").trim() !== "project_documents")
-        .map((d: any) => String(d?.storagePath ?? d?.path ?? "").trim())
+        .filter((d) => String(d?.bucketId ?? "").trim() !== "project_documents")
+        .map((d) => String(d?.storagePath ?? (d as TripDocumentRow)?.path ?? "").trim())
         .filter(Boolean);
 
       if (callsheetPaths.length > 0) {
@@ -577,7 +570,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
       const nextProjectIdStr = typeof nextProjectId === "string" ? nextProjectId.trim() : "";
       if (nextProjectIdStr) {
-        let projectDocsMoveError: any = null;
+        let projectDocsMoveError: unknown = null;
 
         const projectDocumentPaths = (prevTrip?.documents ?? existingTrip?.documents ?? [])
           .filter((d) => d?.bucketId === "project_documents")
@@ -616,10 +609,10 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
           if (!countError && count === 0) {
             const projectsQueryKey = ["projects", user.id] as const;
-            const prevProjects = (queryClient.getQueryData(projectsQueryKey) ?? []) as Array<any>;
+            const prevProjects = (queryClient.getQueryData(projectsQueryKey) ?? []) as Array<{ id?: string }>;
             queryClient.setQueryData(
               projectsQueryKey,
-              prevProjects.filter((p) => String((p as any)?.id ?? "").trim() !== previousProjectId),
+              prevProjects.filter((p) => String(p?.id ?? "").trim() !== previousProjectId),
             );
 
             try {

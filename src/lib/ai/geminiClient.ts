@@ -44,10 +44,10 @@ function extractOpenRouterText(content: unknown): string {
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
     return content
-      .map((part: any) => {
+      .map((part: unknown) => {
         if (typeof part === "string") return part;
-        if (typeof part?.text === "string") return part.text;
-        return "";
+        const text = (part as { text?: unknown } | null)?.text;
+        return typeof text === "string" ? text : "";
       })
       .join("")
       .trim();
@@ -56,10 +56,21 @@ function extractOpenRouterText(content: unknown): string {
   return "";
 }
 
-async function callOpenRouter(modelName: string, prompt: string, apiKey: string, schema?: any, messages?: any[]): Promise<AiGenerationResult> {
+/** Esquema JSON plano (formato Gemini/OpenAI); estructural, sin validación. */
+export type JsonSchema = Record<string, unknown>;
+
+type OpenRouterMessage = { role: string; content: unknown };
+
+async function callOpenRouter(
+  modelName: string,
+  prompt: string,
+  apiKey: string,
+  schema?: JsonSchema,
+  messages?: OpenRouterMessage[],
+): Promise<AiGenerationResult> {
   const finalMessages = messages || [{ role: "user", content: prompt }];
-  
-  const payload: any = {
+
+  const payload: Record<string, unknown> = {
     model: modelName,
     messages: finalMessages,
     temperature: 0, // extracción determinista (igual que la ruta Gemini directa)
@@ -72,19 +83,18 @@ async function callOpenRouter(modelName: string, prompt: string, apiKey: string,
     // así que se normaliza aquí solo para OpenRouter.
     // Recursivo: el modo estricto exige required=todas las propiedades y
     // additionalProperties:false en CADA nivel (los items de locations son objetos).
-    const toStrict = (node: any): any => {
+    const toStrict = (node: unknown): unknown => {
+      if (Array.isArray(node)) return node.map(toStrict);
       if (!node || typeof node !== "object") return node;
-      const out: any = Array.isArray(node) ? node.map(toStrict) : { ...node };
-      if (!Array.isArray(node)) {
-        if (out.properties && typeof out.properties === "object") {
-          out.properties = Object.fromEntries(
-            Object.entries(out.properties).map(([k, v]) => [k, toStrict(v)]),
-          );
-          out.required = Object.keys(out.properties);
-          out.additionalProperties = false;
-        }
-        if (out.items) out.items = toStrict(out.items);
+      const out: Record<string, unknown> = { ...(node as Record<string, unknown>) };
+      if (out.properties && typeof out.properties === "object") {
+        out.properties = Object.fromEntries(
+          Object.entries(out.properties as Record<string, unknown>).map(([k, v]) => [k, toStrict(v)]),
+        );
+        out.required = Object.keys(out.properties as Record<string, unknown>);
+        out.additionalProperties = false;
       }
+      if (out.items) out.items = toStrict(out.items);
       return out;
     };
     const strictSchema = toStrict(schema);
@@ -121,7 +131,11 @@ async function callOpenRouter(modelName: string, prompt: string, apiKey: string,
       throw new Error(`OpenRouter API error: ${response.status} ${text}`);
     }
 
-    const data: any = await response.json();
+    const data = (await response.json()) as {
+      choices?: Array<{ message?: { content?: unknown } }>;
+      model?: unknown;
+      provider?: unknown;
+    };
     const text = extractOpenRouterText(data?.choices?.[0]?.message?.content);
     if (!text) throw new Error("OpenRouter API error: empty response content");
 
@@ -140,7 +154,7 @@ async function callOpenRouter(modelName: string, prompt: string, apiKey: string,
 export async function generateContent(
   modelName: string,
   prompt: string,
-  schema?: any,
+  schema?: JsonSchema,
   userSettings?: AiUserSettings,
 ): Promise<AiGenerationResult> {
   if (userSettings?.openrouterEnabled && userSettings?.openrouterApiKey) {
@@ -166,7 +180,7 @@ export async function generateContent(
   const result = await Promise.race([
     model.generateContent(prompt),
     timeoutPromise
-  ]) as any;
+  ]) as { response: { text: () => string } };
 
   return {
     text: result.response.text(),
@@ -181,7 +195,7 @@ export async function generateContentFromPDF(
   prompt: string,
   pdfData: Buffer,
   mimeType = "application/pdf",
-  schema?: any,
+  schema?: JsonSchema,
   userSettings?: AiUserSettings,
 ): Promise<AiGenerationResult> {
     if (userSettings?.openrouterEnabled && userSettings?.openrouterApiKey) {
@@ -242,7 +256,7 @@ export async function generateContentFromPDF(
             prompt,
         ]),
         timeoutPromise
-    ]) as any;
+    ]) as { response: { text: () => string } };
 
     return {
       text: result.response.text(),
@@ -266,14 +280,14 @@ export async function generateContentFromImages(
   modelName: string,
   prompt: string,
   images: string[],
-  schema?: any,
+  schema?: JsonSchema,
   userSettings?: AiUserSettings,
 ): Promise<AiGenerationResult> {
     if (userSettings?.openrouterEnabled && userSettings?.openrouterApiKey) {
         const orModel = userSettings.openrouterModel || "google/gemini-2.5-flash";
         
         // Build content array with text + all images
-        const content: any[] = [{ type: "text", text: prompt }];
+        const content: Array<Record<string, unknown>> = [{ type: "text", text: prompt }];
         for (const img of images) {
           content.push({
             type: "image_url",
@@ -299,7 +313,7 @@ export async function generateContentFromImages(
     );
 
     // Build parts array: all images + prompt
-    const parts: any[] = images.map(img => ({
+    const parts: Array<Record<string, unknown> | string> = images.map(img => ({
       inlineData: {
         data: img,
         mimeType: "image/png",
@@ -310,7 +324,7 @@ export async function generateContentFromImages(
     const result = await Promise.race([
         model.generateContent(parts),
         timeoutPromise
-    ]) as any;
+    ]) as { response: { text: () => string } };
 
     return {
       text: result.response.text(),

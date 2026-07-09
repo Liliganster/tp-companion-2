@@ -45,7 +45,6 @@ import {
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
 import { useNavigate } from "react-router-dom";
 import { useI18n } from "@/hooks/use-i18n";
 import { useTrips } from "@/contexts/TripsContext";
@@ -456,12 +455,15 @@ export default function AdvancedEmissions() {
     const data = getExportData();
     if (data.length === 0) return;
 
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Emissions");
-    
+    const headerKeys = Object.keys(data[0]);
     const fileBase = `advanced-emissions-${timeRange}-${viewMode}-${sortBy}-${sortDirection}`;
-    XLSX.writeFile(workbook, `${fileBase}.xlsx`);
+    void import("@/lib/xlsxExport").then(({ downloadXlsx }) =>
+      downloadXlsx({
+        fileName: `${fileBase}.xlsx`,
+        sheetName: "Emissions",
+        rows: [headerKeys, ...data.map((row) => headerKeys.map((k) => (row as Record<string, string | number>)[k] ?? ""))],
+      }),
+    );
   };
 
   const handleExportPdf = () => {

@@ -98,14 +98,15 @@ Rediseño de `src/pages/Index.tsx`. Regla: arriba todo es accionable, abajo todo
 
 ## Fase 5 — Solidez (en paralelo con Fase 6)
 
-- [ ] Tests donde hay dinero/datos: cálculo de emisiones (`src/lib/emissions.ts`), totales del informe, `cascadeDelete.ts`, e2e "login → crear viaje → generar informe".
-- [ ] Matar los `any` del núcleo: `TripsContext.tsx` (13), `geminiClient.ts` (9). Validar filas de Supabase con Zod (`schemas.ts`); considerar `supabase gen types`.
-- [ ] Sustituir `xlsx` 0.18.5 (CVEs sin parche en npm) por export CSV o `exceljs`.
-- [ ] `console.log` de `ProjectDetailModal.tsx` (~40) → `logger`.
-- [ ] Trocear componentes gigantes SOLO de forma oportunista al tocarlos: `BulkUploadModal` (2.374 líneas), `ProjectDetailModal` (1.698), `AddTripModal` (1.407), `ReportView` (1.190), `CalendarPage` (1.094).
-- [ ] Rutas: envolver con un layout route (`<RequireAuth><Outlet/></RequireAuth>`) en vez de 12 repeticiones.
+- [x] Tests donde hay dinero/datos — hecho 2026-07-09 (18 tests nuevos, 81 en total): `emissions.test.ts` (gasolina/diésel/EV/fallback/prioridades/árboles), `tripMoney.test.ts` (tarifa por viaje, kilometraje, gastos, € a facturar, coste del coche — la MISMA fuente que usa el informe: ReportView refactorizado a `rateForTrip`), `cascadeDelete.test.ts` (stub de Supabase: borra storage+job+viaje; NO borra el callsheet compartido si otro viaje lo referencia; borra el proyecto huérfano). *Pendiente: e2e con navegador "login → viaje → informe" (requiere montar Playwright — decidir si antes o después de los pilotos).*
+- [x] Matar los `any` del núcleo — hecho: `TripsContext.tsx` 13→0 (tipos `TripRow`/`TripDocumentRow` en `schemas.ts` para las filas de Supabase), `geminiClient.ts` 11→0 (`JsonSchema`, mensajes y respuestas tipadas). *La validación Zod en runtime de filas se descartó por ahora: una fila que no valide haría desaparecer viajes; los tipos estructurales dan la seguridad de compilación sin ese riesgo.*
+- [x] Sustituir `xlsx` 0.18.5 (CVEs sin parche) — hecho: desinstalado; `exceljs` con import dinámico (`src/lib/xlsxExport.ts`) en ReportView y AdvancedEmissions (hibernada).
+- [x] `console.log` de `ProjectDetailModal.tsx` (40) → `logger` — hecho.
+- [ ] Trocear componentes gigantes SOLO de forma oportunista al tocarlos: `BulkUploadModal` (~2.400 líneas), `ProjectDetailModal` (~1.700), `AddTripModal` (~1.400), `CalendarPage` (~1.100). *ReportView ya adelgazó ~500 líneas al extraer reportPdf.ts en Fase 3.*
+- [x] Rutas: layout route `<ProtectedLayout>` con `<Outlet/>` en vez de 12 `<RequireAuth>` repetidos — hecho.
+- [x] Nota registrada de Fase 5: deps del `useCallback` de `materializeTripFromJob` — revisado; `trips` era fresco solo de forma transitiva (vía `hasTripForJob`), ahora está explícito en las deps.
 
-**Hecho cuando**: tests cubren los flujos de dinero, typecheck sin `any` en el núcleo de datos.
+**Hecho cuando**: tests cubren los flujos de dinero ✓, typecheck sin `any` en el núcleo de datos ✓. (Solo queda el e2e de navegador y el troceo oportunista.)
 
 ## Fase 6 — Lanzamiento
 

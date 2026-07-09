@@ -19,6 +19,7 @@ import { useI18n } from "@/hooks/use-i18n";
 import { buildProjectZip } from "@/hooks/use-project-export";
 import { useOdometer } from "@/contexts/OdometerContext";
 import { buildReportPdf, type ReportPdfExpenseRow } from "@/lib/reportPdf";
+import { rateForTrip } from "@/lib/tripMoney";
 import { TREE_KG_CO2_PER_YEAR } from "@/lib/emissionFactors";
 import { FEATURES } from "@/lib/features";
 import type { AppLanguage } from "@/lib/i18n";
@@ -240,12 +241,8 @@ export default function ReportView() {
     const passengers = Number.isFinite(trip.passengers) ? trip.passengers : 0;
     const distance = Number.isFinite(trip.distance) ? trip.distance : 0;
     const producer = trip.clientName || getProducerForProject(trip.project);
-    // Tarifa por viaje: el override del viaje manda (igual que la página de
-    // Viajes); si no hay, la tarifa del perfil.
-    const rate =
-      typeof trip.ratePerKmOverride === "number" && Number.isFinite(trip.ratePerKmOverride)
-        ? trip.ratePerKmOverride
-        : ratePerKm;
+    // Tarifa por viaje: fuente única en tripMoney.ts (misma que el dashboard).
+    const rate = rateForTrip(trip, ratePerKm);
     // Decisión de la propietaria (2026-07-09): el importe del viaje es SOLO
     // kilometraje; el suplemento por pasajeros va como línea separada del
     // informe — producción/Finanzamt lo interpretan, los datos están ahí.
@@ -492,11 +489,12 @@ export default function ReportView() {
         }
 
         if (format === "excel") {
-          const XLSX = await import("xlsx");
-          const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-          const wb = XLSX.utils.book_new();
-          XLSX.utils.book_append_sheet(wb, ws, t("reportView.sheetName"));
-          XLSX.writeFile(wb, `${fileBase}.xlsx`, { compression: true });
+          const { downloadXlsx } = await import("@/lib/xlsxExport");
+          await downloadXlsx({
+            fileName: `${fileBase}.xlsx`,
+            sheetName: t("reportView.sheetName"),
+            rows: [headers, ...rows],
+          });
           return;
         }
 

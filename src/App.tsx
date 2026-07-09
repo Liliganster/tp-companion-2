@@ -15,7 +15,7 @@ import { DataMigration } from "@/components/DataMigration";
 import { GlobalLoadingBar } from "@/components/app/GlobalLoadingBar";
 import { NetworkStatusBanner } from "@/components/app/NetworkStatusBanner";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import { UpdatePrompt } from "@/components/pwa/UpdatePrompt";
 import { Suspense, lazy, useEffect } from "react";
 import { Loader2 } from "lucide-react";
@@ -61,6 +61,16 @@ function RouteFallback() {
   );
 }
 
+// Layout route (Fase 5): un solo RequireAuth para todas las rutas protegidas
+// en vez de 12 repeticiones.
+function ProtectedLayout() {
+  return (
+    <RequireAuth>
+      <Outlet />
+    </RequireAuth>
+  );
+}
+
 function AppContent() {
   const { language } = useI18n();
 
@@ -84,107 +94,24 @@ function AppContent() {
           <Route path="/legal/terms" element={<LegalTerms />} />
           <Route path="/legal/privacy" element={<LegalPrivacy />} />
           <Route path="/legal/cookies" element={<LegalCookies />} />
-          <Route
-            path="/"
-            element={
-              <RequireAuth>
-                <Index />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/trips"
-            element={
-              <RequireAuth>
-                <Trips />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/projects"
-            element={
-              <RequireAuth>
-                <Projects />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/reports"
-            element={
-              <RequireAuth>
-                <Reports />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/reports/view"
-            element={
-              <RequireAuth>
-                <ReportView />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/calendar"
-            element={
-              <RequireAuth>
-                <CalendarPage />
-              </RequireAuth>
-            }
-          />
-          {FEATURES.advancedPages && (
-            <>
-              <Route
-                path="/advanced"
-                element={
-                  <RequireAuth>
-                    <Advanced />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/advanced/routes"
-                element={
-                  <RequireAuth>
-                    <AdvancedRoutes />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/advanced/costs"
-                element={
-                  <RequireAuth>
-                    <AdvancedCosts />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/advanced/emissions"
-                element={
-                  <RequireAuth>
-                    <AdvancedEmissions />
-                  </RequireAuth>
-                }
-              />
-            </>
-          )}
-          <Route
-            path="/plans"
-            element={
-              <RequireAuth>
-                <Plans />
-              </RequireAuth>
-            }
-          />
-
-          <Route
-            path="/docs"
-            element={
-              <RequireAuth>
-                <Docs />
-              </RequireAuth>
-            }
-          />
+          <Route element={<ProtectedLayout />}>
+            <Route path="/" element={<Index />} />
+            <Route path="/trips" element={<Trips />} />
+            <Route path="/projects" element={<Projects />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/reports/view" element={<ReportView />} />
+            <Route path="/calendar" element={<CalendarPage />} />
+            {FEATURES.advancedPages && (
+              <>
+                <Route path="/advanced" element={<Advanced />} />
+                <Route path="/advanced/routes" element={<AdvancedRoutes />} />
+                <Route path="/advanced/costs" element={<AdvancedCosts />} />
+                <Route path="/advanced/emissions" element={<AdvancedEmissions />} />
+              </>
+            )}
+            <Route path="/plans" element={<Plans />} />
+            <Route path="/docs" element={<Docs />} />
+          </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
