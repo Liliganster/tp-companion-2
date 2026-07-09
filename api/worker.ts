@@ -9,13 +9,18 @@ import { checkAiMonthlyQuota } from "./_utils/aiQuota.js";
 import { calculateNextRetry, DEFAULT_RETRY_STRATEGY } from "./_utils/retry.js";
 import {
   buildCallsheetPdfHintText,
-  extractLabeledLocationCandidates,
   normalizeExtractedCallsheetLocations,
   filterHallucinatedLocations,
   filterLogisticsLocations,
   postProcessLocationsForGeocoding,
 } from "./_utils/callsheetLocationHints.js";
-import { extractPagesWithOcr } from "./_utils/ocr.js";
+import { parsePdfWithTimeout } from "./_utils/pdf-parser.js";
+import { resolveCallsheetDate } from "./_utils/callsheetDate.js";
+import {
+  extractMapsLinkCandidates,
+  matchMapsLinkToLocation,
+  resolveMapsLink,
+} from "./_utils/callsheetMapsLinks.js";
 import {
   CALLSHEET_PARALLEL_BATCH_SIZE,
   getCallsheetWorkerFetchLimit,
@@ -214,7 +219,10 @@ export default withApiObservability(async function handler(req: any, res: any, {
       }
 
       const status = String((job as any)?.status ?? "");
-      if (status !== "queued" && status !== "failed") {
+      // preClaimed: trigger-worker ya puso el job en "processing" antes de llamarnos;
+      // rechazarlo aquí dejaba el job atascado hasta el reintento de estancados.
+      const claimable = status === "queued" || status === "failed" || (preClaimed && status === "processing");
+      if (!claimable) {
         res.status(200).json({ message: `Job not claimable (status=${status})`, processed: 0, details: [] });
         return;
       }
@@ -414,22 +422,31 @@ export default withApiObservability(async function handler(req: any, res: any, {
         );
 
         const aiStartTime = Date.now();
-        
-        // Run OCR on first 2 pages to get clean text for header fields
-        const ocrResult = await extractPagesWithOcr(buffer, {
-          maxPages: 2,
-          languages: "deu+eng",
-          timeoutMs: 25000,
-        });
-        const pdfText = ocrResult.text;
-        log.info({ jobId: job.id, ocrPages: ocrResult.pages, ocrConfidence: ocrResult.confidence, ocrDurationMs: ocrResult.durationMs }, "callsheet_ocr_extracted");
-        
-        const labeledPdfLocations = extractLabeledLocationCandidates(pdfText);
+
+        // Texto nativo del PDF COMPLETO (sin OCR/Tesseract — Fase 2 del PLAN.md).
+        // Antes: Tesseract sobre 2 páginas (16-52 s medidos) y el filtro de
+        // alucinaciones validaba contra un texto DISTINTO del que veía la IA.
+        // Ahora el filtro valida contra el mismo documento completo. PDFs
+        // escaneados sin capa de texto → sin hints, y el filtro no descarta
+        // nada (no puede demostrar alucinación).
+        const textStartTime = Date.now();
+        let pdfText = "";
+        try {
+          const parsed = await parsePdfWithTimeout(buffer, 10_000);
+          pdfText = String(parsed?.text ?? "");
+        } catch (textErr) {
+          log.warn({ jobId: job.id, err: textErr }, "callsheet_pdf_text_unavailable");
+        }
+        log.info(
+          { jobId: job.id, textChars: pdfText.length, textDurationMs: Date.now() - textStartTime },
+          "callsheet_pdf_text_extracted",
+        );
+
         const pdfHintText = buildCallsheetPdfHintText(pdfText);
-        
-        // Send FULL PDF to Gemini Vision + OCR text as context
+
+        // Send FULL PDF to Gemini Vision + native text excerpt as context
         const promptSource = pdfHintText
-          ? `[PDF ATTACHED]\n\nOCR TEXT FROM FIRST 2 PAGES (use for projectName/date/company):\n${pdfHintText}`
+          ? `[PDF ATTACHED]\n\nDOCUMENT TEXT EXCERPT (use for projectName/date/company):\n${pdfHintText}`
           : "[PDF ATTACHED]";
         const systemInstruction = buildUniversalExtractorPrompt(promptSource);
         
@@ -536,11 +553,24 @@ export default withApiObservability(async function handler(req: any, res: any, {
         // D. Save Results
         // Note: no pre-save cancel check — the atomic `.update().eq("status","processing")` below
         // handles cancellation safely, and skipping this check saves one DB roundtrip.
+        // El año lo decide el CÓDIGO cuando el documento no lo trae impreso
+        // (la IA lo inventaba; caso medido en la línea base del eval).
+        const resolvedDate = resolveCallsheetDate({
+          date: extracted.date,
+          dateRaw: validated.data.dateRaw ?? null,
+          dateYearInDocument: validated.data.dateYearInDocument ?? null,
+          referenceIso: String((job as any).created_at ?? new Date().toISOString()),
+        });
+        if (resolvedDate !== extracted.date) {
+          log.info({ jobId: job.id, aiDate: extracted.date, resolvedDate, dateRaw: validated.data.dateRaw }, "callsheet_date_year_resolved");
+        }
+
         const { error: resultInsertError } = await supabaseAdmin.from("callsheet_results").insert({
           job_id: job.id,
-          date_value: extracted.date,
+          date_value: resolvedDate,
           project_value: extracted.projectName,
           producer_value: extracted.productionCompanies?.[0],
+          date_evidence: validated.data.dateRaw ?? null,
         });
 
         if (resultInsertError) {
@@ -552,13 +582,35 @@ export default withApiObservability(async function handler(req: any, res: any, {
 
         if (Array.isArray(extracted.locations)) {
           const locs: any[] = [];
-          
+
+          // Enlaces de Google Maps del propio documento = fuente primaria
+          // (Fase 2): apuntan al sitio conducible exacto y resolverlos es
+          // gratis (solo HTTP). Si una localización tiene enlace asociado,
+          // gana al geocoding por texto.
+          const mapsLinkCandidates = extractMapsLinkCandidates(pdfText);
+
           // Parallelize geocoding to avoid sequential API calls (70% speed improvement)
           const geoStartTime = Date.now();
           const geoResults = await Promise.all(
-            geocodingLocations.map((locStr) =>
-              skipGeocode ? Promise.resolve(null) : geocodeAddress(locStr)
-            )
+            geocodingLocations.map(async (locStr, index) => {
+              const linkUrl = matchMapsLinkToLocation(extracted.locations[index] ?? locStr, mapsLinkCandidates, {
+                totalLocations: extracted.locations.length,
+              });
+              if (linkUrl) {
+                const resolved = await resolveMapsLink(linkUrl);
+                if (resolved) {
+                  log.info({ jobId: job.id, locStr, linkUrl, label: resolved.label }, "callsheet_maps_link_resolved");
+                  return {
+                    formatted_address: resolved.label ?? locStr,
+                    lat: resolved.lat,
+                    lng: resolved.lng,
+                    place_id: null,
+                    quality: "maps_link",
+                  };
+                }
+              }
+              return skipGeocode ? null : geocodeAddress(locStr);
+            })
           );
           const geoDuration = Date.now() - geoStartTime;
           log.info({ jobId: job.id, locations: extracted.locations.length, durationMs: geoDuration }, "geocoding_completed");

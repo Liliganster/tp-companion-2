@@ -1,0 +1,19 @@
+archivo: "dispo_HOFER_070524.pdf"
+fecha: "2024-05-07" # "Dienstag, 07.05.2024"
+proyecto: "HOFER PREIS 2024"
+productora: "ovi office e.U."
+
+localizaciones:
+  - etiqueta: "Location 1"
+    direccion: "Erzbischofgasse 6C, 1130 Wien"
+    enlace_maps: "https://maps.app.goo.gl/hqb5W5j8qrtvN7Mw7"
+  - etiqueta: "Location 2"
+    direccion: "Erzbischofgasse 8, 1130 Wien"
+    enlace_maps: "https://maps.app.goo.gl/YV5DhhtnvwmRcTsJ6"
+
+excluidas:
+  - "Parking"
+  - "Lunch"
+  - "Cast"
+
+notas: ""

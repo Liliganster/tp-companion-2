@@ -14,13 +14,18 @@ import { extractionSchema } from "../src/lib/ai/schema.js";
 import { CallsheetExtractionResultSchema } from "../src/lib/ai/validation.js";
 import {
   buildCallsheetPdfHintText,
-  extractLabeledLocationCandidates,
   normalizeExtractedCallsheetLocations,
   filterHallucinatedLocations,
   filterLogisticsLocations,
   postProcessLocationsForGeocoding,
 } from "./_utils/callsheetLocationHints.js";
-import { extractPagesWithOcr } from "./_utils/ocr.js";
+import { parsePdfWithTimeout } from "./_utils/pdf-parser.js";
+import { resolveCallsheetDate } from "./_utils/callsheetDate.js";
+import {
+  extractMapsLinkCandidates,
+  matchMapsLinkToLocation,
+  resolveMapsLink,
+} from "./_utils/callsheetMapsLinks.js";
 import { z } from "zod";
 
 // ─── Geocoding (same logic as worker.ts) ─────────────────────────────────────
@@ -167,26 +172,22 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
       ? { openrouterEnabled: true, openrouterApiKey: profile.openrouter_api_key, openrouterModel: profile.openrouter_model }
       : undefined;
 
-    // 5. Extract OCR text from first 2 pages (for better projectName/company detection)
+    // 5. Texto nativo del PDF completo (sin OCR/Tesseract — igual que api/worker.ts).
     const buffer = Buffer.from(await fileData.arrayBuffer());
-    
-    // Run OCR on first 2 pages to get clean text for header fields
-    const ocrResult = await extractPagesWithOcr(buffer, {
-      maxPages: 2,
-      languages: "deu+eng",
-      timeoutMs: 25000,
-    });
-    const pdfText = ocrResult.text;
-    log.info({ jobId, ocrPages: ocrResult.pages, ocrConfidence: ocrResult.confidence, ocrDurationMs: ocrResult.durationMs }, "callsheet_ocr_extracted");
-    
-    const labeledPdfLocations = extractLabeledLocationCandidates(pdfText);
+    let pdfText = "";
+    try {
+      const parsed = await parsePdfWithTimeout(buffer, 10_000);
+      pdfText = String(parsed?.text ?? "");
+    } catch (textErr) {
+      log.warn({ jobId, err: textErr }, "callsheet_pdf_text_unavailable");
+    }
+    log.info({ jobId, textChars: pdfText.length }, "callsheet_pdf_text_extracted");
+
     const pdfHintText = buildCallsheetPdfHintText(pdfText);
-    
-    // 6. Call Gemini Vision with FULL PDF + OCR text as context
-    // PDF: Gemini reads visually (best for locations)
-    // OCR text: helps with projectName/productionCompanies that may be in headers
+
+    // 6. Call Gemini Vision with FULL PDF + native text excerpt as context
     const promptSource = pdfHintText
-      ? `[PDF ATTACHED]\n\nOCR TEXT FROM FIRST 2 PAGES (use for projectName/date/company):\n${pdfHintText}`
+      ? `[PDF ATTACHED]\n\nDOCUMENT TEXT EXCERPT (use for projectName/date/company):\n${pdfHintText}`
       : "[PDF ATTACHED]";
     const prompt = buildUniversalExtractorPrompt(promptSource);
     
@@ -199,7 +200,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
       extractionSchema,
       userSettings
     );
-    log.info({ jobId, provider: aiResult.provider, model: aiResult.model, ocrUsed: ocrResult.pages > 0 }, "callsheet_process_ai_done");
+    log.info({ jobId, provider: aiResult.provider, model: aiResult.model }, "callsheet_process_ai_done");
 
     // 6. Parse and validate
     let extractedJson: any = null;
@@ -243,19 +244,45 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
     // 6c. Code-side normalization for geocoding (Bezirk expansion, abbreviations)
     const geocodingLocations = postProcessLocationsForGeocoding(extracted.locations);
 
-    // 7. Save results
+    // 7. Save results (año inferido por código si el documento no lo trae — igual que worker.ts)
+    const resolvedDate = resolveCallsheetDate({
+      date: extracted.date,
+      dateRaw: validated.data.dateRaw ?? null,
+      dateYearInDocument: validated.data.dateYearInDocument ?? null,
+      referenceIso: new Date().toISOString(),
+    });
     const { error: resultError } = await supabaseAdmin.from("callsheet_results").insert({
       job_id: jobId,
-      date_value: extracted.date,
+      date_value: resolvedDate,
       project_value: extracted.projectName,
       producer_value: (extracted.productionCompanies as any)?.[0],
+      date_evidence: validated.data.dateRaw ?? null,
     });
     if (resultError) throw new Error(`Failed to save results: ${resultError.message}`);
 
     if (extracted.locations.length > 0) {
-      // Geocode all locations in parallel (same as worker)
+      // Enlaces de Maps del documento = fuente primaria (igual que worker.ts)
+      const mapsLinkCandidates = extractMapsLinkCandidates(pdfText);
       const geoResults = await Promise.all(
-        geocodingLocations.map((addr: string) => geocodeAddress(addr))
+        geocodingLocations.map(async (addr: string, index: number) => {
+          const linkUrl = matchMapsLinkToLocation(extracted.locations[index] ?? addr, mapsLinkCandidates, {
+            totalLocations: extracted.locations.length,
+          });
+          if (linkUrl) {
+            const resolved = await resolveMapsLink(linkUrl);
+            if (resolved) {
+              log.info({ jobId, addr, linkUrl, label: resolved.label }, "callsheet_maps_link_resolved");
+              return {
+                formatted_address: resolved.label ?? addr,
+                lat: resolved.lat,
+                lng: resolved.lng,
+                place_id: null,
+                quality: "maps_link",
+              };
+            }
+          }
+          return geocodeAddress(addr);
+        })
       );
       log.info({ jobId, geocoded: geoResults.filter(Boolean).length, total: extracted.locations.length }, "callsheet_process_geocoding_done");
 

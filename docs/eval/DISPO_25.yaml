@@ -1,0 +1,18 @@
+archivo: "DISPO_25.pdf"
+fecha: "2024-08-21" # "Mittwoch 21.08.2024"
+proyecto: "Crystal Wall"
+productora: "Producers at Work Film GmbH, Wega Filmproduktions GmbH"
+
+localizaciones:
+  - etiqueta: "Loc 1 Palais Rasumofsky"
+    direccion: "Rasumofskygasse 23-25, 1030 Wien"
+    enlace_maps: ""
+
+excluidas:
+  - "Parking"
+  - "Lunch"
+  - "Cast"
+
+notas: >
+  El enlace anotado originalmente era el del Kursalon Hübner (copy-paste de otra
+  callsheet) — descartado. Dirección completada con la calle: Rasumofskygasse.

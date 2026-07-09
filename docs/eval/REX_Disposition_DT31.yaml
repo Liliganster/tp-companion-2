@@ -1,0 +1,21 @@
+archivo: "REX_Disposition_DT31_20250523.pdf"
+fecha: "2025-05-23" # "Freitag, 23. Mai 2025"
+proyecto: "KOMMISSAR REX"
+productora: "MR FILM Kurt Mrkwicka GmbH"
+
+localizaciones:
+  - etiqueta: "MOTIV: 1190, Wildgrubgasse. Zufahrt via Kahlenberger Str 213"
+    direccion: "Mayer am Nussberg, Kahlenberger Straße 210, 1190 Wien"
+    enlace_maps: "https://maps.app.goo.gl/BLnr5A6Ejo4tKciKA"
+
+excluidas:
+  - "Friedhof Heiligenstadt, Wildgrubgasse 18" # BASIS
+  - "Güterweg entlang der Weinberge"           # Parken Technik
+  - "WEINBERGE - NÄHE HAUS MAX"                # decorado narrativo del Drehplan, no dirección
+  - "Catering"
+
+notas: >
+  Caso real reportado por la propietaria (2026-07-09): el texto del MOTIV
+  ("1190, Wildgrubgasse") geocodifica mal — la verdad es el enlace de Maps,
+  que resuelve a "Mayer am Nussberg" con acceso vía Kahlenberger Str 213.
+  El extractor además colaba "WEINBERGE - NÄHE HAUS MAX" (decorado).

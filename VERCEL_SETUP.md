@@ -1,5 +1,21 @@
 # Configuración de Variables de Entorno en Vercel
 
+> ## ⚠️ ANTES DEL PRÓXIMO DEPLOY (checklist 2026-07-09)
+>
+> El entorno de Vercel quedó configurado para la infraestructura VIEJA. Antes de desplegar:
+>
+> 1. **Supabase**: actualizar las 4 variables al proyecto nuevo (`ftsugjbwsgvkcfummbsw`):
+>    `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+> 2. **Upstash**: BORRAR `UPSTASH_REDIS_REST_URL` y `UPSTASH_REDIS_REST_TOKEN` — la instancia
+>    `grand-flea-55821` ya no existe y con credenciales muertas TODAS las llamadas API fallan
+>    (verificado en local). Sin ellas el rate limiting se desactiva; si se quiere, crear
+>    instancia nueva en upstash.com y reponer los valores.
+> 3. **Supabase Auth**: añadir el dominio de producción a las Redirect URLs
+>    (Authentication → URL Configuration).
+> 4. Verificar que `GEMINI_API_KEY`, `GOOGLE_MAPS_SERVER_KEY` y `CRON_SECRET` siguen vigentes.
+>
+> Nota: el desarrollo local NO usa Vercel — ver README (npm run dev + npm run api:local).
+
 Para que la extracción de IA funcione correctamente, necesitas configurar estas variables de entorno en tu proyecto de Vercel:
 
 ## Variables Requeridas

@@ -62,14 +62,23 @@ async function callOpenRouter(modelName: string, prompt: string, apiKey: string,
   const payload: any = {
     model: modelName,
     messages: finalMessages,
+    temperature: 0, // extracción determinista (igual que la ruta Gemini directa)
   };
 
   if (schema) {
+    // El modo estricto de OpenAI exige que `required` incluya TODAS las
+    // propiedades (los campos "opcionales" se modelan igualmente como
+    // required — el modelo puede devolverlos vacíos). Gemini no lo exige,
+    // así que se normaliza aquí solo para OpenRouter.
+    const strictSchema =
+      schema && typeof schema === "object" && schema.properties
+        ? { ...schema, required: Object.keys(schema.properties), additionalProperties: false }
+        : schema;
     payload.response_format = {
       type: "json_schema",
       json_schema: {
         name: "extraction",
-        schema: schema,
+        schema: strictSchema,
         strict: true
       }
     };
@@ -130,6 +139,9 @@ export async function generateContent(
     generationConfig: schema ? {
         responseMimeType: "application/json",
         responseSchema: schema,
+        // Extracción determinista: sin temperatura fijada, el modelo variaba
+        // entre corridas (2 vs 6 localizaciones del mismo PDF).
+        temperature: 0,
     } : undefined
   });
 
@@ -197,6 +209,7 @@ export async function generateContentFromPDF(
         generationConfig: schema ? {
             responseMimeType: "application/json",
             responseSchema: schema,
+            temperature: 0, // extracción determinista
         } : undefined
     });
 
@@ -263,6 +276,7 @@ export async function generateContentFromImages(
         generationConfig: schema ? {
             responseMimeType: "application/json",
             responseSchema: schema,
+            temperature: 0, // extracción determinista
         } : undefined
     });
 

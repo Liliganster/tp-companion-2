@@ -1,0 +1,21 @@
+archivo: "dispo_HOFER_060524.pdf"
+fecha: "2024-05-06" # "Montag, 06.05.2024"
+proyecto: "HOFER PREIS 2024"
+productora: "ovi office e.U."
+
+localizaciones:
+  - etiqueta: "Location 1 WAC Prater"
+    direccion: "Rustenschacherallee 9, 1020 Wien"
+    enlace_maps: "https://maps.app.goo.gl/SfDeMLpeFXaJuKtP7"
+  - etiqueta: "Location 2 Jesuitenwiese Prater"
+    direccion: "Rustenschacherallee 32-40, 1020 Wien"
+    enlace_maps: "https://maps.app.goo.gl/L8q7g1sSZUR8mXgw6"
+
+excluidas:
+  - "Parking"
+  - "Lunch"
+  - "Cast"
+
+notas: >
+  Las direcciones vienen en formato vienés "2., Rustenschacherallee 9"
+  (el "2." es el distrito → 1020 Wien).

@@ -1,7 +1,9 @@
 export const extractionSchema = {
   type: "object",
   properties: {
-    date: { type: "string", description: "Shooting day date in YYYY-MM-DD." },
+    date: { type: "string", description: "Shooting day date in YYYY-MM-DD. If the year is not printed, use any plausible year — the code corrects it." },
+    dateRaw: { type: "string", description: "The shooting date EXACTLY as printed in the document, verbatim (e.g. 'Tuesday, 19th Nov' or 'Montag, 06.05.2024')." },
+    dateYearInDocument: { type: "boolean", description: "true ONLY if a 4-digit year is explicitly printed next to the shooting date; false if the document omits the year." },
     projectName: { type: "string", description: "Show/film/series title (e.g. 'Dark', 'Tatort'). NOT the production company. Look in header, 'Projekt:'/'Serie:' labels." },
     productionCompanies: {
       type: "array",

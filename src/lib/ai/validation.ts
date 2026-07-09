@@ -32,6 +32,8 @@ export type InvoiceExtractionResult = z.infer<typeof InvoiceExtractionResultSche
 
 export const CallsheetExtractionResultSchema = z.object({
   date: dateIso,
+  dateRaw: z.string().trim().max(120).nullable().optional(),
+  dateYearInDocument: z.boolean().nullable().optional(),
   projectName: z.string().trim().min(1).max(160),
   productionCompanies: z.array(z.string().trim().min(1).max(160)).default([]),
   locations: z.array(z.string().trim().min(1).max(300)).min(1),

@@ -1,0 +1,32 @@
+archivo: "FUNDBOX_Dispo DT 4.pdf"
+fecha: "2024-11-19" # la callsheet dice "Tuesday, 19th Nov" sin año; 19-nov martes = 2024
+proyecto: "Fundbox"
+productora: ""
+
+localizaciones:
+  - etiqueta: "Location 1. Denkmal Strauss (Stadtpark)"
+    direccion: "Denkmal Johann Strauss, Stadtpark, Parkring 1, 1010 Wien" # el lugar de rodaje, NO el meeting point
+    enlace_maps: "https://maps.app.goo.gl/1ruVaHRddhSYaPxSA" # OJO: el enlace impreso apunta al Kursalon (meeting point)
+  - etiqueta: "Location 2: Opera House Fake (Viennas Englisch Theatre)"
+    direccion: "Josefsgasse 12, 1080 Wien"
+    enlace_maps: "https://maps.app.goo.gl/PigH4UHRsP3mgB5f9"
+  - etiqueta: "Location 3: Police Station (Ext.)"
+    direccion: "Mattiellistraße 2, 1040 Wien"
+    enlace_maps: "https://maps.app.goo.gl/FU9ZvK4jZbtHVCnC6"
+  - etiqueta: "Location 4: Christmas Market"
+    direccion: "Lichtenfelsgasse / Rathausplatz, 1010 Wien"
+    enlace_maps: "https://maps.app.goo.gl/SnaBUxVHYhMmdqbd6"
+
+excluidas:
+  - "Parking"
+  - "Lunch"
+  - "Cast"
+
+notas: >
+  Fecha sin año en la callsheet. Errata real en el papel: "Matiellistrasse" —
+  la calle correcta es Mattiellistraße 2, 1040 Wien (confirmado por el enlace).
+  Regla corregida (2026-07-09): la localización es el lugar de rodaje
+  (Denkmal Strauss/Stadtpark), NO el meeting point. Y decisión de la
+  propietaria: si hay enlace, EL ENLACE es la dirección para calcular la
+  distancia (aunque apunte al meeting point); el nombre del motiv se conserva
+  tal cual; sin enlace, se usa la dirección impresa del motiv/set/location.

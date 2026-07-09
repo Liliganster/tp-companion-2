@@ -1,6 +1,22 @@
 # Eval set de callsheets
 
-Aquí se anota **a mano** el resultado esperado de cada callsheet de prueba. Estas anotaciones son la "verdad" contra la que se medirá el extractor en la Fase 2 (objetivo: ≥95% de acierto).
+Aquí se anota **a mano** el resultado esperado de cada callsheet de prueba. Estas anotaciones son la "verdad" contra la que se mide el extractor en la Fase 2 (objetivo: ≥95% de acierto).
+
+## Cómo se mide
+
+Con las anotaciones hechas y los PDFs en `docs/eval/callsheets/`:
+
+```sh
+npm run eval:extractor                 # corre el pipeline REAL contra todas las anotaciones
+npm run eval:extractor -- --geocode    # incluye geocoding (gasta Google Maps)
+npm run eval:extractor -- --keep       # conserva los jobs en Supabase para inspeccionar
+npm run eval:extractor -- --only NOMBRE  # solo callsheets cuyo archivo contenga NOMBRE
+npm run eval:extractor -- --only SELFTEST  # prueba de humo del harness (callsheet sintética)
+```
+
+Cada callsheet evaluada hace 1 llamada real a Gemini (~céntimos). El script imprime fecha/proyecto/localizaciones (recall y precisión) por callsheet y el agregado, y guarda el detalle en `docs/eval/results/<fecha>.json` — así cada cambio del extractor se compara con la corrida anterior. Usa un usuario propio (`eval-extractor@…local`) y borra sus jobs al terminar.
+
+**Regla de la Fase 2**: ningún cambio del extractor se fusiona sin correr esto antes y después.
 
 ## Cómo anotar una callsheet
 
@@ -15,7 +31,7 @@ Aquí se anota **a mano** el resultado esperado de cada callsheet de prueba. Est
 - **productora**: si aparece (aunque sea solo como logotipo). Si no, déjalo vacío.
 - **localizaciones**: EN ORDEN de rodaje. Para cada una:
   - `etiqueta`: el texto tal como aparece en la callsheet (literal, con erratas si las hay).
-  - `direccion`: la dirección real y completa a la que conduce el conductor (corregida, geocodificable). Si hay **meeting point o Parkplatz asociado, esa es la dirección**, no el set en sí.
+  - `direccion`: la dirección real y completa del **lugar principal de rodaje (Loc/Set/Motiv)**, corregida y geocodificable. El meeting point/Parkplatz NO es la dirección (regla corregida 2026-07-09).
   - `enlace_maps`: si la callsheet trae enlace de Google Maps, pégalo aquí.
 - **excluidas**: cosas que aparecen en la callsheet pero que NO deben salir como destino (lunch, production office, hospital de referencia…). Sirven para comprobar que el extractor no las cuela.
 
@@ -23,7 +39,7 @@ Aquí se anota **a mano** el resultado esperado de cada callsheet de prueba. Est
 
 - Anota lo que **un conductor del crew** necesitaría: a dónde se conduce de verdad ese día.
 - Una localización mencionada dos veces cuenta una vez.
-- Si dudas entre set y meeting point, gana el meeting point / Parkplatz.
+- Si dudas entre set y meeting point, gana el **set/motiv** (el lugar principal de rodaje).
 
 ## Estado
 

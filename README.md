@@ -63,13 +63,14 @@ SUPABASE_SERVICE_ROLE_KEY=...
 
 ### Funciones API en local
 
-En producción, `api/` se sirve como funciones de Vercel. `npm run dev` solo arranca Vite, así que para probar los endpoints `/api/*` en local:
+En producción, `api/` se sirve como funciones de Vercel. `npm run dev` solo arranca Vite, así que **para que funcione la extracción de callsheets (y el resto de `/api/*`) hacen falta dos terminales**:
 
-1. En una terminal aparte: `npx vercel dev --listen 3000`
-2. Añade a `.env.local`: `VERCEL_DEV_API_ORIGIN=http://localhost:3000`
-3. Arranca Vite: `npm run dev`
+```sh
+npm run dev        # terminal 1: la app (Vite, puerto 8080)
+npm run api:local  # terminal 2: las funciones API reales (puerto 3000) + worker de callsheets
+```
 
-Vite hace proxy de `/api/*` al servidor de Vercel dev.
+`.env.local` debe tener `VERCEL_DEV_API_ORIGIN=http://localhost:3000` (ya configurado); Vite hace proxy de `/api/*` a ese origen. `scripts/local-api.ts` sirve los mismos handlers de `api/` que usa producción y procesa la cola de callsheets cada 8 s (el papel del cron de Vercel).
 
 ## Despliegue
 

@@ -327,13 +327,10 @@ function vercelDevApiProxy(targetOrigin: string | undefined): Plugin {
     return Buffer.concat(chunks);
   };
 
-  const shouldProxy = (url: string) =>
-    url.startsWith("/api/callsheets/trigger-worker") ||
-    url.startsWith("/api/invoices/trigger-worker") ||
-    url.startsWith("/api/google/oauth") ||
-    url.startsWith("/api/google/calendar") ||
-    url.startsWith("/api/google/drive") ||
-    url.startsWith("/api/google/place-details");
+  // Proxya TODO /api/* al servidor de funciones local (scripts/local-api.ts o
+  // `vercel dev`). Los middlewares googleApiProxy/climatiqProxy se registran
+  // antes y siguen atendiendo sus rutas directamente.
+  const shouldProxy = (url: string) => url.startsWith("/api/");
 
   return {
     name: "vercel-dev-api-proxy",

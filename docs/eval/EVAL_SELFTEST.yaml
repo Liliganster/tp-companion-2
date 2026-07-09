@@ -1,0 +1,15 @@
+archivo: "EVAL_SELFTEST.pdf"
+fecha: "2025-01-14"
+proyecto: "TESTFILM"
+productora: "Eval Pictures GmbH"
+localizaciones:
+  - etiqueta: "Cafe Pruckel"
+    direccion: "Stubenring 24, 1010 Wien"
+    enlace_maps: ""
+  - etiqueta: "Schloss Schoenbrunn"
+    direccion: "Schoenbrunner Schlossstrasse 47, 1130 Wien"
+    enlace_maps: ""
+excluidas:
+  - "Catering Zelt am Set"
+  - "Mariahilfer Str. 10, 1060 Wien"
+notas: "Callsheet sintetica para probar el harness"

@@ -1,0 +1,20 @@
+archivo: "FUNDBOX_call_sheet-dispo_DT_5.pdf"
+fecha: "2024-11-20" # "Wednesday, 20th Nov 2024"
+proyecto: "Fundbox"
+productora: ""
+
+localizaciones:
+  - etiqueta: "Location 1. Fundbox / Oper"
+    direccion: "Goethegasse 1, 1010 Wien"
+    enlace_maps: "https://maps.app.goo.gl/1BowJv3tGaURwu8c7"
+  - etiqueta: "Location 2: Opera House"
+    direccion: "Opernring 2, 1010 Wien"
+    enlace_maps: "https://maps.app.goo.gl/L6ABzRwEZe31VusV8"
+
+excluidas:
+  - "Parking"
+  - "Lunch"
+  - "Cast"
+  - "Base"
+
+notas: ""
