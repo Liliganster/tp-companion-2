@@ -21,12 +21,12 @@ export const extractionSchema = {
           },
           address: {
             type: "string",
-            description: "Drehort/Set/Motiv address only. Verbatim from document. NEVER include Base, Parking, Catering, Makeup, Office addresses."
+            description: "The address verbatim from the document. Never invent or complete. Not transit directions, floor numbers or notes."
           }
         },
         required: ["label", "address"]
       },
-      description: "Filming locations only (where camera shoots), each with its printed section label. Exclude all logistics addresses."
+      description: "Every labeled address block: filming (Motiv/Set/Location) AND logistics (Basis/Parken/Catering/Maske/Cast…). The code routes them by label."
     }
   },
   required: ["date", "projectName", "productionCompanies", "locations"]
