@@ -1,21 +1,21 @@
 /**
  * Tarjetas del dashboard — Fase 4 del PLAN.md.
  *
- * - AiQuotaCard: contador de IA transparente (decisión de la propietaria:
- *   visible), 3 estados (neutro / aviso ≥80% / agotado), clicable a Planes.
  * - ReportReadyCard: contextual los primeros días del mes → informe del mes
  *   anterior listo para generar.
  * - CarMarginCard: sustituto del odómetro — Kilometergeld facturado menos
  *   coste real por km del PERFIL (sin fotos, sin IA).
  * - ProUsageCard: % de uso profesional manual (km totales anuales del perfil
  *   ÷ km profesionales registrados).
+ *
+ * (El contador de IA vive como chip pequeño en la cabecera del dashboard —
+ * decisión de la propietaria — y como línea en el modal de subida.)
  */
 import { Link } from "react-router-dom";
-import { FileText, Sparkles } from "lucide-react";
+import { FileText } from "lucide-react";
 import { useI18n } from "@/hooks/use-i18n";
 import { useTrips } from "@/contexts/TripsContext";
 import { useUserProfile } from "@/contexts/UserProfileContext";
-import { useAiQuota } from "@/hooks/use-ai-quota";
 import { parseLocaleNumber } from "@/lib/number";
 import { tripKilometrageAmount, vehicleCostPerKm } from "@/lib/tripMoney";
 import { parseTripDate } from "@/lib/tripDates";
@@ -23,54 +23,6 @@ import { Button } from "@/components/ui/button";
 
 function eur(value: number, locale: string, decimals = 0) {
   return `${value.toLocaleString(locale, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })} €`;
-}
-
-export function AiQuotaCard() {
-  const { t, tf, locale } = useI18n();
-  const { used, limit, bypass, loading } = useAiQuota();
-
-  const now = new Date();
-  const nextMonthName = new Date(now.getFullYear(), now.getMonth() + 1, 1).toLocaleDateString(locale, { month: "long" });
-
-  const usedNum = used ?? 0;
-  const pct = bypass || !Number.isFinite(limit) || limit <= 0 ? 0 : Math.min(100, (usedNum / limit) * 100);
-  const exhausted = !bypass && used != null && Number.isFinite(limit) && usedNum >= limit;
-  const nearLimit = !exhausted && !bypass && used != null && Number.isFinite(limit) && limit > 0 && usedNum / limit >= 0.8;
-
-  const counterText = loading && used == null ? "…" : bypass ? `${usedNum}` : `${used ?? "—"}/${Number.isFinite(limit) ? limit : "∞"}`;
-
-  return (
-    <Link to="/plans" className="block">
-      <div
-        className={`glass-card p-4 transition-colors hover:border-primary/40 ${
-          exhausted ? "border-destructive/60" : nearLimit ? "border-warning/60" : ""
-        }`}
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-semibold uppercase tracking-wide">{t("dashboard.aiCounterTitle")}</span>
-          </div>
-          <span className="text-sm font-bold tabular-nums">{counterText}</span>
-        </div>
-        <div className="mt-3 h-1.5 rounded-full bg-muted overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all duration-500 ${
-              exhausted ? "bg-destructive" : nearLimit ? "bg-warning" : "bg-[#129446]"
-            }`}
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          {exhausted
-            ? `${t("dashboard.aiCounterExhausted")} · ${t("bulk.outOfQuotaButton")}`
-            : nearLimit
-              ? `${t("dashboard.aiCounterNearLimit")} · ${tf("dashboard.aiCounterRenews", { month: nextMonthName })}`
-              : tf("dashboard.aiCounterRenews", { month: nextMonthName })}
-        </p>
-      </div>
-    </Link>
-  );
 }
 
 export function ReportReadyCard() {

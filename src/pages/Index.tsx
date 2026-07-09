@@ -8,14 +8,14 @@ import type { ReactNode } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { RecentTrips } from "@/components/dashboard/RecentTrips";
 import { AttentionPanel } from "@/components/dashboard/AttentionPanel";
-import { AiQuotaCard, CarMarginCard, ProUsageCard, ReportReadyCard } from "@/components/dashboard/DashboardCards";
+import { CarMarginCard, ProUsageCard, ReportReadyCard } from "@/components/dashboard/DashboardCards";
 import { MonthlyBars } from "@/components/dashboard/MonthlyBars";
-import { Button } from "@/components/ui/button";
-import { ArrowDown, ArrowUp, Plus, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useI18n } from "@/hooks/use-i18n";
 import { useTrips } from "@/contexts/TripsContext";
+import { useAiQuota } from "@/hooks/use-ai-quota";
 import { calculateTreesNeeded, calculateTripEmissions, TripEmissionsInput } from "@/lib/emissions";
 import { parseLocaleNumber } from "@/lib/number";
 import { useEmissionsInput } from "@/hooks/use-emissions-input";
@@ -83,6 +83,9 @@ export default function Index() {
   const { t, tf, locale } = useI18n();
   const { trips } = useTrips();
   const { emissionsInput } = useEmissionsInput();
+  // Contador de IA pequeño en la cabecera (decisión de la propietaria):
+  // solo la cifra, sin mensaje de renovación; clicable a Planes.
+  const aiQuota = useAiQuota();
 
   const hour = new Date().getHours();
   const greeting = hour >= 6 && hour < 12
@@ -121,7 +124,8 @@ export default function Index() {
   return (
     <MainLayout>
       <div className="page-container flex flex-col gap-3">
-        {/* Cabecera: saludo + acciones (fuera los chips crípticos) */}
+        {/* Cabecera: saludo + contador de IA pequeño (sin botones redundantes
+            con Viajes — decisión de la propietaria) */}
         <div className="glass-panel p-4 md:p-5 animate-fade-in">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
@@ -130,20 +134,26 @@ export default function Index() {
               </h1>
               <p className="text-muted-foreground mt-1">{t("dashboard.subtitle")}</p>
             </div>
-            <div className="flex items-center gap-2">
-              <Button asChild variant="upload">
-                <Link to="/trips?action=upload">
-                  <Upload className="w-4 h-4" />
-                  <span>{t("dashboard.actionUploadCallsheet")}</span>
-                </Link>
-              </Button>
-              <Button asChild>
-                <Link to="/trips?action=add">
-                  <Plus className="w-4 h-4" />
-                  <span>{t("dashboard.actionAddTrip")}</span>
-                </Link>
-              </Button>
-            </div>
+            <Link
+              to="/plans"
+              className="flex items-center gap-2 px-3 py-1.5 border rounded-lg border-border bg-muted hover:bg-muted/70 transition-colors"
+              title={t("dashboard.aiCounterTitle")}
+            >
+              <Sparkles className="w-4 h-4 text-muted-foreground" />
+              <span
+                className={`text-xs font-medium tabular-nums ${
+                  !aiQuota.bypass && aiQuota.used != null && Number.isFinite(aiQuota.limit) && aiQuota.used >= aiQuota.limit
+                    ? "text-destructive"
+                    : "text-foreground"
+                }`}
+              >
+                {aiQuota.loading && aiQuota.used == null
+                  ? "…"
+                  : aiQuota.bypass
+                    ? `${aiQuota.used ?? 0}`
+                    : `${aiQuota.used ?? "—"}/${Number.isFinite(aiQuota.limit) ? aiQuota.limit : "∞"}`}
+              </span>
+            </Link>
           </div>
         </div>
 
@@ -180,25 +190,16 @@ export default function Index() {
           />
         </div>
 
-        {/* Accionable: atención + informe contextual + contador IA */}
+        {/* Accionable: atención + informe contextual + margen/uso del coche */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           <div className="lg:col-span-2">
             <AttentionPanel />
           </div>
           <div className="flex flex-col gap-3">
             <ReportReadyCard />
-            <AiQuotaCard />
-            <div className="grid grid-cols-1 gap-3 lg:hidden">
-              <CarMarginCard />
-              <ProUsageCard />
-            </div>
+            <CarMarginCard />
+            <ProUsageCard />
           </div>
-        </div>
-
-        {/* Margen del coche + % uso profesional (escritorio) */}
-        <div className="hidden lg:grid grid-cols-2 gap-3">
-          <CarMarginCard />
-          <ProUsageCard />
         </div>
 
         {/* Paisaje: barras km/€ de 6 meses + últimos viajes */}
