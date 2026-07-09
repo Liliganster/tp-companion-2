@@ -26,6 +26,14 @@ function pushWarning(byId: Record<string, TripWarning[]>, tripId: string, warnin
   (byId[tripId] ??= []).push(warning);
 }
 
+/** Clave de duplicado (misma fecha + misma ruta normalizada). Null si faltan datos. */
+export function buildTripDuplicateKey(date: string, route: unknown): string | null {
+  const routeClean = Array.isArray(route) ? route.map((s) => String(s ?? "").trim()).filter(Boolean) : [];
+  const routeNormalized = normalizeRoute(routeClean);
+  if (!routeNormalized || !Number.isFinite(Date.parse(String(date ?? "")))) return null;
+  return `${date}|${routeNormalized}`;
+}
+
 function normalizeRoute(route: string[]) {
   return route
     .map((stop) => stop.trim().replace(/\s+/g, " "))

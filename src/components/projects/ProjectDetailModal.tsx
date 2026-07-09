@@ -9,11 +9,11 @@ import { supabase } from "@/lib/supabaseClient";
 import { cascadeDeleteCallsheetJobById, cascadeDeleteInvoiceJobById } from "@/lib/cascadeDelete";
 import { toast } from "sonner";
 import { CallsheetUploader } from "@/components/callsheets/CallsheetUploader";
-import { ProjectInvoiceUploader } from "@/components/projects/ProjectInvoiceUploader";
 import { ProjectExpenseSection } from "@/components/projects/ProjectExpenseSection";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { calculateTripEmissions } from "@/lib/emissions";
+import { buildTripDuplicateKey } from "@/lib/trip-warnings";
 import { parseLocaleNumber } from "@/lib/number";
 import { useTrips, type Trip } from "@/contexts/TripsContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -373,6 +373,22 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         const distance = typeof distanceKm === "number" ? distanceKm : 0;
         const producer = (result?.producer_value ?? "").trim();
         const purpose = producer ? tf("bulk.purposeWithProducer", { producer }) : t("bulk.purposeDefault");
+
+        // Duplicado exacto (misma fecha + misma ruta) de OTRO job: no crear un
+        // segundo viaje en silencio — avisar y saltar (el de este job ya se
+        // borró arriba si era un re-procesado).
+        const dupKey = buildTripDuplicateKey(date, route);
+        const duplicateOfOther =
+          dupKey != null &&
+          (trips ?? []).some(
+            (tr) =>
+              String((tr as any).callsheet_job_id ?? "") !== String(job.id) &&
+              buildTripDuplicateKey(String((tr as any).date ?? ""), (tr as any).route) === dupKey,
+          );
+        if (duplicateOfOther) {
+          toast.info(t("projectDetail.toastDuplicateTripSkipped"));
+          return { ok: true, skipped: "duplicate" } as any;
+        }
 
         const nextTrip: Trip = {
           id: uuidv4(),
@@ -1125,6 +1141,16 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
         console.error("[handleExtract] API error", { docId: doc.id, errData });
+        if (response.status === 409 && (errData as any)?.error === "not_claimable") {
+          // Otro proceso ya reclamó este job (cron local, doble clic o un intento
+          // previo interrumpido). NO es un error: se deja el documento y el
+          // polling mostrará el estado real. Si quedó atascado, reintentar
+          // pasados ~90 s lo re-reclama automáticamente (CALLSHEET_PROCESS_STALE_MS).
+          localStatusOverridesRef.current.delete(doc.id);
+          cancelCallsheetJobIdsRef.current.delete(doc.id);
+          toast.info(t("projectDetail.toastAlreadyProcessing"));
+          return;
+        }
         if (response.status === 402 || (errData as any)?.error === "quota_exceeded") {
           console.warn("[handleExtract] quota_exceeded -> removing document from UI", { docId: doc.id });
           localStatusOverridesRef.current.delete(doc.id);

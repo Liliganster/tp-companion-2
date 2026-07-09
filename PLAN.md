@@ -33,19 +33,19 @@ El informe PDF que se entrega a producción es el producto visible y el vector d
 
 **Hecho cuando**: repo limpio, build en verde, ≥10 callsheets anotadas.
 
-## Fase 1 — Recorte: la app se hace pequeña
+## Fase 1 — Recorte: la app se hace pequeña ✦ estado: hecha (2026-07-08)
 
 Todo es *ocultar y desconectar* (hibernar), no borrar. Reversible.
 
-- [ ] Quitar de menú/rutas (código queda hibernado): `Advanced`, `AdvancedRoutes`, `AdvancedCosts`, `AdvancedEmissions`, extracción IA de facturas (`invoice-worker`, `ProjectInvoiceUploader`) y de gastos (`ExpenseScanButton`), odómetro (página pública `/odometer-capture`, `OdometerSettingsSection`), integración Google Drive.
-- [ ] Recibos: se mantiene adjuntar foto + **importe manual en EUR** (convención documentada en el campo: recibos extranjeros en CZK/HUF se introducen ya convertidos).
-- [ ] Sustituir Climatiq + Electricity Maps por **tabla estática de factores de emisión** con fuente citada:
+- [x] Quitar de menú/rutas (código queda hibernado): `Advanced`, `AdvancedRoutes`, `AdvancedCosts`, `AdvancedEmissions`, extracción IA de facturas (`invoice-worker`, `ProjectInvoiceUploader`) y de gastos (`ExpenseScanButton`), odómetro (página pública `/odometer-capture`, `OdometerSettingsSection`), integración Google Drive.
+- [x] Recibos: se mantiene adjuntar foto + **importe manual en EUR** (convención documentada en el campo: recibos extranjeros en CZK/HUF se introducen ya convertidos).
+- [x] Sustituir Climatiq + Electricity Maps por **tabla estática de factores de emisión** con fuente citada:
   - Combustible (física exacta): gasolina 2,31 kg CO₂/L, diésel 2,68 kg CO₂/L. Decidir y etiquetar metodología tanque-a-rueda vs pozo-a-rueda.
   - Red eléctrica (EV): media anual por país AT/DE/CZ/HU, fuente Umweltbundesamt/APG. Actualización manual anual.
   - La mayor precisión viene del consumo real del vehículo del usuario (ya está en el perfil), no de APIs.
-- [ ] **Árboles equivalentes: SE MANTIENE** (decisión de la propietaria). Cifra con fuente (~21-22 kg CO₂/árbol/año) y tooltip explicando el supuesto.
-- [ ] Simplificar planes a **Free / Pro** (free: viajes manuales ilimitados + 3 callsheets IA/mes). Simplificar `PlanContext`, `plans.ts`, `aiQuota`.
-- [ ] i18n: separar por idioma con carga perezosa; claves tipadas desde el idioma base; ES se queda.
+- [x] **Árboles equivalentes: SE MANTIENE** (decisión de la propietaria). Cifra con fuente (~21-22 kg CO₂/árbol/año) y tooltip explicando el supuesto.
+- [x] Simplificar planes a **Free / Pro** (free: viajes manuales ilimitados + 3 callsheets IA/mes). Simplificar `PlanContext`, `plans.ts`, `aiQuota`.
+- [x] i18n: separar por idioma con carga perezosa; claves tipadas desde el idioma base; ES se queda.
 
 **Hecho cuando**: navegación con 5-6 entradas, cero llamadas a Climatiq/ElectricityMaps, build y tests en verde.
 
@@ -53,13 +53,16 @@ Todo es *ocultar y desconectar* (hibernar), no borrar. Reversible.
 
 **Método**: primero el eval set, luego cada cambio se mide. Nada se fusiona sin pasar el eval.
 
-- [ ] **Eval set + script de medición**: 20-30 callsheets reales anotadas (incluir 2-3 de rodajes DE/CZ/HU y alguna con productora solo como logo). Métrica: precisión/recall de localizaciones + acierto de fecha/proyecto. Objetivo: ≥95%.
-- [ ] **Resolver enlaces Google Maps como fuente primaria** (mayor impacto). Hoy `MAPS_URL_RE` en `api/_utils/callsheetLocationHints.ts` los BORRA. Nuevo: si una localización tiene enlace `maps.app.goo.gl`/`google.com/maps`, resolverlo (seguir redirección → place/coords) y usarlo como verdad; el texto es la etiqueta. Ahorra geocoding y elimina errores.
-- [ ] **Quitar Tesseract/OCR** (`api/_utils/ocr.ts`, llamada en `api/worker.ts` ~L419): Gemini lee el PDF nativamente. Resolver la contradicción del prompt: o recortar el PDF a N páginas antes de enviar, o validar contra texto completo. El filtro de alucinaciones hoy valida contra un texto (OCR 2 páginas) distinto del que ve la IA (PDF entero) → descarta extracciones correctas.
+- [ ] **Eval set + script de medición**: 20-30 callsheets reales anotadas (incluir 2-3 de rodajes DE/CZ/HU y alguna con productora solo como logo). Métrica: precisión/recall de localizaciones + acierto de fecha/proyecto. Objetivo: ≥95%. *Script HECHO; 5 anotadas.*
+  **LÍNEA BASE (2026-07-09, 5 callsheets, sin geocoding): fecha 80% · proyecto 80% · loc recall 95% · loc precisión 95% · ~50s/callsheet.**
+  **Tras quitar OCR + año por código: fecha 100% · proyecto 80% · loc 95/95 · ~11s/callsheet.** Pendientes medibles: la errata verbatim (Matiellistrasse) espera el campo de dirección corregida + resolución de enlaces Maps; el proyecto "Untitled Project" en FUNDBOX (nombre solo gráfico) es inestable entre corridas. Los fallos (todos en FUNDBOX DT 4) confirman empíricamente 3 hipótesis de esta fase: año inventado por la IA ("Tuesday, 19th Nov" → 2019), proyecto "Untitled Project" (nombre solo visual), y la errata verbatim "Matiellistrasse" sin campo de dirección corregida. ~50 s/callsheet, dominado por el OCR.
+- [x] **Resolver enlaces Google Maps como fuente primaria** — hecho 2026-07-09 (`api/_utils/callsheetMapsLinks.ts` + integración en worker, 7 tests). El enlace de la línea del MOTIV se asocia por contexto, se resuelve por redirección (gratis, sin API) y gana al geocoding. Caso real REX: "1190, Wildgrubgasse" → pin exacto de "Mayer am Nussberg" vía Kahlenberger Str. Eval REX: 100% en todo.
+- [x] **Quitar Tesseract/OCR** *(hecho 2026-07-09: texto nativo con pdf-parse del documento COMPLETO — el filtro valida contra lo mismo que ve la IA; 50s→11s por callsheet y desaparece el crash de Node/WASM)* (`api/_utils/ocr.ts`, llamada en `api/worker.ts` ~L419): Gemini lee el PDF nativamente. Resolver la contradicción del prompt: o recortar el PDF a N páginas antes de enviar, o validar contra texto completo. El filtro de alucinaciones hoy valida contra un texto (OCR 2 páginas) distinto del que ve la IA (PDF entero) → descarta extracciones correctas.
+- [ ] **Callsheets como imagen (JPG/PNG, foto de WhatsApp)** — caso real frecuente, hoy rechazado en el picker (`accept="application/pdf"`) y por el mime fijo del worker. Gemini lee imágenes nativamente: aceptar imágenes en los uploaders, detectar el mime real en el worker y saltarse el OCR (mismo trabajo que quitar Tesseract — hacer juntos). El eval set debe incluir 2-3 callsheets en foto.
 - [ ] **Verbatim = evidencia; dirección geocodificable = campo aparte.** Hoy el filtro castiga al modelo por corregir erratas (ej. real: callsheet dice "Matiellistrasse 2", la calle es Mattiellistraße 2, 1040 Wien → el filtro la descarta por no aparecer literal). Dos campos: `evidence_text` (literal) y dirección corregida/normalizada.
 - [ ] **Arreglar/retirar la torre de regex**: bug confirmado — `LOGISTICS_KEYWORD_RE` contiene `\bessen\b` (Essen es una ciudad alemana), `\boffice\b`, `\bbüro\b`, `\bhotel\b`, `\bmeeting point\b`, `\btreffpunkt\b`… Hipótesis a probar con el eval: menos filtros + prompt claro (+ quizá modelo mejor que gemini-2.5-flash) > torre de heurísticas.
-- [ ] **Meeting point / Parkplatz asociado a una localización = destino conducible del viaje** (el conductor no va al monumento en medio del parque; va al Parkplatz del meeting point). Extraer ambos. Siguen excluidos: lunch, production office, hospital.
-- [ ] **Fecha sin año** ("Tuesday, 19th Nov"): el año lo infiere el CÓDIGO (el que acerque la fecha a la fecha de subida), no la IA. Validar con el día de semana si aparece.
+- [ ] **Solo el lugar principal de rodaje (Loc/Set/Motiv) es una localización** *(regla corregida por la propietaria 2026-07-09)*: meeting point/Parkplatz NO se extraen como localizaciones ni sustituyen la dirección — son a lo sumo información adjunta de su localización. Excluidos: base, parking, catering, lunch, production office, hospital, meeting points sueltos.
+- [x] **Fecha sin año**: hecho 2026-07-09 (`api/_utils/callsheetDate.ts` + campos dateRaw/dateYearInDocument en el esquema; valida con el día de semana; 7 tests). Eval: fecha 80%→100%.
 - [ ] **Productora**: campo por proyecto, se fija una vez y se hereda en callsheets siguientes. Prompt: "puede aparecer solo como logotipo; léelo de la imagen". Opcional, nunca bloquea.
 - [ ] **Localizaciones en orden de rodaje → un viaje multi-parada del día** (el modelo `route: string[]` de `TripsContext` ya lo soporta). Los horarios del callsheet dan el orden.
 - [ ] **Geocoding**: sesgo `region=at` (sesgo, NUNCA restricción por país — rodajes cruzan fronteras), contexto del propio callsheet como segundo sesgo, normalizar "Ecke" → "&", no geocodificar el centinela "No location found".
@@ -134,4 +137,6 @@ Rediseño de `src/pages/Index.tsx`. Regla: arriba todo es accionable, abajo todo
 | Odómetro hibernado, no borrado | Sustituido por margen ÖAMTC + lectura anual manual |
 | Facturas IA hibernadas | Importe manual (5 seg) cubre el 90% del valor; una sola IA en v1 |
 | Solo Austria = reglas y ventas, no geografía | Rodajes cruzan a DE/CZ/HU; geocoding sesgado, nunca restringido |
+| Solo Loc/Set/Motiv son localizaciones | Corregido 2026-07-09: meeting point/Parkplatz no son destino ni regla, solo info adjunta |
+| Con enlace de Maps, el enlace es la dirección de distancia | El nombre del motiv se conserva; sin enlace, se usa la dirección impresa del lugar de rodaje |
 | Gemini Flash de base; modelo mejor solo si el eval lo justifica | Coste por callsheet es céntimos; precisión se mide, no se supone |

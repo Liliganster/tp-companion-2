@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { getBulkCloseCancellation } from "./bulkUploadClose";
 
 describe("getBulkCloseCancellation", () => {
-  it("marks in-flight processing work as cancellable and requests a toast", () => {
+  it("keeps processing/done jobs alive on close and only cancels queued work", () => {
     const result = getBulkCloseCancellation({
       activeJobIds: ["job-1", "job-2"],
       aiLoading: false,
@@ -16,11 +16,13 @@ describe("getBulkCloseCancellation", () => {
       },
     });
 
-    expect(result.jobsToCancel).toEqual(["job-1", "job-3", "job-2"]);
-    expect(result.shouldShowCancellationToast).toBe(true);
+    // queued se cancela; processing y done sobreviven (se recuperan al reabrir).
+    expect(result.jobsToCancel).toEqual(["job-2"]);
+    expect(result.backgroundJobIds).toEqual(["job-1", "job-3"]);
+    expect(result.shouldShowBackgroundToast).toBe(true);
   });
 
-  it("only cancels non-terminal jobs once the modal is no longer processing", () => {
+  it("cancels non-terminal queued/failed jobs when closing from review", () => {
     const result = getBulkCloseCancellation({
       activeJobIds: ["job-1", "job-2"],
       aiLoading: false,
@@ -34,11 +36,33 @@ describe("getBulkCloseCancellation", () => {
       },
     });
 
-    expect(result.jobsToCancel).toEqual(["job-3", "job-4", "job-2"]);
+    expect(result.jobsToCancel).toEqual(["job-4", "job-2"]);
+    // processing sigue vivo también al cerrar desde revisión.
+    expect(result.backgroundJobIds).toEqual(["job-3"]);
     expect(result.shouldShowCancellationToast).toBe(true);
   });
 
-  it("does not request a cancellation toast when the modal closes idle", () => {
+  it("cancels unknown-status jobs only while an upload is still in flight", () => {
+    const uploading = getBulkCloseCancellation({
+      activeJobIds: ["job-1"],
+      aiLoading: true,
+      aiStep: "upload",
+      jobIds: [],
+      jobStateById: {},
+    });
+    expect(uploading.jobsToCancel).toEqual(["job-1"]);
+
+    const idleUnknown = getBulkCloseCancellation({
+      activeJobIds: ["job-1"],
+      aiLoading: false,
+      aiStep: "review",
+      jobIds: [],
+      jobStateById: {},
+    });
+    expect(idleUnknown.jobsToCancel).toEqual([]);
+  });
+
+  it("does not request any toast when the modal closes idle", () => {
     const result = getBulkCloseCancellation({
       activeJobIds: [],
       aiLoading: false,
@@ -48,6 +72,8 @@ describe("getBulkCloseCancellation", () => {
     });
 
     expect(result.jobsToCancel).toEqual([]);
+    expect(result.backgroundJobIds).toEqual([]);
     expect(result.shouldShowCancellationToast).toBe(false);
+    expect(result.shouldShowBackgroundToast).toBe(false);
   });
 });

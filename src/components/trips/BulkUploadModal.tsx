@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload, Sparkles, FileSpreadsheet, CloudUpload, Loader2, MapPin, Calendar, Building2, CheckCircle, Save, AlertTriangle } from "lucide-react";
+import { Upload, Sparkles, FileSpreadsheet, CloudUpload, Loader2, MapPin, Calendar, Building2, CheckCircle, Save, AlertTriangle, XCircle } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useI18n } from "@/hooks/use-i18n";
 import { supabase } from "@/lib/supabaseClient";
@@ -21,12 +21,15 @@ import { buildBaseRouteAddress, optimizeCallsheetLocationsAndDistance } from "@/
 import { useAuth } from "@/contexts/AuthContext";
 import { getBulkCloseCancellation } from "@/components/trips/bulkUploadClose";
 import { getBulkDisplayStatus, getInitialBulkJobStateById } from "@/components/trips/bulkUploadProcessingState";
-import { getBulkDuplicateCleanupIds, getBulkSessionCleanupIds } from "@/components/trips/bulkUploadCleanup";
+import { getBulkDuplicateCleanupIds } from "@/components/trips/bulkUploadCleanup";
 
 import { cancelCallsheetJobs } from "@/lib/aiJobCancellation";
 import { cascadeDeleteCallsheetJobById } from "@/lib/cascadeDelete";
 import { usePlanLimits } from "@/hooks/use-plan-limits";
 import { logger } from "@/lib/logger";
+import { FEATURES } from "@/lib/features";
+import { findProjectByCompatibleName } from "@/lib/projects";
+import { buildTripDuplicateKey } from "@/lib/trip-warnings";
 
 interface SavedTrip {
   id: string;
@@ -152,11 +155,18 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const resumeDriveImportRef = useRef(false);
   const importFromGoogleDriveRef = useRef<(() => Promise<void>) | null>(null);
   
+  const [activeTab, setActiveTab] = useState<"csv" | "ai">("csv");
+
   // AI Tab State
   const [aiStep, setAiStep] = useState<"upload" | "processing" | "review">("upload");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isDragActive, setIsDragActive] = useState(false);
   const [jobIds, setJobIds] = useState<string[]>([]);
+  // Espejos para efectos que no deben re-suscribirse en cada cambio (resurrección).
+  const aiStepRef = useRef(aiStep);
+  const jobIdsRef = useRef(jobIds);
+  useEffect(() => { aiStepRef.current = aiStep; }, [aiStep]);
+  useEffect(() => { jobIdsRef.current = jobIds; }, [jobIds]);
   const [jobMetaById, setJobMetaById] = useState<
     Record<string, { fileName: string; mimeType: string; storagePath: string }>
   >({});
@@ -219,6 +229,58 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     resetAiState();
   }, [open]);
 
+  // Resurrección: al abrir el modal en limpio, recuperar extracciones de las
+  // últimas 24 h que siguen vivas (queued/processing) o terminadas sin guardar
+  // como viaje. Cerrar el modal ya no las destruye; aquí se retoman.
+  useEffect(() => {
+    if (!open || !supabase) return;
+    let alive = true;
+    void (async () => {
+      const { data: { user } = { user: null } } = await supabase.auth.getUser();
+      if (!alive || !user) return;
+      const sinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await supabase
+        .from("callsheet_jobs")
+        .select("id, status, storage_path, created_at")
+        .eq("user_id", user.id)
+        .in("status", ["queued", "processing", "done"])
+        .gte("created_at", sinceIso)
+        .order("created_at", { ascending: false })
+        .limit(10);
+      if (!alive || error || !data?.length) return;
+
+      const savedJobIds = new Set(
+        (trips ?? []).map((tr) => String((tr as any)?.callsheet_job_id ?? "").trim()).filter(Boolean),
+      );
+      const rows = (data as any[]).filter((r) => !savedJobIds.has(String(r.id)));
+      if (rows.length === 0) return;
+
+      // Solo si la sesión sigue en limpio (el usuario no empezó otra cosa).
+      if (aiStepRef.current !== "upload" || jobIdsRef.current.length > 0) return;
+
+      const ids = rows.map((r) => String(r.id));
+      setJobMetaById(
+        Object.fromEntries(
+          rows.map((r) => {
+            const path = String(r.storage_path ?? "");
+            const fileName = path.split("/").pop() || "callsheet.pdf";
+            return [String(r.id), { fileName, mimeType: "application/pdf", storagePath: path }];
+          }),
+        ),
+      );
+      setJobStateById(Object.fromEntries(rows.map((r) => [String(r.id), { status: String(r.status) as JobStatus }])));
+      setProcessingTotal(ids.length);
+      setJobIds(ids);
+      // El polling existente carga los resultados y avanza a "review" solo.
+      setAiStep("processing");
+      setActiveTab("ai"); // llevar al usuario directamente a sus extracciones
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al abrir
+  }, [open]);
+
   useEffect(() => {
     const scheduledProcessJobIds = scheduledProcessJobIdsRef.current;
     return () => {
@@ -251,6 +313,26 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
   const isAiCancelled = (signal?: AbortSignal | null) =>
     cancelRequestedRef.current || Boolean(signal?.aborted);
+
+  // Botón "Cancelar extracción": detiene el cliente, borra los jobs (y sus
+  // archivos) del servidor y vuelve al paso de subida. El worker comprueba la
+  // cancelación antes de llamar a la IA; como mucho se consume la llamada ya
+  // en vuelo (una por callsheet).
+  const cancelActiveExtraction = async () => {
+    cancelRequestedRef.current = true;
+    aiAbortControllerRef.current?.abort();
+    aiAbortControllerRef.current = null;
+    scheduledProcessJobIdsRef.current.clear();
+    optimizeChainRef.current = Promise.resolve();
+    const ids = Array.from(new Set([...jobIds, ...activeJobIdsRef.current])).filter(Boolean);
+    try {
+      await cancelCallsheetJobs(ids);
+    } finally {
+      resetAiState();
+      cancelRequestedRef.current = false; // permite empezar de nuevo sin cerrar el modal
+      toast.info(t("bulk.toastProcessingCancelled"));
+    }
+  };
 
   useEffect(() => {
     reviewByJobIdRef.current = reviewByJobId;
@@ -379,8 +461,8 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     // 1. Check in-session cache first (avoids re-creating during same import run)
     if (sessionCache?.has(key)) return sessionCache.get(key);
 
-    // 2. Check existing projects from context
-    const existing = projects.find((p) => p.name.trim().toLowerCase() === key);
+    // 2. Check existing projects from context (exacto o por contención: "rex" ↔ "KOMMISSAR REX")
+    const existing = findProjectByCompatibleName(projects, trimmed);
     if (existing) {
       sessionCache?.set(key, existing.id);
       return existing.id;
@@ -1247,7 +1329,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
-      const { jobsToCancel, shouldShowCancellationToast } = getBulkCloseCancellation({
+      const { jobsToCancel, shouldShowCancellationToast, shouldShowBackgroundToast } = getBulkCloseCancellation({
         activeJobIds: activeJobIdsRef.current,
         aiLoading,
         aiStep,
@@ -1260,15 +1342,16 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       aiAbortControllerRef.current = null;
       scheduledProcessJobIdsRef.current.clear();
       optimizeChainRef.current = Promise.resolve();
+      // Solo se cancelan/limpian jobs que aún no consumen IA (created/queued/failed).
+      // Los processing/done siguen en el servidor y se recuperan al reabrir.
       void cancelCallsheetJobs(jobsToCancel);
-      void cleanupTransientCallsheetJobs(
-        getBulkSessionCleanupIds({
-          jobIds: [...jobIds, ...activeJobIdsRef.current],
-          savedByJobId: savedByJobIdRef.current,
-        }),
-      );
+      void cleanupTransientCallsheetJobs(jobsToCancel);
 
-      if (shouldShowCancellationToast) {
+      if (shouldShowBackgroundToast) {
+        setTimeout(() => {
+          toast.info(t("bulk.toastBackgroundProcessing"));
+        }, 50);
+      } else if (shouldShowCancellationToast) {
         setTimeout(() => {
           toast.info(t("bulk.toastProcessingCancelled"));
         }, 50);
@@ -1298,6 +1381,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   }, []);
 
   useEffect(() => {
+    if (!FEATURES.googleDrive) return;
     if (!open || !resumeDriveImportRef.current) return;
 
     resumeDriveImportRef.current = false;
@@ -1372,7 +1456,14 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       if (resultError || locsError || !result) return;
 
       const rawLocations = (locs ?? [])
-        .map((l: any) => String(l?.name_raw || l?.address_raw || l?.formatted_address || "").trim())
+        .map((l: any) => {
+          // El enlace de Maps del propio documento es la verdad: si el worker
+          // lo resolvió (geocode_quality = maps_link), su nombre/direción gana
+          // al texto crudo de la callsheet.
+          const linkResolved =
+            String(l?.geocode_quality ?? "") === "maps_link" ? String(l?.formatted_address ?? "").trim() : "";
+          return (linkResolved || String(l?.name_raw || l?.address_raw || l?.formatted_address || "")).trim();
+        })
         .filter(Boolean);
 
       setReviewByJobId((prev) => {
@@ -1576,7 +1667,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     const cached = createdProjectsByNameRef.current[key];
     if (cached) return cached;
 
-    const existingProject = projects.find((p) => p.name.trim().toLowerCase() === key);
+    const existingProject = findProjectByCompatibleName(projects, trimmed);
     if (existingProject?.id) {
       createdProjectsByNameRef.current[key] = existingProject.id;
       return existingProject.id;
@@ -1600,11 +1691,24 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       co2Emissions: 0,
     } as any);
 
-    // Best-effort: if the project already existed, fetch its real id by name.
-    const { data } = await supabase.from("projects").select("id").eq("name", trimmed).limit(1).maybeSingle();
-    const id = data?.id ? String((data as any).id) : newProjectId;
-    createdProjectsByNameRef.current[key] = id;
-    return id;
+    // VERIFICAR contra la BD antes de referenciar el id: si el insert falló
+    // (red caída, duplicado con otra grafía…), devolver el id real o ninguno.
+    // Antes se devolvía el uuid nunca insertado → violación de FK en trips.
+    const { data: byName } = await supabase.from("projects").select("id").eq("name", trimmed).limit(1).maybeSingle();
+    if (byName?.id) {
+      const id = String((byName as any).id);
+      createdProjectsByNameRef.current[key] = id;
+      return id;
+    }
+    const { data: byId } = await supabase.from("projects").select("id").eq("id", newProjectId).maybeSingle();
+    if (byId?.id) {
+      createdProjectsByNameRef.current[key] = newProjectId;
+      return newProjectId;
+    }
+    // No se pudo crear ni encontrar: el viaje se guarda SIN proyecto (se puede
+    // asignar después) en vez de fallar con una referencia fantasma.
+    logger.warn("[BulkUploadModal] No se pudo crear/encontrar el proyecto; el viaje se guarda sin proyecto", { name: trimmed });
+    return undefined;
   };
 
   const updateReview = (jobId: string, patch: Partial<ReviewTrip>) => {
@@ -1631,6 +1735,15 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
       const baseAddress = (profile.baseAddress ?? "").trim();
       const stops = review.locations.map((l) => (l ?? "").trim()).filter(Boolean);
       const route = baseAddress ? [baseAddress, ...stops, baseAddress] : stops;
+
+      // Duplicado (misma fecha + misma ruta que un viaje existente): confirmar antes.
+      const dupKey = buildTripDuplicateKey(review.date, route);
+      const isDuplicate =
+        dupKey != null &&
+        (trips ?? []).some((tr) => buildTripDuplicateKey(String((tr as any).date ?? ""), (tr as any).route) === dupKey);
+      if (isDuplicate && !window.confirm(t("bulk.duplicateTripConfirm"))) {
+        return false;
+      }
 
       const newTrip: SavedTrip = {
         id: uuidv4(),
@@ -1849,7 +1962,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
           <DialogDescription className="sr-only">{t("bulk.title")}</DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="csv" className="w-full">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "csv" | "ai")} className="w-full">
           <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 mb-6">
             <TabsTrigger value="csv" className="gap-2">
               <FileSpreadsheet className="w-4 h-4" />
@@ -1889,15 +2002,17 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                 <Upload className="w-4 h-4" />
                 {t("bulk.selectCsvFile")}
               </Button>
-              <Button
-                variant="outline"
-                className="h-12 gap-2"
-                type="button"
-                onClick={() => void importFromGoogleDrive()}
-              >
-                <CloudUpload className="w-4 h-4" />
-                {t("bulk.importFromDrive")}
-              </Button>
+              {FEATURES.googleDrive && (
+                <Button
+                  variant="outline"
+                  className="h-12 gap-2"
+                  type="button"
+                  onClick={() => void importFromGoogleDrive()}
+                >
+                  <CloudUpload className="w-4 h-4" />
+                  {t("bulk.importFromDrive")}
+                </Button>
+              )}
             </div>
 
             <div className="relative">
@@ -1972,15 +2087,17 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                     </p>
                     </div>
 
-                    <Button
-                      variant="outline"
-                      className="w-full h-12 gap-2"
-                      type="button"
-                      onClick={() => void importPdfFromDrive()}
-                    >
-                      <CloudUpload className="w-4 h-4" />
-                      {t("bulk.importPdfFromDrive") || "Import PDFs from Google Drive"}
-                    </Button>
+                    {FEATURES.googleDrive && (
+                      <Button
+                        variant="outline"
+                        className="w-full h-12 gap-2"
+                        type="button"
+                        onClick={() => void importPdfFromDrive()}
+                      >
+                        <CloudUpload className="w-4 h-4" />
+                        {t("bulk.importPdfFromDrive") || "Import PDFs from Google Drive"}
+                      </Button>
+                    )}
 
                     <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
                       <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
@@ -2063,6 +2180,18 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                     </CardContent>
                   </Card>
                 )}
+
+                {/* Botón de pánico: detiene y descarta la extracción en curso. */}
+                <div className="flex justify-center pt-1">
+                  <Button
+                    variant="outline"
+                    className="gap-2 text-destructive hover:bg-destructive/10"
+                    onClick={() => void cancelActiveExtraction()}
+                  >
+                    <XCircle className="w-4 h-4" />
+                    {t("bulk.aiCancelExtraction")}
+                  </Button>
+                </div>
               </div>
             )}
 

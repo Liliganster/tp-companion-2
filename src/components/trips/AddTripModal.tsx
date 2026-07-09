@@ -440,6 +440,22 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
       ];
     }
 
+    // Viaje creado desde callsheet SIN dirección base: la ruta guardada son
+    // SOLO las paradas del rodaje. No convertir la primera/última en
+    // origen/destino (al sobrescribirlas se perdían las paradas): se listan
+    // como paradas y origen/destino quedan vacíos para añadirlos alrededor.
+    const cameFromCallsheet = Boolean((seedTrip as any)?.callsheet_job_id);
+    const baseNorm = (baseLocation ?? "").trim().toLowerCase();
+    const routeVals = (seedTrip?.route ?? []).map((v) => String(v ?? "").trim()).filter(Boolean);
+    const routeTouchesBase = baseNorm.length > 0 && routeVals.some((v) => v.toLowerCase() === baseNorm);
+    if (cameFromCallsheet && routeVals.length >= 1 && !routeTouchesBase) {
+      return [
+        { id: "origin", value: "", type: "origin" as const },
+        ...routeVals.map((v, i) => ({ id: `stop-${i + 1}`, value: v, type: "stop" as const })),
+        { id: "destination", value: "", type: "destination" as const },
+      ];
+    }
+
     if (seedTrip?.route && seedTrip.route.length >= 2) {
       return seedTrip.route.map((rawValue, index) => {
         const trimmed = rawValue?.trim?.() ?? "";
