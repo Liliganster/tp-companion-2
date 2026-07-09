@@ -1,7 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/contexts/AuthContext";
-import { isOffline, readOfflineCache, readOfflineCacheEntry, writeOfflineCache } from "@/lib/offlineCache";
+import { useMemo } from "react";
+import { DEFAULT_GRID_ZONE, GRID_KG_CO2_PER_KWH, type GridZone } from "@/lib/emissionFactors";
 
+/**
+ * Fase 1: la API de Electricity Maps está HIBERNADA. Este hook conserva su
+ * firma y la forma del dato, pero devuelve la media anual estática por país de
+ * `src/lib/emissionFactors.ts` sin ninguna llamada de red.
+ * (El endpoint /api/electricity-maps/* sigue en api/external.ts por si se reactiva.)
+ */
 export type ElectricityMapsCarbonIntensity = {
   zone: string;
   gCo2PerKwh: number;
@@ -10,47 +15,19 @@ export type ElectricityMapsCarbonIntensity = {
 };
 
 export function useElectricityMapsCarbonIntensity(zone = "AT", opts?: { enabled?: boolean }) {
-  const { user, getAccessToken } = useAuth();
-  const enabled = Boolean(user) && (opts?.enabled ?? true);
-  const offlineCacheKey = `cache:electricityMaps:carbonIntensity:v1:${zone}`;
-  const offlineCacheTtlMs = 24 * 60 * 60 * 1000; // 24h
-  const cachedEntry = readOfflineCacheEntry<ElectricityMapsCarbonIntensity>(offlineCacheKey, offlineCacheTtlMs);
+  const enabled = opts?.enabled ?? true;
 
-  return useQuery({
-    queryKey: ["electricityMaps", "carbonIntensity", zone] as const,
-    enabled,
-    staleTime: 5 * 60_000,
-    retry: 1,
-    refetchOnWindowFocus: false,
-    initialData: cachedEntry?.data,
-    initialDataUpdatedAt: cachedEntry?.ts,
-    queryFn: async (): Promise<ElectricityMapsCarbonIntensity | null> => {
-      const cached = readOfflineCache<ElectricityMapsCarbonIntensity>(offlineCacheKey, offlineCacheTtlMs);
-      if (isOffline()) return cached ?? null;
+  const data = useMemo<ElectricityMapsCarbonIntensity | null>(() => {
+    if (!enabled) return null;
+    const key: GridZone = (zone in GRID_KG_CO2_PER_KWH ? zone : DEFAULT_GRID_ZONE) as GridZone;
+    const kg = GRID_KG_CO2_PER_KWH[key];
+    return {
+      zone: key,
+      gCo2PerKwh: Math.round(kg * 1000),
+      kgCo2PerKwh: kg,
+      datetime: null, // media anual estática, no hay "última actualización"
+    };
+  }, [enabled, zone]);
 
-      const token = await getAccessToken();
-      if (!token) return cached ?? null;
-
-      const res = await fetch(`/api/electricity-maps/carbon-intensity?zone=${encodeURIComponent(zone)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data: any = await res.json().catch(() => null);
-      if (!res.ok || !data) return cached ?? null;
-
-      const kg = Number(data?.kgCo2PerKwh);
-      const g = Number(data?.gCo2PerKwh);
-      if (!Number.isFinite(kg) || kg <= 0) return cached ?? null;
-      if (!Number.isFinite(g) || g <= 0) return cached ?? null;
-
-      const payload: ElectricityMapsCarbonIntensity = {
-        zone: typeof data?.zone === "string" ? data.zone : zone,
-        gCo2PerKwh: g,
-        kgCo2PerKwh: kg,
-        datetime: typeof data?.datetime === "string" ? data.datetime : null,
-      };
-
-      writeOfflineCache(offlineCacheKey, payload);
-      return payload;
-    },
-  });
+  return { data, isLoading: false, isFetching: false } as const;
 }

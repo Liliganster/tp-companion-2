@@ -20,6 +20,7 @@ import { UpdatePrompt } from "@/components/pwa/UpdatePrompt";
 import { Suspense, lazy, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { useI18n } from "@/hooks/use-i18n";
+import { FEATURES } from "@/lib/features";
 
 const Index = lazy(() => import("./pages/Index"));
 const Trips = lazy(() => import("./pages/Trips"));
@@ -78,7 +79,7 @@ function AppContent() {
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/auth/reset" element={<ResetPassword />} />
           {/* Public page — no auth required, token-based access */}
-          <Route path="/odometer-capture" element={<OdometerCapture />} />
+          {FEATURES.odometer && <Route path="/odometer-capture" element={<OdometerCapture />} />}
 
           <Route path="/legal/terms" element={<LegalTerms />} />
           <Route path="/legal/privacy" element={<LegalPrivacy />} />
@@ -131,38 +132,42 @@ function AppContent() {
               </RequireAuth>
             }
           />
-          <Route
-            path="/advanced"
-            element={
-              <RequireAuth>
-                <Advanced />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/advanced/routes"
-            element={
-              <RequireAuth>
-                <AdvancedRoutes />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/advanced/costs"
-            element={
-              <RequireAuth>
-                <AdvancedCosts />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/advanced/emissions"
-            element={
-              <RequireAuth>
-                <AdvancedEmissions />
-              </RequireAuth>
-            }
-          />
+          {FEATURES.advancedPages && (
+            <>
+              <Route
+                path="/advanced"
+                element={
+                  <RequireAuth>
+                    <Advanced />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/advanced/routes"
+                element={
+                  <RequireAuth>
+                    <AdvancedRoutes />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/advanced/costs"
+                element={
+                  <RequireAuth>
+                    <AdvancedCosts />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/advanced/emissions"
+                element={
+                  <RequireAuth>
+                    <AdvancedEmissions />
+                  </RequireAuth>
+                }
+              />
+            </>
+          )}
           <Route
             path="/plans"
             element={

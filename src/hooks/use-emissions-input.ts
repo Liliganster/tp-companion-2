@@ -4,10 +4,12 @@ import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps"
 import { useClimatiqFuelFactor } from "@/hooks/use-climatiq";
 import { parseLocaleNumber } from "@/lib/number";
 import { TripEmissionsInput } from "@/lib/emissions";
+import { gridZoneForCountry } from "@/lib/emissionFactors";
 
 /**
- * Hook to interpret user profile and external data into a standardized emissions input object.
- * This ensures all parts of the app use the exact same parameters for CO2 calculations.
+ * Hook to interpret user profile and static emission factors into a standardized
+ * emissions input object. This ensures all parts of the app use the exact same
+ * parameters for CO2 calculations. (Fase 1: factores estáticos, sin APIs.)
  */
 export function useEmissionsInput(): {
   emissionsInput: Omit<TripEmissionsInput, "distanceKm">;
@@ -17,9 +19,10 @@ export function useEmissionsInput(): {
 } {
   const { profile } = useUserProfile();
 
-  const { data: atGrid, isLoading: isLoadingGrid } = useElectricityMapsCarbonIntensity("AT", {
-    enabled: profile.fuelType === "ev",
-  });
+  const { data: atGrid, isLoading: isLoadingGrid } = useElectricityMapsCarbonIntensity(
+    gridZoneForCountry(profile.country),
+    { enabled: profile.fuelType === "ev" },
+  );
 
   const { data: fuelFactor, isLoading: isLoadingFuel } = useClimatiqFuelFactor(
     profile.fuelType === "gasoline" || profile.fuelType === "diesel" ? profile.fuelType : null,

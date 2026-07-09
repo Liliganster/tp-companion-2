@@ -33,9 +33,12 @@ vi.mock("./AuthContext", () => ({
   useAuth: () => ({ user: { id: "user-1" } }),
 }));
 
-vi.mock("./PlanContext", () => ({
-  usePlan: () => ({ planTier: "basic" }),
-}));
+vi.mock("./PlanContext", async () => {
+  const { getPlanLimits } = await import("@/lib/plans");
+  return {
+    usePlan: () => ({ planTier: "basic", limits: getPlanLimits("basic") }),
+  };
+});
 
 import { ReportsProvider, useReports } from "./ReportsContext";
 
@@ -76,9 +79,7 @@ describe("ReportsContext", () => {
 
     await waitFor(() => expect(out.current!.reports.length).toBe(1));
     expect(saved.id).toBeTruthy();
-    expect(mocks.insert).toHaveBeenCalledTimes(0);
-
-    const raw = localStorage.getItem("fbp.localfirst:v1:reports:user-1");
-    expect(raw).toBeTruthy();
+    // Los informes se persisten directamente en Supabase (no hay capa local-first aquí).
+    expect(mocks.insert).toHaveBeenCalledTimes(1);
   });
 });

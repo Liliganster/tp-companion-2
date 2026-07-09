@@ -391,7 +391,7 @@ export default function AdvancedEmissions() {
     // Totals are based on the full (time-range) dataset, not the search filter.
     const rawTotalCo2 = curAgg.reduce((acc, a) => acc + a.co2Kg, 0);
     const rawTotalDistance = curAgg.reduce((acc, a) => acc + a.distanceKm, 0);
-    const treesNeeded = calculateTreesNeeded(rawTotalCo2, 20);
+    const treesNeeded = calculateTreesNeeded(rawTotalCo2);
     
     return {
       results: sorted,

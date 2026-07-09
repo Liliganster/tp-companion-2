@@ -1,11 +1,18 @@
 import { logger } from "@/lib/logger";
+import {
+  DEFAULT_GRID_ZONE,
+  DIESEL_KG_CO2_PER_LITER,
+  GASOLINE_KG_CO2_PER_LITER,
+  GRID_KG_CO2_PER_KWH,
+  TREE_KG_CO2_PER_YEAR,
+} from "@/lib/emissionFactors";
 
 export function calculateCO2KgFromKm(distanceKm: number): number {
   const km = Number(distanceKm);
   if (!Number.isFinite(km) || km <= 0) return 0;
 
-  // WTW fallback: 0.21 kg CO₂e/km (European passenger car Well-to-Wheel average)
-  // Used when Climatiq data is unavailable or fuel type is unknown.
+  // Fallback: 0.21 kg CO₂e/km (European passenger car Well-to-Wheel average)
+  // Used when the fuel type or the vehicle consumption is unknown.
   const kgPerKm = 0.21;
 
   return Math.round(km * kgPerKm * 10) / 10;
@@ -36,11 +43,10 @@ export type TripEmissionsResult = {
   kwh?: number;
 };
 
-// Fallback (kg CO₂ per kWh) used when a real-time grid factor isn't available (offline / missing key / upstream error).
-// Austria ('AT') real-time values are fetched via Electricity Maps (see `/api/electricity-maps/carbon-intensity`).
-export const DEFAULT_GRID_KG_CO2_PER_KWH_FALLBACK = 0.05;
-export const GASOLINE_KG_CO2_PER_LITER = 2.31;
-export const DIESEL_KG_CO2_PER_LITER = 2.68;
+// Fallback (kg CO₂ per kWh) when no grid factor is provided: static annual
+// average for Austria (see src/lib/emissionFactors.ts — Fase 1, sin APIs).
+export const DEFAULT_GRID_KG_CO2_PER_KWH_FALLBACK = GRID_KG_CO2_PER_KWH[DEFAULT_GRID_ZONE];
+export { GASOLINE_KG_CO2_PER_LITER, DIESEL_KG_CO2_PER_LITER };
 
 export function calculateTripEmissions(input: TripEmissionsInput): TripEmissionsResult {
   const raw = _computeTripEmissions(input);
@@ -155,7 +161,8 @@ function _computeTripEmissions(input: TripEmissionsInput): Omit<TripEmissionsRes
   return { co2Kg: calculateCO2KgFromKm(distanceKm), method: "fallback_km" };
 }
 
-export function calculateTreesNeeded(co2Kg: number, kgCo2PerTreeYear = 20): number {
+// ~21 kg CO₂/árbol/año (árbol maduro; fuente en src/lib/emissionFactors.ts)
+export function calculateTreesNeeded(co2Kg: number, kgCo2PerTreeYear = TREE_KG_CO2_PER_YEAR): number {
   const c = Number(co2Kg);
   const perTree = Number(kgCo2PerTreeYear);
   if (!Number.isFinite(c) || c <= 0) return 0;

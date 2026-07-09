@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { getProfileInitial, useUserProfile } from "@/contexts/UserProfileContext";
 import { useI18n } from "@/hooks/use-i18n";
 import { useAuth } from "@/contexts/AuthContext";
+import { FEATURES } from "@/lib/features";
 interface MobileHeaderProps {
   onSettingsClick: () => void;
 }
@@ -39,11 +40,11 @@ export function MobileHeader({
     name: t("nav.calendar"),
     href: "/calendar",
     icon: Calendar
-  }, {
+  }, ...(FEATURES.advancedPages ? [{
     name: t("nav.advanced"),
     href: "/advanced",
     icon: Sparkles
-  }];
+  }] : [])];
   return <header className="lg:hidden fixed top-0 left-0 right-0 z-50 h-16 glass border-b border-border/50">
       <div className="flex items-center justify-between h-full px-4">
         <Link to="/" className="flex items-center gap-2">

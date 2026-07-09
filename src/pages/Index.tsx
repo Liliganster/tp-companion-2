@@ -20,6 +20,8 @@ import { useEmissionsInput } from "@/hooks/use-emissions-input";
 import { usePlan } from "@/contexts/PlanContext";
 import { usePlanLimits } from "@/hooks/use-plan-limits";
 import { logger } from "@/lib/logger";
+import { FEATURES } from "@/lib/features";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 function parseTripDate(value: string): Date | null {
   if (!value) return null;
@@ -196,7 +198,7 @@ export default function Index() {
   const kmPrevMonth = sumKm(tripsPrevMonth);
   const co2ThisMonth = sumCo2(tripsThisMonth, emissionsInput);
   const co2PrevMonth = sumCo2(tripsPrevMonth, emissionsInput);
-  const treesThisMonth = calculateTreesNeeded(co2ThisMonth, 20);
+  const treesThisMonth = calculateTreesNeeded(co2ThisMonth);
   // Rating matches the month-over-month bubble context (monthly emissions).
   const co2Rating = co2ThisMonth <= 500 ? "A" : co2ThisMonth <= 1000 ? "B" : co2ThisMonth <= 1500 ? "C" : "D";
     const co2TrendValue = percentageChange(co2ThisMonth, co2PrevMonth);
@@ -244,10 +246,12 @@ export default function Index() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 px-3 py-1.5 border rounded-lg border-border bg-muted">
-                <Car className="w-4 h-4 text-muted-foreground" />
-                <span className="text-xs font-medium tabular-nums text-foreground">{tripCounts.total}/{limits.maxActiveTrips}</span>
-              </div>
+              {Number.isFinite(limits.maxActiveTrips) && (
+                <div className="flex items-center gap-2 px-3 py-1.5 border rounded-lg border-border bg-muted">
+                  <Car className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-xs font-medium tabular-nums text-foreground">{tripCounts.total}/{limits.maxActiveTrips}</span>
+                </div>
+              )}
               <div className="flex items-center gap-2 px-3 py-1.5 border rounded-lg border-border bg-muted">
                 <Sparkles className="w-4 h-4 text-muted-foreground" />
                 <span className={`text-xs font-medium tabular-nums ${aiQuotaTextColor}`}>{aiQuotaText}</span>
@@ -349,11 +353,20 @@ export default function Index() {
                       status={co2Rating === "A" ? "success" : "neutral"}
                       icon={co2Rating === "A" ? Check : AlertCircle}
                     />
-                    <StatusRow
-                      label={t("dashboard.equivalentTrees")}
-                      value={`${treesThisMonth}`}
-                      status="neutral"
-                    />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="cursor-help">
+                          <StatusRow
+                            label={t("dashboard.equivalentTrees")}
+                            value={`${treesThisMonth}`}
+                            status="neutral"
+                          />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[280px] text-xs">
+                        {t("dashboard.equivalentTreesTooltip")}
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
                 {/* Right: ring chart */}
@@ -386,7 +399,7 @@ export default function Index() {
               </div>
             </div>
             )}
-            action={<Link to="/advanced/emissions" className="text-sm font-medium text-[#129446] hover:text-[#129446]/80 mt-2 inline-flex items-center gap-1">{t("dashboard.viewCo2")} <ArrowRight className="w-4 h-4" /></Link>}
+            action={FEATURES.advancedPages ? <Link to="/advanced/emissions" className="text-sm font-medium text-[#129446] hover:text-[#129446]/80 mt-2 inline-flex items-center gap-1">{t("dashboard.viewCo2")} <ArrowRight className="w-4 h-4" /></Link> : undefined}
           />
         </div>
 

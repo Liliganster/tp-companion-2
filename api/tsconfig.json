@@ -13,9 +13,8 @@
     "noEmit": false,
     "outDir": "../.vercel/output/functions",
     "rootDir": "..",
-    "baseUrl": "..",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["../src/*"]
     }
   },
   "include": [

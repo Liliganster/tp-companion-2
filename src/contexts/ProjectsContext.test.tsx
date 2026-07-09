@@ -126,8 +126,8 @@ describe("ProjectsContext", () => {
     await out.current!.addProject(p);
     await waitFor(() => expect(out.current!.projects.length).toBe(1));
 
-    expect(mocks.insert).toHaveBeenCalledTimes(0);
-    const raw = localStorage.getItem("fbp.localfirst:v1:projects:user-1");
-    expect(raw).toBeTruthy();
+    // Los proyectos se persisten directamente en Supabase (no hay capa local-first aquí).
+    expect(mocks.insert).toHaveBeenCalledTimes(1);
+    expect(out.current!.projects[0]?.name).toBe("My Project");
   });
 });

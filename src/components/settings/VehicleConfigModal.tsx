@@ -8,8 +8,6 @@ import { Button } from "@/components/ui/button";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { parseLocaleNumber } from "@/lib/number";
 import { toast } from "sonner";
-import { useClimatiqFuelFactor } from "@/hooks/use-climatiq";
-import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
 import { Info, ExternalLink } from "lucide-react";
 import { validateFuelConsumption, validateEvConsumption, getConsumptionErrorData } from "@/lib/validation";
 
@@ -30,14 +28,6 @@ export function VehicleConfigModal({ open, onOpenChange }: VehicleConfigModalPro
   const [saving, setSaving] = useState(false);
 
   const isElectric = fuelType === "ev";
-
-  const { data: fuelFactor } = useClimatiqFuelFactor(
-    fuelType === "gasoline" || fuelType === "diesel" ? fuelType : null,
-    { enabled: fuelType === "gasoline" || fuelType === "diesel" },
-  );
-  const { data: gridData } = useElectricityMapsCarbonIntensity("AT", {
-    enabled: fuelType === "ev",
-  });
 
   useEffect(() => {
     if (!open) return;

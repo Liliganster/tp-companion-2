@@ -20,26 +20,22 @@ export default function Plans() {
   };
 
   const basicFeatures = [
-    { text: t("plans.features.trips20"), included: true },
-    { text: t("plans.features.projects3"), included: true },
-    { text: t("plans.features.stops10"), included: true },
-    { text: t("plans.features.ai5"), included: true },
-    { text: t("plans.features.callsheet1"), included: true },
-    { text: t("plans.features.reports1"), included: true },
-    { text: t("plans.features.routeTemplates5"), included: true },
+    { text: t("plans.features.unlimitedTrips"), included: true },
+    { text: t("plans.features.unlimitedProjects"), included: true },
+    { text: t("plans.features.stops25"), included: true },
+    { text: t("plans.features.ai3"), included: true },
+    { text: t("plans.features.reportsUnlimited"), included: true },
     { text: t("plans.features.csvExport"), included: true },
   ];
 
   const proFeatures = [
-    { text: t("plans.features.trips200"), included: true },
-    { text: t("plans.features.projects30"), included: true },
+    { text: t("plans.features.unlimitedTrips"), included: true },
+    { text: t("plans.features.unlimitedProjects"), included: true },
     { text: t("plans.features.stops25"), included: true },
     { text: t("plans.features.ai60"), included: true },
     { text: t("plans.features.callsheetBulk20"), included: true },
     { text: t("plans.features.reportsUnlimited"), included: true },
-    { text: t("plans.features.routeTemplates50"), included: true },
     { text: t("plans.features.calendarSync"), included: true },
-    { text: t("plans.features.costAnalysis"), included: true },
     { text: t("plans.features.prioritySupport"), included: true },
   ];
 

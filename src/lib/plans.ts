@@ -1,11 +1,17 @@
 /**
- * Plan configuration for Trip Companion
- * 
- * This file defines the limits for each plan tier.
- * Currently only "basic" plan is implemented. "pro" will be added later.
+ * Planes de Fahrtenbuch Pro — Fase 1: solo Free y Pro.
+ *
+ * "basic" = plan Free (nombre histórico en BD; la CHECK constraint de
+ * user_profiles.plan_tier acepta basic/pro). El diferenciador real es la
+ * cuota mensual de callsheets IA: Free 3/mes, Pro 60/mes. Los viajes
+ * manuales son ilimitados en ambos.
+ *
+ * UNLIMITED (Infinity) solo se usa en cliente; no serializar a JSON.
  */
 
 export type PlanTier = "basic" | "pro";
+
+export const UNLIMITED = Number.POSITIVE_INFINITY;
 
 export interface PlanLimits {
   // Trips
@@ -41,69 +47,50 @@ export interface PlanLimits {
 }
 
 export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
+  // Free: viajes manuales ilimitados + 3 callsheets IA/mes.
   basic: {
-    // Trips
-    maxActiveTrips: 20,
-    maxActiveTripsAI: 5,
-    maxActiveTripsNonAI: 15,
-    maxStopsPerTrip: 10,
+    maxActiveTrips: UNLIMITED,
+    maxActiveTripsAI: UNLIMITED,
+    maxActiveTripsNonAI: UNLIMITED,
+    maxStopsPerTrip: 25,          // Google Directions Advanced SKU limit
 
-    // AI - 15 jobs/month, allows callsheet and invoice extraction
-    aiJobsPerMonth: 15,
-    allowedAITypes: ["callsheet", "invoice"],
+    aiJobsPerMonth: 3,
+    allowedAITypes: ["callsheet"], // invoice/expense hibernados (Fase 1)
 
-    // Projects
-    maxActiveProjects: 3,
+    maxActiveProjects: UNLIMITED,
+    maxRouteTemplates: UNLIMITED,
+    maxDistanceCalculationsPerMonth: UNLIMITED, // sin enforcement; el coste de Maps se ataca con caché (Fase 2)
 
-    // Templates
-    maxRouteTemplates: 5,
-
-    // Google Maps
-    maxDistanceCalculationsPerMonth: 20,
-
-    // Import limits
-    maxTripsPerCSVImport: 20,
-    maxTripsPerCalendarImport: 20,
+    maxTripsPerCSVImport: 200,
+    maxTripsPerCalendarImport: 200,
     maxTripsPerDriveImport: 20,
 
-    // Reports
-    maxSavedReportsPerMonth: 1,
+    maxSavedReportsPerMonth: -1, // -1 = unlimited
 
-    // Callsheet batch
-    maxCallsheetsPerBatch: 1,
+    maxCallsheetsPerBatch: 3,
     maxCallsheetsPerWorkerRun: 1,
   },
 
+  // Pro: 60 callsheets IA/mes y proceso por lotes.
   pro: {
-    // Pro plan - full features for power users
-    // Trips
-    maxActiveTrips: 200,
-    maxActiveTripsAI: 200,
-    maxActiveTripsNonAI: 200,
+    maxActiveTrips: UNLIMITED,
+    maxActiveTripsAI: UNLIMITED,
+    maxActiveTripsNonAI: UNLIMITED,
     maxStopsPerTrip: 25,          // Google Directions Advanced SKU limit
 
-    // AI - 60 jobs/month, all extraction types
     aiJobsPerMonth: 60,
-    allowedAITypes: ["callsheet", "invoice", "expense"],
+    allowedAITypes: ["callsheet"], // invoice/expense hibernados (Fase 1)
 
-    // Projects
-    maxActiveProjects: 30,
+    maxActiveProjects: UNLIMITED,
+    maxRouteTemplates: UNLIMITED,
+    maxDistanceCalculationsPerMonth: UNLIMITED,
 
-    // Templates
-    maxRouteTemplates: 50,
-
-    // Google Maps - 1000 calculations/month
-    maxDistanceCalculationsPerMonth: 1000,
-
-    // Import limits
     maxTripsPerCSVImport: 200,
     maxTripsPerCalendarImport: 200,
     maxTripsPerDriveImport: 200,
 
-    // Reports
     maxSavedReportsPerMonth: -1,
 
-    // Callsheet batch
     maxCallsheetsPerBatch: 20,
     maxCallsheetsPerWorkerRun: 5,
   },

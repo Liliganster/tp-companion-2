@@ -32,6 +32,7 @@ import {
   } from "lucide-react";
 import { OdometerSettingsSection } from "@/components/settings/OdometerSettingsSection";
 import { cn } from "@/lib/utils";
+import { FEATURES } from "@/lib/features";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useI18n } from "@/hooks/use-i18n";
 import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
@@ -43,6 +44,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { formatLocaleNumber, parseLocaleNumber } from "@/lib/number";
 import { DEFAULT_GRID_KG_CO2_PER_KWH_FALLBACK } from "@/lib/emissions";
+import { GRID_FACTORS_YEAR, gridZoneForCountry } from "@/lib/emissionFactors";
 import { validateFuelConsumption, validateEvConsumption, getConsumptionErrorData } from "@/lib/validation";
 import { useOpenRouterModels } from "@/hooks/use-openrouter-models";
 import { supabase } from "@/lib/supabaseClient";
@@ -91,9 +93,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
   // Draft form state for profile
   const [profileData, setProfileData] = useState(profile);
-  const { data: atGrid, isFetching: atGridFetching } = useElectricityMapsCarbonIntensity("AT", {
-    enabled: open && profileData.fuelType === "ev",
-  });
+  const { data: atGrid, isFetching: atGridFetching } = useElectricityMapsCarbonIntensity(
+    gridZoneForCountry(profileData.country),
+    { enabled: open && profileData.fuelType === "ev" },
+  );
   const { data: fuelFactor } = useClimatiqFuelFactor(
     profileData.fuelType === "gasoline" ? "gasoline" : profileData.fuelType === "diesel" ? "diesel" : null,
     { enabled: open && (profileData.fuelType === "gasoline" || profileData.fuelType === "diesel") }
@@ -208,7 +211,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const navItems = [
     { id: "profile", label: t("settings.tabProfile"), icon: User },
     { id: "apis", label: t("settings.tabApis"), icon: Sparkles },
-    { id: "odometer", label: t("settings.tabOdometer"), icon: Gauge },
+    ...(FEATURES.odometer ? [{ id: "odometer", label: t("settings.tabOdometer"), icon: Gauge }] : []),
     { id: "personalization", label: t("settings.tabPersonalization"), icon: Palette },
     { id: "language", label: t("settings.tabLanguage"), icon: Languages },
     { id: "news", label: t("settings.tabNews"), icon: Newspaper },
@@ -291,7 +294,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
       const response = await fetch("/api/google/oauth/start", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ scopes: ["calendar", "drive"], returnTo: "/" }),
+        body: JSON.stringify({ scopes: FEATURES.googleDrive ? ["calendar", "drive"] : ["calendar"], returnTo: "/" }),
       });
       const data: any = await response.json().catch(() => null);
       if (!response.ok || !data?.authUrl) throw new Error(data?.error || "OAuth start failed");
@@ -626,28 +629,12 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       <div className="space-y-3">
                         {fuelFactor && (profileData.fuelType === "gasoline" || profileData.fuelType === "diesel") && (
                           <div className="text-xs space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-primary">Climatiq</span>
-                              <a 
-                                href="https://www.climatiq.io/data" 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-                              >
-                                <ExternalLink className="w-3 h-3" />
-                              </a>
-                            </div>
+                            <span className="font-semibold text-primary">{t("settings.emissionsStaticFuelTitle")}</span>
                             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
                               <div><span className="font-medium">{t("settings.emissionsFactor")}:</span> {
-                                fuelFactor.kgCo2ePerLiter != null 
-                                  ? `${fuelFactor.kgCo2ePerLiter.toFixed(3)} kg CO₂e/L`
-                                  : fuelFactor.kgCo2ePerKm != null
-                                    ? `${fuelFactor.kgCo2ePerKm.toFixed(3)} kg CO₂e/km`
-                                    : "N/A"
+                                fuelFactor.kgCo2ePerLiter != null ? `${fuelFactor.kgCo2ePerLiter.toFixed(2)} kg CO₂/L` : "N/A"
                               }</div>
                               {fuelFactor.source && <div><span className="font-medium">{t("settings.emissionsSource")}:</span> {fuelFactor.source}</div>}
-                              {fuelFactor.year && <div><span className="font-medium">{t("settings.emissionsYear")}:</span> {fuelFactor.year}</div>}
-                              {fuelFactor.region && <div><span className="font-medium">{t("settings.emissionsRegion")}:</span> {fuelFactor.region}</div>}
                             </div>
                             <p className="text-[10px] text-muted-foreground mt-2 italic">
                               {t("settings.emissionsWellToWheel")}
@@ -658,10 +645,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         {atGrid && profileData.fuelType === "ev" && (
                           <div className="text-xs space-y-1">
                             <div className="flex items-center gap-2">
-                              <span className="font-semibold text-primary">Electricity Maps</span>
-                              <a 
-                                href="https://www.electricitymaps.com" 
-                                target="_blank" 
+                              <span className="font-semibold text-primary">{t("settings.emissionsStaticGridTitle")}</span>
+                              <a
+                                href="https://ourworldindata.org/grapher/carbon-intensity-electricity"
+                                target="_blank"
                                 rel="noopener noreferrer"
                                 className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
                               >
@@ -671,30 +658,11 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
                               <div><span className="font-medium">{t("settings.emissionsIntensity")}:</span> {atGrid.gCo2PerKwh.toFixed(0)} g CO₂/kWh</div>
                               {atGrid.zone && <div><span className="font-medium">{t("settings.emissionsZone")}:</span> {atGrid.zone}</div>}
-                              {atGrid.datetime && (
-                                <div className="col-span-2">
-                                  <span className="font-medium">{t("settings.emissionsUpdated")}:</span> {new Date(atGrid.datetime).toLocaleString(locale)}
-                                </div>
-                              )}
+                              <div><span className="font-medium">{t("settings.emissionsYear")}:</span> {GRID_FACTORS_YEAR}</div>
                             </div>
                             <p className="text-[10px] text-muted-foreground mt-2 italic">
-                              * Basado en la mezcla energética en tiempo real de la red eléctrica
+                              {t("settings.emissionsGridAnnualNote")}
                             </p>
-                          </div>
-                        )}
-                        
-                        {fuelFactor?.apiPayload && (
-                          <div className="mt-2 pt-2 border-t border-border/50">
-                             <details>
-                               <summary className="text-[10px] text-primary cursor-pointer hover:underline select-none">
-                                 {t("settings.debugViewRawData") || "Ver respuesta API (JSON)"}
-                               </summary>
-                               <ScrollArea className="h-48 w-full rounded border border-border bg-background/50 mt-2">
-                                 <pre className="p-2 text-[10px] font-mono whitespace-pre-wrap break-all">
-                                   {JSON.stringify(fuelFactor.apiPayload, null, 2)}
-                                 </pre>
-                               </ScrollArea>
-                             </details>
                           </div>
                         )}
                       </div>
@@ -1102,7 +1070,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 </div>
               )}
 
-              {activeTab === "odometer" && (
+              {FEATURES.odometer && activeTab === "odometer" && (
                 <OdometerSettingsSection />
               )}
 

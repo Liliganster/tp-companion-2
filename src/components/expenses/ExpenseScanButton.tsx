@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useI18n } from "@/hooks/use-i18n";
 import { cn, uuidv4 } from "@/lib/utils";
 import { logger } from "@/lib/logger";
+import { FEATURES } from "@/lib/features";
 
 export type ExpenseType = "toll" | "parking" | "fuel" | "other";
 
@@ -267,6 +268,20 @@ export function ExpenseScanButton({
 
       setStoragePath(fileName);
 
+      // IA de gastos hibernada (Fase 1): el recibo se adjunta tal cual y el
+      // importe se introduce a mano en EUR en el campo correspondiente.
+      if (!FEATURES.expenseAi) {
+        onExtracted(
+          { amount: null, currency: null, quantity: null, unit: null, pricePerUnit: null, vendorName: null, date: null },
+          fileName,
+        );
+        setIsOpen(false);
+        setShowUploadOptions(false);
+        resetState();
+        toast.success(t("expenseScan.receiptAttached"));
+        return;
+      }
+
       // Call extraction API
       const token = await getAccessToken();
       if (!token) throw new Error("Not authenticated");
@@ -317,7 +332,7 @@ export function ExpenseScanButton({
     } finally {
       setIsProcessing(false);
     }
-  }, [imagePreview, user, getAccessToken, expenseType, tripId, projectId, t]);
+  }, [imagePreview, user, getAccessToken, expenseType, tripId, projectId, t, onExtracted, resetState]);
 
   const handleConfirm = useCallback(() => {
     if (!extractionResult || !storagePath) return;
@@ -638,7 +653,7 @@ export function ExpenseScanButton({
                       ) : (
                         <Check className="w-4 h-4 mr-2" />
                       )}
-                      {t("expenseScan.extract")}
+                      {FEATURES.expenseAi ? t("expenseScan.extract") : t("expenseScan.attach")}
                     </Button>
                   </>
               ) : (

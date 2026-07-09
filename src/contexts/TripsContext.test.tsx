@@ -137,13 +137,8 @@ describe("TripsContext", () => {
     expect(ok).toBe(true);
 
     await waitFor(() => expect(out.current!.trips.length).toBe(1));
-    expect(mocks.insert).toHaveBeenCalledTimes(0);
-
-    const raw = localStorage.getItem("fbp.localfirst:v1:trips:user-1");
-    expect(raw).toBeTruthy();
-    const parsed = JSON.parse(raw as string) as { v: number; ts: number; data: Trip[] };
-    expect(parsed.v).toBe(1);
-    expect(Array.isArray(parsed.data)).toBe(true);
-    expect(parsed.data[0]?.id).toBe("trip-1");
+    // Los viajes se persisten directamente en Supabase (no hay capa local-first aquí).
+    expect(mocks.insert).toHaveBeenCalledTimes(1);
+    expect(out.current!.trips[0]?.id).toBe("trip-1");
   });
 });

@@ -8,6 +8,7 @@ import { getProfileInitial, useUserProfile } from "@/contexts/UserProfileContext
 import { useI18n } from "@/hooks/use-i18n";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePlan } from "@/contexts/PlanContext";
+import { FEATURES } from "@/lib/features";
 interface SidebarProps {
   onSettingsClick: () => void;
 }
@@ -43,11 +44,11 @@ export function Sidebar({
     name: t("nav.calendar"),
     href: "/calendar",
     icon: Calendar
-  }, {
+  }, ...(FEATURES.advancedPages ? [{
     name: t("nav.advanced"),
     href: "/advanced",
     icon: Sparkles
-  }];
+  }] : [])];
   return <aside
       className={cn(
         "hidden lg:flex flex-col sticky top-0 h-screen shrink-0 glass border-r border-border/50 transition-[width] will-change-[width] relative",
