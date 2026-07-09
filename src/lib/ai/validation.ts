@@ -34,12 +34,14 @@ const LabeledLocationSchema = z.union([
   z.object({
     label: z.string().trim().max(120).catch("").default(""),
     address: z.string().trim().min(1).max(300),
+    // Dirección geocodificable (errata corregida); el address queda como evidencia.
+    addressCorrected: z.string().trim().max(300).catch("").default(""),
   }),
   // Compatibilidad: si el modelo devuelve strings sueltos, se convierten.
-  z.string().trim().min(1).max(300).transform((address) => ({ label: "", address })),
+  z.string().trim().min(1).max(300).transform((address) => ({ label: "", address, addressCorrected: "" })),
 ]);
 
-export type LabeledLocation = { label: string; address: string };
+export type LabeledLocation = { label: string; address: string; addressCorrected?: string };
 
 export const CallsheetExtractionResultSchema = z.object({
   date: dateIso,

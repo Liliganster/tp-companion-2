@@ -203,6 +203,19 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
   }
   const filmingAddresses = filming.map((f: any) => f.address);
 
+  // Dirección corregida (Fase 2): el verbatim es la EVIDENCIA (evidence_text);
+  // para geocodificar y mostrar se usa la corrección de erratas del modelo
+  // ('Matiellistrasse' impreso → calle real), con guarda determinista: la
+  // corrección debe conservar todos los números del verbatim (no puede
+  // cambiar de sitio ni inventar portales).
+  const correctedByAddress = new Map<string, string>();
+  for (const f of filming as any[]) {
+    const corrected = String(f?.addressCorrected ?? "").trim();
+    if (!corrected || corrected === f.address) continue;
+    const digits = String(f.address).match(/\d+/g) ?? [];
+    if (digits.every((d) => corrected.includes(d))) correctedByAddress.set(f.address, corrected);
+  }
+
   const normalizedAiLocations = normalizeExtractedCallsheetLocations({
     locations: filmingAddresses,
     pdfText,
@@ -228,8 +241,12 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
     "callsheet_hallucination_filter",
   );
 
+  // La versión de trabajo de cada localización: corregida si el modelo dio
+  // una corrección válida; el verbatim queda en evidence_text.
+  const displayLocations = extracted.locations.map((locStr) => correctedByAddress.get(locStr) ?? locStr);
+
   // Normalización por código para geocodificar (Bezirk, abreviaturas)
-  const geocodingLocations = postProcessLocationsForGeocoding(extracted.locations);
+  const geocodingLocations = postProcessLocationsForGeocoding(displayLocations);
 
   // G. Fecha: el año lo decide el CÓDIGO si el documento no lo trae impreso
   const resolvedDate = resolveCallsheetDate({
@@ -284,14 +301,14 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
   geocodingDurationMs = Date.now() - geoStartTime;
   log.info({ jobId, locations: extracted.locations.length, durationMs: geocodingDurationMs }, "geocoding_completed");
 
-  const locs = extracted.locations.map((locStr, index) => {
+  const locs = displayLocations.map((locStr, index) => {
     const geo = geoResults[index];
     return {
       job_id: jobId,
       name_raw: /\d/.test(locStr) ? null : locStr,
       address_raw: locStr,
       label_source: locationLabels[index] || "EXTRACTED",
-      evidence_text: evidenceLocations[index] ?? locStr,
+      evidence_text: evidenceLocations[index] ?? extracted.locations[index] ?? locStr,
       formatted_address: geo?.formatted_address ?? null,
       lat: geo?.lat ?? null,
       lng: geo?.lng ?? null,
@@ -313,7 +330,7 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
     ok: true,
     date: resolvedDate,
     projectName: extracted.projectName,
-    locations: extracted.locations,
+    locations: displayLocations,
     aiProvider: aiResult.provider,
     aiModel: aiResult.model,
     aiVendor: aiResult.vendor,

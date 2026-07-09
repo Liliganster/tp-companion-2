@@ -22,6 +22,10 @@ export const extractionSchema = {
           address: {
             type: "string",
             description: "The address verbatim from the document. Never invent or complete. Not transit directions, floor numbers or notes."
+          },
+          addressCorrected: {
+            type: "string",
+            description: "The same address made geocodable: fix ONLY obvious street-name typos and append city/postal code if printed elsewhere in the document. NEVER a different place, NEVER invented house numbers. Empty string if no correction needed."
           }
         },
         required: ["label", "address"]

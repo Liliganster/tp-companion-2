@@ -62,7 +62,10 @@ export function classifyLabeledLocations(items: LabeledLocation[]): ClassifiedLo
       continue;
     }
     seenAddresses.add(key);
-    filming.push({ label, address });
+    // addressCorrected (errata corregida por el modelo) viaja con la entrada;
+    // la guarda de aceptación vive en el pipeline (callsheetExtraction.ts).
+    const addressCorrected = String((item as any)?.addressCorrected ?? "").trim();
+    filming.push(addressCorrected ? { label, address, addressCorrected } : { label, address });
   }
 
   return { filming, dropped };

@@ -53,6 +53,17 @@ describe("classifyLabeledLocations (híbrido: red de seguridad)", () => {
     ]);
   });
 
+  it("addressCorrected viaja con la localización de rodaje (errata corregida)", () => {
+    const r = classifyLabeledLocations([
+      { label: "LOC 3", address: "Matiellistrasse 2", addressCorrected: "Mattiellistraße 2, 1040 Wien" } as any,
+      { label: "PARKEN", address: "Am Heumarkt 8", addressCorrected: "Am Heumarkt 8, 1030 Wien" } as any,
+    ]);
+    expect(r.filming).toEqual([
+      { label: "LOC 3", address: "Matiellistrasse 2", addressCorrected: "Mattiellistraße 2, 1040 Wien" },
+    ]);
+    expect(r.dropped).toHaveLength(1);
+  });
+
   it("catering/maske/office fuera; deduplica direcciones repetidas", () => {
     const r = classifyLabeledLocations([
       { label: "LOCATION 2", address: "Josefsgasse 12, 1080 Wien" },
