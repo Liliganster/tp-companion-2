@@ -372,7 +372,22 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         const route = base ? [base, ...normalizedLocs, base] : normalizedLocs;
 
         const distance = typeof distanceKm === "number" ? distanceKm : 0;
-        const producer = (result?.producer_value ?? "").trim();
+
+        // Productora por proyecto (PLAN Fase 2): se fija UNA vez desde la
+        // extracción y, si la hoja no la trae, se hereda la del proyecto.
+        // Consulta directa para no ampliar las deps de este useCallback.
+        const extractedProducer = (result?.producer_value ?? "").trim();
+        let projectProducer = "";
+        try {
+          const { data: projRow } = await supabase.from("projects").select("producer").eq("id", project.id).maybeSingle();
+          projectProducer = String((projRow as any)?.producer ?? "").trim();
+          if (extractedProducer && !projectProducer) {
+            await supabase.from("projects").update({ producer: extractedProducer }).eq("id", project.id);
+          }
+        } catch {
+          /* opcional, nunca bloquea */
+        }
+        const producer = extractedProducer || projectProducer;
         const purpose = producer ? tf("bulk.purposeWithProducer", { producer }) : t("bulk.purposeDefault");
 
         // Duplicado exacto (misma fecha + misma ruta) de OTRO job: no crear un

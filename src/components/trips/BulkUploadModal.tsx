@@ -211,7 +211,7 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const exampleText = t("bulk.examplePlaceholder");
   const { getAccessToken } = useAuth();
   const { profile } = useUserProfile();
-  const { projects, addProject } = useProjects();
+  const { projects, addProject, updateProject } = useProjects();
   const { trips } = useTrips();
   const { checkCSVImportLimit, checkStopsLimit, canAddNonAITrip, limits } = usePlanLimits();
 
@@ -1670,6 +1670,15 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
 
     const existingProject = findProjectByCompatibleName(projects, trimmed);
     if (existingProject?.id) {
+      // Productora: se fija UNA vez (PLAN Fase 2) — si el proyecto aún no la
+      // tiene y la extracción la trae, queda guardada en el proyecto.
+      if (producer && !(existingProject.producer ?? "").trim()) {
+        try {
+          await updateProject(existingProject.id, { producer });
+        } catch {
+          /* opcional, nunca bloquea */
+        }
+      }
       createdProjectsByNameRef.current[key] = existingProject.id;
       return existingProject.id;
     }
@@ -1730,8 +1739,12 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
     setSavingByJobId((prev) => ({ ...prev, [jobId]: true }));
     try {
       const trimmedProjectName = review.project.trim();
-      const producer = (review.producer ?? "").trim();
-      const projectIdToUse = await resolveProjectId(trimmedProjectName, producer, meta.fileName);
+      const extractedProducer = (review.producer ?? "").trim();
+      // Productora heredada (PLAN Fase 2): si la hoja no la trae, se usa la
+      // del proyecto (fijada en una extracción anterior o a mano).
+      const producer =
+        extractedProducer || (findProjectByCompatibleName(projects, trimmedProjectName)?.producer ?? "").trim();
+      const projectIdToUse = await resolveProjectId(trimmedProjectName, extractedProducer, meta.fileName);
 
       const baseAddress = (profile.baseAddress ?? "").trim();
       const stops = review.locations.map((l) => (l ?? "").trim()).filter(Boolean);
