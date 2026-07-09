@@ -246,7 +246,10 @@ export default function ReportView() {
       typeof trip.ratePerKmOverride === "number" && Number.isFinite(trip.ratePerKmOverride)
         ? trip.ratePerKmOverride
         : ratePerKm;
-    const reimbursement = (distance * rate) + (passengers * passengerSurcharge);
+    // Decisión de la propietaria (2026-07-09): el importe del viaje es SOLO
+    // kilometraje; el suplemento por pasajeros va como línea separada del
+    // informe — producción/Finanzamt lo interpretan, los datos están ahí.
+    const reimbursement = distance * rate;
 
     return {
       date: dateLabel,
@@ -279,7 +282,9 @@ export default function ReportView() {
       .map((k) => ({ date: dateLabel, kind: k.kind, amount: k.amount as number }));
   });
   const totalExpenses = reportExpenses.reduce((acc, e) => acc + e.amount, 0);
-  const grandTotal = totalReimbursement + totalExpenses;
+  const totalPassengers = trips.reduce((acc, trip) => acc + trip.passengers, 0);
+  const passengerSurchargeTotal = totalPassengers * passengerSurcharge;
+  const grandTotal = totalReimbursement + passengerSurchargeTotal + totalExpenses;
   const totalCo2 = filteredTrips.reduce((acc, trip) => acc + (Number.isFinite(trip.co2) ? trip.co2 : 0), 0);
   const hasReceipts = filteredTrips.some((trip) =>
     (trip.documents ?? []).some((d) => String(d.kind ?? "").endsWith("_receipt") || d.kind === "invoice"),
@@ -831,6 +836,11 @@ export default function ReportView() {
               <p>
                 {t("reportPdf.travelCosts")}: <span className="font-semibold">{totalReimbursement.toFixed(2)} €</span>
               </p>
+              {passengerSurchargeTotal > 0 && (
+                <p>
+                  {t("reportView.passengerSurchargeLabel")} ({totalPassengers}): <span className="font-semibold">{passengerSurchargeTotal.toFixed(2)} €</span>
+                </p>
+              )}
               {totalExpenses > 0 && (
                 <p>
                   {t("reportPdf.expensesTitle")}: <span className="font-semibold">{totalExpenses.toFixed(2)} €</span>

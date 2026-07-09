@@ -76,7 +76,7 @@ Todo es *ocultar y desconectar* (hibernar), no borrar. Reversible.
 ## Fase 3 — El informe del que se presume
 
 - [x] Rediseño del PDF — hecho 2026-07-09 (`src/lib/reportPdf.ts`, ÚNICA implementación; antes vivía duplicada 2× dentro de ReportView). Cabecera freelancer (conductor, dirección, matrícula) + producción (proyecto, productora, Mitfahrer-Zuschlag); tabla fecha · ruta · propósito · (pasajeros) · km · €/km · importe con la tarifa POR VIAJE (el override del viaje manda — antes el informe ignoraba los overrides: bug de dinero); tabla de Auslagen (peaje/parking/combustible/otros) con nota "Belege im Anhang (ZIP-Export)"; total destacado (caja negra); línea de CO2 con fuente citada (Umweltbundesamt/JEC tank-to-wheel; Ember/OWID para red) + árboles equivalentes; línea de firma; números formateados por locale (1.234,56 €). **Idioma del PDF independiente de la UI: alemán por defecto**, selector DE/EN/ES en la vista. La vista en pantalla ganó el bloque resumen (total destacado + CO2). Odómetro fuera del informe (feature hibernada, gate FEATURES.odometer).
-- [ ] Verificar que cubre lo que la Aufnahmeleitung necesita para pagar Kilometergeld (0,50 €/km oficial 2026). Validar formato con 2-3 pilotos. *Pendiente de decisión: semántica del Mitfahrer-Zuschlag (hoy se suma un importe fijo por pasajero y viaje; el oficial austríaco es por km) — validar con los pilotos.*
+- [ ] Verificar que cubre lo que la Aufnahmeleitung necesita para pagar Kilometergeld (0,50 €/km oficial 2026). Validar formato con 2-3 pilotos. *Mitfahrer-Zuschlag DECIDIDO (2026-07-09): separado — el importe del viaje es solo kilometraje y el suplemento por pasajeros es una línea propia del resumen con su recuento; producción/Finanzamt lo interpretan, los datos (pasajeros por viaje) están en la tabla.*
 - [x] Pie discreto *"Erstellt mit Fahrtenbuch Pro · fahrtenbuchpro.com"* en todas las páginas + numeración "Seite n von N" → bucle viral.
 
 **Hecho cuando**: un piloto entrega el informe a una producción real y no le piden cambios.
@@ -143,3 +143,4 @@ Rediseño de `src/pages/Index.tsx`. Regla: arriba todo es accionable, abajo todo
 | Solo Loc/Set/Motiv son localizaciones | Corregido 2026-07-09: meeting point/Parkplatz no son destino ni regla, solo info adjunta |
 | Con enlace de Maps, el enlace es la dirección de distancia | El nombre del motiv se conserva; sin enlace, se usa la dirección impresa del lugar de rodaje |
 | Gemini Flash de base; modelo mejor solo si el eval lo justifica | Coste por callsheet es céntimos; precisión se mide, no se supone |
+| Mitfahrer-Zuschlag separado del importe del viaje | Decidido 2026-07-09: viaje = solo km × tarifa; pasajeros como línea propia con recuento — producción/Finanzamt interpretan, los datos están en el informe |

@@ -249,9 +249,14 @@ export async function buildReportPdf(data: ReportPdfData): Promise<jsPDF> {
   }
 
   // ── Totales (bloque derecho, total destacado) ──────────────────────────────
+  // Decisión de la propietaria: el importe del viaje es SOLO kilometraje; el
+  // suplemento por pasajeros va como línea separada (los pasajeros por viaje
+  // ya están en la tabla — producción/Finanzamt lo interpretan).
   const totalKm = data.trips.reduce((acc, trip) => acc + trip.distanceKm, 0);
   const travelTotal = data.trips.reduce((acc, trip) => acc + trip.amount, 0);
-  const grandTotal = travelTotal + expensesTotal;
+  const totalPassengers = data.trips.reduce((acc, trip) => acc + trip.passengers, 0);
+  const passengerTotal = totalPassengers * data.passengerSurcharge;
+  const grandTotal = travelTotal + passengerTotal + expensesTotal;
 
   y = ensureSpace(y, 96);
   const lineRight = (text: string, yy: number, size = 9.5, bold = false, gray = false) => {
@@ -266,6 +271,10 @@ export async function buildReportPdf(data: ReportPdfData): Promise<jsPDF> {
   y += 16;
   lineRight(`${t("reportPdf.travelCosts")}: ${eur(travelTotal)}`, y);
   y += 15;
+  if (passengerTotal > 0) {
+    lineRight(`${t("reportView.passengerSurchargeLabel")} (${totalPassengers}): ${eur(passengerTotal)}`, y);
+    y += 15;
+  }
   if (expensesTotal > 0) {
     lineRight(`${t("reportPdf.expensesTitle")}: ${eur(expensesTotal)}`, y);
     y += 15;
