@@ -31,6 +31,7 @@ import { FEATURES } from "@/lib/features";
 import { findProjectByCompatibleName } from "@/lib/projects";
 import { buildTripDuplicateKey } from "@/lib/trip-warnings";
 import { CALLSHEET_ACCEPT, isSupportedCallsheetFile, resolveCallsheetMime } from "@/lib/callsheetMime";
+import { useAiQuota } from "@/hooks/use-ai-quota";
 
 interface SavedTrip {
   id: string;
@@ -52,6 +53,8 @@ interface SavedTrip {
 interface BulkUploadModalProps {
   trigger: React.ReactNode;
   onSave?: (data: SavedTrip) => Promise<boolean> | boolean | void;
+  /** Abrir el asistente al montar (botón "Subir callsheet" del dashboard). */
+  defaultOpen?: boolean;
 }
 
 let googleApiJsPromise: Promise<void> | null = null;
@@ -148,9 +151,9 @@ async function openGoogleDrivePicker(params: {
   });
 }
 
-export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
+export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUploadModalProps) {
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [csvText, setCsvText] = useState("");
   const [csvBusy, setCsvBusy] = useState(false);
   const resumeDriveImportRef = useRef(false);
@@ -208,6 +211,8 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
   const dragDepthRef = useRef(0);
   
   const { t, tf, locale } = useI18n();
+  // Contador de IA transparente en el punto de gasto (Fase 4 del PLAN.md)
+  const aiQuota = useAiQuota();
   const exampleText = t("bulk.examplePlaceholder");
   const { getAccessToken } = useAuth();
   const { profile } = useUserProfile();
@@ -2111,6 +2116,17 @@ export function BulkUploadModal({ trigger, onSave }: BulkUploadModalProps) {
                         <CloudUpload className="w-4 h-4" />
                         {t("bulk.importPdfFromDrive") || "Import PDFs from Google Drive"}
                       </Button>
+                    )}
+
+                    {/* Contador de IA transparente ANTES de gastar (Fase 4) */}
+                    {aiQuota.used != null && Number.isFinite(aiQuota.limit) && !aiQuota.bypass && (
+                      <p className="text-xs text-muted-foreground text-center">
+                        {tf("bulk.aiQuotaLine", { used: aiQuota.used, limit: aiQuota.limit })}
+                        {" · "}
+                        {tf("dashboard.aiCounterRenews", {
+                          month: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toLocaleDateString(locale, { month: "long" }),
+                        })}
+                      </p>
                     )}
 
                     <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">

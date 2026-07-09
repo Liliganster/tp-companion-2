@@ -1,44 +1,26 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+/**
+ * Dashboard — Fase 4 del PLAN.md. Regla: arriba todo es accionable, abajo
+ * todo es paisaje. Fuera los chips crípticos de cuota, los anillos y la
+ * nota A-D; el contador de IA sigue visible (decisión de la propietaria)
+ * pero como tarjeta transparente con estados.
+ */
+import type { ReactNode } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { KPICard } from "@/components/dashboard/KPICard";
-import { NotificationDropdown } from "@/components/dashboard/NotificationDropdown";
 import { RecentTrips } from "@/components/dashboard/RecentTrips";
-import { ProjectsRingCard } from "@/components/dashboard/ProjectsRingCard";
-import { ProjectChart } from "@/components/dashboard/ProjectChart";
+import { AttentionPanel } from "@/components/dashboard/AttentionPanel";
+import { AiQuotaCard, CarMarginCard, ProUsageCard, ReportReadyCard } from "@/components/dashboard/DashboardCards";
+import { MonthlyBars } from "@/components/dashboard/MonthlyBars";
 import { Button } from "@/components/ui/button";
-import { ArrowDown, ArrowUp, ArrowRight, Plus, Settings, Sparkles, Check, AlertCircle, Loader2, Car } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Upload } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useUserProfile } from "@/contexts/UserProfileContext";
-import { useProjects } from "@/contexts/ProjectsContext";
-import { getProjectsForDashboard } from "@/lib/projects";
 import { useI18n } from "@/hooks/use-i18n";
 import { useTrips } from "@/contexts/TripsContext";
 import { calculateTreesNeeded, calculateTripEmissions, TripEmissionsInput } from "@/lib/emissions";
 import { parseLocaleNumber } from "@/lib/number";
-import { useAuth } from "@/contexts/AuthContext";
 import { useEmissionsInput } from "@/hooks/use-emissions-input";
-import { usePlan } from "@/contexts/PlanContext";
-import { usePlanLimits } from "@/hooks/use-plan-limits";
-import { logger } from "@/lib/logger";
-import { FEATURES } from "@/lib/features";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-
-function parseTripDate(value: string): Date | null {
-  if (!value) return null;
-
-  // Prefer parsing YYYY-MM-DD as local date to avoid timezone drift.
-  const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})/.exec(value);
-  if (m) {
-    const year = Number(m[1]);
-    const month = Number(m[2]);
-    const day = Number(m[3]);
-    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
-    return new Date(year, month - 1, day);
-  }
-
-  const dt = new Date(value);
-  return Number.isFinite(dt.getTime()) ? dt : null;
-}
+import { billableAmount } from "@/lib/tripMoney";
+import { parseTripDate } from "@/lib/tripDates";
 
 function percentageChange(current: number, previous: number): number {
   const cur = Number.isFinite(current) ? current : 0;
@@ -56,111 +38,51 @@ function sumCo2(
   emissionsInput: Omit<TripEmissionsInput, "distanceKm">,
 ): number {
   return trips.reduce((acc, t) => {
-    // Always recalculate to reflect current profile settings
     return acc + calculateTripEmissions({ distanceKm: t.distance, fuelLiters: t.fuelLiters, evKwhUsed: t.evKwhUsed, ...emissionsInput }).co2Kg;
   }, 0);
 }
 
+function Trend({ value, higherIsBetter, label }: { value: number; higherIsBetter: boolean; label: string }) {
+  const up = value >= 0;
+  const good = up === higherIsBetter;
+  const Icon = up ? ArrowUp : ArrowDown;
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs ${good ? "text-[#129446]" : "text-destructive"}`}>
+      <Icon className="w-3 h-3" />
+      {Math.abs(value)}% <span className="text-muted-foreground">{label}</span>
+    </span>
+  );
+}
+
+function FlatKpi({
+  label,
+  value,
+  sub,
+  to,
+  big = false,
+}: {
+  label: string;
+  value: string;
+  sub?: ReactNode;
+  to: string;
+  big?: boolean;
+}) {
+  return (
+    <Link to={to} className="block h-full">
+      <div className="glass-card p-4 h-full flex flex-col gap-1 hover:border-primary/40 transition-colors">
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+        <span className={`font-bold text-foreground tabular-nums ${big ? "text-3xl sm:text-4xl" : "text-2xl"}`}>{value}</span>
+        {sub}
+      </div>
+    </Link>
+  );
+}
+
 export default function Index() {
   const { profile } = useUserProfile();
-  const { user } = useAuth();
-  const { t, locale } = useI18n();
-  const { projects } = useProjects();
+  const { t, tf, locale } = useI18n();
   const { trips } = useTrips();
-  const { limits } = usePlan();
-  const { tripCounts } = usePlanLimits();
-  const dashboardProjects = getProjectsForDashboard(projects);
-  
-  // Trips quota
-  const tripsQuotaFull = tripCounts.total >= limits.maxActiveTrips;
-
-  // AI monthly quota from API (respects plan and bypass)
-  const [aiUsedThisMonth, setAiUsedThisMonth] = useState<number | null>(null);
-  const [aiLimitFromApi, setAiLimitFromApi] = useState<number>(limits.aiJobsPerMonth);
-  const [aiBypassEnabled, setAiBypassEnabled] = useState(false);
-  const [aiQuotaLoading, setAiQuotaLoading] = useState(false);
-  const { getAccessToken } = useAuth();
-  const aiQuotaPollingDisabled = useRef(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchAiQuota() {
-      if (aiQuotaPollingDisabled.current) return;
-      if (!user?.id) {
-        setAiUsedThisMonth(null);
-        return;
-      }
-
-      // Only show loading state if we don't have data yet
-      if (aiUsedThisMonth === null) {
-        setAiQuotaLoading(true);
-      }
-
-      try {
-        const token = await getAccessToken();
-        if (!token) {
-          if (!cancelled) setAiUsedThisMonth(null);
-          return;
-        }
-
-        const response = await fetch("/api/user/ai-quota", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch AI quota");
-        }
-
-        const contentType = response.headers.get("content-type") ?? "";
-        if (!contentType.includes("application/json")) {
-          throw new Error("AI quota endpoint did not return JSON");
-        }
-
-        const data = await response.json();
-        
-        if (!cancelled) {
-          setAiBypassEnabled(data.bypass === true);
-          setAiLimitFromApi(data.limit);
-          setAiUsedThisMonth(data.used);
-        }
-      } catch (e) {
-        logger.warn("Error fetching AI quota from API, trying Supabase fallback", e);
-        // Fallback: count callsheet_jobs directly from Supabase client
-        try {
-          const { supabase } = await import("@/lib/supabaseClient");
-          if (supabase && user?.id) {
-            const startOfMonth = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)).toISOString();
-            const { count, error } = await supabase
-              .from("callsheet_jobs")
-              .select("id", { count: "exact" })
-              .range(0, 0)
-              .eq("user_id", user.id)
-              .eq("status", "done")
-              .gte("processed_at", startOfMonth);
-            if (!error && typeof count === "number" && !cancelled) {
-              setAiUsedThisMonth(count);
-              setAiLimitFromApi(limits.aiJobsPerMonth);
-              setAiBypassEnabled(false);
-              aiQuotaPollingDisabled.current = true;
-              return;
-            }
-          }
-        } catch (fallbackErr) {
-          logger.warn("Supabase fallback for AI quota also failed", fallbackErr);
-        }
-        if (!cancelled) setAiUsedThisMonth(null);
-      } finally {
-        if (!cancelled) setAiQuotaLoading(false);
-      }
-    }
-
-    void fetchAiQuota();
-    
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id, getAccessToken, limits.aiJobsPerMonth]);
+  const { emissionsInput } = useEmissionsInput();
 
   const hour = new Date().getHours();
   const greeting = hour >= 6 && hour < 12
@@ -169,14 +91,6 @@ export default function Index() {
       ? t("dashboard.greetingAfternoon")
       : t("dashboard.greetingEvening");
 
-  const kpiTitleClassName = "text-sm font-semibold leading-tight text-foreground uppercase tracking-wide";
-  const kpiTitleWrapperClassName = "p-0 rounded-none bg-transparent border-0";
-
-  const { emissionsInput, isLoading: isLoadingEmissionsData } = useEmissionsInput();
-
-  const totalKm = sumKm(trips);
-  const co2Kg = sumCo2(trips, emissionsInput);
-
   const now = new Date();
   const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
@@ -184,230 +98,115 @@ export default function Index() {
 
   const tripsThisMonth = trips.filter((trip) => {
     const dt = parseTripDate(trip.date);
-    if (!dt) return false;
-    return dt >= startOfThisMonth && dt < startOfNextMonth;
+    return dt != null && dt >= startOfThisMonth && dt < startOfNextMonth;
   });
-
   const tripsPrevMonth = trips.filter((trip) => {
     const dt = parseTripDate(trip.date);
-    if (!dt) return false;
-    return dt >= startOfPrevMonth && dt < startOfThisMonth;
+    return dt != null && dt >= startOfPrevMonth && dt < startOfThisMonth;
   });
+
+  // € a facturar del mes: kilometraje + pasajeros + gastos (coherente con el informe)
+  const defaultRate = parseLocaleNumber(profile.ratePerKm) || 0;
+  const surcharge = parseLocaleNumber(profile.passengerSurcharge) || 0;
+  const billableThisMonth = billableAmount(tripsThisMonth, defaultRate, surcharge);
+  const billablePrevMonth = billableAmount(tripsPrevMonth, defaultRate, surcharge);
 
   const kmThisMonth = sumKm(tripsThisMonth);
   const kmPrevMonth = sumKm(tripsPrevMonth);
   const co2ThisMonth = sumCo2(tripsThisMonth, emissionsInput);
-  const co2PrevMonth = sumCo2(tripsPrevMonth, emissionsInput);
   const treesThisMonth = calculateTreesNeeded(co2ThisMonth);
-  // Rating matches the month-over-month bubble context (monthly emissions).
-  const co2Rating = co2ThisMonth <= 500 ? "A" : co2ThisMonth <= 1000 ? "B" : co2ThisMonth <= 1500 ? "C" : "D";
-    const co2TrendValue = percentageChange(co2ThisMonth, co2PrevMonth);
-    const co2TrendPositive = co2TrendValue >= 0;
-    const Co2TrendIcon = co2TrendPositive ? ArrowUp : ArrowDown;
-    const co2TrendColor = "text-muted-foreground";
 
-  const distanceTrendValue = percentageChange(kmThisMonth, kmPrevMonth);
-  const distanceTrendPositive = distanceTrendValue >= 0;
+  const eur0 = (v: number) => `${Math.round(v).toLocaleString(locale)} €`;
 
-  // AI Quota display - show ∞ when bypass is enabled
-  // AI Quota display - when bypass=1 (testing mode), show count without limit
-  const aiQuotaText = aiQuotaLoading 
-    ? "…" 
-    : aiUsedThisMonth == null 
-      ? `—/${aiLimitFromApi}` 
-      : aiBypassEnabled 
-        ? `${aiUsedThisMonth}` // Testing mode: just show count, no limit
-        : `${aiUsedThisMonth}/${aiLimitFromApi}`;
-  const aiQuotaTextColor = "text-foreground";
-  /* New Card Design Helpers */
-  const StatusRow = ({ label, value, status = "neutral", icon: Icon }: { label: string, value: string, status?: "success" | "warning" | "destructive" | "neutral", icon?: any }) => (
-    <div className="flex items-center justify-between text-xs px-2 py-1.5 rounded-lg border border-border bg-muted text-muted-foreground">
-      <span className="font-medium">{label}</span>
-      <div className="flex items-center gap-1.5">
-        {Icon && <Icon className="w-3 h-3" />}
-        <span className="font-bold tabular-nums text-foreground">{value}</span>
-      </div>
-    </div>
-  );
-
-  return <MainLayout>
-      <div className="page-container lg:h-full lg:flex lg:flex-col lg:gap-3 lg:py-1">
-        {/* Header */}
+  return (
+    <MainLayout>
+      <div className="page-container flex flex-col gap-3">
+        {/* Cabecera: saludo + acciones (fuera los chips crípticos) */}
         <div className="glass-panel p-4 md:p-5 animate-fade-in">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div>
-                <h1 className="text-foreground text-xl sm:text-2xl font-semibold leading-tight tracking-tight">
-                  {greeting} <span className="text-foreground">{profile.fullName.split(" ")[0]}</span>
-                </h1>
-                <p className="text-muted-foreground mt-1">
-                  {t("dashboard.subtitle")}
-                </p>
-              </div>
+            <div>
+              <h1 className="text-foreground text-xl sm:text-2xl font-semibold leading-tight tracking-tight">
+                {greeting} <span className="text-foreground">{profile.fullName.split(" ")[0]}</span>
+              </h1>
+              <p className="text-muted-foreground mt-1">{t("dashboard.subtitle")}</p>
             </div>
-            <div className="flex items-center gap-3">
-              {Number.isFinite(limits.maxActiveTrips) && (
-                <div className="flex items-center gap-2 px-3 py-1.5 border rounded-lg border-border bg-muted">
-                  <Car className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-xs font-medium tabular-nums text-foreground">{tripCounts.total}/{limits.maxActiveTrips}</span>
-                </div>
-              )}
-              <div className="flex items-center gap-2 px-3 py-1.5 border rounded-lg border-border bg-muted">
-                <Sparkles className="w-4 h-4 text-muted-foreground" />
-                <span className={`text-xs font-medium tabular-nums ${aiQuotaTextColor}`}>{aiQuotaText}</span>
-              </div>
-              {/* Warnings Bell */}
-              <NotificationDropdown />
+            <div className="flex items-center gap-2">
+              <Button asChild variant="upload">
+                <Link to="/trips?action=upload">
+                  <Upload className="w-4 h-4" />
+                  <span>{t("dashboard.actionUploadCallsheet")}</span>
+                </Link>
+              </Button>
+              <Button asChild>
+                <Link to="/trips?action=add">
+                  <Plus className="w-4 h-4" />
+                  <span>{t("dashboard.actionAddTrip")}</span>
+                </Link>
+              </Button>
             </div>
           </div>
         </div>
 
-        {/* KPI Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <KPICard
-            title="DISTANCIA TOTAL"
-            value={<div className="mt-1">
-              <div className="grid grid-cols-2 gap-3">
-                {/* Left: stats */}
-                <div className="min-w-0 flex flex-col">
-                  <div className="text-2xl font-bold text-foreground mb-2">{totalKm.toLocaleString(locale)} <span className="text-sm text-muted-foreground font-medium">km</span></div>
-                  <div className="grid gap-1.5">
-                    <StatusRow 
-                      label={t("dashboard.thisMonth")} 
-                      value={`${kmThisMonth.toLocaleString(locale)} km`} 
-                      status="neutral"
-                    />
-                    <StatusRow 
-                      label={t("dashboard.trend")} 
-                      value={`${Math.abs(distanceTrendValue)}%`} 
-                      status={distanceTrendPositive ? "success" : "destructive"}
-                      icon={distanceTrendPositive ? ArrowUp : ArrowDown}
-                    />
-                  </div>
-                </div>
-                {/* Right: ring chart */}
-                <div className="flex flex-col items-center">
-                  <svg width={120} height={120} viewBox="0 0 120 120">
-                    {/* Last month (inner - older) */}
-                    <circle cx={60} cy={60} r={38} fill="none" stroke="hsl(var(--muted) / 0.3)" strokeWidth={10} />
-                    <circle cx={60} cy={60} r={38} fill="none" stroke="#3b82f6" strokeWidth={10}
-                      strokeDasharray={`${(kmPrevMonth / Math.max(kmThisMonth, kmPrevMonth, 1)) * 2 * Math.PI * 38} ${2 * Math.PI * 38}`}
-                      strokeDashoffset={2 * Math.PI * 38 * 0.25} strokeLinecap="round" className="transition-all duration-700" />
-                    {/* This month (outer - newer) */}
-                    <circle cx={60} cy={60} r={51} fill="none" stroke="hsl(var(--muted) / 0.3)" strokeWidth={10} />
-                    <circle cx={60} cy={60} r={51} fill="none" stroke="#129446" strokeWidth={10}
-                      strokeDasharray={`${(kmThisMonth / Math.max(kmThisMonth, kmPrevMonth, 1)) * 2 * Math.PI * 51} ${2 * Math.PI * 51}`}
-                      strokeDashoffset={2 * Math.PI * 51 * 0.25} strokeLinecap="round" className="transition-all duration-700" />
-                    <text x={60} y={60} textAnchor="middle" dominantBaseline="central" className="fill-foreground font-bold" fontSize={16}>
-                      {kmThisMonth.toLocaleString(locale)}
-                    </text>
-                  </svg>
-                  <div className="flex gap-2 mt-0.5">
-                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                      <span className="w-2 h-2 rounded-full bg-[#129446]" />
-                      {t("dashboard.thisMonth")}
-                    </div>
-                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                      <span className="w-2 h-2 rounded-full bg-[#3b82f6]" />
-                      {t("dashboard.lastMonth")}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>}
-            icon={<div className={kpiTitleClassName}>{t("dashboard.totalDistance")}</div>}
-            iconWrapperClassName={kpiTitleWrapperClassName}
-            hideTitle
-            variant="primary"
-            valueGradient={false}
-            action={<Link to="/trips" className="text-sm font-medium text-[#129446] hover:text-[#129446]/80 mt-2 inline-flex items-center gap-1">{t("dashboard.viewTrips")} <ArrowRight className="w-4 h-4" /></Link>}
+        {/* Fila de 4 cifras planas (sin anillos, sin nota A-D) */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <FlatKpi
+            label={t("dashboard.kpiBillableMonth")}
+            value={eur0(billableThisMonth)}
+            big
+            to="/reports"
+            sub={<Trend value={percentageChange(billableThisMonth, billablePrevMonth)} higherIsBetter label={t("dashboard.vsPrevMonth")} />}
           />
-          
-          <ProjectsRingCard />
-
-          <KPICard
-            title={"EMISIONES CO\u2082"}
-            icon={<div className={kpiTitleClassName}>{t("dashboard.co2Emissions")}</div>}
-            iconWrapperClassName={kpiTitleWrapperClassName}
-            hideTitle
-            value={isLoadingEmissionsData ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
-              <div className="mt-1">
-              <div className="grid grid-cols-2 gap-3">
-                {/* Left: stats */}
-                <div className="min-w-0 flex flex-col">
-                  <div className="text-2xl font-bold text-foreground mb-2">{co2ThisMonth.toFixed(0)} <span className="text-sm text-muted-foreground font-medium">kg</span></div>
-                  <div className="grid gap-1.5">
-                    <StatusRow 
-                      label={t("dashboard.trend")}
-                      value={`${Math.abs(co2TrendValue)}%`}
-                      status={co2TrendPositive ? "destructive" : "success"} 
-                      icon={co2TrendPositive ? ArrowUp : ArrowDown}
-                    />
-                    <StatusRow 
-                      label={t("dashboard.status")}
-                      value={co2Rating === "A" ? t("dashboard.excellent") : co2Rating === "B" ? t("dashboard.good") : t("dashboard.improvable")}
-                      status={co2Rating === "A" ? "success" : "neutral"}
-                      icon={co2Rating === "A" ? Check : AlertCircle}
-                    />
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="cursor-help">
-                          <StatusRow
-                            label={t("dashboard.equivalentTrees")}
-                            value={`${treesThisMonth}`}
-                            status="neutral"
-                          />
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-[280px] text-xs">
-                        {t("dashboard.equivalentTreesTooltip")}
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
-                </div>
-                {/* Right: ring chart */}
-                <div className="flex flex-col items-center">
-                  {(() => {
-                    const maxCo2 = 1500;
-                    const ratio = Math.min(co2ThisMonth / maxCo2, 1);
-                    const ratingColor = co2Rating === "A" ? "#129446" : co2Rating === "B" ? "#3b82f6" : co2Rating === "C" ? "#f59e0b" : "#ef4444";
-                    const r = 51;
-                    const circumference = 2 * Math.PI * r;
-                    return (
-                      <svg width={120} height={120} viewBox="0 0 120 120">
-                        <circle cx={60} cy={60} r={r} fill="none" stroke="hsl(var(--muted) / 0.3)" strokeWidth={10} />
-                        <circle cx={60} cy={60} r={r} fill="none" stroke={ratingColor} strokeWidth={10}
-                          strokeDasharray={`${ratio * circumference} ${circumference}`}
-                          strokeDashoffset={circumference * 0.25} strokeLinecap="round" className="transition-all duration-700" />
-                        <text x={60} y={60} textAnchor="middle" dominantBaseline="central" className="fill-foreground font-bold" fontSize={32}>
-                          {co2Rating}
-                        </text>
-                      </svg>
-                    );
-                  })()}
-                  <div className="flex gap-2 mt-0.5">
-                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: co2Rating === "A" ? "#129446" : co2Rating === "B" ? "#3b82f6" : co2Rating === "C" ? "#f59e0b" : "#ef4444" }} />
-                      CO₂ {t("dashboard.thisMonth")}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            )}
-            action={FEATURES.advancedPages ? <Link to="/advanced/emissions" className="text-sm font-medium text-[#129446] hover:text-[#129446]/80 mt-2 inline-flex items-center gap-1">{t("dashboard.viewCo2")} <ArrowRight className="w-4 h-4" /></Link> : undefined}
+          <FlatKpi
+            label={t("dashboard.kpiKmMonth")}
+            value={`${Math.round(kmThisMonth).toLocaleString(locale)} km`}
+            to="/trips"
+            sub={<Trend value={percentageChange(kmThisMonth, kmPrevMonth)} higherIsBetter label={t("dashboard.vsPrevMonth")} />}
+          />
+          <FlatKpi
+            label={t("dashboard.kpiTripsMonth")}
+            value={`${tripsThisMonth.length}`}
+            to="/trips"
+            sub={<Trend value={percentageChange(tripsThisMonth.length, tripsPrevMonth.length)} higherIsBetter label={t("dashboard.vsPrevMonth")} />}
+          />
+          <FlatKpi
+            label={t("dashboard.kpiCo2Month")}
+            value={`${co2ThisMonth.toFixed(0)} kg`}
+            to="/trips"
+            sub={
+              <span className="text-xs text-muted-foreground" title={t("dashboard.equivalentTreesTooltip")}>
+                {tf("dashboard.treesPerYearShort", { trees: treesThisMonth })}
+              </span>
+            }
           />
         </div>
 
-        {/* Main content grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:flex-1 lg:min-h-0">
-          <ProjectChart />
+        {/* Accionable: atención + informe contextual + contador IA */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <div className="lg:col-span-2">
+            <AttentionPanel />
+          </div>
+          <div className="flex flex-col gap-3">
+            <ReportReadyCard />
+            <AiQuotaCard />
+            <div className="grid grid-cols-1 gap-3 lg:hidden">
+              <CarMarginCard />
+              <ProUsageCard />
+            </div>
+          </div>
+        </div>
+
+        {/* Margen del coche + % uso profesional (escritorio) */}
+        <div className="hidden lg:grid grid-cols-2 gap-3">
+          <CarMarginCard />
+          <ProUsageCard />
+        </div>
+
+        {/* Paisaje: barras km/€ de 6 meses + últimos viajes */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <MonthlyBars />
           <RecentTrips />
         </div>
       </div>
-    </MainLayout>;
+    </MainLayout>
+  );
 }

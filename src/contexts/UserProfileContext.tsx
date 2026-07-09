@@ -24,6 +24,8 @@ export type UserProfile = {
   electricityPricePerKwh: string; // electric
   maintenanceEurPerKm: string;
   otherEurPerKm: string;
+  /** Km totales del coche este año (factura del taller/ITV) → % uso profesional. */
+  annualCarTotalKm: string;
 
   openrouterEnabled: boolean;
   openrouterApiKey: string;
@@ -50,6 +52,7 @@ const DEFAULT_PROFILE: UserProfile = {
   electricityPricePerKwh: "",
   maintenanceEurPerKm: "",
   otherEurPerKm: "",
+  annualCarTotalKm: "",
 
   openrouterEnabled: false,
   openrouterApiKey: "",
@@ -148,6 +151,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
               electricityPricePerKwh: (data as any).electricity_price_per_kwh == null ? "" : String((data as any).electricity_price_per_kwh).replace(".", ","),
               maintenanceEurPerKm: (data as any).maintenance_eur_per_km == null ? "" : String((data as any).maintenance_eur_per_km).replace(".", ","),
               otherEurPerKm: (data as any).other_eur_per_km == null ? "" : String((data as any).other_eur_per_km).replace(".", ","),
+              annualCarTotalKm: (data as any).annual_car_total_km == null ? "" : String((data as any).annual_car_total_km).replace(".", ","),
 
               openrouterEnabled: Boolean((data as any).openrouter_enabled),
               openrouterApiKey: (data as any).openrouter_api_key || "",
@@ -173,6 +177,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
                 electricityPricePerKwh: (data as any).electricity_price_per_kwh == null ? "" : String((data as any).electricity_price_per_kwh).replace(".", ","),
                 maintenanceEurPerKm: (data as any).maintenance_eur_per_km == null ? "" : String((data as any).maintenance_eur_per_km).replace(".", ","),
                 otherEurPerKm: (data as any).other_eur_per_km == null ? "" : String((data as any).other_eur_per_km).replace(".", ","),
+                annualCarTotalKm: (data as any).annual_car_total_km == null ? "" : String((data as any).annual_car_total_km).replace(".", ","),
 
                 openrouterEnabled: Boolean((data as any).openrouter_enabled),
                 openrouterApiKey: (data as any).openrouter_api_key || "",
@@ -229,6 +234,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
       electricity_price_per_kwh: parseProfileNumber(nextProfile.electricityPricePerKwh),
       maintenance_eur_per_km: parseProfileNumber(nextProfile.maintenanceEurPerKm),
       other_eur_per_km: parseProfileNumber(nextProfile.otherEurPerKm),
+      annual_car_total_km: parseProfileNumber(nextProfile.annualCarTotalKm),
       openrouter_enabled: nextProfile.openrouterEnabled,
       openrouter_api_key: nextProfile.openrouterApiKey || null,
       openrouter_model: nextProfile.openrouterModel || null,

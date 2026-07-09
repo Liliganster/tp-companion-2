@@ -83,16 +83,16 @@ Todo es *ocultar y desconectar* (hibernar), no borrar. Reversible.
 
 ## Fase 4 — Dashboard
 
-Rediseño de `src/pages/Index.tsx`. Regla: arriba todo es accionable, abajo todo es paisaje.
+Rediseño de `src/pages/Index.tsx`. Regla: arriba todo es accionable, abajo todo es paisaje. **IMPLEMENTADA 2026-07-09** (pendiente el "hecho cuando": validación con un usuario nuevo).
 
-- [ ] **Cabecera**: saludo + botones "Subir callsheet" y "Añadir viaje". Fuera los chips crípticos de cuota.
-- [ ] **Fila de 4 cifras planas**: **€ a facturar del mes** (primera, más grande, tendencia vs mes anterior), km, nº viajes, CO₂. Sin anillos, sin nota A-D.
-- [ ] **Panel "Necesita tu atención"**: warnings de viajes (`trip-warnings.ts`), callsheets `failed`/`needs_review`, viajes sin proyecto. Cada línea clicable a su solución. Vacío = "Todo en orden". Sustituye al NotificationDropdown.
-- [ ] **Tarjeta contextual de informe** (primeros días del mes): "Informe de [mes] listo · Generar PDF".
-- [ ] **Contador de IA transparente** (decisión de la propietaria: SE MANTIENE visible): "Callsheets IA: 5/15 · se renueva el 1 de [mes]", barra de progreso, 3 estados (neutro / aviso ≥80% / agotado con opciones), clicable a Plan. **También en el modal de subida, antes de gastar.**
-- [ ] Abajo: barras km/€ de 6 meses + últimos 5 viajes (`RecentTrips`).
-- [ ] **Tarjeta "margen neto de tu coche"** (sustituto del odómetro): Kilometergeld facturado − coste real por km (tabla ÖAMTC estática por clase de vehículo + consumo y precio de combustible del perfil) = *"tu coche te dejó ~X € netos este mes"*. Sin fotos, sin IA.
-- [ ] **% uso profesional (caso fiscal), versión manual**: un campo anual "km totales del coche" (de factura de taller/ITV) ÷ km profesionales registrados. El flujo QR+foto+IA del odómetro queda hibernado.
+- [x] **Cabecera**: saludo + botones "Subir callsheet" (→ `/trips?action=upload`, abre el asistente) y "Añadir viaje" (→ `/trips?action=add`). Fuera los chips crípticos de cuota y la campana.
+- [x] **Fila de 4 cifras planas**: **€ a facturar del mes** (primera, más grande, tendencia vs mes anterior; kilometraje+pasajeros+gastos, coherente con el informe), km, nº viajes, CO₂ (con árboles equivalentes como sublínea). Sin anillos, sin nota A-D. Cada tarjeta es un enlace.
+- [x] **Panel "Necesita tu atención"** (`AttentionPanel.tsx`): warnings de viajes (incluye sin proyecto), callsheets `failed`/`needs_review`. Cada línea clicable a su solución. Vacío = "Todo en orden" con check verde. Sustituye al NotificationDropdown.
+- [x] **Tarjeta contextual de informe** (días 1-7 del mes, si el mes anterior tuvo viajes): "Informe de [mes] listo · Generar PDF" → ReportView del mes anterior.
+- [x] **Contador de IA transparente**: tarjeta con barra de progreso, 3 estados (neutro / aviso ≥80% / agotado con "Mejorar plan"), "se renueva el 1 de [mes]", clicable a Planes. **Y en el modal de subida antes de gastar** (hook compartido `use-ai-quota.ts`).
+- [x] Abajo: barras km/€ de 6 meses (`MonthlyBars.tsx`, doble eje) + últimos viajes (`RecentTrips`).
+- [x] **Tarjeta "margen neto de tu coche"**: Kilometergeld facturado − coste real por km. *Mejora sobre el plan: en vez de la tabla ÖAMTC estática se usan los costes REALES del perfil (combustible/electricidad del consumo + mantenimiento + otros €/km — los campos ya existían) → sin cifras inventadas; inputs añadidos a Ajustes ("Costes del coche"). Sin datos → CTA a Ajustes.*
+- [x] **% uso profesional (caso fiscal), versión manual**: campo "Km totales del coche este año" en Ajustes (columna `annual_car_total_km`, migración `20260711000000` — **PENDIENTE pegar en el SQL Editor**) ÷ km profesionales del año registrados. El flujo QR+foto+IA del odómetro sigue hibernado.
 
 **Hecho cuando**: un usuario nuevo entiende el dashboard sin explicación y cada elemento superior lleva a una acción.
 

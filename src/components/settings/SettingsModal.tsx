@@ -612,6 +612,71 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                     )}
                   </div>
 
+                  {/* Costes del coche + km anuales (Fase 4: margen neto y % uso profesional) */}
+                  <div className="mt-4 space-y-3">
+                    <div>
+                      <h4 className="text-sm font-medium">{t("settings.carCostsTitle")}</h4>
+                      <p className="text-xs text-muted-foreground">{t("settings.carCostsHint")}</p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {(profileData.fuelType === "gasoline" || profileData.fuelType === "diesel") && (
+                        <div className="space-y-2">
+                          <Label htmlFor="fuelPricePerLiter">{t("settings.fuelPricePerLiter")}</Label>
+                          <Input
+                            id="fuelPricePerLiter"
+                            inputMode="decimal"
+                            value={profileData.fuelPricePerLiter}
+                            onChange={(e) => setProfileData({ ...profileData, fuelPricePerLiter: e.target.value })}
+                            className="bg-secondary/50"
+                          />
+                        </div>
+                      )}
+                      {profileData.fuelType === "ev" && (
+                        <div className="space-y-2">
+                          <Label htmlFor="electricityPricePerKwh">{t("settings.electricityPricePerKwh")}</Label>
+                          <Input
+                            id="electricityPricePerKwh"
+                            inputMode="decimal"
+                            value={profileData.electricityPricePerKwh}
+                            onChange={(e) => setProfileData({ ...profileData, electricityPricePerKwh: e.target.value })}
+                            className="bg-secondary/50"
+                          />
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        <Label htmlFor="maintenanceEurPerKm">{t("settings.maintenanceEurPerKm")}</Label>
+                        <Input
+                          id="maintenanceEurPerKm"
+                          inputMode="decimal"
+                          value={profileData.maintenanceEurPerKm}
+                          onChange={(e) => setProfileData({ ...profileData, maintenanceEurPerKm: e.target.value })}
+                          className="bg-secondary/50"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="otherEurPerKm">{t("settings.otherEurPerKm")}</Label>
+                        <Input
+                          id="otherEurPerKm"
+                          inputMode="decimal"
+                          value={profileData.otherEurPerKm}
+                          onChange={(e) => setProfileData({ ...profileData, otherEurPerKm: e.target.value })}
+                          className="bg-secondary/50"
+                        />
+                      </div>
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="annualCarTotalKm">{t("settings.annualCarTotalKm")}</Label>
+                        <Input
+                          id="annualCarTotalKm"
+                          inputMode="numeric"
+                          value={profileData.annualCarTotalKm}
+                          onChange={(e) => setProfileData({ ...profileData, annualCarTotalKm: e.target.value })}
+                          className="bg-secondary/50"
+                        />
+                        <p className="text-xs text-muted-foreground">{t("settings.annualCarTotalKmHint")}</p>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Emissions Data Source Info */}
                   {((fuelFactor && (profileData.fuelType === "gasoline" || profileData.fuelType === "diesel")) || 
                     (atGrid && profileData.fuelType === "ev")) && (

@@ -80,6 +80,9 @@ export default function Trips() {
     project?: string;
   } | null>(null);
   const [prefillModalOpen, setPrefillModalOpen] = useState(false);
+  // Capturado en el mount: el botón "Subir callsheet" del dashboard llega
+  // como /trips?action=upload y abre el asistente directamente.
+  const [bulkAutoOpen] = useState(() => new URLSearchParams(window.location.search).get("action") === "upload");
   // ... imports
   const { projects } = useProjects();
   const { trips, addTrip, updateTrip, deleteTrip } = useTrips();
@@ -116,6 +119,22 @@ export default function Trips() {
     // Clear navigation state so it doesn't reopen on refresh/back.
     navigate(location.pathname + location.search, { replace: true, state: null });
   }, [location.pathname, location.search, location.state, navigate]);
+
+  // Acciones directas desde el dashboard (Fase 4): /trips?action=add|upload.
+  // "upload" se captura en el estado inicial (bulkAutoOpen); aquí se abre
+  // "add" y se limpia el parámetro para que no reabra al refrescar.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const action = params.get("action");
+    if (!action) return;
+    if (action === "add") {
+      setTripPrefill(null);
+      setPrefillModalOpen(true);
+    }
+    params.delete("action");
+    const rest = params.toString();
+    navigate(`${location.pathname}${rest ? `?${rest}` : ""}`, { replace: true });
+  }, [location.pathname, location.search, navigate]);
 
   // Validate filters
   useEffect(() => {
@@ -484,12 +503,13 @@ export default function Trips() {
             <Trash2 className="w-4 h-4" />
             <span className="hidden sm:inline">{t("trips.delete")} ({selectedIds.size})</span>
           </Button>}
-          <BulkUploadModal 
+          <BulkUploadModal
             trigger={<Button variant="upload">
               <Upload className="w-4 h-4" />
               <span className="hidden sm:inline">{t("trips.bulkUpload")}</span>
-            </Button>} 
+            </Button>}
             onSave={handleSaveTrip}
+            defaultOpen={bulkAutoOpen}
           />
           <AddTripModal trigger={<Button>
             <Plus className="w-4 h-4" />
