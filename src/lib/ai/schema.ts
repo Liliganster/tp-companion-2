@@ -13,10 +13,20 @@ export const extractionSchema = {
     locations: {
       type: "array",
       items: {
-        type: "string",
-        description: "Drehort/Set/Motiv address only. Verbatim from document. NEVER include Base, Parking, Catering, Makeup, Office addresses."
+        type: "object",
+        properties: {
+          label: {
+            type: "string",
+            description: "Section label EXACTLY as printed next to this address (e.g. 'MOTIV', 'LOCATION 2', 'SET', 'DREHORT'). Empty string if unlabeled."
+          },
+          address: {
+            type: "string",
+            description: "Drehort/Set/Motiv address only. Verbatim from document. NEVER include Base, Parking, Catering, Makeup, Office addresses."
+          }
+        },
+        required: ["label", "address"]
       },
-      description: "Filming locations only (where camera shoots). Exclude all logistics addresses."
+      description: "Filming locations only (where camera shoots), each with its printed section label. Exclude all logistics addresses."
     }
   },
   required: ["date", "projectName", "productionCompanies", "locations"]

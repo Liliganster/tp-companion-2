@@ -31,6 +31,8 @@ export function buildUniversalExtractorPrompt(text: string) {
     "",
     "── locations (CRITICAL) ──",
     "ONLY addresses where the CAMERA FILMS (Drehort / Set / Motiv).",
+    "Return each as {label, address}: label = the section label EXACTLY as printed",
+    "('MOTIV', 'LOCATION 2', 'SET', 'DREHORT'…); empty string if unlabeled.",
     "Look for labels: 'Drehort', 'Location', 'Set', 'Motiv', 'Filming Location', 'Drehlocation'.",
     "",
     "⛔ NEVER include addresses from these sections (these are logistics, NOT filming):",

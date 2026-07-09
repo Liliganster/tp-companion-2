@@ -11,9 +11,9 @@ import {
   buildCallsheetPdfHintText,
   normalizeExtractedCallsheetLocations,
   filterHallucinatedLocations,
-  filterLogisticsLocations,
   postProcessLocationsForGeocoding,
 } from "./_utils/callsheetLocationHints.js";
+import { classifyLabeledLocations } from "./_utils/callsheetLabels.js";
 import { parsePdfWithTimeout } from "./_utils/pdf-parser.js";
 import { resolveCallsheetDate } from "./_utils/callsheetDate.js";
 import {
@@ -517,24 +517,37 @@ export default withApiObservability(async function handler(req: any, res: any, {
           return;
         }
 
+        // Contrato híbrido: el modelo devuelve {label, address} solo de rodaje;
+        // el clasificador descarta fugas de logística (BASIS/PARKEN/…) por etiqueta.
+        const { filming, dropped } = classifyLabeledLocations(validated.data.locations as any);
+        if (dropped.length > 0) {
+          log.info({ jobId: job.id, dropped: dropped.map((d: any) => `${d.label}|${d.reason}`) }, "callsheet_labels_dropped");
+          try {
+            await supabaseAdmin.from("callsheet_excluded_blocks").insert(
+              dropped.map((d: any) => ({ job_id: job.id, label: d.label || null, evidence_text: d.address, reason: d.reason })),
+            );
+          } catch { /* auditoría best-effort */ }
+        }
+        const filmingAddresses = filming.map((f: any) => f.address);
+
         const normalizedAiLocations = normalizeExtractedCallsheetLocations({
-          locations: validated.data.locations,
+          locations: filmingAddresses,
           pdfText,
         });
-        // Evidence: keep the raw AI output for DB records
-        const evidenceLocations = validated.data.locations;
+        // Evidence: etiqueta + dirección literales del documento
+        const evidenceLocations = filming.map((f: any) => (f.label ? `${f.label}: ${f.address}` : f.address));
+        const locationLabels = filming.map((f: any) => f.label);
         const extracted = {
           ...validated.data,
           locations:
             normalizedAiLocations.length > 0
               ? normalizedAiLocations
-              : validated.data.locations,
+              : filmingAddresses,
         };
+        if (extracted.locations.length === 0) extracted.locations = ["No location found"];
 
-        // Strip logistics locations (Base, Parking, Catering, etc.)
-        const nonLogistics = filterLogisticsLocations(extracted.locations);
-        // If all were logistics, don't revert to bad data — use sentinel
-        extracted.locations = nonLogistics.length > 0 ? nonLogistics : ["No location found"];
+        // (la torre de regex de logística queda jubilada: el clasificador por
+        // etiqueta ya hizo este trabajo con información fiable)
 
         // Filter out hallucinated locations (addresses the AI invented)
         const verifiedLocations = filterHallucinatedLocations({
@@ -625,7 +638,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
               job_id: job.id,
               name_raw: /\d/.test(locStr) ? null : locStr,
               address_raw: locStr,
-              label_source: "EXTRACTED",
+              label_source: locationLabels[index] || "EXTRACTED",
               evidence_text: evidenceLocations[index] ?? locStr,
               formatted_address: geo?.formatted_address,
               lat: geo?.lat,

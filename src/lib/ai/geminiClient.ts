@@ -70,10 +70,24 @@ async function callOpenRouter(modelName: string, prompt: string, apiKey: string,
     // propiedades (los campos "opcionales" se modelan igualmente como
     // required — el modelo puede devolverlos vacíos). Gemini no lo exige,
     // así que se normaliza aquí solo para OpenRouter.
-    const strictSchema =
-      schema && typeof schema === "object" && schema.properties
-        ? { ...schema, required: Object.keys(schema.properties), additionalProperties: false }
-        : schema;
+    // Recursivo: el modo estricto exige required=todas las propiedades y
+    // additionalProperties:false en CADA nivel (los items de locations son objetos).
+    const toStrict = (node: any): any => {
+      if (!node || typeof node !== "object") return node;
+      const out: any = Array.isArray(node) ? node.map(toStrict) : { ...node };
+      if (!Array.isArray(node)) {
+        if (out.properties && typeof out.properties === "object") {
+          out.properties = Object.fromEntries(
+            Object.entries(out.properties).map(([k, v]) => [k, toStrict(v)]),
+          );
+          out.required = Object.keys(out.properties);
+          out.additionalProperties = false;
+        }
+        if (out.items) out.items = toStrict(out.items);
+      }
+      return out;
+    };
+    const strictSchema = toStrict(schema);
     payload.response_format = {
       type: "json_schema",
       json_schema: {
