@@ -552,7 +552,6 @@ export default function AdvancedRoutes() {
                     id="name"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="bg-secondary/50"
                     disabled={loading}
                   />
                 </div>
@@ -563,7 +562,7 @@ export default function AdvancedRoutes() {
                     onValueChange={(value) => setFormData({ ...formData, category: value })}
                     disabled={loading}
                   >
-                    <SelectTrigger className="bg-secondary/50" disabled={loading}>
+                    <SelectTrigger disabled={loading}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -611,8 +610,7 @@ export default function AdvancedRoutes() {
                       onCommit={(value) => setFormData((prev) => ({ ...prev, startLocation: value }))}
                       placeholder={baseLocation || t("tripModal.originPlaceholder")}
                       disabled={loading}
-                      className="bg-secondary/50"
-                      country={profile.country}
+                        country={profile.country}
                     />
                   </div>
 
@@ -630,8 +628,7 @@ export default function AdvancedRoutes() {
                           }
                           placeholder={t("tripModal.stopPlaceholder")}
                           disabled={loading}
-                          className="bg-secondary/50"
-                          country={profile.country}
+                                country={profile.country}
                         />
                       </div>
                       <Button
@@ -660,8 +657,7 @@ export default function AdvancedRoutes() {
                       onCommit={(value) => setFormData((prev) => ({ ...prev, endLocation: value }))}
                       placeholder={baseLocation || t("tripModal.destinationPlaceholder")}
                       disabled={loading}
-                      className="bg-secondary/50"
-                      country={profile.country}
+                        country={profile.country}
                     />
                   </div>
                 </div>
@@ -676,8 +672,7 @@ export default function AdvancedRoutes() {
                       type="number"
                       value={formData.distance}
                       onChange={(e) => setFormData({ ...formData, distance: Number(e.target.value) })}
-                      className="bg-secondary/50"
-                      disabled={loading}
+                        disabled={loading}
                     />
                     <Button
                       type="button"
@@ -699,7 +694,6 @@ export default function AdvancedRoutes() {
                     type="number"
                     value={formData.estimatedTime}
                     onChange={(e) => setFormData({ ...formData, estimatedTime: Number(e.target.value) })}
-                    className="bg-secondary/50"
                     disabled={loading}
                   />
                 </div>
@@ -716,7 +710,7 @@ export default function AdvancedRoutes() {
                   placeholder={t("advancedRoutes.descriptionPlaceholder")}
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="bg-secondary/50 resize-none min-h-[100px]"
+                  className="resize-none min-h-[100px]"
                   disabled={loading}
                 />
               </div>

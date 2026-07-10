@@ -182,7 +182,7 @@ export function ProjectExpenseSection({ projectId, onExpenseChange }: ProjectExp
             </span>
           )}
           {receipts.length > 0 && (
-            <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">
+            <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded-chip">
               {receipts.length} {receipts.length === 1 ? t("expenses.receipt") : t("expenses.receipts")}
             </span>
           )}

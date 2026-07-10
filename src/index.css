@@ -8,87 +8,90 @@
   :root {
     /*
      * Tema Fahrtenbuch Pro — oscuro SIEMPRE (decisión de la propietaria),
-     * estilo Gemini: superficies azul-noche, acento azul del logo (#1d6fb8)
-     * aclarado para fondo oscuro, radios generosos, navegación en píldora.
+     * estilo Unity (UI8): fondo #1B1D21, acento morado #6C5DD3, texto
+     * secundario #808191, avisos naranja #FF754C. Tarjetas un punto más
+     * claras que el kit (#2B2E3A) — pedido de la propietaria 2026-07-10:
+     * que se note la saliencia sobre el fondo. Tipografía Inter.
      */
-    --background: 220 20% 6%;
-    --foreground: 214 25% 94%;
+    --background: 220 10% 12%;
+    --foreground: 0 0% 100%;
 
-    --card: 219 18% 10%;
-    --card-foreground: 214 25% 94%;
+    --card: 227 14% 20%;
+    --card-foreground: 0 0% 100%;
 
-    --popover: 219 18% 11%;
-    --popover-foreground: 214 25% 94%;
+    --popover: 227 14% 21%;
+    --popover-foreground: 0 0% 100%;
 
-    /* Azul pálido tipo Material-dark sobre texto azul-noche (muy "Gemini") */
-    --primary: 209 92% 72%;
-    --primary-foreground: 216 65% 11%;
+    /* Morado Unity #6C5DD3 con texto blanco */
+    --primary: 248 57% 60%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 218 16% 14%;
-    --secondary-foreground: 214 15% 86%;
+    --secondary: 228 12% 25%;
+    --secondary-foreground: 228 15% 90%;
 
-    --muted: 218 15% 15%;
-    --muted-foreground: 216 12% 62%;
+    --muted: 228 12% 25%;
+    --muted-foreground: 236 7% 58%;
 
-    /* Hover/selección con tinte azul */
-    --accent: 213 35% 17%;
-    --accent-foreground: 210 40% 92%;
+    /* Hover/selección: elevación neutra sobre carbón */
+    --accent: 230 12% 27%;
+    --accent-foreground: 0 0% 98%;
 
-    --destructive: 0 70% 68%;
-    --destructive-foreground: 0 60% 10%;
+    --destructive: 9 100% 64%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 218 14% 17%;
-    --input: 218 15% 15%;
-    --ring: 209 92% 72%;
+    --border: 228 12% 26%;
+    --input: 228 12% 24%;
+    --ring: 248 57% 60%;
 
     /* Radios generosos (Tailwind rounded-lg via shadcn) */
     --radius: 12px;
 
-    /* Superficies glass con tinte azul */
-    --glass-bg: 219 18% 10% / 0.72;
-    --glass-bg-2: 219 18% 8% / 0.66;
-    --glass-border: 210 60% 80% / 0.08;
+    /* Superficies glass neutras (tinte carbón Unity), casi opacas para que
+       la tarjeta no se funda con el fondo */
+    --glass-bg: 227 14% 20% / 0.92;
+    --glass-bg-2: 227 14% 17% / 0.85;
+    --glass-border: 240 30% 90% / 0.08;
     --glass-blur: 18px;
     --glass-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
     --app-bg-blur: 0px;
-    --app-bg-image: radial-gradient(80% 60% at 50% 0%, rgba(72, 140, 235, 0.10), transparent 60%),
-      radial-gradient(50% 50% at 15% 80%, rgba(72, 140, 235, 0.05), transparent 60%);
+    --app-bg-image: radial-gradient(80% 60% at 50% 0%, rgba(108, 93, 211, 0.08), transparent 60%),
+      radial-gradient(50% 50% at 15% 80%, rgba(108, 93, 211, 0.04), transparent 60%);
     --app-bg-image-opacity: 0.9;
 
-    /* Degradado de marca (azul → azul claro) */
-    --gradient-primary: linear-gradient(135deg, hsl(212 90% 62%), hsl(199 95% 74%));
+    /* Degradado de marca (morado → azul, como la tarjeta hero de Unity) */
+    --gradient-primary: linear-gradient(135deg, hsl(248 57% 60%), hsl(216 100% 62%));
     --gradient-surface: none;
     --gradient-glow: none;
 
-    /* Botones de acción = acento azul */
-    --action-add: 209 92% 72%;
-    --action-add-foreground: 216 65% 11%;
-    --action-save: 209 92% 72%;
-    --action-save-foreground: 216 65% 11%;
-    --action-upload: 209 92% 72%;
-    --action-upload-foreground: 216 65% 11%;
+    /* Botones de acción = acento morado */
+    --action-add: 248 57% 60%;
+    --action-add-foreground: 0 0% 100%;
+    --action-save: 248 57% 60%;
+    --action-save-foreground: 0 0% 100%;
+    --action-upload: 248 57% 60%;
+    --action-upload-foreground: 0 0% 100%;
 
-    /* Sidebar */
-    --sidebar-background: 220 20% 7%;
-    --sidebar-foreground: 216 12% 72%;
-    --sidebar-primary: 209 92% 72%;
-    --sidebar-primary-foreground: 216 65% 11%;
-    --sidebar-accent: 213 35% 16%;
-    --sidebar-accent-foreground: 210 40% 92%;
-    --sidebar-border: 218 14% 14%;
-    --sidebar-ring: 209 92% 72%;
+    /* Sidebar: mismo carbón que el fondo, como en Unity */
+    --sidebar-background: 220 10% 12%;
+    --sidebar-foreground: 236 7% 54%;
+    --sidebar-primary: 248 57% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 230 13% 20%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 227 12% 18%;
+    --sidebar-ring: 248 57% 60%;
 
-    /* Charts: escala de azules */
-    --chart-1: 209 92% 72%;
-    --chart-2: 210 70% 58%;
-    --chart-3: 213 45% 45%;
-    --chart-4: 216 30% 34%;
-    --chart-5: 218 20% 26%;
+    /* Charts: paleta Unity (morado, azul, cian claro, lila, gris) */
+    --chart-1: 248 57% 60%;
+    --chart-2: 216 100% 62%;
+    --chart-3: 194 60% 77%;
+    --chart-4: 248 100% 89%;
+    --chart-5: 236 7% 54%;
 
-    /* Estados */
-    --success: 152 55% 62%;
-    --warning: 38 92% 62%;
-    --info: 209 92% 72%;
+    /* Estados (verde, amarillo y azul del kit Unity) */
+    --success: 115 32% 60%;
+    --warning: 39 100% 73%;
+    --info: 216 100% 62%;
   }
 }
 
@@ -121,10 +124,9 @@
     @apply rounded-2xl border border-border bg-card/60 shadow-sm;
   }
 
+  /* Campos estilo Unity: relleno sólido, sin borde visible, radio generoso */
   .fb-field {
-    @apply w-full rounded-lg border px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
-    background-color: rgba(255, 255, 255, 0.03);
-    border-color: rgba(255, 255, 255, 0.10);
+    @apply w-full rounded-xl border border-transparent bg-secondary px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .fb-eyebrow {
@@ -136,7 +138,7 @@
   }
 
   .fb-pill {
-    @apply inline-flex items-center rounded-full border border-border bg-muted px-3 py-1 text-xs text-muted-foreground;
+    @apply inline-flex items-center rounded-chip border border-border bg-muted px-3 py-1 text-xs text-muted-foreground;
   }
 
   .fb-row {
@@ -163,8 +165,10 @@
     @apply glass rounded-2xl;
   }
 
+  /* Columna central de TODAS las páginas: 85% del ancho disponible, centrada
+     (pedido de la propietaria 2026-07-10); 100% en pantallas pequeñas. */
   .page-container {
-    @apply mx-auto w-full max-w-[1600px] space-y-8;
+    @apply mx-auto w-full lg:w-[85%] max-w-[1600px] space-y-8;
   }
 
   .app-background-effects {
@@ -212,17 +216,22 @@
     box-shadow: 0 0 40px hsl(var(--accent) / 0.3);
   }
 
-  /* Navegación en píldora (estilo Gemini): hover azul suave, activo azul acento.
-     nowrap + overflow-hidden: durante la animación de ancho del sidebar las
-     etiquetas se recortan limpias en vez de envolver y montarse. */
+  /* Navegación estilo Unity: rectángulo redondeado (no píldora), hover neutro,
+     activo morado sólido con texto blanco. nowrap + overflow-hidden: durante la
+     animación de ancho del sidebar las etiquetas se recortan limpias en vez de
+     envolver y montarse. */
   .nav-item {
-    @apply flex items-center gap-3 px-4 py-2.5 rounded-full transition-colors duration-200;
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-xl transition-colors duration-200;
     @apply text-muted-foreground hover:text-foreground hover:bg-accent;
     @apply min-w-0 overflow-hidden whitespace-nowrap;
   }
 
   .nav-item-active {
-    @apply bg-primary/15 text-primary font-medium;
+    @apply bg-primary text-primary-foreground font-medium;
+  }
+
+  .nav-item-active:hover {
+    @apply bg-primary text-primary-foreground;
   }
 }
 

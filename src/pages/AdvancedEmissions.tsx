@@ -619,14 +619,14 @@ export default function AdvancedEmissions() {
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder={t("advancedEmissions.searchPlaceholder")}
-                    className="h-[46px] pl-11 bg-secondary/50 border-border/70 focus-visible:ring-0 focus-visible:border-primary/50"
+                    className="h-[46px] pl-11"
                   />
                 </div>
 
                 <div className="relative group lg:w-60">
                   <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" size={16} />
                   <Select value={timeRange} onValueChange={setTimeRange}>
-                    <SelectTrigger className="h-[46px] pl-11 bg-secondary/50 border-border/70 uppercase text-[10px] font-bold tracking-wider">
+                    <SelectTrigger className="h-[46px] pl-11 uppercase text-[10px] font-bold tracking-wider">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -643,7 +643,7 @@ export default function AdvancedEmissions() {
                 <div className="relative group lg:w-60">
                   <Layers className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" size={16} />
                   <Select value={viewMode} onValueChange={setViewMode}>
-                    <SelectTrigger className="h-[46px] pl-11 bg-secondary/50 border-border/70 uppercase text-[10px] font-bold tracking-wider">
+                    <SelectTrigger className="h-[46px] pl-11 uppercase text-[10px] font-bold tracking-wider">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -904,7 +904,7 @@ export default function AdvancedEmissions() {
                   {t("advancedEmissions.sortBy")}
                 </Label>
                 <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="bg-secondary/50">
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                     <SelectContent>

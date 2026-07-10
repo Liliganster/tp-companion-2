@@ -91,6 +91,10 @@ export default {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        /* Chips/etiquetas: rectángulo redondeado proporcional a su tamaño
+           (12px del menú en un chip de 20px se recorta a píldora; 6px da la
+           misma forma a escala de chip). */
+        chip: "6px",
       },
       keyframes: {
         "accordion-down": {

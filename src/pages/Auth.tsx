@@ -113,7 +113,7 @@ export default function Auth() {
         <div className="w-full max-w-md">
           <div className="glass-card p-8 animate-scale-in">
             <div className="text-center mb-6">
-              <h1 className="text-3xl font-extrabold" style={{ fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial' }}>Fahrtenbuch <span className="text-[#1d6fb8]">Pro</span></h1>
+              <h1 className="text-3xl font-extrabold">Fahrtenbuch <span className="text-primary">Pro</span></h1>
               <p className="mt-2 text-sm text-muted-foreground">{t("auth.tagline")}</p>
             </div>
 
@@ -159,7 +159,7 @@ export default function Auth() {
                       placeholder="Max Mustermann"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="pl-10 bg-secondary/50"
+                      className="pl-10"
                       autoComplete="name"
                     />
                   </div>
@@ -176,7 +176,7 @@ export default function Auth() {
                     placeholder="max@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10 bg-secondary/50"
+                    className="pl-10"
                     autoComplete="email"
                   />
                 </div>
@@ -192,7 +192,7 @@ export default function Auth() {
                     placeholder=""
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 pr-10 bg-secondary/50"
+                    className="pl-10 pr-10"
                     autoComplete={isLogin ? "current-password" : "new-password"}
                   />
                   <button

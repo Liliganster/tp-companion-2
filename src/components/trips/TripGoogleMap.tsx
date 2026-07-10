@@ -194,7 +194,7 @@ function TripGoogleMapLoaded({ route, open, browserKey }: { route: string[]; ope
           map: googleMapRef.current,
           suppressMarkers: false,
           polylineOptions: {
-            strokeColor: "#2563eb",
+            strokeColor: "#6C5DD3",
             strokeOpacity: 0.8,
             strokeWeight: 5,
           },

@@ -6,12 +6,12 @@ import { getProjectsForDashboard } from "@/lib/projects";
 import { useI18n } from "@/hooks/use-i18n";
 
 const RING_COLORS = [
-  "hsl(209 92% 72%)", // azul acento
-  "hsl(210 70% 58%)", // azul medio
-  "#ef4444", // red
-  "#f59e0b", // amber
-  "#8b5cf6", // violet
-  "#ec4899", // pink
+  "#6C5DD3", // morado Unity
+  "#3F8CFF", // azul
+  "#A0D7E7", // cian claro
+  "#FFCE73", // amarillo
+  "#FF754C", // naranja
+  "#7FBA7A", // verde
 ];
 
 export function ProjectsRingCard() {

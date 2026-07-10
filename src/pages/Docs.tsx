@@ -314,7 +314,7 @@ export default function Docs() {
               <a
                 key={item.id}
                 href={`#${item.id}`}
-                className="text-sm px-3 py-1 rounded-full bg-secondary/40 hover:bg-secondary/60 transition-colors"
+                className="text-sm px-3 py-1 rounded-chip bg-secondary/40 hover:bg-secondary/60 transition-colors"
               >
                 {item.title}
               </a>

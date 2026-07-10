@@ -123,7 +123,7 @@ export default function ResetPassword() {
                 type={showPassword ? "text" : "password"}
                 value={nextPassword}
                 onChange={(e) => setNextPassword(e.target.value)}
-                className="pl-10 pr-10 bg-secondary/50"
+                className="pl-10 pr-10"
                 autoComplete="new-password"
               />
               <button
@@ -149,7 +149,7 @@ export default function ResetPassword() {
                 type={showConfirm ? "text" : "password"}
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
-                className="pl-10 pr-10 bg-secondary/50"
+                className="pl-10 pr-10"
                 autoComplete="new-password"
               />
               <button

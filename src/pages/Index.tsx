@@ -7,7 +7,7 @@
 import type { ReactNode } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { RecentTrips } from "@/components/dashboard/RecentTrips";
-import { AttentionPanel } from "@/components/dashboard/AttentionPanel";
+import { AttentionBell } from "@/components/dashboard/AttentionBell";
 import { CarMarginCard, ProUsageCard, ReportReadyCard } from "@/components/dashboard/DashboardCards";
 import { MonthlyBars } from "@/components/dashboard/MonthlyBars";
 import { ArrowDown, ArrowUp, Sparkles } from "lucide-react";
@@ -124,8 +124,9 @@ export default function Index() {
   return (
     <MainLayout>
       <div className="page-container flex flex-col gap-3">
-        {/* Cabecera: saludo + contador de IA pequeño (sin botones redundantes
-            con Viajes — decisión de la propietaria) */}
+        {/* Cabecera: saludo + contador de IA pequeño + campana de atención
+            (estilo Unity; sin botones redundantes con Viajes — decisión de
+            la propietaria). El ancho 85% centrado lo pone .page-container. */}
         <div className="glass-panel p-4 md:p-5 animate-fade-in">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
@@ -135,26 +136,29 @@ export default function Index() {
               </h1>
               <p className="text-muted-foreground mt-1">{t("dashboard.subtitle")}</p>
             </div>
-            <Link
-              to="/plans"
-              className="flex items-center gap-2 px-3 py-1.5 border rounded-lg border-border bg-muted hover:bg-muted/70 transition-colors"
-              title={t("dashboard.aiCounterTitle")}
-            >
-              <Sparkles className="w-4 h-4 text-muted-foreground" />
-              <span
-                className={`text-xs font-medium tabular-nums ${
-                  !aiQuota.bypass && aiQuota.used != null && Number.isFinite(aiQuota.limit) && aiQuota.used >= aiQuota.limit
-                    ? "text-destructive"
-                    : "text-foreground"
-                }`}
+            <div className="flex items-center gap-2">
+              <Link
+                to="/plans"
+                className="flex items-center gap-2 px-3 py-1.5 border rounded-lg border-border bg-muted hover:bg-muted/70 transition-colors"
+                title={t("dashboard.aiCounterTitle")}
               >
-                {aiQuota.loading && aiQuota.used == null
-                  ? "…"
-                  : aiQuota.bypass
-                    ? `${aiQuota.used ?? 0}`
-                    : `${aiQuota.used ?? "—"}/${Number.isFinite(aiQuota.limit) ? aiQuota.limit : "∞"}`}
-              </span>
-            </Link>
+                <Sparkles className="w-4 h-4 text-muted-foreground" />
+                <span
+                  className={`text-xs font-medium tabular-nums ${
+                    !aiQuota.bypass && aiQuota.used != null && Number.isFinite(aiQuota.limit) && aiQuota.used >= aiQuota.limit
+                      ? "text-destructive"
+                      : "text-foreground"
+                  }`}
+                >
+                  {aiQuota.loading && aiQuota.used == null
+                    ? "…"
+                    : aiQuota.bypass
+                      ? `${aiQuota.used ?? 0}`
+                      : `${aiQuota.used ?? "—"}/${Number.isFinite(aiQuota.limit) ? aiQuota.limit : "∞"}`}
+                </span>
+              </Link>
+              <AttentionBell />
+            </div>
           </div>
         </div>
 
@@ -191,16 +195,16 @@ export default function Index() {
           />
         </div>
 
-        {/* Accionable: atención + informe contextual + margen/uso del coche */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          <div className="lg:col-span-2">
-            <AttentionPanel />
-          </div>
-          <div className="flex flex-col gap-3">
-            <ReportReadyCard />
-            <CarMarginCard />
-            <ProUsageCard />
-          </div>
+        {/* Informe contextual (días 1-7): banner a todo lo ancho; devuelve
+            null el resto del mes sin dejar hueco */}
+        <ReportReadyCard />
+
+        {/* Margen del coche + % de uso profesional: siempre a ancho
+            completo, mitad y mitad (la atención vive en la campana de la
+            cabecera, estilo Unity) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <CarMarginCard />
+          <ProUsageCard />
         </div>
 
         {/* Paisaje: barras km/€ de 6 meses + últimos viajes */}

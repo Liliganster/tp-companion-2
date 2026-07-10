@@ -1688,22 +1688,22 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                           </span>
                         ) : null}
                         {sheet.status === 'cancelled' ? (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-muted-foreground border border-white/10">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-chip bg-white/10 text-muted-foreground border border-white/10">
                             Cancelado
                           </span>
                         ) : null}
                         {sheet.status === 'needs_review' ? (
-                          <span title={sheet.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-full cursor-help bg-white/10 text-muted-foreground border border-white/10">
+                          <span title={sheet.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-chip cursor-help bg-white/10 text-muted-foreground border border-white/10">
                             {t("projectDetail.review")}
                           </span>
                         ) : null}
                         {sheet.status === 'out_of_quota' ? (
-                          <span title={sheet.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-full cursor-help bg-white/10 text-muted-foreground border border-white/10">
+                          <span title={sheet.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-chip cursor-help bg-white/10 text-muted-foreground border border-white/10">
                             {t("projectDetail.outOfQuota")}
                           </span>
                         ) : null}
                         {sheet.status === 'failed' ? (
-                          <span title={sheet.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-full cursor-help bg-white/10 text-muted-foreground border border-white/10">
+                          <span title={sheet.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-chip cursor-help bg-white/10 text-muted-foreground border border-white/10">
                             Error
                           </span>
                         ) : null}

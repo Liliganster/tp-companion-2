@@ -101,7 +101,7 @@ export default function Plans() {
 
               {/* Pro Plan */}
               <div className="bg-zinc-900/40 backdrop-blur-md p-6 rounded-lg border border-white/15 ring-1 ring-white/10 relative flex flex-col transition-colors hover:border-white/20">
-            <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white text-zinc-950 hover:bg-white font-medium px-3 py-1 rounded-full text-xs shadow-sm">
+            <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white text-zinc-950 hover:bg-white font-medium px-3 py-1 text-xs shadow-sm">
               {t("plans.mostPopular")}
             </Badge>
             

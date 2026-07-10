@@ -46,12 +46,12 @@ export function ReportReadyCard() {
   const link = `/reports/view?project=all&startDate=${toDateOnly(prevStart)}&endDate=${toDateOnly(prevEnd)}`;
 
   return (
-    <div className="glass-card p-4 border-primary/40">
-      <div className="flex items-center gap-2">
-        <FileText className="w-4 h-4 text-primary" />
+    <div className="glass-card p-4 border-primary/40 flex flex-col sm:flex-row sm:items-center gap-3">
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <FileText className="w-4 h-4 text-primary shrink-0" />
         <span className="text-sm font-semibold">{tf("dashboard.reportReadyTitle", { month: monthName })}</span>
       </div>
-      <Button asChild size="sm" className="mt-3 w-full">
+      <Button asChild size="sm" className="w-full sm:w-auto">
         <Link to={link}>{t("dashboard.reportReadyCta")}</Link>
       </Button>
     </div>

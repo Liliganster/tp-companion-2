@@ -367,7 +367,7 @@ export default function Reports() {
             <div className="space-y-2">
               <Label>{t("reports.project")}</Label>
               <Select value={selectedProject} onValueChange={setSelectedProject}>
-                <SelectTrigger className="bg-secondary/50">
+                <SelectTrigger>
                   <SelectValue placeholder={t("reports.selectProject")} />
                 </SelectTrigger>
                 <SelectContent>

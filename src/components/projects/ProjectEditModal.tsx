@@ -114,7 +114,6 @@ export function ProjectEditModal({
             <Input
               id="name"
               placeholder="e.g., Film Production XY"
-              className="bg-secondary/50"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
@@ -124,7 +123,6 @@ export function ProjectEditModal({
             <Input
               id="producer"
               placeholder={t("projects.companyPlaceholder")}
-              className="bg-secondary/50"
               value={producer}
               onChange={(e) => setProducer(e.target.value)}
             />
@@ -134,7 +132,7 @@ export function ProjectEditModal({
             <Textarea
               id="description"
               placeholder={t("projects.descriptionPlaceholder")}
-              className="bg-secondary/50 resize-none"
+              className="resize-none"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
@@ -147,8 +145,7 @@ export function ProjectEditModal({
                 type="number"
                 step="0.01"
                 placeholder="0.30"
-                className="bg-secondary/50"
-                value={ratePerKm}
+                  value={ratePerKm}
                 onChange={(e) => setRatePerKm(e.target.value)}
               />
             </div>
@@ -159,8 +156,7 @@ export function ProjectEditModal({
                 type="number"
                 step="0.01"
                 placeholder="0.05"
-                className="bg-secondary/50"
-                value={ratePerPassenger}
+                  value={ratePerPassenger}
                 onChange={(e) => setRatePerPassenger(e.target.value)}
               />
             </div>

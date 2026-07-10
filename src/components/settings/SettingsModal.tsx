@@ -465,8 +465,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         id="fullName"
                         value={profileData.fullName}
                         onChange={(e) => setProfileData({ ...profileData, fullName: e.target.value })}
-                        className="bg-secondary/50"
-                      />
+                                             />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="vatId">{t("settings.vatId")}</Label>
@@ -474,8 +473,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         id="vatId"
                         value={profileData.vatId}
                         onChange={(e) => setProfileData({ ...profileData, vatId: e.target.value })}
-                        className="bg-secondary/50"
-                      />
+                                             />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="licensePlate">{t("settings.licensePlate")}</Label>
@@ -483,8 +481,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         id="licensePlate"
                         value={profileData.licensePlate}
                         onChange={(e) => setProfileData({ ...profileData, licensePlate: e.target.value })}
-                        className="bg-secondary/50"
-                      />
+                                             />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="ratePerKm">{t("settings.ratePerKm")}</Label>
@@ -492,8 +489,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         id="ratePerKm"
                         value={profileData.ratePerKm}
                         onChange={(e) => setProfileData({ ...profileData, ratePerKm: e.target.value })}
-                        className="bg-secondary/50"
-                      />
+                                             />
                     </div>
                   </div>
 
@@ -503,8 +499,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       id="passengerSurcharge"
                       value={profileData.passengerSurcharge}
                       onChange={(e) => setProfileData({ ...profileData, passengerSurcharge: e.target.value })}
-                      className="bg-secondary/50"
-                    />
+                                         />
                   </div>
 
                   <div className="space-y-2">
@@ -513,8 +508,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       id="baseAddress"
                       value={profileData.baseAddress}
                       onChange={(e) => setProfileData({ ...profileData, baseAddress: e.target.value })}
-                      className="bg-secondary/50"
-                    />
+                                         />
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -524,8 +518,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         id="city"
                         value={profileData.city}
                         onChange={(e) => setProfileData({ ...profileData, city: e.target.value })}
-                        className="bg-secondary/50"
-                      />
+                                             />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="country">{t("settings.country")}</Label>
@@ -533,8 +526,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         id="country"
                         value={profileData.country}
                         onChange={(e) => setProfileData({ ...profileData, country: e.target.value })}
-                        className="bg-secondary/50"
-                      />
+                                             />
                     </div>
                   </div>
 
@@ -552,7 +544,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                           setProfileData({ ...profileData, fuelType: value as typeof profileData.fuelType })
                         }
                       >
-                        <SelectTrigger className="bg-secondary/50">
+                        <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -573,8 +565,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                           placeholder=""
                           value={profileData.fuelLPer100Km}
                           onChange={(e) => setProfileData({ ...profileData, fuelLPer100Km: e.target.value })}
-                          className="bg-secondary/50"
-                        />
+                                                 />
                       </div>
                     )}
 
@@ -587,8 +578,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                             inputMode="decimal"
                             value={profileData.evKwhPer100Km}
                             onChange={(e) => setProfileData({ ...profileData, evKwhPer100Km: e.target.value })}
-                            className="bg-secondary/50"
-                          />
+                                                     />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="gridKgCo2PerKwh">{t("settings.gridFactor")}</Label>
@@ -597,8 +587,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                             inputMode="decimal"
                             value={formatLocaleNumber(atGrid?.kgCo2PerKwh ?? DEFAULT_GRID_KG_CO2_PER_KWH_FALLBACK)}
                             disabled
-                            className="bg-secondary/50"
-                          />
+                                                     />
                           <p className="text-xs text-muted-foreground">
                             {t("settings.gridFactorHelp")}
                             {atGrid?.datetime ? ` (${new Date(atGrid.datetime).toLocaleString(locale)})` : ""}
@@ -624,8 +613,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                             inputMode="decimal"
                             value={profileData.fuelPricePerLiter}
                             onChange={(e) => setProfileData({ ...profileData, fuelPricePerLiter: e.target.value })}
-                            className="bg-secondary/50"
-                          />
+                                                     />
                         </div>
                       )}
                       {profileData.fuelType === "ev" && (
@@ -636,8 +624,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                             inputMode="decimal"
                             value={profileData.electricityPricePerKwh}
                             onChange={(e) => setProfileData({ ...profileData, electricityPricePerKwh: e.target.value })}
-                            className="bg-secondary/50"
-                          />
+                                                     />
                         </div>
                       )}
                       <div className="space-y-2">
@@ -647,8 +634,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                           inputMode="decimal"
                           value={profileData.maintenanceEurPerKm}
                           onChange={(e) => setProfileData({ ...profileData, maintenanceEurPerKm: e.target.value })}
-                          className="bg-secondary/50"
-                        />
+                                                 />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="otherEurPerKm">{t("settings.otherEurPerKm")}</Label>
@@ -657,8 +643,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                           inputMode="decimal"
                           value={profileData.otherEurPerKm}
                           onChange={(e) => setProfileData({ ...profileData, otherEurPerKm: e.target.value })}
-                          className="bg-secondary/50"
-                        />
+                                                 />
                       </div>
                       <div className="space-y-2 sm:col-span-2">
                         <Label htmlFor="annualCarTotalKm">{t("settings.annualCarTotalKm")}</Label>
@@ -667,8 +652,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                           inputMode="numeric"
                           value={profileData.annualCarTotalKm}
                           onChange={(e) => setProfileData({ ...profileData, annualCarTotalKm: e.target.value })}
-                          className="bg-secondary/50"
-                        />
+                                                 />
                         <p className="text-xs text-muted-foreground">{t("settings.annualCarTotalKmHint")}</p>
                       </div>
                     </div>
@@ -815,8 +799,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                             id="openrouter-key" 
                             type="password" 
                             placeholder="sk-or-v1-..." 
-                            className="bg-secondary/50"
-                            value={profileData.openrouterApiKey}
+                                                       value={profileData.openrouterApiKey}
                             onChange={(e) => setProfileData({ ...profileData, openrouterApiKey: e.target.value })}
                           />
                         </div>
@@ -826,7 +809,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                             value={profileData.openrouterModel || "google/gemini-2.5-flash"}
                             onValueChange={(value) => setProfileData({ ...profileData, openrouterModel: value })}
                           >
-                            <SelectTrigger id="openrouter-model" className="bg-secondary/50">
+                            <SelectTrigger id="openrouter-model">
                               <SelectValue placeholder="Selecciona un modelo" />
                             </SelectTrigger>
                             <SelectContent>

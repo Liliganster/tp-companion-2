@@ -134,7 +134,7 @@ function SortableStop({ stop, onRemove, onChange, onDraftChange, canRemove, disa
             onDraftChange={(value) => onDraftChange?.(stop.id, value)}
             placeholder={placeholder ?? getPlaceholder()}
             disabled={disabled}
-            className="bg-secondary/50 h-8 mt-1"
+            className="h-8 mt-1"
             country={country}
             locationBias={locationBias}
           />
@@ -811,7 +811,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="bg-secondary/50 [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:order-first [&::-webkit-calendar-picker-indicator]:mr-2"
+                className="[&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:order-first [&::-webkit-calendar-picker-indicator]:mr-2"
               />
             </div>
             <div className="grid gap-2">
@@ -822,7 +822,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                     variant="outline"
                     role="combobox"
                     aria-expanded={projectOpen}
-                    className="w-full justify-between bg-secondary/50 font-normal"
+                    className="w-full justify-between bg-secondary border-transparent font-normal"
                   >
                     {project || t("tripModal.selectProject")}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -947,7 +947,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
             <div className="grid gap-2">
               <Label>{t("tripModal.specialOrigin")}</Label>
               <Select value={specialOrigin} onValueChange={(value) => handleSpecialOriginChange(value as SpecialOrigin)}>
-                <SelectTrigger className="bg-secondary/50">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -965,8 +965,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                 placeholder="0"
                 value={passengers}
                 onChange={(e) => setPassengers(e.target.value)}
-                className="bg-secondary/50"
-              />
+                             />
             </div>
           </div>
 
@@ -979,8 +978,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                 placeholder="0"
                 value={distance}
                 onChange={(e) => setDistance(e.target.value)}
-                className="bg-secondary/50"
-              />
+                             />
             </div>
             <Button
               type="button"
@@ -1000,8 +998,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                 value={tripRate}
                 onChange={(e) => setTripRate(e.target.value)}
                 placeholder={settingsRateLabel}
-                className="bg-secondary/50"
-              />
+                             />
             </div>
           </div>
 
@@ -1012,8 +1009,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
               placeholder={t("tripModal.purposePlaceholder")}
               value={purpose}
               onChange={(e) => setPurpose(e.target.value)}
-              className="bg-secondary/50"
-              spellCheck="true"
+                           spellCheck="true"
             />
           </div>
 
@@ -1041,8 +1037,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                   placeholder="0"
                   value={tollAmount}
                   onChange={(e) => setTollAmount(e.target.value)}
-                  className="bg-secondary/50"
-                />
+                                 />
                 <ExpenseScanButton
                   expenseType="toll"
                   tripId={trip?.id}
@@ -1090,8 +1085,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                   placeholder="0"
                   value={parkingAmount}
                   onChange={(e) => setParkingAmount(e.target.value)}
-                  className="bg-secondary/50"
-                />
+                                 />
                 <ExpenseScanButton
                   expenseType="parking"
                   tripId={trip?.id}
@@ -1139,8 +1133,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                   placeholder="0"
                   value={otherExpenses}
                   onChange={(e) => setOtherExpenses(e.target.value)}
-                  className="bg-secondary/50"
-                />
+                                 />
                 <ExpenseScanButton
                   expenseType="other"
                   tripId={trip?.id}
@@ -1188,8 +1181,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                   placeholder="0"
                   value={fuelAmount}
                   onChange={(e) => setFuelAmount(e.target.value)}
-                  className="bg-secondary/50"
-                />
+                                 />
                 <ExpenseScanButton
                   expenseType="fuel"
                   tripId={trip?.id}
@@ -1258,8 +1250,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                       value={templateName}
                       onChange={(e) => setTemplateName(e.target.value)}
                       placeholder="Ej. Visita cliente X"
-                      className="bg-secondary/50"
-                    />
+                                         />
                   </div>
                   <Button 
                     variant="add" 

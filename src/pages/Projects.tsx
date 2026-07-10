@@ -639,36 +639,35 @@ export default function Projects() {
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="glass-card p-5 animate-fade-in animation-delay-100">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder={t("projects.searchPlaceholder")}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 bg-secondary/50"
-              />
-            </div>
-            <Select value={selectedYear} onValueChange={setSelectedYear}>
-              <SelectTrigger className="w-full sm:w-32 bg-secondary/50">
-                <Calendar className="w-4 h-4 mr-2" />
-                <SelectValue placeholder={t("projects.year")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("projects.allTime")}</SelectItem>
-                <SelectItem value="2026">2026</SelectItem>
-                <SelectItem value="2025">2025</SelectItem>
-                <SelectItem value="2024">2024</SelectItem>
-                <SelectItem value="2023">2023</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Projects Table */}
+        {/* Projects Table — la tabla contiene al filtro (estilo Unity):
+            campos distribuidos a lo ancho desde la izquierda */}
         <div className="glass-card overflow-hidden animate-fade-in animation-delay-200">
+          <div className="p-5">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder={t("projects.searchPlaceholder")}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger className="w-full sm:w-44">
+                  <Calendar className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder={t("projects.year")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t("projects.allTime")}</SelectItem>
+                  <SelectItem value="2026">2026</SelectItem>
+                  <SelectItem value="2025">2025</SelectItem>
+                  <SelectItem value="2024">2024</SelectItem>
+                  <SelectItem value="2023">2023</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           <div className="overflow-x-auto" style={{ maxHeight: filteredProjects.length > 8 ? '32rem' : 'none', overflowY: filteredProjects.length > 8 ? 'scroll' : 'visible' }}>
             <Table>
               <TableHeader>
@@ -681,14 +680,14 @@ export default function Projects() {
                     />
                   </TableHead>
 
-                  <TableHead className="text-white font-semibold whitespace-nowrap">{t("projects.tableProject")}</TableHead>
-                  <TableHead className="text-white font-semibold whitespace-nowrap hidden sm:table-cell">{t("projects.tableCompany")}</TableHead>
-                  <TableHead className="text-white font-semibold text-right whitespace-nowrap">{t("projects.tableTrips")}</TableHead>
-                  <TableHead className="text-white font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("projects.tableInvoices")}</TableHead>
-                  <TableHead className="text-white font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("projects.tableDocuments")}</TableHead>
-                  <TableHead className="text-white font-semibold text-right whitespace-nowrap hidden md:table-cell">{t("projects.tableCo2")}</TableHead>
-                  <TableHead className="text-white font-semibold text-right whitespace-nowrap">{t("projects.tableCost")}</TableHead>
-                  <TableHead className="text-white font-semibold text-right whitespace-nowrap hidden md:table-cell">{t("projects.tableTotalKm")}</TableHead>
+                  <TableHead className="whitespace-nowrap">{t("projects.tableProject")}</TableHead>
+                  <TableHead className="whitespace-nowrap hidden sm:table-cell">{t("projects.tableCompany")}</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">{t("projects.tableTrips")}</TableHead>
+                  <TableHead className="text-right whitespace-nowrap hidden lg:table-cell">{t("projects.tableInvoices")}</TableHead>
+                  <TableHead className="text-right whitespace-nowrap hidden lg:table-cell">{t("projects.tableDocuments")}</TableHead>
+                  <TableHead className="text-right whitespace-nowrap hidden md:table-cell">{t("projects.tableCo2")}</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">{t("projects.tableCost")}</TableHead>
+                  <TableHead className="text-right whitespace-nowrap hidden md:table-cell">{t("projects.tableTotalKm")}</TableHead>
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -706,7 +705,7 @@ export default function Projects() {
                     return (
                       <TableRow
                         key={project.id}
-                        className={`hover:bg-secondary/30 border-border/30 animate-slide-up cursor-pointer ${selectedIds.has(project.id) ? 'bg-primary/10' : index % 2 === 1 ? 'bg-muted/30' : ''}`}
+                        className={`animate-slide-up cursor-pointer ${selectedIds.has(project.id) ? 'bg-primary/10' : ''}`}
                         style={{ animationDelay: `${index * 50}ms` }}
                         role="button"
                         tabIndex={0}
@@ -728,7 +727,10 @@ export default function Projects() {
                         </TableCell>
 
                         <TableCell>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-3">
+                            <span className="w-9 h-9 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">
+                              <FolderKanban className="w-4 h-4" />
+                            </span>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
