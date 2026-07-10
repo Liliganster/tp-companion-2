@@ -37,7 +37,7 @@ export function RecentTrips() {
       <div className="flex items-center justify-between mb-2">
         <h2 className="font-semibold text-sm">{t("dashboard.recentTrips")}</h2>
         <Button variant="ghost" size="sm" asChild>
-          <Link to="/trips" className="flex items-center gap-1 text-[#129446] hover:text-[#129446]/80">
+          <Link to="/trips" className="flex items-center gap-1 text-primary hover:text-primary/80">
             {t("dashboard.viewAll")}
             <ArrowRight className="w-4 h-4" />
           </Link>

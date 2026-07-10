@@ -36,6 +36,7 @@ import tripHeaderImage from "@/assets/trip-modal-header.jpg";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatLocaleNumber, parseLocaleNumber } from "@/lib/number";
+import { FEATURES } from "@/lib/features";
 import { getCountryCode } from "@/lib/country-mapping";
 import { useI18n } from "@/hooks/use-i18n";
 import { AddressAutocompleteInput } from "@/components/google/AddressAutocompleteInput";
@@ -101,11 +102,11 @@ function SortableStop({ stop, onRemove, onChange, onDraftChange, canRemove, disa
   const getIcon = () => {
     switch (stop.type) {
       case "origin":
-        return <Home className="w-4 h-4 shrink-0 text-blue-500" />;
+        return <Home className="w-4 h-4 shrink-0 text-primary" />;
       case "destination":
         return <Home className="w-4 h-4 shrink-0 text-primary" />;
       default:
-        return <MapPin className="w-4 h-4 shrink-0 text-red-500" />;
+        return <MapPin className="w-4 h-4 shrink-0 text-primary" />;
     }
   };
 
@@ -1232,6 +1233,9 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
           </div>
 
           <div className="flex items-center gap-2 mt-2">
+            {/* Plantillas de ruta: viven en las páginas Advanced (hibernadas en
+                Fase 1) — sin la página, el botón guardaba en un sitio inaccesible. */}
+            {FEATURES.advancedPages && (
             <Popover open={saveTemplateOpen} onOpenChange={setSaveTemplateOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="gap-2" type="button">
@@ -1308,6 +1312,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                 </div>
               </PopoverContent>
             </Popover>
+            )}
 
             <DialogClose asChild>
               <Button

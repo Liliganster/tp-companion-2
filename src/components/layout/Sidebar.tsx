@@ -120,7 +120,7 @@ export function Sidebar({
           title={collapsed ? t("nav.plans") : undefined}
         >
           <div className={cn("flex w-full items-center gap-2", collapsed && "justify-center gap-0")}>
-            <Crown className="w-5 h-5 shrink-0 text-yellow-400" />
+            <Crown className="w-5 h-5 shrink-0 text-warning" />
             {!collapsed && (
               <div className="flex flex-col">
                 <span className="text-sm font-semibold text-foreground">
@@ -141,7 +141,7 @@ export function Sidebar({
           <Settings className="w-5 h-5 shrink-0" />
           {!collapsed && <span>{t("nav.settings")}</span>}
         </button>
-        <button onClick={() => signOut()} className={cn("nav-item w-full text-red-500 hover:text-red-600 hover:bg-red-500/10", collapsed && "justify-center px-2")} title={collapsed ? t("nav.logout") : undefined}>
+        <button onClick={() => signOut()} className={cn("nav-item w-full text-destructive hover:text-destructive hover:bg-destructive/10", collapsed && "justify-center px-2")} title={collapsed ? t("nav.logout") : undefined}>
           <LogOut className="w-5 h-5 shrink-0" />
           {!collapsed && <span>{t("nav.logout")}</span>}
         </button>

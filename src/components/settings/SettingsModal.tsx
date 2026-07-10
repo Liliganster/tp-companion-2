@@ -754,15 +754,15 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   </div>
 
                   {/* Delete Account */}
-                  <div className="mt-8 p-4 rounded-lg border border-red-500/30 bg-red-500/10">
+                  <div className="mt-8 p-4 rounded-lg border border-destructive/30 bg-destructive/10">
                     <div className="flex items-start gap-3">
-                      <Trash2 className="w-5 h-5 text-red-300 mt-0.5 shrink-0" />
+                      <Trash2 className="w-5 h-5 text-destructive mt-0.5 shrink-0" />
                       <div className="flex-1">
-                        <h3 className="font-medium text-red-200">{t("settings.deleteAccountTitle")}</h3>
+                        <h3 className="font-medium text-destructive">{t("settings.deleteAccountTitle")}</h3>
                         <p className="text-sm text-muted-foreground mt-1 mb-4">
                           {t("settings.deleteAccountBody")}
                         </p>
-                        <Button className="bg-red-600 text-white hover:bg-red-600/90" size="sm" onClick={deleteAccount}>
+                        <Button variant="destructive" size="sm" onClick={deleteAccount}>
                           <Trash2 className="w-4 h-4 mr-2" />
                           {t("settings.deleteAccountButton")}
                         </Button>
@@ -783,7 +783,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         <p className="text-sm text-muted-foreground">{t("settings.apisGeminiBody")}</p>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <div className={cn("w-2 h-2 rounded-full", geminiActive ? "bg-green-500" : "bg-muted-foreground/40")} />
+                        <div className={cn("w-2 h-2 rounded-full", geminiActive ? "bg-success" : "bg-muted-foreground/40")} />
                         {t("settings.apisActive")}
                       </div>
                     </div>

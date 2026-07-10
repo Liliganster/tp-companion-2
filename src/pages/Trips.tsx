@@ -575,20 +575,20 @@ export default function Trips() {
                   </span>
                   {(tripWarnings.byId[trip.id]?.length ?? 0) > 0 && (
                     <span title={(tripWarnings.byId[trip.id] ?? []).map((w) => w.title).join("\n")}>
-                      <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-400" />
+                      <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
                     </span>
                   )}
                   {trip.specialOrigin === "continue" && (
-                    <Badge variant="secondary" className="w-fit text-[10px] sm:text-xs bg-yellow-500/20 text-yellow-300 border-transparent">
+                    <Badge variant="secondary" className="w-fit text-[10px] sm:text-xs bg-warning/15 text-warning border-transparent">
                       {t("trips.continuation")}
                     </Badge>
                   )}
                   {trip.specialOrigin === "return" && (
-                    <Badge variant="secondary" className="w-fit text-[10px] sm:text-xs bg-red-500/20 text-red-400 border-transparent">
+                    <Badge variant="secondary" className="w-fit text-[10px] sm:text-xs bg-primary/15 text-primary border-transparent">
                       {t("trips.returnTrip")}
                     </Badge>
                   )}
-                  <span className="text-[10px] sm:text-xs truncate max-w-[150px] sm:max-w-none px-1.5 py-0.5 rounded bg-[#129446]/20 text-[#129446]">
+                  <span className="text-[10px] sm:text-xs truncate max-w-[150px] sm:max-w-none px-1.5 py-0.5 rounded bg-primary/15 text-primary">
                     {trip.project}
                   </span>
                 </div>
@@ -772,11 +772,11 @@ export default function Trips() {
                     </span>
                     {(tripWarnings.byId[trip.id]?.length ?? 0) > 0 && (
                       <span title={(tripWarnings.byId[trip.id] ?? []).map((w) => w.title).join("\n")}>
-                        <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-400" />
+                        <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
                       </span>
                     )}
-                    {trip.specialOrigin === "continue" && <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-300 border-transparent">{t("trips.continuation")}</Badge>}
-                    {trip.specialOrigin === "return" && <Badge variant="secondary" className="bg-red-500/20 text-red-400 border-transparent">{t("trips.returnTrip")}</Badge>}
+                    {trip.specialOrigin === "continue" && <Badge variant="secondary" className="bg-warning/15 text-warning border-transparent">{t("trips.continuation")}</Badge>}
+                    {trip.specialOrigin === "return" && <Badge variant="secondary" className="bg-primary/15 text-primary border-transparent">{t("trips.returnTrip")}</Badge>}
                   </div>
                 </TableCell>
                 <TableCell>

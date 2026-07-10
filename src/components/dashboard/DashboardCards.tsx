@@ -46,7 +46,7 @@ export function ReportReadyCard() {
   const link = `/reports/view?project=all&startDate=${toDateOnly(prevStart)}&endDate=${toDateOnly(prevEnd)}`;
 
   return (
-    <div className="glass-card p-4 border-[#129446]/40">
+    <div className="glass-card p-4 border-primary/40">
       <div className="flex items-center gap-2">
         <FileText className="w-4 h-4 text-primary" />
         <span className="text-sm font-semibold">{tf("dashboard.reportReadyTitle", { month: monthName })}</span>

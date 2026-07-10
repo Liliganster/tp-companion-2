@@ -6,7 +6,7 @@ import { getProjectsForDashboard } from "@/lib/projects";
 import { useI18n } from "@/hooks/use-i18n";
 
 const RING_COLORS = [
-  "#129446", // green
+  "hsl(209 92% 72%)", // azul acento
   "hsl(210 70% 58%)", // azul medio
   "#ef4444", // red
   "#f59e0b", // amber
@@ -69,7 +69,7 @@ export function ProjectsRingCard() {
           <div className="text-2xl font-bold text-foreground mb-2">{totalCount}</div>
           <div className="grid gap-1.5">
             <div className="flex items-center justify-between text-xs px-2 py-1.5 rounded-lg border border-border bg-muted text-muted-foreground">
-              <span className="font-medium flex items-center gap-1"><Star className="w-3 h-3 text-yellow-500 fill-yellow-500" /> {t("dashboard.starred") ?? "Starred"}</span>
+              <span className="font-medium flex items-center gap-1"><Star className="w-3 h-3 text-warning fill-warning" /> {t("dashboard.starred") ?? "Starred"}</span>
               <span className="font-bold tabular-nums text-foreground">{starred.length}</span>
             </div>
             <div className="flex items-center justify-between text-xs px-2 py-1.5 rounded-lg border border-border bg-muted text-muted-foreground">

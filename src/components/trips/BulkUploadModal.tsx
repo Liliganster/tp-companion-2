@@ -2129,9 +2129,9 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                       </p>
                     )}
 
-                    <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                      <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                    <div className="flex items-start gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20">
+                      <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
+                      <p className="text-xs text-warning">
                         {t("bulk.aiDisclaimer")}
                       </p>
                     </div>
@@ -2180,9 +2180,9 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                   </div>
                 </div>
 
-                <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                  <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20">
+                  <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
+                  <p className="text-xs text-warning">
                     {t("bulk.aiDisclaimer")}
                   </p>
                 </div>

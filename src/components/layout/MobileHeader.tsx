@@ -50,7 +50,7 @@ export function MobileHeader({
         <Link to="/" className="flex items-center gap-2">
           <img src="/favicon-32x32.png" alt="Fahrtenbuch Pro" className="w-8 h-8" />
           <span className="whitespace-nowrap text-[18px] font-black leading-none tracking-tight text-foreground">
-            Fahrtenbuch <span className="text-blue-500">Pro</span>
+            Fahrtenbuch <span className="text-primary">Pro</span>
           </span>
         </Link>
 
@@ -92,7 +92,7 @@ export function MobileHeader({
                     setOpen(false);
                     void signOut();
                   }}
-                  className="nav-item w-full text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                  className="nav-item w-full text-destructive hover:text-destructive hover:bg-destructive/10"
                 >
                   <LogOut className="w-5 h-5" />
                   <span>{t("nav.logout")}</span>
@@ -100,7 +100,7 @@ export function MobileHeader({
 
                 {/* User Profile */}
                 <div className="flex items-center gap-3 pt-3 border-t border-border/50">
-                  <div className="w-9 h-9 rounded-full bg-[#129446] flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center shrink-0">
                     <span className="text-sm font-medium text-primary-foreground">{profileInitial}</span>
                   </div>
                   <div className="min-w-0 flex-1">

@@ -737,7 +737,7 @@ export default function Projects() {
                               className="shrink-0 opacity-60 hover:opacity-100 transition-opacity"
                             >
                               {project.starred ? (
-                                <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                                <Star className="w-4 h-4 text-warning fill-warning" />
                               ) : (
                                 <StarOff className="w-4 h-4" />
                               )}
