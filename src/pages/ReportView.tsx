@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Download, Printer, ArrowLeft, FileSpreadsheet, FileText, FileDown, Save, Archive } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTrips } from "@/contexts/TripsContext";
@@ -113,6 +114,10 @@ export default function ReportView() {
   // El PDF va dirigido a la producción (Aufnahmeleitung) → alemán por defecto,
   // independiente del idioma de la UI (Fase 3 del PLAN.md).
   const [pdfLang, setPdfLang] = useState<AppLanguage>("de");
+  // Opción del informe (2026-07-10): unir el suplemento de pasajeros al
+  // importe por km de cada viaje (un solo número por viaje, sin línea
+  // separada). Por defecto SEPARADOS — la regla general de la app.
+  const [mergePassengers, setMergePassengers] = useState(false);
   const reportId = searchParams.get("reportId");
   const savedReport = reportId ? reports.find((r) => r.id === reportId) : undefined;
 
@@ -246,7 +251,9 @@ export default function ReportView() {
     // Decisión de la propietaria (2026-07-09): el importe del viaje es SOLO
     // kilometraje; el suplemento por pasajeros va como línea separada del
     // informe — producción/Finanzamt lo interpretan, los datos están ahí.
-    const reimbursement = distance * rate;
+    // Con la opción "unir" (2026-07-10) el suplemento se suma al importe de
+    // cada viaje y desaparece la línea separada; el total no cambia.
+    const reimbursement = distance * rate + (mergePassengers ? passengers * passengerSurcharge : 0);
 
     return {
       date: dateLabel,
@@ -280,7 +287,9 @@ export default function ReportView() {
   });
   const totalExpenses = reportExpenses.reduce((acc, e) => acc + e.amount, 0);
   const totalPassengers = trips.reduce((acc, trip) => acc + trip.passengers, 0);
-  const passengerSurchargeTotal = totalPassengers * passengerSurcharge;
+  // Unidos: el suplemento ya está dentro de totalReimbursement → la línea
+  // separada vale 0 y el total general queda idéntico.
+  const passengerSurchargeTotal = mergePassengers ? 0 : totalPassengers * passengerSurcharge;
   const grandTotal = totalReimbursement + passengerSurchargeTotal + totalExpenses;
   const totalCo2 = filteredTrips.reduce((acc, trip) => acc + (Number.isFinite(trip.co2) ? trip.co2 : 0), 0);
   const hasReceipts = filteredTrips.some((trip) =>
@@ -379,7 +388,9 @@ export default function ReportView() {
       licensePlate,
       projectLabel,
       producer: producerHeader,
-      passengerSurcharge,
+      // Unidos: el PDF recibe tarifa 0 → no imprime ni la tarifa por pasajero
+      // ni la línea de suplemento; los importes por viaje ya lo incluyen.
+      passengerSurcharge: mergePassengers ? 0 : passengerSurcharge,
       trips: trips.map((trip) => ({
         date: trip.date,
         routeText: trip.route.map(cleanRoute).join(" > "),
@@ -608,7 +619,17 @@ export default function ReportView() {
             <span className="hidden sm:inline">{t("reportView.backToReports")}</span>
             <span className="sm:hidden">{t("reportView.backShort")}</span>
           </Button>
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-end flex-wrap">
+            {totalPassengers > 0 && passengerSurcharge > 0 && (
+              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+                <Switch
+                  checked={mergePassengers}
+                  onCheckedChange={setMergePassengers}
+                  aria-label={t("reportView.mergePassengers")}
+                />
+                {t("reportView.mergePassengers")}
+              </label>
+            )}
             <Select value={pdfLang} onValueChange={(v) => setPdfLang(v as AppLanguage)}>
               <SelectTrigger className="h-9 w-[150px]" aria-label={t("reportView.pdfLanguage")}>
                 <SelectValue />
@@ -692,9 +713,11 @@ export default function ReportView() {
                 <p>
                   <span className="font-semibold">{t("reportView.projectLabel")}:</span> {projectLabel}
                 </p>
-                <p>
-                  <span className="font-semibold">{t("reportView.passengerSurchargeLabel")}:</span> {profile.passengerSurcharge || "0"} €
-                </p>
+                {!mergePassengers && (
+                  <p>
+                    <span className="font-semibold">{t("reportView.passengerSurchargeLabel")}:</span> {profile.passengerSurcharge || "0"} €
+                  </p>
+                )}
                 <p>
                   <span className="font-semibold">{t("reportView.ratePerKmLabel")}:</span> {profile.ratePerKm || "0"} €
                 </p>

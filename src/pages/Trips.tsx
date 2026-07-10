@@ -3,7 +3,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Filter, Upload, Calendar, MoreVertical, Pencil, Trash2, Map as MapIcon, CalendarPlus, ChevronUp, ChevronDown, AlertTriangle, Loader2, ChevronsDown } from "lucide-react";
+import { Plus, Filter, Upload, Calendar, Route, MoreVertical, Pencil, Trash2, Map as MapIcon, CalendarPlus, ChevronUp, ChevronDown, AlertTriangle, Loader2, ChevronsDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -259,10 +259,16 @@ export default function Trips() {
     return trip.route[trip.route.length - 1] || baseLocation;
   };
 
+  // Reembolso por km SOLO (regla de la propietaria 2026-07-10: kilometraje y
+  // suplemento por pasajeros separados en TODAS las vistas, igual que en el
+  // informe; el suplemento se muestra aparte en la columna de pasajeros).
   const calculateTripReimbursement = (trip: Trip) => {
     const baseRate = trip.ratePerKmOverride ?? settingsRatePerKm;
-    return roundTo(trip.distance * baseRate + trip.passengers * settingsPassengerSurchargePerKm, 2);
+    return roundTo(trip.distance * baseRate, 2);
   };
+
+  const calculateTripPassengersAmount = (trip: Trip) =>
+    roundTo((Number.isFinite(trip.passengers) ? trip.passengers : 0) * settingsPassengerSurchargePerKm, 2);
 
   // Calculate trip expenses (toll + parking + other + fuel)
   const calculateTripExpenses = (trip: Trip) => {
@@ -484,6 +490,41 @@ export default function Trips() {
   };
   const isAllSelected = visibleTrips.length > 0 && selectedIds.size === visibleTrips.length;
   const isSomeSelected = selectedIds.size > 0;
+
+  // Filtros estilo Unity: distribuidos a lo ancho desde la izquierda. En
+  // escritorio viven DENTRO de la tarjeta de la tabla; en móvil/tablet (donde
+  // no hay tabla) en su propia tarjeta sobre la lista.
+  const tripsFilters = (
+    <div className="flex flex-col sm:flex-row gap-3">
+      <Select value={selectedProject} onValueChange={setSelectedProject}>
+        <SelectTrigger className="w-full sm:w-56">
+          <Filter className="w-4 h-4 mr-2" />
+          <SelectValue placeholder={t("trips.project")} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">{t("trips.allProjects")}</SelectItem>
+          {uniqueProjects.map((p) => (
+            <SelectItem key={p} value={p}>
+              {p}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select value={selectedYear} onValueChange={setSelectedYear}>
+        <SelectTrigger className="w-full sm:w-56">
+          <Calendar className="w-4 h-4 mr-2" />
+          <SelectValue placeholder={t("trips.year")} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">{t("trips.all")}</SelectItem>
+          <SelectItem value="2025">2025</SelectItem>
+          <SelectItem value="2024">2024</SelectItem>
+          <SelectItem value="2023">2023</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+
   return <MainLayout>
     <div className="page-container">
       {/* Header */}
@@ -518,36 +559,9 @@ export default function Trips() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="glass-card p-5 animate-fade-in animation-delay-100">
-        <div className="flex flex-col sm:flex-row sm:justify-end gap-3">
-          <Select value={selectedProject} onValueChange={setSelectedProject}>
-            <SelectTrigger className="w-full sm:w-48 bg-secondary/50">
-              <Filter className="w-4 h-4 mr-2" />
-              <SelectValue placeholder={t("trips.project")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("trips.allProjects")}</SelectItem>
-              {uniqueProjects.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {p}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={selectedYear} onValueChange={setSelectedYear}>
-            <SelectTrigger className="w-full sm:w-32 bg-secondary/50">
-              <Calendar className="w-4 h-4 mr-2" />
-              <SelectValue placeholder={t("trips.year")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("trips.all")}</SelectItem>
-              <SelectItem value="2025">2025</SelectItem>
-              <SelectItem value="2024">2024</SelectItem>
-              <SelectItem value="2023">2023</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      {/* Filtros (solo móvil/tablet; en escritorio van dentro de la tabla) */}
+      <div className="lg:hidden glass-card p-5 animate-fade-in animation-delay-100">
+        {tripsFilters}
       </div>
 
       {/* Mobile & Tablet Cards View */}
@@ -622,6 +636,16 @@ export default function Trips() {
                     <span className="text-muted-foreground text-center">{t("trips.expenses")}:</span>
                     <span className="text-foreground font-medium text-center">
                       {calculateTripExpenses(trip) > 0 ? `${calculateTripExpenses(trip).toFixed(2)} €` : "-"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between md:flex-col md:gap-0.5">
+                    <span className="text-muted-foreground text-center">{t("trips.passengers")}:</span>
+                    <span className="text-foreground font-medium text-center">
+                      {trip.passengers > 0
+                        ? calculateTripPassengersAmount(trip) > 0
+                          ? `${trip.passengers} · +${calculateTripPassengersAmount(trip).toFixed(2)} €`
+                          : `${trip.passengers}`
+                        : "-"}
                     </span>
                   </div>
                   <div className="flex justify-between md:flex-col md:gap-0.5">
@@ -701,6 +725,8 @@ export default function Trips() {
 
       {/* Desktop Table View - Only on large screens */}
       <div className="hidden lg:block glass-card overflow-hidden animate-fade-in animation-delay-200">
+        {/* La tabla contiene al filtro (estilo Unity) */}
+        <div className="p-5">{tripsFilters}</div>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader className="sticky top-0 z-10">
@@ -708,11 +734,12 @@ export default function Trips() {
                 <TableHead className="w-10">
                   <Checkbox checked={isAllSelected} onCheckedChange={toggleSelectAll} aria-label={t("projects.selectAll")} />
                 </TableHead>
-                <TableHead className="text-white font-semibold whitespace-nowrap">
+                <TableHead className="w-14"></TableHead>
+                <TableHead className="whitespace-nowrap">
                   <button
                     type="button"
                     onClick={() => setDateSort((prev) => (prev === "asc" ? "desc" : "asc"))}
-                    className="inline-flex items-center gap-1 hover:text-white"
+                    className="inline-flex items-center gap-1 hover:text-foreground"
                     aria-label={tf("trips.sortByDate", {
                       order: dateSort === "asc" ? t("trips.sortAsc") : t("trips.sortDesc"),
                     })}
@@ -725,21 +752,21 @@ export default function Trips() {
                     </span>
                   </button>
                 </TableHead>
-                <TableHead className="text-white font-semibold whitespace-nowrap">{t("trips.route")}</TableHead>
-                <TableHead className="text-white font-semibold whitespace-nowrap">{t("trips.project")}</TableHead>
-                <TableHead className="text-white font-semibold text-right whitespace-nowrap">{t("trips.co2")}</TableHead>
-                <TableHead className="text-white font-semibold text-right whitespace-nowrap">{t("trips.receipts")}</TableHead>
-                <TableHead className="text-white font-semibold text-right whitespace-nowrap hidden lg:table-cell">{t("trips.passengers")}</TableHead>
-                <TableHead className="text-white font-semibold text-right whitespace-nowrap">{t("trips.expenses")}</TableHead>
-                <TableHead className="text-white font-semibold text-right whitespace-nowrap">{t("trips.reimbursement")}</TableHead>
-                <TableHead className="text-white font-semibold text-right whitespace-nowrap">{t("trips.distance")}</TableHead>
+                <TableHead className="whitespace-nowrap">{t("trips.route")}</TableHead>
+                <TableHead className="whitespace-nowrap">{t("trips.project")}</TableHead>
+                <TableHead className="text-right whitespace-nowrap">{t("trips.co2")}</TableHead>
+                <TableHead className="text-right whitespace-nowrap">{t("trips.receipts")}</TableHead>
+                <TableHead className="text-right whitespace-nowrap hidden lg:table-cell">{t("trips.passengers")}</TableHead>
+                <TableHead className="text-right whitespace-nowrap">{t("trips.expenses")}</TableHead>
+                <TableHead className="text-right whitespace-nowrap">{t("trips.reimbursement")}</TableHead>
+                <TableHead className="text-right whitespace-nowrap">{t("trips.distance")}</TableHead>
                 <TableHead className="w-10"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {visibleTrips.map((trip, index) => <TableRow
                 key={trip.id}
-                className={`hover:bg-secondary/30 border-border/30 animate-slide-up cursor-pointer [&>td:nth-child(9)]:text-success ${selectedIds.has(trip.id) ? 'bg-primary/10' : index % 2 === 1 ? 'bg-muted/30' : ''}`}
+                className={`animate-slide-up cursor-pointer [&>td:nth-child(10)]:text-success ${selectedIds.has(trip.id) ? 'bg-primary/10' : ''}`}
                 style={{
                   animationDelay: `${index * 50}ms`
                 }}
@@ -760,6 +787,11 @@ export default function Trips() {
                     aria-label={tf("trips.selectTrip", { id: trip.id })}
                     onClick={(e) => e.stopPropagation()}
                   />
+                </TableCell>
+                <TableCell className="w-14">
+                  <span className="w-9 h-9 rounded-lg bg-primary/15 text-primary flex items-center justify-center">
+                    <Route className="w-4 h-4" />
+                  </span>
                 </TableCell>
                 <TableCell className="font-medium whitespace-nowrap">
                   <div className="flex items-center gap-2">
@@ -798,7 +830,18 @@ export default function Trips() {
                   {isLoadingEmissionsData ? <Loader2 className="w-3 h-3 animate-spin inline" /> : `${calculateCO2(trip.distance, trip.fuelLiters, trip.evKwhUsed)} kg`}
                 </TableCell>
                 <TableCell className="text-right whitespace-nowrap">{formatTripReceiptCell(trip)}</TableCell>
-                <TableCell className="text-right text-muted-foreground hidden lg:table-cell">{trip.passengers || "-"}</TableCell>
+                <TableCell className="text-right hidden lg:table-cell whitespace-nowrap">
+                  {trip.passengers > 0 ? (
+                    <span className="inline-flex flex-col items-end leading-tight">
+                      <span className="text-muted-foreground">{trip.passengers}</span>
+                      {calculateTripPassengersAmount(trip) > 0 && (
+                        <span className="text-xs text-muted-foreground">+{calculateTripPassengersAmount(trip).toFixed(2)} €</span>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </TableCell>
                 <TableCell className="text-right text-foreground whitespace-nowrap">
                   {calculateTripExpenses(trip) > 0 ? `${calculateTripExpenses(trip).toFixed(2)} €` : "-"}
                 </TableCell>

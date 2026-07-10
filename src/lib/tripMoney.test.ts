@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Trip } from "@/contexts/TripsContext";
 import type { UserProfile } from "@/contexts/UserProfileContext";
-import { billableAmount, rateForTrip, tripExpensesAmount, tripKilometrageAmount, vehicleCostPerKm } from "./tripMoney";
+import { billableAmount, rateForTrip, tripExpensesAmount, tripKilometrageAmount, tripPassengersAmount, vehicleCostPerKm } from "./tripMoney";
 
 const trip = (over: Partial<Trip>): Trip =>
   ({ id: "t1", date: "2026-07-01", route: [], project: "", purpose: "", passengers: 0, co2: 0, distance: 0, ...over }) as Trip;
@@ -17,6 +17,15 @@ describe("tripMoney (Fase 5: los mismos números que el informe)", () => {
     expect(tripKilometrageAmount(trip({ distance: 10 }), 0.5)).toBe(5);
     expect(tripKilometrageAmount(trip({ distance: 10, ratePerKmOverride: 0.42 }), 0.5)).toBeCloseTo(4.2);
     expect(tripKilometrageAmount(trip({ distance: Number.NaN }), 0.5)).toBe(0);
+  });
+
+  it("suplemento por pasajeros = pasajeros × recargo, SEPARADO del kilometraje", () => {
+    expect(tripPassengersAmount(trip({ passengers: 2 }), 0.15)).toBeCloseTo(0.3);
+    expect(tripPassengersAmount(trip({ passengers: 0 }), 0.15)).toBe(0);
+    expect(tripPassengersAmount(trip({ passengers: Number.NaN }), 0.15)).toBe(0);
+    expect(tripPassengersAmount(trip({ passengers: 2 }), Number.NaN)).toBe(0);
+    // El kilometraje NO incluye pasajeros (regla: separados en todas las vistas)
+    expect(tripKilometrageAmount(trip({ distance: 10, passengers: 5 }), 0.5)).toBe(5);
   });
 
   it("gastos: suma peaje+parking+combustible+otros; ignora nulos y negativos", () => {

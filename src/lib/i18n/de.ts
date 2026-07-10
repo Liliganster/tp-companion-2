@@ -608,6 +608,7 @@ export const de: Record<I18nKey, string> = {
   "reportView.projectLabel": "Projekt",
   "reportView.ratePerKmLabel": "Satz pro km",
   "reportView.passengerSurchargeLabel": "Mitfahrer-Zuschlag",
+  "reportView.mergePassengers": "Mitfahrer-Zuschlag ins Kilometergeld einrechnen",
   "reportView.colReimbursement": "Erstattung",
   "reportView.totalReimbursementLabel": "Gesamterstattung",
   "reportView.colDate": "Datum",

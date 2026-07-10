@@ -609,6 +609,7 @@ export const en: Record<I18nKey, string> = {
   "reportView.projectLabel": "Project",
   "reportView.ratePerKmLabel": "Rate per km",
   "reportView.passengerSurchargeLabel": "Passenger surcharge",
+  "reportView.mergePassengers": "Merge passenger surcharge into mileage",
   "reportView.colReimbursement": "Reimbursement",
   "reportView.totalReimbursementLabel": "Total reimbursement",
   "reportView.colDate": "Date",

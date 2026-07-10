@@ -567,6 +567,7 @@ export const es = {
   "reportView.projectLabel": "Proyecto",
   "reportView.ratePerKmLabel": "Tarifa por km",
   "reportView.passengerSurchargeLabel": "Tarifa por pasajero",
+  "reportView.mergePassengers": "Unir suplemento de pasajeros al kilometraje",
   "reportView.colReimbursement": "Reembolso",
   "reportView.totalReimbursementLabel": "Total reembolso",
   "reportView.colDate": "Fecha",

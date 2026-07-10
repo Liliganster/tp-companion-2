@@ -20,6 +20,17 @@ export function tripKilometrageAmount(trip: Pick<Trip, "distance" | "ratePerKmOv
   return distance * rateForTrip(trip, defaultRatePerKm);
 }
 
+/**
+ * Suplemento por pasajeros del viaje: pasajeros × recargo. SIEMPRE separado
+ * del kilometraje en todas las vistas (regla de la propietaria 2026-07-10);
+ * solo el informe puede unirlos, con opción explícita.
+ */
+export function tripPassengersAmount(trip: Pick<Trip, "passengers">, passengerSurcharge: number): number {
+  const passengers = Number.isFinite(trip.passengers) ? trip.passengers : 0;
+  const surcharge = Number.isFinite(passengerSurcharge) ? passengerSurcharge : 0;
+  return passengers * surcharge;
+}
+
 /** Gastos del viaje (peaje + parking + combustible + otros). */
 export function tripExpensesAmount(
   trip: Pick<Trip, "tollAmount" | "parkingAmount" | "fuelAmount" | "otherExpenses">,
@@ -37,7 +48,7 @@ export function billableAmount(trips: Trip[], defaultRatePerKm: number, passenge
     (acc, trip) =>
       acc +
       tripKilometrageAmount(trip, defaultRatePerKm) +
-      (Number.isFinite(trip.passengers) ? trip.passengers : 0) * passengerSurcharge +
+      tripPassengersAmount(trip, passengerSurcharge) +
       tripExpensesAmount(trip),
     0,
   );
