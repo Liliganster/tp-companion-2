@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { Route, BarChart3, Leaf, ChevronRight } from "lucide-react";
+import { Route, Leaf, ChevronRight } from "lucide-react";
 import { useI18n } from "@/hooks/use-i18n";
 import { useMemo } from "react";
 import type { I18nKey } from "@/lib/i18n";
@@ -22,15 +22,6 @@ const advancedSections: Array<{
     color: "text-foreground",
     bgColor: "bg-white/5",
     path: "/advanced/routes",
-  },
-  {
-    id: "costs",
-    titleKey: "advanced.costsTitle",
-    descriptionKey: "advanced.costsBody",
-    icon: BarChart3,
-    color: "text-foreground",
-    bgColor: "bg-white/5",
-    path: "/advanced/costs",
   },
   {
     id: "emissions",

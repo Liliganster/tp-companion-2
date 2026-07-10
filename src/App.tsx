@@ -1,4 +1,5 @@
 import { Toaster as Sonner } from "@/components/ui/sonner";
+import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { UserProfileProvider } from "@/contexts/UserProfileContext";
 import { ProjectsProvider } from "@/contexts/ProjectsContext";
@@ -30,7 +31,6 @@ const ReportView = lazy(() => import("./pages/ReportView"));
 const CalendarPage = lazy(() => import("./pages/CalendarPage"));
 const Advanced = lazy(() => import("./pages/Advanced"));
 const AdvancedRoutes = lazy(() => import("./pages/AdvancedRoutes"));
-const AdvancedCosts = lazy(() => import("./pages/AdvancedCosts"));
 const AdvancedEmissions = lazy(() => import("./pages/AdvancedEmissions"));
 const Plans = lazy(() => import("./pages/Plans"));
 
@@ -105,7 +105,6 @@ function AppContent() {
               <>
                 <Route path="/advanced" element={<Advanced />} />
                 <Route path="/advanced/routes" element={<AdvancedRoutes />} />
-                <Route path="/advanced/costs" element={<AdvancedCosts />} />
                 <Route path="/advanced/emissions" element={<AdvancedEmissions />} />
               </>
             )}
@@ -132,6 +131,10 @@ const App = () => (
                 <ReportsProvider>
                   <TooltipProvider>
                     <Sonner />
+                    {/* Toaster de use-toast: 9 páginas/modales lanzan avisos con
+                        este sistema y nadie lo montaba — los toasts se perdían
+                        en silencio (bug encontrado en la limpieza 2026-07-10) */}
+                    <Toaster />
                     <UpdatePrompt />
                     <GlobalLoadingBar />
                     <AppContent />

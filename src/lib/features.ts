@@ -8,7 +8,9 @@
  * No convertir en configuración por usuario: son decisiones de producto.
  */
 export const FEATURES = {
-  /** Páginas Advanced (/advanced, /advanced/routes, /advanced/costs, /advanced/emissions). */
+  /** Páginas Advanced (/advanced, /advanced/routes, /advanced/emissions).
+      El análisis de costes fue ELIMINADO (no hibernado) a pedido de la
+      propietaria 2026-07-10. */
   advancedPages: false,
   /** Extracción IA de facturas (invoice-worker, ProjectInvoiceUploader). */
   invoiceAi: false,
