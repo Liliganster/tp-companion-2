@@ -60,7 +60,7 @@ export function RecentTrips() {
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1.5">
                   <Calendar className="w-3.5 h-3.5" />
                   <span>{new Date(trip.date).toLocaleDateString(locale)}</span>
-                  <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-[#129446]/20 text-[#129446]">
+                  <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-primary/15 text-primary">
                     {trip.project}
                   </span>
                 </div>

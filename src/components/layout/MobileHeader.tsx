@@ -101,7 +101,7 @@ export function MobileHeader({
                 {/* User Profile */}
                 <div className="flex items-center gap-3 pt-3 border-t border-border/50">
                   <div className="w-9 h-9 rounded-full bg-[#129446] flex items-center justify-center shrink-0">
-                    <span className="text-sm font-medium text-white">{profileInitial}</span>
+                    <span className="text-sm font-medium text-primary-foreground">{profileInitial}</span>
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{profile.fullName}</p>

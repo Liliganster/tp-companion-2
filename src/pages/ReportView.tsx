@@ -665,14 +665,14 @@ export default function ReportView() {
       {/* Report Content */}
       <div className="p-4 sm:p-6 overflow-auto print:p-0 print:m-0 print:overflow-visible print:bg-white print:text-black">
         <div className="max-w-[1800px] mx-auto print:max-w-none print:m-0">
-          <div className="bg-slate-800 text-white rounded-lg p-4 sm:p-6 lg:p-8 print:bg-white print:text-black print:rounded-none print:p-2 print:shadow-none">
+          <div className="glass-card p-4 sm:p-6 lg:p-8 print:bg-white print:text-black print:rounded-none print:p-2 print:shadow-none print:border-0">
             {/* Report Header */}
             <div className="text-center mb-6">
               <h1 className="text-lg sm:text-xl font-bold mb-1 print:text-black">{t("reportView.reportTitle")}</h1>
-              <p className="text-xs sm:text-sm text-slate-300 print:text-black">
+              <p className="text-xs sm:text-sm text-muted-foreground print:text-black">
                 {t("reportView.periodLabel")}: {period}
               </p>
-              <p className="text-[10px] text-slate-400 print:text-gray-400 mt-1">Fahrtenbuch Pro</p>
+              <p className="text-[10px] text-muted-foreground print:text-gray-400 mt-1">Fahrtenbuch Pro</p>
             </div>
 
             {/* Report Meta Info */}
@@ -705,29 +705,29 @@ export default function ReportView() {
 
             {/* Odometer Summary Card — feature hibernada (Fase 1) */}
             {FEATURES.odometer && displayOdoRatio && (
-              <div className="mb-4 rounded-lg bg-slate-700/50 border border-slate-600/60 print:bg-gray-50 print:border-gray-200 p-3 sm:p-4">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 print:text-gray-500 mb-2">
+              <div className="mb-4 rounded-lg bg-muted/50 border border-border print:bg-gray-50 print:border-gray-200 p-3 sm:p-4">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground print:text-gray-500 mb-2">
                   {t("odometer.calcTitle")}
                 </p>
                 <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs sm:text-sm">
                   <div>
-                    <span className="text-slate-400 print:text-gray-500">{t("odometer.totalKm")}: </span>
+                    <span className="text-muted-foreground print:text-gray-500">{t("odometer.totalKm")}: </span>
                     <span className="font-semibold">{Number(displayOdoRatio.totalKm).toFixed(0)} km</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 print:text-gray-500">{t("odometer.workKm")}: </span>
+                    <span className="text-muted-foreground print:text-gray-500">{t("odometer.workKm")}: </span>
                     <span className="font-semibold">{Number(displayOdoRatio.workKm).toFixed(0)} km</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 print:text-gray-500">{t("odometer.privateKm")}: </span>
+                    <span className="text-muted-foreground print:text-gray-500">{t("odometer.privateKm")}: </span>
                     <span className="font-semibold">{Number(displayOdoRatio.privateKm).toFixed(0)} km</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 print:text-gray-500">{t("odometer.workPct")}: </span>
+                    <span className="text-muted-foreground print:text-gray-500">{t("odometer.workPct")}: </span>
                     <span className="font-semibold">{Number(displayOdoRatio.pct).toFixed(1)} %</span>
                   </div>
                 </div>
-                <p className="mt-1 text-[10px] text-slate-500 print:text-gray-400">
+                <p className="mt-1 text-[10px] text-muted-foreground print:text-gray-400">
                   {displayOdoRatio.startSnapshot.snapshot_date}
                   {displayOdoRatio.startSnapshot.id !== displayOdoRatio.endSnapshot.id && (
                     <>{" \u2192 "}{displayOdoRatio.endSnapshot.snapshot_date}</>
@@ -754,7 +754,7 @@ export default function ReportView() {
                   <col style={{ width: "14%" }} />
                 </colgroup>
                 <thead>
-                  <tr className="border-b border-slate-600 print:border-gray-300">
+                  <tr className="border-b border-border print:border-gray-300">
                     <th className="text-left py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap text-white print:text-black">{t("reportView.colDate")}</th>
                     <th className="text-left py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap text-white print:text-black">{t("reportView.colProject")}</th>
                     <th className="text-left py-3 px-2 print:py-2 print:px-2 font-semibold hidden md:table-cell print:hidden leading-tight text-white">
@@ -770,7 +770,7 @@ export default function ReportView() {
                 </thead>
                 <tbody>
                   {trips.map((trip, index) => (
-                    <tr key={index} className={`border-b border-slate-700/50 print:border-gray-200 ${index % 2 === 1 ? 'bg-muted/30' : ''}`}>
+                    <tr key={index} className={`border-b border-border/60 print:border-gray-200 ${index % 2 === 1 ? 'bg-muted/30' : ''}`}>
                       <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top whitespace-nowrap print:text-black">
                         {trip.date}
                       </td>
@@ -780,7 +780,7 @@ export default function ReportView() {
                       <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top hidden md:table-cell print:hidden overflow-hidden text-ellipsis whitespace-nowrap">
                         {trip.producer}
                       </td>
-                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top text-slate-300 max-w-[200px] sm:max-w-none truncate sm:whitespace-normal print:text-black print:max-w-none print:whitespace-normal print:break-words print:overflow-visible">
+                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top text-muted-foreground max-w-[200px] sm:max-w-none truncate sm:whitespace-normal print:text-black print:max-w-none print:whitespace-normal print:break-words print:overflow-visible">
                         <span className="hidden print:inline">{trip.route.join(" > ")}</span>
                         <span className="print:hidden">{trip.route.join(" -> ")}</span>
                       </td>
@@ -790,14 +790,14 @@ export default function ReportView() {
                       <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top text-right whitespace-nowrap print:text-black">
                         {trip.distance.toFixed(1)} <span className="hidden print:inline">km</span>
                       </td>
-                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top text-right font-semibold whitespace-nowrap text-green-500 print:text-black">
+                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top text-right font-semibold whitespace-nowrap text-success print:text-black">
                         {trip.reimbursement.toFixed(2)} €
                       </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-slate-500 print:hidden">
+                  <tr className="border-t-2 border-border print:hidden">
                     <td colSpan={4} className="py-3 px-2 text-right font-semibold hidden sm:table-cell">
                     </td>
                     <td className="py-3 px-2 text-right font-semibold hidden sm:table-cell">
@@ -805,7 +805,7 @@ export default function ReportView() {
                     <td className="py-3 px-2 text-right font-semibold whitespace-nowrap">
                       {t("reportView.totalShort")}: {totalDistance.toFixed(1)} km
                     </td>
-                    <td className="py-3 px-2 text-right font-semibold whitespace-nowrap text-green-500 print:text-black">
+                    <td className="py-3 px-2 text-right font-semibold whitespace-nowrap text-success print:text-black">
                       {t("reportView.totalShort")}: {totalReimbursement.toFixed(2)} €
                     </td>
                   </tr>
@@ -828,7 +828,7 @@ export default function ReportView() {
 
             {/* Resumen: total destacado + CO2 con fuente (Fase 3) */}
             <div className="mt-6 flex flex-col items-end gap-1 text-xs sm:text-sm print:text-black">
-              <p className="text-slate-400 print:text-gray-500">
+              <p className="text-muted-foreground print:text-gray-500">
                 {t("reportPdf.tripsLabel")}: {trips.length} · {t("reportPdf.totalKmLabel")}: {totalDistance.toFixed(1)} km
               </p>
               <p>
@@ -848,7 +848,7 @@ export default function ReportView() {
                 {t("reportPdf.grandTotal")}: {grandTotal.toFixed(2)} €
               </p>
               {totalCo2 > 0 && (
-                <p className="mt-2 text-[10px] text-slate-400 print:text-gray-500 text-right">
+                <p className="mt-2 text-[10px] text-muted-foreground print:text-gray-500 text-right">
                   {tf("reportPdf.co2Line", { kg: totalCo2.toFixed(1), trees: (totalCo2 / TREE_KG_CO2_PER_YEAR).toFixed(1) })}
                 </p>
               )}

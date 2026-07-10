@@ -23,8 +23,6 @@ import {
   HelpCircle,
   Trash2,
   Save,
-  Sun,
-  Moon,
   Upload,
   Info,
   ExternalLink,
@@ -175,8 +173,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     };
   }, [activeTab, open, user]);
 
-  // Personalization state
-  const [theme, setTheme] = useState<"light" | "dark">(appearance.theme);
+  // Personalization state (tema oscuro siempre; sin selector)
+  const theme = "dark" as const;
   const [uiOpacity, setUiOpacity] = useState([appearance.uiOpacity]);
   const [uiBlur, setUiBlur] = useState([appearance.uiBlur]);
   const [bgBlur, setBgBlur] = useState([appearance.backgroundBlur]);
@@ -185,7 +183,6 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
   useEffect(() => {
     if (!open) return;
-    setTheme(appearance.theme);
     setUiOpacity([appearance.uiOpacity]);
     setUiBlur([appearance.uiBlur]);
     setBgBlur([appearance.backgroundBlur]);
@@ -805,7 +802,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       </div>
                       <Switch 
                         disabled={planTier !== "pro"}
-                        className="data-[state=checked]:bg-green-500 data-[state=checked]:hover:bg-green-500/90"
+                        className="data-[state=checked]:bg-primary data-[state=checked]:hover:bg-primary/90"
                         checked={planTier === "pro" ? profileData.openrouterEnabled : false}
                         onCheckedChange={(checked) => setProfileData({ ...profileData, openrouterEnabled: checked })}
                       />
@@ -928,47 +925,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 <div className="space-y-6">
                   <h2 className="text-lg font-medium">{t("settings.appearanceTitle")}</h2>
                   
-                  {/* Theme */}
-                  <div className="space-y-3">
-                    <Label>{t("settings.theme")}</Label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        onClick={() => setTheme("light")}
-                        className={cn(
-                          "p-4 rounded-lg border transition-colors text-left flex items-start gap-3",
-                          theme === "light"
-                            ? "bg-secondary/50 border-border/70"
-                            : "bg-secondary/30 border-border/50 hover:border-border/70"
-                        )}
-                      >
-                        <Sun className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
-                        <div>
-                          <h4 className="font-medium text-sm">
-                            {t("settings.themeLight")} {theme === "light" && `(${t("settings.current")})`}
-                          </h4>
-                          <p className="text-xs text-muted-foreground mt-1">{t("settings.themeLightDesc")}</p>
-                        </div>
-                      </button>
-                      <button
-                        onClick={() => setTheme("dark")}
-                        className={cn(
-                          "p-4 rounded-lg border transition-colors text-left flex items-start gap-3",
-                          theme === "dark"
-                            ? "bg-primary/10 border-primary/50"
-                            : "bg-secondary/50 border-border/50 hover:border-primary/30"
-                        )}
-                      >
-                        <Moon className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
-                        <div>
-                          <h4 className="font-medium text-sm">
-                            {t("settings.themeDark")} {theme === "dark" && `(${t("settings.current")})`}
-                          </h4>
-                          <p className="text-xs text-muted-foreground mt-1">{t("settings.themeDarkDesc")}</p>
-                        </div>
-                      </button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">{t("settings.themeHint")}</p>
-                  </div>
+                  {/* Tema: oscuro siempre (decisión de la propietaria) — sin selector */}
 
                   {/* Background Image */}
                   <div className="space-y-3">

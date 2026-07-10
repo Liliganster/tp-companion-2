@@ -246,7 +246,7 @@ export function ProjectChart() {
             <Bar 
               dataKey="km" 
               radius={[4, 4, 0, 0]} 
-              fill="#129446"
+              fill="hsl(var(--chart-1))"
             />
           </BarChart>
         </ResponsiveContainer>

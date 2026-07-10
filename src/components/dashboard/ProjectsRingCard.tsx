@@ -7,7 +7,7 @@ import { useI18n } from "@/hooks/use-i18n";
 
 const RING_COLORS = [
   "#129446", // green
-  "#3b82f6", // blue
+  "hsl(210 70% 58%)", // azul medio
   "#ef4444", // red
   "#f59e0b", // amber
   "#8b5cf6", // violet
@@ -106,7 +106,7 @@ export function ProjectsRingCard() {
             ) : (
               <>
                 <circle cx={cx} cy={cy} r={45} fill="none" stroke="currentColor" className="text-muted/30" strokeWidth={10} />
-                <circle cx={cx} cy={cy} r={45} fill="none" stroke="#129446" strokeWidth={10}
+                <circle cx={cx} cy={cy} r={45} fill="none" stroke="hsl(var(--chart-1))" strokeWidth={10}
                   strokeDasharray={`${2 * Math.PI * 45}`} strokeDashoffset={0} strokeLinecap="round" />
               </>
             )}
@@ -133,7 +133,7 @@ export function ProjectsRingCard() {
       <div className="mt-auto pt-2">
         <Link
           to="/projects"
-          className="text-sm font-medium text-[#129446] hover:text-[#129446]/80 inline-flex items-center gap-1"
+          className="text-sm font-medium text-primary hover:text-primary/80 inline-flex items-center gap-1"
         >
           {t("dashboard.viewProjects")} <ArrowRight className="w-4 h-4" />
         </Link>

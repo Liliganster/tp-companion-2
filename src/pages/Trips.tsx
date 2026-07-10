@@ -608,7 +608,7 @@ export default function Trips() {
 
                 {/* Stats Grid - Better responsive grid */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-1 sm:gap-2 text-xs sm:text-sm">
-                  <div className="flex justify-between md:flex-col md:gap-0.5 [&>span:last-child]:text-green-500">
+                  <div className="flex justify-between md:flex-col md:gap-0.5 [&>span:last-child]:text-success">
                     <span className="text-muted-foreground">Distancia:</span>
                     <span className="font-medium">{trip.distance} km</span>
                   </div>
@@ -739,7 +739,7 @@ export default function Trips() {
             <TableBody>
               {visibleTrips.map((trip, index) => <TableRow
                 key={trip.id}
-                className={`hover:bg-secondary/30 border-border/30 animate-slide-up cursor-pointer [&>td:nth-child(9)]:text-green-500 ${selectedIds.has(trip.id) ? 'bg-primary/10' : index % 2 === 1 ? 'bg-muted/30' : ''}`}
+                className={`hover:bg-secondary/30 border-border/30 animate-slide-up cursor-pointer [&>td:nth-child(9)]:text-success ${selectedIds.has(trip.id) ? 'bg-primary/10' : index % 2 === 1 ? 'bg-muted/30' : ''}`}
                 style={{
                   animationDelay: `${index * 50}ms`
                 }}

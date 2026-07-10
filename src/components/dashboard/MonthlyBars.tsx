@@ -44,7 +44,7 @@ export function MonthlyBars() {
             <span className="w-2 h-2 rounded-full bg-[#3b82f6]" /> km
           </span>
           <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-[#129446]" /> €
+            <span className="w-2 h-2 rounded-full bg-chart-1" /> €
           </span>
         </div>
       </div>
@@ -64,8 +64,8 @@ export function MonthlyBars() {
               }}
               formatter={(value: number, name: string) => [name === "eur" ? `${value} €` : `${value} km`, ""]}
             />
-            <Bar yAxisId="km" dataKey="km" fill="#3b82f6" radius={[3, 3, 0, 0]} maxBarSize={22} />
-            <Bar yAxisId="eur" dataKey="eur" fill="#129446" radius={[3, 3, 0, 0]} maxBarSize={22} />
+            <Bar yAxisId="km" dataKey="km" fill="hsl(var(--chart-3))" radius={[3, 3, 0, 0]} maxBarSize={22} />
+            <Bar yAxisId="eur" dataKey="eur" fill="hsl(var(--chart-1))" radius={[3, 3, 0, 0]} maxBarSize={22} />
           </BarChart>
         </ResponsiveContainer>
       </div>

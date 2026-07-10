@@ -1,7 +1,8 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 export type AppearanceSettings = {
-  theme: "dark" | "light";
+  /** Oscuro SIEMPRE (decisión de la propietaria); se conserva el campo por compatibilidad. */
+  theme: "dark";
   uiOpacity: number; // 0..100
   uiBlur: number; // px
   backgroundBlur: number; // px
@@ -32,7 +33,7 @@ function readStoredAppearance(): AppearanceSettings {
     const backgroundImage = typeof parsed.backgroundImage === "string" ? parsed.backgroundImage : DEFAULT_APPEARANCE.backgroundImage;
     const safeBackgroundImage = backgroundImage.length > 250_000 ? "" : backgroundImage;
     return {
-      theme: parsed.theme === "light" ? "light" : "dark",
+      theme: "dark",
       uiOpacity: clamp(Number(parsed.uiOpacity ?? DEFAULT_APPEARANCE.uiOpacity), 0, 100),
       uiBlur: clamp(Number(parsed.uiBlur ?? DEFAULT_APPEARANCE.uiBlur), 0, 50),
       backgroundBlur: clamp(Number(parsed.backgroundBlur ?? DEFAULT_APPEARANCE.backgroundBlur), 0, 50),
@@ -52,15 +53,14 @@ function applyAppearanceToDom(value: AppearanceSettings) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
 
-  root.classList.toggle("light", value.theme === "light");
+  // Oscuro siempre: la clase .light ya no existe en el tema.
+  root.classList.remove("light");
 
   const alpha = clamp(value.uiOpacity / 100, 0, 1);
-  const glassBg = value.theme === "light" ? `0 0% 100% / ${alpha}` : `220 16% 11% / ${alpha}`;
-  root.style.setProperty("--glass-bg", glassBg);
+  root.style.setProperty("--glass-bg", `219 18% 10% / ${alpha}`);
 
   const borderAlpha = clamp(alpha * 0.08, 0.03, 0.12);
-  const glassBorder = value.theme === "light" ? `220 16% 12% / ${borderAlpha}` : `220 10% 92% / ${borderAlpha}`;
-  root.style.setProperty("--glass-border", glassBorder);
+  root.style.setProperty("--glass-border", `210 60% 80% / ${borderAlpha}`);
 
   root.style.setProperty("--glass-blur", `${clamp(value.uiBlur, 0, 50)}px`);
   root.style.setProperty("--app-bg-blur", `${clamp(value.backgroundBlur, 0, 50)}px`);

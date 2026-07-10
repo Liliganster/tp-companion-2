@@ -48,7 +48,7 @@ export function ReportReadyCard() {
   return (
     <div className="glass-card p-4 border-[#129446]/40">
       <div className="flex items-center gap-2">
-        <FileText className="w-4 h-4 text-[#129446]" />
+        <FileText className="w-4 h-4 text-primary" />
         <span className="text-sm font-semibold">{tf("dashboard.reportReadyTitle", { month: monthName })}</span>
       </div>
       <Button asChild size="sm" className="mt-3 w-full">
@@ -87,7 +87,7 @@ export function CarMarginCard() {
           const margin = billed - cost;
           return (
             <>
-              <p className={`text-3xl font-bold ${margin >= 0 ? "text-[#129446]" : "text-destructive"}`}>
+              <p className={`text-3xl font-bold ${margin >= 0 ? "text-success" : "text-destructive"}`}>
                 {margin >= 0 ? "+" : ""}
                 {eur(margin, locale)}
               </p>
@@ -129,7 +129,7 @@ export function ProUsageCard() {
         <>
           <p className="text-3xl font-bold">{pct.toLocaleString(locale, { maximumFractionDigits: 1 })} %</p>
           <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
-            <div className="h-full rounded-full bg-[#3b82f6] transition-all duration-500" style={{ width: `${pct}%` }} />
+            <div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${pct}%` }} />
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
             {tf("dashboard.proUsageDetail", {

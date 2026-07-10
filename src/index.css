@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,140 +6,89 @@
 
 @layer base {
   :root {
-    /* Professional dark theme - minimal colors */
-    --background: 222 18% 6%;
-    --foreground: 220 10% 92%;
+    /*
+     * Tema Fahrtenbuch Pro — oscuro SIEMPRE (decisión de la propietaria),
+     * estilo Gemini: superficies azul-noche, acento azul del logo (#1d6fb8)
+     * aclarado para fondo oscuro, radios generosos, navegación en píldora.
+     */
+    --background: 220 20% 6%;
+    --foreground: 214 25% 94%;
 
-    --card: 222 18% 9%;
-    --card-foreground: 220 10% 92%;
+    --card: 219 18% 10%;
+    --card-foreground: 214 25% 94%;
 
-    --popover: 222 18% 10%;
-    --popover-foreground: 220 10% 92%;
+    --popover: 219 18% 11%;
+    --popover-foreground: 214 25% 94%;
 
-    --primary: 0 0% 96%;
-    --primary-foreground: 220 16% 8%;
+    /* Azul pálido tipo Material-dark sobre texto azul-noche (muy "Gemini") */
+    --primary: 209 92% 72%;
+    --primary-foreground: 216 65% 11%;
 
-    --secondary: 220 14% 14%;
-    --secondary-foreground: 220 10% 85%;
+    --secondary: 218 16% 14%;
+    --secondary-foreground: 214 15% 86%;
 
-    --muted: 220 14% 16%;
-    --muted-foreground: 220 10% 55%;
+    --muted: 218 15% 15%;
+    --muted-foreground: 216 12% 62%;
 
-    --accent: 220 14% 18%;
-    --accent-foreground: 220 10% 92%;
+    /* Hover/selección con tinte azul */
+    --accent: 213 35% 17%;
+    --accent-foreground: 210 40% 92%;
 
-    /* Keep UI monochrome (delete-account stays red via explicit classes) */
-    --destructive: 0 0% 55%;
-    --destructive-foreground: 0 0% 10%;
+    --destructive: 0 70% 68%;
+    --destructive-foreground: 0 60% 10%;
 
-    --border: 220 14% 18%;
-    --input: 220 14% 16%;
-    --ring: 220 10% 70%;
+    --border: 218 14% 17%;
+    --input: 218 15% 15%;
+    --ring: 209 92% 72%;
 
-    /* Base radius for the whole app (Tailwind `rounded-lg` via shadcn) */
-    --radius: 6px;
+    /* Radios generosos (Tailwind rounded-lg via shadcn) */
+    --radius: 12px;
 
-    /* Subtle glass tokens (landing-like) */
-    --glass-bg: 220 18% 12% / 0.72;
-    --glass-bg-2: 220 18% 9% / 0.66;
-    --glass-border: 220 10% 92% / 0.10;
+    /* Superficies glass con tinte azul */
+    --glass-bg: 219 18% 10% / 0.72;
+    --glass-bg-2: 219 18% 8% / 0.66;
+    --glass-border: 210 60% 80% / 0.08;
     --glass-blur: 18px;
-    --glass-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+    --glass-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
     --app-bg-blur: 0px;
-    --app-bg-image: radial-gradient(80% 60% at 50% 0%, rgba(255, 255, 255, 0.06), transparent 60%),
-      radial-gradient(50% 50% at 30% 75%, rgba(255, 255, 255, 0.05), transparent 60%);
-    --app-bg-image-opacity: 0.8;
+    --app-bg-image: radial-gradient(80% 60% at 50% 0%, rgba(72, 140, 235, 0.10), transparent 60%),
+      radial-gradient(50% 50% at 15% 80%, rgba(72, 140, 235, 0.05), transparent 60%);
+    --app-bg-image-opacity: 0.9;
 
-    /* No gradients - solid colors only */
-    --gradient-primary: none;
+    /* Degradado de marca (azul → azul claro) */
+    --gradient-primary: linear-gradient(135deg, hsl(212 90% 62%), hsl(199 95% 74%));
     --gradient-surface: none;
     --gradient-glow: none;
 
-    /* Action button colors (monochrome) */
-    --action-add: 0 0% 92%;
-    --action-add-foreground: 0 0% 10%;
-    --action-save: 0 0% 92%;
-    --action-save-foreground: 0 0% 10%;
-    --action-upload: 0 0% 92%;
-    --action-upload-foreground: 0 0% 10%;
+    /* Botones de acción = acento azul */
+    --action-add: 209 92% 72%;
+    --action-add-foreground: 216 65% 11%;
+    --action-save: 209 92% 72%;
+    --action-save-foreground: 216 65% 11%;
+    --action-upload: 209 92% 72%;
+    --action-upload-foreground: 216 65% 11%;
 
     /* Sidebar */
-    --sidebar-background: 220 16% 9%;
-    --sidebar-foreground: 220 10% 85%;
-    --sidebar-primary: 220 10% 92%;
-    --sidebar-primary-foreground: 220 16% 8%;
-    --sidebar-accent: 220 14% 14%;
-    --sidebar-accent-foreground: 220 10% 92%;
-    --sidebar-border: 220 14% 16%;
-    --sidebar-ring: 220 10% 70%;
+    --sidebar-background: 220 20% 7%;
+    --sidebar-foreground: 216 12% 72%;
+    --sidebar-primary: 209 92% 72%;
+    --sidebar-primary-foreground: 216 65% 11%;
+    --sidebar-accent: 213 35% 16%;
+    --sidebar-accent-foreground: 210 40% 92%;
+    --sidebar-border: 218 14% 14%;
+    --sidebar-ring: 209 92% 72%;
 
-    /* Chart colors - monochrome */
-    --chart-1: 220 10% 85%;
-    --chart-2: 220 10% 70%;
-    --chart-3: 220 10% 55%;
-    --chart-4: 220 10% 45%;
-    --chart-5: 220 10% 35%;
+    /* Charts: escala de azules */
+    --chart-1: 209 92% 72%;
+    --chart-2: 210 70% 58%;
+    --chart-3: 213 45% 45%;
+    --chart-4: 216 30% 34%;
+    --chart-5: 218 20% 26%;
 
-    /* Status colors - monochrome */
-    --success: 220 10% 75%;
-    --warning: 220 10% 75%;
-    --info: 220 10% 75%;
-  }
-
-  .light {
-    --background: 220 20% 97%;
-    --foreground: 220 16% 12%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 220 16% 12%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 16% 12%;
-
-    --primary: 220 16% 15%;
-    --primary-foreground: 220 20% 97%;
-
-    --secondary: 220 14% 93%;
-    --secondary-foreground: 220 16% 15%;
-
-    --muted: 220 14% 91%;
-    --muted-foreground: 220 10% 45%;
-
-    --accent: 220 14% 88%;
-    --accent-foreground: 220 16% 12%;
-
-    --destructive: 0 0% 55%;
-    --destructive-foreground: 0 0% 10%;
-
-    --border: 220 14% 88%;
-    --input: 220 14% 88%;
-    --ring: 220 16% 30%;
-
-    --glass-bg: 0 0% 100% / 0.85;
-    --glass-bg-2: 0 0% 100% / 0.75;
-    --glass-border: 220 16% 12% / 0.06;
-    --glass-blur: 12px;
-    --glass-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.08);
-
-    --gradient-primary: none;
-    --gradient-surface: none;
-    --gradient-glow: none;
-
-    --action-add: 220 14% 18%;
-    --action-add-foreground: 220 20% 97%;
-    --action-save: 220 14% 18%;
-    --action-save-foreground: 220 20% 97%;
-    --action-upload: 220 14% 18%;
-    --action-upload-foreground: 220 20% 97%;
-
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 220 16% 12%;
-    --sidebar-primary: 220 16% 15%;
-    --sidebar-primary-foreground: 220 20% 97%;
-    --sidebar-accent: 220 14% 93%;
-    --sidebar-accent-foreground: 220 16% 12%;
-    --sidebar-border: 220 14% 88%;
-    --sidebar-ring: 220 16% 30%;
+    /* Estados */
+    --success: 152 55% 62%;
+    --warning: 38 92% 62%;
+    --info: 209 92% 72%;
   }
 }
 
@@ -150,7 +99,7 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    font-family: 'Poppins', system-ui, sans-serif;
+    font-family: 'Inter', system-ui, sans-serif;
     overflow-x: hidden;
   }
 
@@ -165,22 +114,17 @@
 
 @layer components {
   .fb-surface {
-    @apply rounded-[6px] border border-border bg-card/60 shadow-sm;
+    @apply rounded-xl border border-border bg-card/60 shadow-sm;
   }
 
   .fb-surface-lg {
-    @apply rounded-[6px] border border-border bg-card/60 shadow-sm;
+    @apply rounded-2xl border border-border bg-card/60 shadow-sm;
   }
 
   .fb-field {
-    @apply w-full rounded-[5px] border px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply w-full rounded-lg border px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
     background-color: rgba(255, 255, 255, 0.03);
     border-color: rgba(255, 255, 255, 0.10);
-  }
-
-  .light .fb-field {
-    background-color: rgba(0, 0, 0, 0.03);
-    border-color: rgba(0, 0, 0, 0.08);
   }
 
   .fb-eyebrow {
@@ -192,11 +136,11 @@
   }
 
   .fb-pill {
-    @apply inline-flex items-center rounded-[6px] border border-border bg-muted px-3 py-1 text-xs text-muted-foreground;
+    @apply inline-flex items-center rounded-full border border-border bg-muted px-3 py-1 text-xs text-muted-foreground;
   }
 
   .fb-row {
-    @apply flex items-center justify-between rounded-[6px] border border-border bg-card/60 px-3 py-2 text-sm text-foreground;
+    @apply flex items-center justify-between rounded-xl border border-border bg-card/60 px-3 py-2 text-sm text-foreground;
   }
 
   .fb-link {
@@ -212,11 +156,11 @@
   }
 
   .glass-card {
-    @apply glass rounded-[6px];
+    @apply glass rounded-2xl;
   }
 
   .glass-panel {
-    @apply glass rounded-[6px];
+    @apply glass rounded-2xl;
   }
 
   .page-container {
@@ -237,7 +181,10 @@
   }
 
   .gradient-text {
-    color: hsl(var(--foreground));
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
 
   .gradient-border {
@@ -265,13 +212,14 @@
     box-shadow: 0 0 40px hsl(var(--accent) / 0.3);
   }
 
+  /* Navegación en píldora (estilo Gemini): hover azul suave, activo azul acento */
   .nav-item {
-    @apply flex items-center gap-3 px-4 py-2.5 rounded-[5px] transition-colors duration-200;
-    @apply text-muted-foreground hover:text-white hover:bg-[#129446];
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-full transition-colors duration-200;
+    @apply text-muted-foreground hover:text-foreground hover:bg-accent;
   }
 
   .nav-item-active {
-    @apply bg-[#129446] text-white font-medium;
+    @apply bg-primary/15 text-primary font-medium;
   }
 }
 

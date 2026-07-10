@@ -47,7 +47,7 @@ function Trend({ value, higherIsBetter, label }: { value: number; higherIsBetter
   const good = up === higherIsBetter;
   const Icon = up ? ArrowUp : ArrowDown;
   return (
-    <span className={`inline-flex items-center gap-1 text-xs ${good ? "text-[#129446]" : "text-destructive"}`}>
+    <span className={`inline-flex items-center gap-1 text-xs ${good ? "text-success" : "text-destructive"}`}>
       <Icon className="w-3 h-3" />
       {Math.abs(value)}% <span className="text-muted-foreground">{label}</span>
     </span>
