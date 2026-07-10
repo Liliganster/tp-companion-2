@@ -84,8 +84,8 @@ export function Sidebar({
       </Tooltip>
 
       {/* Logo */}
-      <div className="flex items-center justify-center h-16 px-4 border-b border-border/50">
-        <Link to="/" className="flex items-center justify-center w-full" aria-label="Home">
+      <div className="flex items-center justify-center h-16 px-4 border-b border-border/50 overflow-hidden">
+        <Link to="/" className="flex items-center justify-center w-full min-w-0 overflow-hidden" aria-label="Home">
           <img
             src={collapsed ? collapsedLogoSrc : logoSrc}
             alt="Logo"
@@ -119,14 +119,14 @@ export function Sidebar({
           )}
           title={collapsed ? t("nav.plans") : undefined}
         >
-          <div className={cn("flex w-full items-center gap-2", collapsed && "justify-center gap-0")}>
+          <div className={cn("flex w-full min-w-0 items-center gap-2 overflow-hidden", collapsed && "justify-center gap-0")}>
             <Crown className="w-5 h-5 shrink-0 text-warning" />
             {!collapsed && (
-              <div className="flex flex-col">
-                <span className="text-sm font-semibold text-foreground">
+              <div className="flex min-w-0 flex-col overflow-hidden">
+                <span className="text-sm font-semibold text-foreground whitespace-nowrap truncate">
                   {planTier === "pro" ? "Pro Plan" : t("plans.sidebar.free")}
                 </span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-muted-foreground whitespace-nowrap truncate">
                   {planTier === "pro" ? t("plans.sidebar.manage") : t("plans.sidebar.upgrade")}
                 </span>
               </div>
@@ -147,13 +147,13 @@ export function Sidebar({
         </button>
 
         {/* User Profile */}
-        <div className={cn("flex items-center gap-3 pt-3 border-t border-border/50", collapsed && "justify-center")}>
+        <div className={cn("flex items-center gap-3 pt-3 border-t border-border/50 min-w-0 overflow-hidden", collapsed && "justify-center")}>
           <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center shrink-0">
             <span className="text-sm font-medium text-primary-foreground">{profileInitial}</span>
           </div>
-          {!collapsed && <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium truncate text-foreground">{profile.fullName}</p>
-              <p className="text-xs text-muted-foreground">{profile.licensePlate}</p>
+          {!collapsed && <div className="min-w-0 flex-1 overflow-hidden">
+              <p className="text-sm font-medium truncate whitespace-nowrap text-foreground">{profile.fullName}</p>
+              <p className="text-xs text-muted-foreground truncate whitespace-nowrap">{profile.licensePlate}</p>
             </div>}
         </div>
       </div>

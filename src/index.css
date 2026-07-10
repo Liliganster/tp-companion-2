@@ -212,10 +212,13 @@
     box-shadow: 0 0 40px hsl(var(--accent) / 0.3);
   }
 
-  /* Navegación en píldora (estilo Gemini): hover azul suave, activo azul acento */
+  /* Navegación en píldora (estilo Gemini): hover azul suave, activo azul acento.
+     nowrap + overflow-hidden: durante la animación de ancho del sidebar las
+     etiquetas se recortan limpias en vez de envolver y montarse. */
   .nav-item {
     @apply flex items-center gap-3 px-4 py-2.5 rounded-full transition-colors duration-200;
     @apply text-muted-foreground hover:text-foreground hover:bg-accent;
+    @apply min-w-0 overflow-hidden whitespace-nowrap;
   }
 
   .nav-item-active {
