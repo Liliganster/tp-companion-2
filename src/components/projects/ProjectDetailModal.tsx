@@ -1527,7 +1527,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                 <div key={trip.id} className="glass-card p-4 space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-lg">Viaje {index + 1}</span>
+                      <span className="font-medium text-lg">{t("projectDetail.tripLabel")} {index + 1}</span>
                       <span className="text-sm text-muted-foreground">{trip.date}</span>
                     </div>
                     <Button
@@ -1541,11 +1541,11 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                   </div>
                   
                   <div className="text-sm space-y-1">
-                    <p><span className="text-muted-foreground">Propósito:</span> {trip.purpose}</p>
-                    <p><span className="text-muted-foreground">Distancia:</span> {trip.distance.toFixed(1)} km</p>
-                    <p><span className="text-muted-foreground">CO2:</span> {calculateCO2(trip.distance).toFixed(2)} kg</p>
+                    <p><span className="text-muted-foreground">{t("tripModal.purpose")}:</span> {trip.purpose}</p>
+                    <p><span className="text-muted-foreground">{t("trips.distance")}:</span> {trip.distance.toFixed(1)} km</p>
+                    <p><span className="text-muted-foreground">{t("trips.co2")}:</span> {calculateCO2(trip.distance).toFixed(2)} kg</p>
                     <div>
-                      <span className="text-muted-foreground">Ruta:</span>
+                      <span className="text-muted-foreground">{t("trips.route")}:</span>
                       <ul className="ml-4 mt-1 space-y-0.5">
                         {trip.route.map((loc, i) => (
                           <li key={i} className="text-xs">
@@ -1679,7 +1679,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                             {sheet.status === 'processing' && (
                               <button
                                 onClick={() => handleCancelExtract(sheet)}
-                                title="Cancelar procesamiento"
+                                title={t("projectDetail.cancelProcessing")}
                                 className="h-4 w-4 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                               >
                                 <X className="h-3 w-3" />
@@ -1689,7 +1689,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                         ) : null}
                         {sheet.status === 'cancelled' ? (
                           <span className="text-[10px] px-1.5 py-0.5 rounded-chip bg-white/10 text-muted-foreground border border-white/10">
-                            Cancelado
+                            {t("projectDetail.cancelled")}
                           </span>
                         ) : null}
                         {sheet.status === 'needs_review' ? (
@@ -1704,7 +1704,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                         ) : null}
                         {sheet.status === 'failed' ? (
                           <span title={sheet.needs_review_reason} className="text-[10px] px-1.5 py-0.5 rounded-chip cursor-help bg-white/10 text-muted-foreground border border-white/10">
-                            Error
+                            {t("projectDetail.failed")}
                           </span>
                         ) : null}
                       </div>

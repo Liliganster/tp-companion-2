@@ -122,7 +122,12 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   useEffect(() => {
     if (!open) return;
     setProfileData(profile);
-  }, [open, profile]);
+    // SOLO al abrir: el contexto de perfil se refresca solo (p. ej. al volver
+    // el foco a la ventana Supabase re-emite la sesión y se refetchea) y con
+    // `profile` en las deps ese refresco MACHACABA lo que la usuaria estaba
+    // escribiendo — "escribo la dirección base y desaparece" (2026-07-10).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const lastAiProviderLabel =
     lastAiUsage.provider === "openrouter"
@@ -416,10 +421,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
                 className={cn(
-                  "flex flex-col items-center gap-1 px-3 py-2 text-xs rounded-lg whitespace-nowrap transition-colors min-w-[70px] flex-shrink-0",
+                  "flex flex-col items-center gap-1 px-3 py-2 text-xs rounded-xl border whitespace-nowrap transition-colors min-w-[70px] flex-shrink-0",
                   activeTab === item.id
-                    ? "bg-primary/20 text-primary"
-                    : "text-muted-foreground hover:bg-secondary/50"
+                    ? "border-transparent bg-primary text-primary-foreground"
+                    : "border-border text-muted-foreground hover:text-foreground hover:bg-accent"
                 )}
               >
                 <item.icon className="w-5 h-5" />
@@ -438,10 +443,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
                   className={cn(
-                    "w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors",
+                    "mx-2 mb-1 flex w-[calc(100%-1rem)] items-center gap-3 rounded-xl px-4 py-2.5 text-sm text-left transition-colors",
                     activeTab === item.id
-                      ? "bg-primary/10 text-primary border-r-2 border-primary"
-                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
                   )}
                 >
                   <item.icon className="w-4 h-4 shrink-0" />
