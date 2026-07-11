@@ -703,15 +703,21 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
     }
   }, [getAccessToken, getEffectiveRouteValues, googleRegion, isOpen]);
 
-  // Auto-calculate distance when using special types (Continue/Return)
+  // Autocálculo de distancia en TODOS los modos, también "base" (antes solo
+  // Continue/Return — con lo que el modo por defecto nunca calculaba solo y
+  // la dirección base de Ajustes parecía "no usarse"; queja 2026-07-10).
   useEffect(() => {
     if (!isOpen) return;
-    if (specialOrigin === "base") return;
 
     const { origin, destination, waypoints } = getEffectiveRouteValues();
+    // Sin ambos extremos no hay nada que pedir; y base→base sin paradas
+    // sería una llamada inútil que devolvería 0 km.
+    if (!origin || !destination) return;
+    if (origin === destination && waypoints.length === 0) return;
+
     // Create a unique string from the route values
     const currentRoute = JSON.stringify({ origin, destination, waypoints });
-    
+
     // Only recalculate if the route has actually changed
     if (currentRoute === previousRouteRef.current) return;
     previousRouteRef.current = currentRoute;
@@ -811,7 +817,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="[&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:order-first [&::-webkit-calendar-picker-indicator]:mr-2"
+                className="[&::-webkit-calendar-picker-indicator]:order-first [&::-webkit-calendar-picker-indicator]:mr-2"
               />
             </div>
             <div className="grid gap-2">

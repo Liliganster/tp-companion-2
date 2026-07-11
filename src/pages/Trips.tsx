@@ -410,6 +410,14 @@ export default function Trips() {
         title: exists ? t("trips.toastTripUpdatedTitle") : t("trips.toastTripCreatedTitle"),
         description: exists ? t("trips.toastTripUpdatedBody") : t("trips.toastTripCreatedBody"),
       });
+    } else {
+      // Sin esto, un guardado fallido (p. ej. sesión expirada) era INVISIBLE:
+      // la tabla revertía el cambio optimista y parecía que "no actualiza".
+      toast({
+        title: t("trips.toastTripSaveFailedTitle"),
+        description: t("trips.toastTripSaveFailedBody"),
+        variant: "destructive",
+      });
     }
     return ok;
   };
