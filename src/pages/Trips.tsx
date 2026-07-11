@@ -3,7 +3,9 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Filter, Upload, Calendar, Route, MoreVertical, Pencil, Trash2, Map as MapIcon, CalendarPlus, ChevronUp, ChevronDown, AlertTriangle, Loader2, ChevronsDown } from "lucide-react";
+import { Plus, Filter, Upload, Calendar, MoreVertical, Pencil, Trash2, Map as MapIcon, CalendarPlus, ChevronUp, ChevronDown, AlertTriangle, Loader2 } from "lucide-react";
+import { LoadMoreButton } from "@/components/ui/load-more-button";
+import { projectLabelColor } from "@/lib/projectColors";
 import { useToast } from "@/hooks/use-toast";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -104,7 +106,7 @@ export default function Trips() {
   const { toast } = useToast();
   
   // Pagination state - show 5 trips initially
-  const TRIPS_PER_PAGE = 5;
+  const TRIPS_PER_PAGE = 10;
   const [visibleTripsCount, setVisibleTripsCount] = useState(TRIPS_PER_PAGE);
 
 
@@ -610,7 +612,10 @@ export default function Trips() {
                       {t("trips.returnTrip")}
                     </Badge>
                   )}
-                  <span className="text-[10px] sm:text-xs truncate max-w-[150px] sm:max-w-none px-1.5 py-0.5 rounded bg-primary/15 text-primary">
+                  <span
+                    className="text-[10px] sm:text-xs font-semibold truncate max-w-[150px] sm:max-w-none px-1.5 py-0.5 rounded-chip"
+                    style={trip.project ? { backgroundColor: projectLabelColor(trip.project).bg, color: projectLabelColor(trip.project).fg } : undefined}
+                  >
                     {trip.project}
                   </span>
                 </div>
@@ -721,13 +726,9 @@ export default function Trips() {
         
         {/* Load More Button - Mobile */}
         {hasMoreTrips && (
-          <button
-            onClick={() => setVisibleTripsCount(prev => prev + TRIPS_PER_PAGE)}
-            className="w-full flex items-center justify-center gap-2 text-sm text-primary hover:text-primary/80 font-semibold py-3 rounded-lg transition-colors glass-card"
-          >
-            <ChevronsDown className="w-4 h-4" />
+          <LoadMoreButton onClick={() => setVisibleTripsCount(prev => prev + TRIPS_PER_PAGE)}>
             {t("trips.loadMore")} ({remainingTripsCount} {t("advancedCosts.remaining")})
-          </button>
+          </LoadMoreButton>
         )}
       </div>
 
@@ -742,7 +743,6 @@ export default function Trips() {
                 <TableHead className="w-10">
                   <Checkbox checked={isAllSelected} onCheckedChange={toggleSelectAll} aria-label={t("projects.selectAll")} />
                 </TableHead>
-                <TableHead className="w-14"></TableHead>
                 <TableHead className="whitespace-nowrap">
                   <button
                     type="button"
@@ -774,7 +774,7 @@ export default function Trips() {
             <TableBody>
               {visibleTrips.map((trip, index) => <TableRow
                 key={trip.id}
-                className={`animate-slide-up cursor-pointer [&>td:nth-child(10)]:text-success ${selectedIds.has(trip.id) ? 'bg-primary/10' : ''}`}
+                className={`animate-slide-up cursor-pointer [&>td:nth-child(9)]:text-success ${selectedIds.has(trip.id) ? 'bg-primary/10' : ''}`}
                 style={{
                   animationDelay: `${index * 50}ms`
                 }}
@@ -795,11 +795,6 @@ export default function Trips() {
                     aria-label={tf("trips.selectTrip", { id: trip.id })}
                     onClick={(e) => e.stopPropagation()}
                   />
-                </TableCell>
-                <TableCell className="w-14">
-                  <span className="w-9 h-9 rounded-lg bg-primary/15 text-primary flex items-center justify-center">
-                    <Route className="w-4 h-4" />
-                  </span>
                 </TableCell>
                 <TableCell className="font-medium whitespace-nowrap">
                   <div className="flex items-center gap-2">
@@ -830,7 +825,11 @@ export default function Trips() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <span className="text-xs text-primary whitespace-nowrap">
+                  {/* Etiqueta de proyecto con color determinista (estilo Unity) */}
+                  <span
+                    className="inline-flex items-center rounded-chip px-2 py-0.5 text-xs font-semibold whitespace-nowrap"
+                    style={trip.project ? { backgroundColor: projectLabelColor(trip.project).bg, color: projectLabelColor(trip.project).fg } : undefined}
+                  >
                     {trip.project}
                   </span>
                 </TableCell>
@@ -921,15 +920,9 @@ export default function Trips() {
         
         {/* Load More Button */}
         {hasMoreTrips && (
-          <div className="p-4 border-t border-border/50">
-            <button
-              onClick={() => setVisibleTripsCount(prev => prev + TRIPS_PER_PAGE)}
-              className="w-full flex items-center justify-center gap-2 text-sm text-primary hover:text-primary/80 font-medium py-2 rounded-md hover:bg-muted/50 transition-colors"
-            >
-              <ChevronsDown className="w-4 h-4" />
-              {t("trips.loadMore")} ({remainingTripsCount} {t("advancedCosts.remaining")})
-            </button>
-          </div>
+          <LoadMoreButton onClick={() => setVisibleTripsCount(prev => prev + TRIPS_PER_PAGE)}>
+            {t("trips.loadMore")} ({remainingTripsCount} {t("advancedCosts.remaining")})
+          </LoadMoreButton>
         )}
       </div>
 

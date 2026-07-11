@@ -35,7 +35,6 @@ import {
   Calendar,
   Receipt,
   Leaf,
-  ChevronsDown,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -45,6 +44,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
+import { LoadMoreButton } from "@/components/ui/load-more-button";
 import { useToast } from "@/hooks/use-toast";
 import { ProjectDetailModal } from "@/components/projects/ProjectDetailModal";
 import { ProjectEditModal } from "@/components/projects/ProjectEditModal";
@@ -104,7 +104,7 @@ export default function Projects() {
   , [projects, editingProjectId]);
 
   // Pagination state - show 5 projects initially
-  const ITEMS_PER_PAGE = 5;
+  const ITEMS_PER_PAGE = 10;
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
 
   interface ProjectDocument {
@@ -830,15 +830,9 @@ export default function Projects() {
           
           {/* Load More Button */}
           {hasMoreProjects && (
-            <div className="p-4 border-t border-border/50">
-              <button
-                onClick={() => setVisibleCount(prev => prev + ITEMS_PER_PAGE)}
-                className="w-full flex items-center justify-center gap-2 text-sm text-primary hover:text-primary/80 font-medium py-2 rounded-md hover:bg-muted/50 transition-colors"
-              >
-                <ChevronsDown className="w-4 h-4" />
-                {t("trips.loadMore")} ({remainingCount} {t("advancedCosts.remaining")})
-              </button>
-            </div>
+            <LoadMoreButton onClick={() => setVisibleCount(prev => prev + ITEMS_PER_PAGE)}>
+              {t("trips.loadMore")} ({remainingCount} {t("advancedCosts.remaining")})
+            </LoadMoreButton>
           )}
         </div>
 
