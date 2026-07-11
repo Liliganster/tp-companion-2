@@ -48,7 +48,9 @@ export default function Plans() {
 
   return (
     <MainLayout backgroundVariant="plans">
-      <div className="mx-auto flex min-h-[calc(100dvh-4rem)] max-w-6xl flex-col justify-center px-4 py-10 lg:px-8 lg:-translate-y-16">
+      {/* Altura estándar de página (sin centrado vertical ni translate: el
+          título quedaba pegado al borde superior) */}
+      <div className="mx-auto max-w-6xl px-4 py-8 lg:px-8">
         {/* Header */}
         <div className="text-center space-y-2 animate-fade-in mb-8">
           <div className="flex items-center justify-center gap-2">
@@ -118,7 +120,7 @@ export default function Plans() {
                 <h2 className="text-lg font-semibold">{t("plans.pro.name")}</h2>
               </div>
               <div className="flex items-baseline gap-1 mb-1">
-                <span className="text-3xl font-bold">19 €</span>
+                <span className="text-3xl font-bold">8,99 €</span>
                 <span className="text-muted-foreground text-sm">/{t("plans.perMonth")}</span>
               </div>
               <p className="text-xs text-muted-foreground">{t("plans.pro.description")}</p>
