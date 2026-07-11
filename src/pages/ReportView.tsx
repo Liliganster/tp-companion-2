@@ -3,13 +3,14 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Download, Printer, ArrowLeft, FileSpreadsheet, FileText, FileDown, Save, Archive } from "lucide-react";
+import { Download, Printer, ArrowLeft, FileSpreadsheet, FileText, FileDown, Save, Archive, SlidersHorizontal } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTrips } from "@/contexts/TripsContext";
 import { useProjects } from "@/contexts/ProjectsContext";
@@ -35,6 +36,7 @@ interface ReportTrip {
   distance: number;
   rate: number;
   reimbursement: number;
+  co2: number;
 }
 
 /* Mock report data (unused)
@@ -118,6 +120,11 @@ export default function ReportView() {
   // importe por km de cada viaje (un solo número por viaje, sin línea
   // separada). Por defecto SEPARADOS — la regla general de la app.
   const [mergePassengers, setMergePassengers] = useState(false);
+  // Bloques OPCIONALES del informe (v4): CO2 = columna de la tabla + total en
+  // estadísticas; firma = bloque final. Árboles y fuente FUERA del informe
+  // (no son material de Finanzamt). El pie de Fahrtenbuch Pro es obligatorio.
+  const [showCo2, setShowCo2] = useState(true);
+  const [showSignature, setShowSignature] = useState(true);
   const reportId = searchParams.get("reportId");
   const savedReport = reportId ? reports.find((r) => r.id === reportId) : undefined;
 
@@ -265,6 +272,7 @@ export default function ReportView() {
       distance,
       rate,
       reimbursement,
+      co2: Number.isFinite(trip.co2) ? trip.co2 : 0,
     };
   });
 
@@ -388,6 +396,8 @@ export default function ReportView() {
       licensePlate,
       projectLabel,
       producer: producerHeader,
+      // Tarifa base del perfil (faltaba en la cabecera del PDF)
+      ratePerKm,
       // Unidos: el PDF recibe tarifa 0 → no imprime ni la tarifa por pasajero
       // ni la línea de suplemento; los importes por viaje ya lo incluyen.
       passengerSurcharge: mergePassengers ? 0 : passengerSurcharge,
@@ -399,10 +409,14 @@ export default function ReportView() {
         distanceKm: trip.distance,
         ratePerKm: trip.rate,
         amount: trip.reimbursement,
+        co2Kg: trip.co2,
       })),
       expenses: reportExpenses,
       co2Kg: totalCo2,
       hasReceipts,
+      // Bloques opcionales elegidos por la usuaria
+      showCo2,
+      showSignature,
     });
 
   const canSave = !savedReport && filteredTrips.length > 0;
@@ -630,6 +644,23 @@ export default function ReportView() {
                 {t("reportView.mergePassengers")}
               </label>
             )}
+            {/* Bloques opcionales: se eligen ANTES de exportar el informe */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9">
+                  <SlidersHorizontal className="w-4 h-4 sm:mr-2" />
+                  <span className="hidden sm:inline">{t("reportView.contentMenu")}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-popover w-56">
+                <DropdownMenuCheckboxItem checked={showCo2} onCheckedChange={(v) => setShowCo2(Boolean(v))} onSelect={(e) => e.preventDefault()}>
+                  {t("reportView.optCo2")}
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={showSignature} onCheckedChange={(v) => setShowSignature(Boolean(v))} onSelect={(e) => e.preventDefault()}>
+                  {t("reportView.optSignature")}
+                </DropdownMenuCheckboxItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Select value={pdfLang} onValueChange={(v) => setPdfLang(v as AppLanguage)}>
               <SelectTrigger className="h-9 w-[150px]" aria-label={t("reportView.pdfLanguage")}>
                 <SelectValue />
@@ -771,9 +802,10 @@ export default function ReportView() {
                   <col style={{ width: "8%" }} />
                   <col style={{ width: "12%" }} />
                   <col style={{ width: "12%" }} />
-                  <col style={{ width: "32%" }} />
+                  <col style={{ width: showCo2 ? "24%" : "32%" }} />
                   <col style={{ width: "10%" }} />
                   <col style={{ width: "12%" }} />
+                  {showCo2 && <col style={{ width: "8%" }} />}
                   <col style={{ width: "14%" }} />
                 </colgroup>
                 <thead>
@@ -788,6 +820,9 @@ export default function ReportView() {
                       {t("reportView.colPassengersShort")}
                     </th>
                     <th className="text-right py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap text-white print:text-black">{t("reportView.colDistanceKm")}</th>
+                    {showCo2 && (
+                      <th className="text-right py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap text-white print:text-black">{t("reportPdf.colCo2")}</th>
+                    )}
                     <th className="text-right py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap text-white print:text-black">{t("reportView.colReimbursement")}</th>
                   </tr>
                 </thead>
@@ -813,12 +848,20 @@ export default function ReportView() {
                       <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top text-right whitespace-nowrap print:text-black">
                         {trip.distance.toFixed(1)} <span className="hidden print:inline">km</span>
                       </td>
+                      {showCo2 && (
+                        <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top text-right whitespace-nowrap text-muted-foreground print:text-black">
+                          {trip.co2.toFixed(1)}
+                        </td>
+                      )}
                       <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top text-right font-semibold whitespace-nowrap text-success print:text-black">
                         {trip.reimbursement.toFixed(2)} €
                       </td>
                     </tr>
                   ))}
                 </tbody>
+                {/* Totales EN la tabla, cada uno bajo su columna; el recuento
+                    de viajes acompaña al total de km (v8: fuera la línea
+                    flotante de estadísticas) */}
                 <tfoot>
                   <tr className="border-t-2 border-border print:hidden">
                     <td colSpan={4} className="py-3 px-2 text-right font-semibold hidden sm:table-cell">
@@ -826,21 +869,31 @@ export default function ReportView() {
                     <td className="py-3 px-2 text-right font-semibold hidden sm:table-cell">
                     </td>
                     <td className="py-3 px-2 text-right font-semibold whitespace-nowrap">
-                      {t("reportView.totalShort")}: {totalDistance.toFixed(1)} km
+                      {t("reportView.totalShort")} ({trips.length === 1 ? t("reportView.tripsCountOne") : tf("reportView.tripsCount", { count: trips.length })}): {totalDistance.toFixed(1)} km
                     </td>
+                    {showCo2 && (
+                      <td className="py-3 px-2 text-right font-semibold whitespace-nowrap">
+                        {totalCo2.toFixed(1)} kg
+                      </td>
+                    )}
                     <td className="py-3 px-2 text-right font-semibold whitespace-nowrap text-success print:text-black">
-                      {t("reportView.totalShort")}: {totalReimbursement.toFixed(2)} €
+                      {totalReimbursement.toFixed(2)} €
                     </td>
                   </tr>
                   <tr className="hidden print:table-row border-t border-gray-300">
                     <td colSpan={3} className="py-2 px-2">
                     </td>
                     <td className="py-2 px-2 text-right font-bold print:text-black">
-                      {t("reportView.totalShort")}:
+                      {t("reportView.totalShort")} ({trips.length === 1 ? t("reportView.tripsCountOne") : tf("reportView.tripsCount", { count: trips.length })}):
                     </td>
                     <td className="py-2 px-2 text-right font-bold print:text-black whitespace-nowrap">
                       {totalDistance.toFixed(1)} km
                     </td>
+                    {showCo2 && (
+                      <td className="py-2 px-2 text-right font-bold print:text-black whitespace-nowrap">
+                        {totalCo2.toFixed(1)} kg
+                      </td>
+                    )}
                     <td className="py-2 px-2 text-right font-bold print:text-black whitespace-nowrap">
                       {totalReimbursement.toFixed(2)} €
                     </td>
@@ -850,31 +903,31 @@ export default function ReportView() {
             </div>
 
             {/* Resumen: total destacado + CO2 con fuente (Fase 3) */}
+            {/* Estilo factura: el desglose SOLO existe cuando hay más de un
+                componente (suplemento/gastos). Con solo kilometraje, un único
+                "Total a facturar" — el importe ya vive en el pie de la tabla
+                (queja 2026-07-11: el mismo total salía 3 veces). */}
             <div className="mt-6 flex flex-col items-end gap-1 text-xs sm:text-sm print:text-black">
-              <p className="text-muted-foreground print:text-gray-500">
-                {t("reportPdf.tripsLabel")}: {trips.length} · {t("reportPdf.totalKmLabel")}: {totalDistance.toFixed(1)} km
-              </p>
-              <p>
-                {t("reportPdf.travelCosts")}: <span className="font-semibold">{totalReimbursement.toFixed(2)} €</span>
-              </p>
-              {passengerSurchargeTotal > 0 && (
-                <p>
-                  {t("reportView.passengerSurchargeLabel")} ({totalPassengers}): <span className="font-semibold">{passengerSurchargeTotal.toFixed(2)} €</span>
-                </p>
+              {(passengerSurchargeTotal > 0 || totalExpenses > 0) && (
+                <>
+                  <p>
+                    {t("reportPdf.travelCosts")}: <span className="font-semibold">{totalReimbursement.toFixed(2)} €</span>
+                  </p>
+                  {passengerSurchargeTotal > 0 && (
+                    <p>
+                      {t("reportView.passengerSurchargeLabel")} ({totalPassengers}): <span className="font-semibold">{passengerSurchargeTotal.toFixed(2)} €</span>
+                    </p>
+                  )}
+                  {totalExpenses > 0 && (
+                    <p>
+                      {t("reportPdf.expensesTitle")}: <span className="font-semibold">{totalExpenses.toFixed(2)} €</span>
+                    </p>
+                  )}
+                </>
               )}
-              {totalExpenses > 0 && (
-                <p>
-                  {t("reportPdf.expensesTitle")}: <span className="font-semibold">{totalExpenses.toFixed(2)} €</span>
-                </p>
-              )}
-              <p className="mt-1 rounded-md bg-black text-white print:bg-black print:text-white px-4 py-2 text-sm sm:text-base font-bold">
+              <p className="mt-5 border-t border-foreground/70 print:border-black pt-3 text-sm font-bold print:text-black">
                 {t("reportPdf.grandTotal")}: {grandTotal.toFixed(2)} €
               </p>
-              {totalCo2 > 0 && (
-                <p className="mt-2 text-[10px] text-muted-foreground print:text-gray-500 text-right">
-                  {tf("reportPdf.co2Line", { kg: totalCo2.toFixed(1), trees: (totalCo2 / TREE_KG_CO2_PER_YEAR).toFixed(1) })}
-                </p>
-              )}
             </div>
 
             {!savedReport && (
