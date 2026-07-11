@@ -4,7 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, GripVertical, X, MapPin, Calendar, Home, Route, Loader2, Check, ChevronsUpDown, FileUp, Camera, Info } from "lucide-react";
+import { Plus, GripVertical, X, MapPin, Calendar, Home, Route, Loader2, Check, ChevronsUpDown, FileUp, Camera, Info, HelpCircle } from "lucide-react";
+import { TripModalTour, shouldAutoShowTripTour } from "@/components/tour/TripModalTour";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -492,6 +493,19 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
   const isOpen = isControlled ? open : internalOpen;
   const setIsOpen = isControlled ? onOpenChange! : setInternalOpen;
 
+  // Tutorial del formulario (existe sobre todo por "Origen especial"):
+  // auto una vez la primera vez que se abre el modal; relanzable con el (?).
+  const [tripTourActive, setTripTourActive] = useState(false);
+  useEffect(() => {
+    if (!isOpen) {
+      setTripTourActive(false);
+      return;
+    }
+    if (!shouldAutoShowTripTour(user)) return;
+    const id = window.setTimeout(() => setTripTourActive(true), 700);
+    return () => window.clearTimeout(id);
+  }, [isOpen, user]);
+
   const [stops, setStops] = useState<Stop[]>(() => getInitialStops());
   const stopDraftsRef = useRef<Record<string, string>>({});
   const destinationBeforeReturnRef = useRef<string | null>(null);
@@ -720,9 +734,14 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
 
     // Only recalculate if the route has actually changed
     if (currentRoute === previousRouteRef.current) return;
-    previousRouteRef.current = currentRoute;
 
+    // OJO: la ruta se marca como "calculada" DENTRO del timer, no antes.
+    // Si se marca antes y un re-render (p. ej. el efecto que sincroniza el
+    // origen al cambiar a Continuación/Regreso reconstruye las paradas)
+    // cancela este timer en los 500 ms, la segunda pasada veía la ruta como
+    // ya calculada y el modo Regreso se quedaba sin distancia automática.
     const timer = setTimeout(() => {
+      previousRouteRef.current = currentRoute;
       calculateDistance();
     }, 500);
 
@@ -789,7 +808,19 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
   };
 
   const dialogContent = (
-    <DialogContent className="glass max-w-lg max-h-[90vh] overflow-y-auto p-0">
+    <DialogContent
+      className="glass max-w-lg max-h-[90vh] overflow-y-auto p-0"
+      onEscapeKeyDown={(e) => {
+        // Con el tutorial activo, Esc cierra el tutorial (SpotlightOverlay), no el modal.
+        if (tripTourActive) e.preventDefault();
+      }}
+      onPointerDownOutside={(e) => {
+        if (tripTourActive) e.preventDefault();
+      }}
+      onInteractOutside={(e) => {
+        if (tripTourActive) e.preventDefault();
+      }}
+    >
       {/* Header Image */}
       <div className="relative h-32 overflow-hidden rounded-t-lg">
         <img
@@ -802,7 +833,18 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
 
         <div className="px-6 pb-6">
           <DialogHeader className="pb-4">
-            <DialogTitle>{isEditing ? t("tripModal.editTitle") : t("tripModal.addTitle")}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              {isEditing ? t("tripModal.editTitle") : t("tripModal.addTitle")}
+              <button
+                type="button"
+                onClick={() => setTripTourActive(true)}
+                title={t("tripTour.help")}
+                aria-label={t("tripTour.help")}
+                className="text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <HelpCircle className="w-4 h-4" />
+              </button>
+            </DialogTitle>
             <DialogDescription className="sr-only">
               {isEditing ? t("tripModal.editTitle") : t("tripModal.addTitle")}
             </DialogDescription>
@@ -901,7 +943,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
           </div>
 
           {/* Draggable Route Stops */}
-          <div className="grid gap-2">
+          <div className="grid gap-2" data-tour="trip-route">
             <div className="flex items-center justify-between">
               <Label>{t("tripModal.route")}</Label>
               <Button
@@ -950,7 +992,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
+            <div className="grid gap-2" data-tour="trip-origin-mode">
               <Label>{t("tripModal.specialOrigin")}</Label>
               <Select value={specialOrigin} onValueChange={(value) => handleSpecialOriginChange(value as SpecialOrigin)}>
                 <SelectTrigger>
@@ -963,7 +1005,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2">
+            <div className="grid gap-2" data-tour="trip-passengers">
               <Label htmlFor="passengers">{t("tripModal.passengers")}</Label>
               <Input
                 id="passengers"
@@ -975,7 +1017,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
             </div>
           </div>
 
-          <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2" data-tour="trip-distance">
             <div className="grid gap-2">
               <Label htmlFor="distance">{t("tripModal.distance")}</Label>
               <Input
@@ -1033,7 +1075,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
               </Tooltip>
             </TooltipProvider>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4" data-tour="trip-expenses">
             <div className="grid gap-2">
               <Label htmlFor="tollAmount">{t("tripModal.toll")}</Label>
               <div className="flex gap-1">
@@ -1413,6 +1455,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
           </DialogClose>
         </div>
       </div>
+      <TripModalTour active={tripTourActive} onClose={() => setTripTourActive(false)} user={user} />
     </DialogContent>
   );
 

@@ -1040,6 +1040,19 @@ export const en: Record<I18nKey, string> = {
   "tour.planBody": "See your current plan here. Pro raises the monthly callsheet extractions and lets you use your own OpenRouter key.",
   "tour.finalTitle": "All set!",
   "tour.finalBody": "Whenever you need a refresher, the documentation and this tour live in Settings → Help & docs. Happy shooting!",
+
+  // Add/edit trip modal tutorial (TripModalTour)
+  "tripTour.help": "Form tutorial",
+  "tripTour.routeTitle": "The trip route",
+  "tripTour.routeBody": "The origin starts from your base address: leave it empty and the grey address is used. Type the destination and pick a suggestion; \"Add stop\" gives you up to 25 stops, draggable to reorder.",
+  "tripTour.originModeTitle": "Special origin: chain your day",
+  "tripTour.originModeBody": "\"Start from my base address\" is the normal trip from home. \"Continue from last destination\" fills the origin with your previous trip's destination — ideal for the day's second trip. \"Return to my base address\" locks the destination to your base for the ride home.",
+  "tripTour.distanceTitle": "Distance and rate",
+  "tripTour.distanceBody": "The distance is calculated automatically with Google Maps once the route is complete; correct it by hand or recalculate with the middle button. The rate is optional: if set, it overrides the project's and the profile's.",
+  "tripTour.passengersTitle": "Passengers",
+  "tripTour.passengersBody": "Enter how many colleagues rode along: their per-km surcharge is calculated separately and ALWAYS stays apart from the mileage, in the report too.",
+  "tripTour.expensesTitle": "Expenses with receipts",
+  "tripTour.expensesBody": "Toll, parking, fuel and others: type the amount in EUR and attach the receipt photo with the camera button. They become their own lines in the report.",
   "tripDetail.invoiceFailed": "Error",
   "tripDetail.invoiceNeedsReview": "Review",
 

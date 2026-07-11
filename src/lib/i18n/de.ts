@@ -1039,6 +1039,19 @@ export const de: Record<I18nKey, string> = {
   "tour.planBody": "Hier siehst du deinen aktuellen Plan. Pro erhöht die monatlichen Callsheet-Extraktionen und erlaubt deinen eigenen OpenRouter-Schlüssel.",
   "tour.finalTitle": "Alles bereit!",
   "tour.finalBody": "Zum Nachschlagen findest du die Dokumentation und diese Tour in Einstellungen → Hilfe & Docs. Gute Drehtage!",
+
+  // Tutorial des Fahrt-Modals (TripModalTour)
+  "tripTour.help": "Formular-Tutorial",
+  "tripTour.routeTitle": "Die Route der Fahrt",
+  "tripTour.routeBody": "Der Start geht von deiner Basisadresse aus: bleibt er leer, gilt die graue Adresse. Tippe das Ziel und wähle einen Vorschlag; mit \"Stopp hinzufügen\" bis zu 25 Stopps, per Ziehen sortierbar.",
+  "tripTour.originModeTitle": "Spezieller Start: verkette deinen Tag",
+  "tripTour.originModeBody": "\"Start von meiner Basisadresse\" ist die normale Fahrt von zu Hause. \"Vom letzten Ziel fortsetzen\" füllt den Start mit dem Ziel deiner vorherigen Fahrt — ideal für die zweite Fahrt des Tages. \"Zur Basisadresse zurück\" fixiert das Ziel auf deine Basis für die Heimfahrt.",
+  "tripTour.distanceTitle": "Distanz und Satz",
+  "tripTour.distanceBody": "Die Distanz berechnet sich automatisch über Google Maps, sobald die Route steht; korrigiere sie von Hand oder berechne mit dem mittleren Button neu. Der Satz ist optional: wenn gesetzt, geht er vor Projekt- und Profilsatz.",
+  "tripTour.passengersTitle": "Mitfahrer",
+  "tripTour.passengersBody": "Trage ein, wie viele Kolleg:innen mitgefahren sind: ihr Zuschlag pro km wird separat berechnet und bleibt IMMER vom Kilometergeld getrennt, auch im Bericht.",
+  "tripTour.expensesTitle": "Ausgaben mit Beleg",
+  "tripTour.expensesBody": "Maut, Parken, Kraftstoff und Sonstiges: Betrag in EUR eintragen und das Belegfoto über den Kamera-Button anhängen. Sie erscheinen als eigene Zeilen im Bericht.",
   "tripDetail.invoiceNeedsReview": "Prüfen",
   "tripDetail.invoiceFailed": "Fehler",
 

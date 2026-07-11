@@ -52,7 +52,7 @@ export default function Docs() {
               ],
             },
             "El panel te avisará con un banner si falta la tarifa o la dirección base.",
-            "La primera vez que entras, un tutorial interactivo te enseña la app en 7 pasos. Puedes repetirlo cuando quieras: botón \"Iniciar tutorial\" aquí arriba o en Ajustes → Ayuda y docs.",
+            "La primera vez que entras, un tutorial interactivo te lleva de visita guiada por la app en 12 pasos. Puedes repetirlo cuando quieras: botón \"Iniciar tutorial\" aquí arriba o en Ajustes → Ayuda y docs. El formulario de añadir viaje tiene además su propio tutorial (el botón ? junto al título).",
           ],
         },
         {
@@ -335,7 +335,7 @@ export default function Docs() {
               ],
             },
             "The dashboard will warn you with a banner if the rate or the base address is missing.",
-            "The first time you sign in, an interactive tour shows you the app in 7 steps. Replay it anytime: \"Start tour\" button above, or Settings → Help & docs.",
+            "The first time you sign in, an interactive tour walks you through the app in 12 steps. Replay it anytime: \"Start tour\" button above, or Settings → Help & docs. The add-trip form also has its own tutorial (the ? button next to its title).",
           ],
         },
         {
@@ -618,7 +618,7 @@ export default function Docs() {
               ],
             },
             "Das Dashboard warnt dich mit einem Banner, wenn Satz oder Basisadresse fehlen.",
-            "Beim ersten Anmelden zeigt dir eine interaktive Tour die App in 7 Schritten. Jederzeit wiederholbar: Button \"Tour starten\" oben oder Einstellungen → Hilfe & Docs.",
+            "Beim ersten Anmelden führt dich eine interaktive Tour in 12 Schritten durch die App. Jederzeit wiederholbar: Button \"Tour starten\" oben oder Einstellungen → Hilfe & Docs. Das Fahrt-Formular hat zusätzlich ein eigenes Tutorial (der ?-Button neben dem Titel).",
           ],
         },
         {

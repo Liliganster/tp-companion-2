@@ -990,6 +990,19 @@ export const es = {
   "tour.planBody": "Aquí ves tu plan actual. Pro amplía las extracciones de callsheets al mes y te deja usar tu propia clave de OpenRouter.",
   "tour.finalTitle": "¡Todo listo!",
   "tour.finalBody": "Cuando quieras repasar algo, tienes la documentación y este tutorial en Ajustes → Ayuda y docs. ¡Buen rodaje!",
+
+  // Tutorial del modal de añadir/editar viaje (TripModalTour)
+  "tripTour.help": "Tutorial del formulario",
+  "tripTour.routeTitle": "La ruta del viaje",
+  "tripTour.routeBody": "El origen parte de tu dirección base: si lo dejas vacío, se usa la dirección en gris. Escribe el destino y elige una sugerencia; con \"Añadir parada\" metes hasta 25 paradas y las reordenas arrastrando.",
+  "tripTour.originModeTitle": "Origen especial: encadena tu día",
+  "tripTour.originModeBody": "\"Salida desde mi dirección base\" es el viaje normal desde casa. \"Continuar desde el último destino\" rellena el origen con el destino de tu viaje anterior — ideal para el segundo viaje del día. \"Regresar a mi dirección base\" fija el destino en tu base para la vuelta.",
+  "tripTour.distanceTitle": "Distancia y tarifa",
+  "tripTour.distanceBody": "La distancia se calcula sola con Google Maps al completar la ruta; puedes corregirla a mano o recalcular con el botón del medio. La tarifa es opcional: si la rellenas, manda sobre la del proyecto y la del perfil.",
+  "tripTour.passengersTitle": "Pasajeros",
+  "tripTour.passengersBody": "Indica cuántos compañeros llevaste: su suplemento por km se calcula aparte y va SIEMPRE separado del kilometraje, también en el informe.",
+  "tripTour.expensesTitle": "Gastos con recibo",
+  "tripTour.expensesBody": "Peaje, parking, combustible y otros: escribe el importe en EUR y adjunta la foto del recibo con el botón de la cámara. Van al informe como líneas propias.",
   "tripDetail.invoiceFailed": "Error",
   "tripDetail.invoiceNeedsReview": "Revisar",
 
