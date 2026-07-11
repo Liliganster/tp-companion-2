@@ -505,7 +505,7 @@ export default function Trips() {
   // escritorio viven DENTRO de la tarjeta de la tabla; en móvil/tablet (donde
   // no hay tabla) en su propia tarjeta sobre la lista.
   const tripsFilters = (
-    <div className="flex flex-col sm:flex-row gap-3">
+    <div className="flex flex-col sm:flex-row gap-3" data-tour="trips-filters">
       <Select value={selectedProject} onValueChange={setSelectedProject}>
         <SelectTrigger className="w-full sm:w-56">
           <Filter className="w-4 h-4 mr-2" />
@@ -555,14 +555,14 @@ export default function Trips() {
             <span className="hidden sm:inline">{t("trips.delete")} ({selectedIds.size})</span>
           </Button>}
           <BulkUploadModal
-            trigger={<Button variant="upload">
+            trigger={<Button variant="upload" data-tour="bulk-upload">
               <Upload className="w-4 h-4" />
               <span className="hidden sm:inline">{t("trips.bulkUpload")}</span>
             </Button>}
             onSave={handleSaveTrip}
             defaultOpen={bulkAutoOpen}
           />
-          <AddTripModal trigger={<Button>
+          <AddTripModal trigger={<Button data-tour="add-trip">
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">{t("trips.addTrip")}</span>
           </Button>} onSave={handleSaveTrip} previousDestination={addPreviousDestination} />

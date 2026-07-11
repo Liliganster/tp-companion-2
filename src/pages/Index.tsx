@@ -144,7 +144,7 @@ export default function Index() {
               </h1>
               <p className="text-muted-foreground mt-1">{t("dashboard.subtitle")}</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2" data-tour="attention">
               <Link
                 to="/plans"
                 className="flex items-center gap-2 px-3 py-1.5 border rounded-lg border-border bg-muted hover:bg-muted/70 transition-colors"
@@ -196,7 +196,7 @@ export default function Index() {
         )}
 
         {/* Fila de 4 cifras planas (sin anillos, sin nota A-D) */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-tour="kpis">
           <FlatKpi
             label={t("dashboard.kpiBillableMonth")}
             value={eur0(billableThisMonth)}

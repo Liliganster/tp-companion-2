@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/hooks/use-i18n";
@@ -7,20 +8,24 @@ import { supabase } from "@/lib/supabaseClient";
 import type { I18nKey } from "@/lib/i18n";
 
 /**
- * Tutorial interactivo (tour con foco tipo spotlight sobre la barra lateral).
+ * Tutorial interactivo — visita GUIADA por la app, no un pop-up estático:
+ * cada paso navega a la página real (panel → viajes → proyectos → informes →
+ * calendario) e ilumina el control concreto con un spotlight.
  *
- * - Arranca solo UNA vez: la primera sesión del usuario. La marca "visto" se
- *   guarda en user_metadata de Supabase (fb_tour_done, persiste entre
- *   dispositivos) con espejo en localStorage por si la red falla.
- * - Se relanza cuando se quiera con `window.dispatchEvent(new CustomEvent("fb:start-tour"))`
- *   (botones en Ajustes → Ayuda y docs, y en la página /docs).
- * - Los pasos apuntan a elementos con [data-tour="..."]; si uno no es visible
- *   (móvil o zoom alto: la sidebar se oculta bajo lg) el paso NO se pierde:
- *   se muestra como tarjeta centrada sin foco. Siempre son 7 pasos.
+ * - Vive en ProtectedLayout (App.tsx): sobrevive a la navegación entre rutas.
+ * - Arranca solo UNA vez (primera sesión del usuario). Marca "visto" en
+ *   user_metadata.fb_tour_done de Supabase + espejo en localStorage.
+ * - Se relanza con `window.dispatchEvent(new CustomEvent("fb:start-tour"))`
+ *   (Ajustes → Ayuda y docs, y la página /docs).
+ * - Anclas por [data-tour="..."]; tras navegar se espera (polling ~4s) a que
+ *   el ancla exista. Si no aparece o no es visible (móvil), el paso se
+ *   muestra centrado con el mismo contenido: NUNCA se pierden pasos.
  */
 
 type TourStep = {
   id: string;
+  /** ruta a la que navegar antes de mostrar el paso (si no estamos ya en ella) */
+  route?: string;
   /** valor de data-tour del elemento a iluminar; sin target = tarjeta centrada */
   target?: string;
   titleKey: I18nKey;
@@ -28,10 +33,15 @@ type TourStep = {
 };
 
 const STEPS: TourStep[] = [
-  { id: "welcome", titleKey: "tour.welcomeTitle", bodyKey: "tour.welcomeBody" },
-  { id: "trips", target: "nav-trips", titleKey: "tour.tripsTitle", bodyKey: "tour.tripsBody" },
-  { id: "projects", target: "nav-projects", titleKey: "tour.projectsTitle", bodyKey: "tour.projectsBody" },
-  { id: "reports", target: "nav-reports", titleKey: "tour.reportsTitle", bodyKey: "tour.reportsBody" },
+  { id: "welcome", route: "/", titleKey: "tour.welcomeTitle", bodyKey: "tour.welcomeBody" },
+  { id: "kpis", route: "/", target: "kpis", titleKey: "tour.kpisTitle", bodyKey: "tour.kpisBody" },
+  { id: "attention", route: "/", target: "attention", titleKey: "tour.attentionTitle", bodyKey: "tour.attentionBody" },
+  { id: "add-trip", route: "/trips", target: "add-trip", titleKey: "tour.addTripTitle", bodyKey: "tour.addTripBody" },
+  { id: "bulk", route: "/trips", target: "bulk-upload", titleKey: "tour.bulkTitle", bodyKey: "tour.bulkBody" },
+  { id: "table", route: "/trips", target: "trips-filters", titleKey: "tour.tableTitle", bodyKey: "tour.tableBody" },
+  { id: "projects", route: "/projects", target: "new-project", titleKey: "tour.projectsTitle", bodyKey: "tour.projectsBody" },
+  { id: "reports", route: "/reports", target: "report-generate", titleKey: "tour.reportsTitle", bodyKey: "tour.reportsBody" },
+  { id: "calendar", route: "/calendar", target: "calendar-header", titleKey: "tour.calendarTitle", bodyKey: "tour.calendarBody" },
   { id: "settings", target: "settings", titleKey: "tour.settingsTitle", bodyKey: "tour.settingsBody" },
   { id: "plan", target: "plan", titleKey: "tour.planTitle", bodyKey: "tour.planBody" },
   { id: "final", titleKey: "tour.finalTitle", bodyKey: "tour.finalBody" },
@@ -40,21 +50,27 @@ const STEPS: TourStep[] = [
 const SPOT_PAD = 6;
 const CARD_GAP = 20;
 const EDGE = 16;
+const FIND_TRIES = 30; // ~4s a 130ms: cubre el lazy-load de la página tras navegar
+const FIND_INTERVAL_MS = 130;
 const AUTO_SESSION_KEY = "fb:tour:auto-checked";
 
 const doneStorageKey = (userId: string) => `fb:tour:done:${userId}`;
 
+/** Primer elemento VISIBLE con ese data-tour (puede haber variante móvil y de escritorio). */
 function findTarget(target: string): HTMLElement | null {
-  const el = document.querySelector<HTMLElement>(`[data-tour="${target}"]`);
-  if (!el) return null;
-  const rect = el.getBoundingClientRect();
-  if (rect.width === 0 || rect.height === 0) return null;
-  return el;
+  const els = document.querySelectorAll<HTMLElement>(`[data-tour="${target}"]`);
+  for (const el of Array.from(els)) {
+    const r = el.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) return el;
+  }
+  return null;
 }
 
 export function OnboardingTour() {
   const { user } = useAuth();
   const { t, tf } = useI18n();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const [active, setActive] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
@@ -65,6 +81,7 @@ export function OnboardingTour() {
 
   const start = useCallback(() => {
     setStepIndex(0);
+    setRect(null);
     setCardPos(null);
     setActive(true);
   }, []);
@@ -93,8 +110,7 @@ export function OnboardingTour() {
     return () => window.removeEventListener("fb:start-tour", onStart);
   }, [start]);
 
-  // Arranque automático: solo la primera vez del usuario (cualquier tamaño de
-  // pantalla — los pasos sin ancla visible se muestran centrados).
+  // Arranque automático: solo la primera vez del usuario.
   useEffect(() => {
     if (!user || active) return;
     if (sessionStorage.getItem(AUTO_SESSION_KEY)) return;
@@ -112,20 +128,55 @@ export function OnboardingTour() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- basta con evaluarlo cuando llega el usuario
   }, [user, start]);
 
-  // Medir el elemento objetivo del paso actual (y re-medir en resize/scroll).
+  // Navegar a la página del paso actual (la visita guiada de verdad).
+  useEffect(() => {
+    if (!active) return;
+    const step = steps[stepIndex];
+    if (step?.route && location.pathname !== step.route) {
+      navigate(step.route);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- location solo se lee; navegar de nuevo al cambiar sería un bucle
+  }, [active, stepIndex, steps, navigate]);
+
+  // Buscar y medir el ancla del paso (con espera: la página puede estar cargando).
   useLayoutEffect(() => {
     if (!active) return;
     const step = steps[stepIndex];
-    const measure = () => {
-      const el = step?.target ? findTarget(step.target) : null;
-      setRect(el ? el.getBoundingClientRect() : null);
+    setRect(null); // sin spotlight viejo mientras llega la página nueva
+    if (!step?.target) return;
+
+    let cancelled = false;
+    let tries = 0;
+    let timer: number | undefined;
+
+    const attempt = () => {
+      if (cancelled) return;
+      const el = findTarget(step.target as string);
+      if (el) {
+        el.scrollIntoView({ block: "center" });
+        setRect(el.getBoundingClientRect());
+        return;
+      }
+      if (tries < FIND_TRIES) {
+        tries += 1;
+        timer = window.setTimeout(attempt, FIND_INTERVAL_MS);
+      }
+      // agotado: se queda centrado (rect null) — el paso no se pierde
     };
-    measure();
-    window.addEventListener("resize", measure);
-    window.addEventListener("scroll", measure, true);
+    attempt();
+
+    const remeasure = () => {
+      if (cancelled) return;
+      const el = findTarget(step.target as string);
+      if (el) setRect(el.getBoundingClientRect());
+    };
+    window.addEventListener("resize", remeasure);
+    window.addEventListener("scroll", remeasure, true);
     return () => {
-      window.removeEventListener("resize", measure);
-      window.removeEventListener("scroll", measure, true);
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+      window.removeEventListener("resize", remeasure);
+      window.removeEventListener("scroll", remeasure, true);
     };
   }, [active, steps, stepIndex]);
 
@@ -141,11 +192,10 @@ export function OnboardingTour() {
       setCardPos({ top: Math.max(EDGE, (vh - h) / 2), left: Math.max(EDGE, (vw - w) / 2) });
       return;
     }
-    // Preferencia: a la derecha del elemento (la sidebar vive a la izquierda).
+    // Preferencia: a la derecha del elemento; si no cabe, debajo; si no, encima.
     let left = rect.right + SPOT_PAD + CARD_GAP;
     let top = rect.top + rect.height / 2 - h / 2;
     if (left + w > vw - EDGE) {
-      // Sin sitio a la derecha: debajo (o encima si tampoco cabe).
       left = Math.min(Math.max(EDGE, rect.left + rect.width / 2 - w / 2), vw - w - EDGE);
       top = rect.bottom + SPOT_PAD + CARD_GAP;
       if (top + h > vh - EDGE) top = rect.top - SPOT_PAD - CARD_GAP - h;

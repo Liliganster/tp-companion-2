@@ -1,5 +1,6 @@
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
+import { OnboardingTour } from "@/components/tour/OnboardingTour";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { UserProfileProvider } from "@/contexts/UserProfileContext";
 import { ProjectsProvider } from "@/contexts/ProjectsContext";
@@ -62,10 +63,12 @@ function RouteFallback() {
 }
 
 // Layout route (Fase 5): un solo RequireAuth para todas las rutas protegidas
-// en vez de 12 repeticiones.
+// en vez de 12 repeticiones. El tour vive aquí (no en MainLayout) porque
+// navega entre páginas y debe sobrevivir al cambio de ruta.
 function ProtectedLayout() {
   return (
     <RequireAuth>
+      <OnboardingTour />
       <Outlet />
     </RequireAuth>
   );

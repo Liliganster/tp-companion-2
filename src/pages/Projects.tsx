@@ -628,6 +628,7 @@ export default function Projects() {
               onSave={handleSaveProject}
             />
             <Button
+              data-tour="new-project"
               onClick={() => {
                 setEditingProjectId(null);
                 setCreateProjectOpen(true);

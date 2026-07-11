@@ -683,7 +683,7 @@ export default function CalendarPage() {
     <MainLayout>
       <div className="page-container">
         {/* Header */}
-        <div className="glass-panel p-6 md:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6 animate-fade-in">
+        <div className="glass-panel p-6 md:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6 animate-fade-in" data-tour="calendar-header">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold">
               {t("calendar.title")}
