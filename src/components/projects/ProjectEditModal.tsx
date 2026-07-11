@@ -14,6 +14,7 @@ import { useI18n } from "@/hooks/use-i18n";
 import { Project } from "@/contexts/ProjectsContext";
 import { Loader2 } from "lucide-react";
 import { logger } from "@/lib/logger";
+import { ModalHeaderImage } from "@/components/ui/modal-header-image";
 
 interface ProjectEditModalProps {
   open: boolean;
@@ -99,16 +100,18 @@ export function ProjectEditModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass max-w-lg">
-        <DialogHeader>
-          <DialogTitle>
-            {project ? t("projects.edit") : t("projects.createNewProject")}
-          </DialogTitle>
-          <DialogDescription className="sr-only">
-            {project ? t("projects.edit") : t("projects.createNewProject")}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
+      <DialogContent className="glass max-w-lg max-h-[90vh] overflow-y-auto p-0">
+        <ModalHeaderImage />
+        <div className="px-6 pb-6">
+          <DialogHeader className="pb-4">
+            <DialogTitle>
+              {project ? t("projects.edit") : t("projects.createNewProject")}
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              {project ? t("projects.edit") : t("projects.createNewProject")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor="name">{t("projects.projectName")}</Label>
             <Input
@@ -161,15 +164,16 @@ export function ProjectEditModal({
               />
             </div>
           </div>
-          <Button className="w-full mt-2" onClick={handleSubmit} disabled={loading}>
-            {loading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : project ? (
-              t("projects.edit")
-            ) : (
-              t("projects.createProject")
-            )}
-          </Button>
+            <Button className="w-full mt-2" onClick={handleSubmit} disabled={loading}>
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : project ? (
+                t("projects.edit")
+              ) : (
+                t("projects.createProject")
+              )}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

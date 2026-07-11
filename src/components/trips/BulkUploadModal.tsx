@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ModalHeaderImage } from "@/components/ui/modal-header-image";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -1975,8 +1976,10 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="w-[95vw] sm:max-w-5xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="flex flex-row items-center justify-between">
+      <DialogContent className="glass w-[95vw] sm:max-w-5xl max-h-[90vh] overflow-y-auto p-0">
+        <ModalHeaderImage />
+        <div className="px-6 pb-6">
+        <DialogHeader className="flex flex-row items-center justify-between pb-4">
           <DialogTitle>{t("bulk.title")}</DialogTitle>
           <DialogDescription className="sr-only">{t("bulk.title")}</DialogDescription>
         </DialogHeader>
@@ -2438,6 +2441,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
             )}
           </TabsContent>
         </Tabs>
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -33,7 +33,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import tripHeaderImage from "@/assets/trip-modal-header.jpg";
+import { ModalHeaderImage } from "@/components/ui/modal-header-image";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatLocaleNumber, parseLocaleNumber } from "@/lib/number";
@@ -821,15 +821,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
         if (tripTourActive) e.preventDefault();
       }}
     >
-      {/* Header Image */}
-      <div className="relative h-32 overflow-hidden rounded-t-lg">
-        <img
-          src={tripHeaderImage}
-          alt="Business trip"
-          className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
-      </div>
+      <ModalHeaderImage />
 
         <div className="px-6 pb-6">
           <DialogHeader className="pb-4">

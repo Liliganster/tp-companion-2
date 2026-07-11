@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ModalHeaderImage } from "@/components/ui/modal-header-image";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -106,8 +107,11 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Casi pantalla completa: el visor de documentos necesita sitio para
-          que un callsheet A4 se lea sin lupa (queja de la propietaria) */}
-      <DialogContent className="w-[96vw] sm:w-[96vw] sm:max-w-[1500px] h-[92vh] max-h-[92vh] p-0 gap-0 overflow-hidden flex flex-col">
+          que un callsheet A4 se lea sin lupa (queja de la propietaria).
+          Cabecera de imagen BAJA (h-16) por lo mismo: estilo unificado sin
+          robarle altura al documento. */}
+      <DialogContent className="glass w-[96vw] sm:w-[96vw] sm:max-w-[1500px] h-[92vh] max-h-[92vh] p-0 gap-0 overflow-hidden flex flex-col">
+        <ModalHeaderImage className="h-16" />
         <DialogHeader className="p-4 pb-0 shrink-0">
           <DialogTitle>{t("tripDetail.title")}</DialogTitle>
           <DialogDescription className="sr-only">{t("tripDetail.title")}</DialogDescription>

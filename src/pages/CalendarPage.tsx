@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ModalHeaderImage } from "@/components/ui/modal-header-image";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -748,8 +749,10 @@ export default function CalendarPage() {
 	        )}
 
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogContent>
-            <DialogHeader>
+          <DialogContent className="glass max-w-lg max-h-[90vh] overflow-y-auto p-0">
+            <ModalHeaderImage />
+            <div className="px-6 pb-6 space-y-4">
+            <DialogHeader className="pb-0">
               <DialogTitle>{t("calendar.createEventTitle")}</DialogTitle>
               <DialogDescription className="sr-only">{t("calendar.createEventTitle")}</DialogDescription>
             </DialogHeader>
@@ -814,6 +817,7 @@ export default function CalendarPage() {
                 {createBusy ? t("calendar.creating") : t("calendar.create")}
               </Button>
             </DialogFooter>
+            </div>
           </DialogContent>
         </Dialog>
 
@@ -974,8 +978,10 @@ export default function CalendarPage() {
 
         {/* Import Event as Trip Dialog */}
         <Dialog open={importOpen} onOpenChange={setImportOpen}>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
+          <DialogContent className="glass sm:max-w-lg max-h-[90vh] overflow-y-auto p-0">
+            <ModalHeaderImage />
+            <div className="px-6 pb-6 space-y-4">
+            <DialogHeader className="pb-0">
               <DialogTitle>{t("calendar.importEventTitle")}</DialogTitle>
               <DialogDescription>{t("calendar.importEventDescription")}</DialogDescription>
             </DialogHeader>
@@ -1086,6 +1092,7 @@ export default function CalendarPage() {
                 {importing ? t("calendar.importing") : t("calendar.importAsTrip")}
               </Button>
             </DialogFooter>
+            </div>
           </DialogContent>
         </Dialog>
       </div>

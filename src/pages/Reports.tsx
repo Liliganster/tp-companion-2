@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ModalHeaderImage } from "@/components/ui/modal-header-image";
 import {
   FileText,
   AlertTriangle,
@@ -527,8 +528,10 @@ export default function Reports() {
 
       {/* Verification Modal */}
       <Dialog open={verificationModalOpen} onOpenChange={setVerificationModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
+        <DialogContent className="glass sm:max-w-md max-h-[90vh] overflow-y-auto p-0">
+          <ModalHeaderImage />
+          <div className="px-6 pb-6">
+          <DialogHeader className="pb-2">
             <DialogTitle>{t("reports.verifyTitle")}</DialogTitle>
             <DialogDescription className="sr-only">{t("reports.verifyTitle")}</DialogDescription>
           </DialogHeader>
@@ -583,8 +586,7 @@ export default function Reports() {
               {t("reports.generateReport")}
             </Button>
           </div>
-
-
+          </div>
         </DialogContent>
       </Dialog>
     </MainLayout>

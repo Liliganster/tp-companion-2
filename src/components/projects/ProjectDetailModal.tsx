@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ModalHeaderImage } from "@/components/ui/modal-header-image";
 import { Button } from "@/components/ui/button";
 import { Car, Calendar, Route, Leaf, FileText, Sparkles, Eye, Trash2, Upload, Receipt, Loader2, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -1511,7 +1512,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     <>
       {/* Pending Trips Review Dialog */}
       <Dialog open={showPendingTrips} onOpenChange={setShowPendingTrips}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh] p-0 gap-0 overflow-hidden z-[70]">
+        <DialogContent className="glass sm:max-w-4xl max-h-[90vh] p-0 gap-0 overflow-hidden z-[70] flex flex-col">
+          <ModalHeaderImage className="h-16" />
           <DialogHeader className="p-6 pb-4">
             <DialogTitle className="text-xl font-semibold">
               Viajes procesados ({pendingTrips.length})
@@ -1580,13 +1582,15 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
       {/* Main Project Detail Dialog */}
       <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] p-0 gap-0 overflow-hidden">
+      <DialogContent className="glass sm:max-w-2xl max-h-[90vh] p-0 gap-0 overflow-hidden">
+        <ModalHeaderImage />
         <DialogHeader className="p-6 pb-4">
           <DialogTitle className="text-xl font-semibold">{project.name}</DialogTitle>
           <DialogDescription className="sr-only">{project.name}</DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[calc(90vh-80px)]">
+        {/* 208px = cabecera de imagen (128) + título (80) */}
+        <ScrollArea className="max-h-[calc(90vh-208px)]">
           <div className="px-6 pb-6 space-y-6">
             {/* Stats Grid */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
