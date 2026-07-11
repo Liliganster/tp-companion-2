@@ -139,7 +139,22 @@ export default function Docs() {
           id: "calendar",
           title: "Calendario",
           body: [
-            "Conecta tu Google Calendar para ver tus eventos junto a tus viajes y crear viajes a partir de un evento con un clic.",
+            "Conecta tu Google Calendar (\"Conectar Google\" en la página Calendario) y la sincronización funciona en las dos direcciones.",
+            {
+              label: "Del calendario a Fahrtenbuch Pro (evento → viaje)",
+              items: [
+                "Haz clic en un evento y elige \"Importar como viaje\": la ruta se monta sola como ida y vuelta desde tu dirección base hasta la ubicación del evento, y la distancia se calcula con Google Maps.",
+                "El viaje cae en un proyecto \"Unknown\" con el título del evento como productora — muévelo luego al proyecto correcto si quieres.",
+                "Necesita tu dirección base completa en el perfil (dirección, ciudad y país) y que el evento tenga ubicación.",
+              ],
+            },
+            {
+              label: "De Fahrtenbuch Pro al calendario (viaje → evento)",
+              items: [
+                "En la tabla de Viajes, abre el menú de la fila (⋮) y elige \"Añadir al calendario\": se crea un evento en tu Google Calendar el día del viaje, con el proyecto en el título, el destino como ubicación y la ruta con los km en la descripción.",
+              ],
+            },
+            "Además puedes activar varios calendarios con sus interruptores y crear eventos de Google desde la propia app (botón \"Crear evento\" o clic en un día).",
           ],
         },
         {
@@ -288,7 +303,22 @@ export default function Docs() {
           id: "calendar",
           title: "Calendar",
           body: [
-            "Connect your Google Calendar to see your events next to your trips and create trips from an event in one click.",
+            "Connect your Google Calendar (\"Connect Google\" on the Calendar page) and the sync works in both directions.",
+            {
+              label: "From the calendar into Fahrtenbuch Pro (event → trip)",
+              items: [
+                "Click an event and choose \"Import as trip\": the route is built automatically as a round trip from your base address to the event's location, and the distance is calculated with Google Maps.",
+                "The trip lands in an \"Unknown\" project with the event title as the production company — move it to the right project later if you like.",
+                "Requires your complete base address in the profile (address, city and country) and a location on the event.",
+              ],
+            },
+            {
+              label: "From Fahrtenbuch Pro into the calendar (trip → event)",
+              items: [
+                "In the Trips table, open the row menu (⋮) and choose \"Add to calendar\": an event is created in your Google Calendar on the trip's date, with the project in the title, the destination as the location and the route with the km in the description.",
+              ],
+            },
+            "You can also enable several calendars with their switches and create Google events right from the app (\"Create event\" button or clicking a day).",
           ],
         },
         {
@@ -437,7 +467,22 @@ export default function Docs() {
           id: "calendar",
           title: "Kalender",
           body: [
-            "Verbinde deinen Google Kalender, um Termine neben deinen Fahrten zu sehen und aus einem Termin mit einem Klick eine Fahrt zu erstellen.",
+            "Verbinde deinen Google Kalender (\"Google verbinden\" auf der Kalender-Seite) — die Synchronisation funktioniert in beide Richtungen.",
+            {
+              label: "Vom Kalender in Fahrtenbuch Pro (Termin → Fahrt)",
+              items: [
+                "Klicke einen Termin an und wähle \"Als Fahrt importieren\": Die Route wird automatisch als Hin- und Rückfahrt von deiner Basisadresse zum Ort des Termins gebaut, die Distanz berechnet Google Maps.",
+                "Die Fahrt landet in einem \"Unknown\"-Projekt mit dem Termintitel als Produktionsfirma — verschiebe sie später ins richtige Projekt, wenn du magst.",
+                "Braucht deine vollständige Basisadresse im Profil (Adresse, Stadt und Land) und einen Ort am Termin.",
+              ],
+            },
+            {
+              label: "Von Fahrtenbuch Pro in den Kalender (Fahrt → Termin)",
+              items: [
+                "Öffne in der Fahrten-Tabelle das Zeilenmenü (⋮) und wähle \"Zum Kalender hinzufügen\": In deinem Google Kalender entsteht ein Termin am Tag der Fahrt — Projekt im Titel, Ziel als Ort, Route mit km in der Beschreibung.",
+              ],
+            },
+            "Außerdem kannst du mehrere Kalender per Schalter aktivieren und Google-Termine direkt aus der App erstellen (\"Termin erstellen\" oder Klick auf einen Tag).",
           ],
         },
         {
