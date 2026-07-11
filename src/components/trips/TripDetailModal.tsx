@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { MapPin, FileText, CircleDot, Eye, Car, Receipt, ParkingCircle, Banknote, Users } from "lucide-react";
+import { MapPin, FileText, CircleDot, Eye, Car, Receipt, ParkingCircle, Banknote, Users, ArrowLeft, ExternalLink } from "lucide-react";
 import { useI18n } from "@/hooks/use-i18n";
 import { TripGoogleMap } from "@/components/trips/TripGoogleMap";
 import { Trip, useTrips } from "@/contexts/TripsContext";
@@ -105,13 +105,15 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] sm:w-full sm:max-w-4xl h-[90vh] md:h-auto max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
+      {/* Casi pantalla completa: el visor de documentos necesita sitio para
+          que un callsheet A4 se lea sin lupa (queja de la propietaria) */}
+      <DialogContent className="w-[96vw] sm:w-[96vw] sm:max-w-[1500px] h-[92vh] max-h-[92vh] p-0 gap-0 overflow-hidden flex flex-col">
         <DialogHeader className="p-4 pb-0 shrink-0">
           <DialogTitle>{t("tripDetail.title")}</DialogTitle>
           <DialogDescription className="sr-only">{t("tripDetail.title")}</DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col md:flex-row flex-1 md:h-[600px] min-h-0">
+        <div className="flex flex-col md:flex-row flex-1 min-h-0">
           <div className="w-full md:w-80 max-h-[45%] md:max-h-none p-4 space-y-4 overflow-y-auto border-b md:border-b-0 md:border-r border-border/50 bg-secondary/20 min-h-0">
             <div>
               <Label className="text-xs uppercase tracking-wide text-muted-foreground">{t("tripDetail.date")}</Label>
@@ -226,12 +228,39 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
                 </TabsContent>
 
                 <TabsContent value="document" className="absolute inset-0 m-0 bg-secondary/20">
-                  <div className="w-full h-full p-4 sm:p-6 overflow-auto">
+                  <div className={previewUrl ? "w-full h-full p-2 sm:p-3 overflow-hidden" : "w-full h-full p-4 sm:p-6 overflow-auto"}>
                     {previewUrl ? (
-                      <div className="flex flex-col h-full">
-                        <div className="flex-1 bg-background rounded border border-border/50 overflow-hidden">
-                          {previewDocName.toLowerCase().endsWith(".pdf") || previewDocName.toLowerCase().endsWith(".jpg") || previewDocName.toLowerCase().endsWith(".png") || previewDocName.toLowerCase().endsWith(".jpeg") ? (
+                      <div className="flex flex-col h-full min-h-0">
+                        {/* Barra del visor: volver a la lista, nombre y abrir a tamaño completo */}
+                        <div className="flex items-center gap-2 pb-2 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            type="button"
+                            onClick={() => {
+                              URL.revokeObjectURL(previewUrl);
+                              setPreviewUrl(null);
+                              setPreviewDocName("");
+                            }}
+                          >
+                            <ArrowLeft className="w-4 h-4 sm:mr-1" />
+                            <span className="hidden sm:inline">{t("tripDetail.backToDocuments")}</span>
+                          </Button>
+                          <p className="flex-1 min-w-0 truncate text-center text-xs text-muted-foreground">{previewDocName}</p>
+                          <Button variant="outline" size="sm" asChild>
+                            <a href={previewUrl} target="_blank" rel="noreferrer">
+                              <ExternalLink className="w-4 h-4 sm:mr-1" />
+                              <span className="hidden sm:inline">{t("tripDetail.openInNewTab")}</span>
+                            </a>
+                          </Button>
+                        </div>
+                        <div className="flex-1 min-h-0 bg-background rounded border border-border/50 overflow-hidden">
+                          {previewDocName.toLowerCase().endsWith(".pdf") ? (
                             <iframe src={previewUrl} className="w-full h-full" title={t("tripDetail.previewFrameTitle")} />
+                          ) : /\.(jpe?g|png|webp|heic)$/i.test(previewDocName) ? (
+                            <div className="w-full h-full overflow-auto flex items-center justify-center">
+                              <img src={previewUrl} alt={previewDocName} className="max-w-full max-h-full object-contain" />
+                            </div>
                           ) : (
                             <div className="flex flex-col items-center justify-center h-full text-center p-4">
                               <FileText className="w-12 h-12 text-muted-foreground mb-2" />
