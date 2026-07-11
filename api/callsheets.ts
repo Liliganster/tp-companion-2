@@ -119,8 +119,11 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
       return sendJson(res, 409, { error: "not_claimable", status: s });
     }
 
-    // 3. Load user AI settings (OpenRouter override if configured)
-    const userSettings = profile?.openrouter_enabled && profile?.openrouter_api_key
+    // 3. Load user AI settings (OpenRouter override if configured).
+    // OpenRouter propio = SOLO plan Pro (regla de la propietaria 2026-07-10):
+    // la UI ya lo esconde en Free, pero el servidor no debe fiarse del perfil.
+    const isPro = String(profile?.plan_tier ?? "").trim().toLowerCase() === "pro";
+    const userSettings = isPro && profile?.openrouter_enabled && profile?.openrouter_api_key
       ? { openrouterEnabled: true, openrouterApiKey: profile.openrouter_api_key, openrouterModel: profile.openrouter_model }
       : undefined;
 

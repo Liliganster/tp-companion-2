@@ -13,6 +13,7 @@ interface OpenRouterModel {
   };
   architecture?: {
     modality: string;
+    input_modalities?: string[];
     tokenizer: string;
     instruct_type: string;
   };
@@ -40,10 +41,18 @@ export function useOpenRouterModels(apiKey?: string, enabled: boolean = true) {
       }
 
       const data = (await response.json()) as OpenRouterResponse;
-      
-      // Filter for models that likely support vision/multimodal (JSON extraction)
-      // OpenRouter doesn't always have a strict binary flag for vision, but we sort alphabetically
-      return data.data.sort((a, b) => a.name.localeCompare(b.name));
+
+      // SOLO modelos multimodales: el extractor envía PDFs/imágenes, así que
+      // un modelo de solo texto fallaría siempre. OpenRouter declara las
+      // modalidades de entrada en architecture.input_modalities (o, en
+      // modelos antiguos, en architecture.modality tipo "text+image->text").
+      const isMultimodal = (m: OpenRouterModel) => {
+        const inputs = m.architecture?.input_modalities;
+        if (Array.isArray(inputs)) return inputs.includes("image") || inputs.includes("file");
+        return /image|file|multimodal/i.test(m.architecture?.modality ?? "");
+      };
+
+      return data.data.filter(isMultimodal).sort((a, b) => a.name.localeCompare(b.name));
     },
     enabled: enabled,
     staleTime: 1000 * 60 * 60 * 24, // 24 hours

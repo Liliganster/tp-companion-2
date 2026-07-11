@@ -288,8 +288,9 @@ export default withApiObservability(async function handler(req: any, res: any, {
         }
 
         // Fetch AI user settings — reuse the profile cached during plan-limit checks (no extra DB query).
+        // OpenRouter propio = SOLO plan Pro (el servidor no se fía del perfil a secas).
         let userSettings = undefined;
-        if (userId) {
+        if (userId && String(planTierByUserId.get(userId) ?? "basic").toLowerCase() === "pro") {
           const cachedProfile = userProfileCache.get(userId);
           if (cachedProfile?.openrouter_enabled && cachedProfile?.openrouter_api_key) {
             userSettings = {

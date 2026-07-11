@@ -119,9 +119,9 @@ const handleExtract = withApiObservability(async function handler(req: any, res:
 
     log.info({ storagePath, snapshotId }, "odometer_extract_start");
 
-    // AI settings (OpenRouter or default Gemini)
+    // AI settings (OpenRouter or default Gemini). OpenRouter propio = SOLO plan Pro.
     let userSettings = undefined;
-    if ((profile as any)?.openrouter_enabled && (profile as any)?.openrouter_api_key) {
+    if (String((profile as any)?.plan_tier ?? "").trim().toLowerCase() === "pro" && (profile as any)?.openrouter_enabled && (profile as any)?.openrouter_api_key) {
       userSettings = {
         openrouterEnabled: (profile as any).openrouter_enabled,
         openrouterApiKey: (profile as any).openrouter_api_key,

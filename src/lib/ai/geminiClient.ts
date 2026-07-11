@@ -61,6 +61,43 @@ export type JsonSchema = Record<string, unknown>;
 
 type OpenRouterMessage = { role: string; content: unknown };
 
+/**
+ * Limpia la respuesta cuando el modelo no soporta salida estructurada:
+ * quita vallas ```json y recorta al primer objeto/array JSON del texto.
+ */
+function extractJsonPayload(text: string): string {
+  const trimmed = text.trim();
+  const fence = /^```(?:json)?\s*([\s\S]*?)\s*```$/m.exec(trimmed);
+  const candidate = (fence ? fence[1] : trimmed).trim();
+  if (candidate.startsWith("{") || candidate.startsWith("[")) return candidate;
+  const start = candidate.indexOf("{");
+  const end = candidate.lastIndexOf("}");
+  if (start >= 0 && end > start) return candidate.slice(start, end + 1);
+  return candidate;
+}
+
+/** Añade la instrucción de esquema al texto del último mensaje de usuario. */
+function withSchemaInstruction(messages: OpenRouterMessage[], note: string): OpenRouterMessage[] {
+  return messages.map((m, i) => {
+    if (i !== messages.length - 1 || m.role !== "user") return m;
+    if (typeof m.content === "string") return { ...m, content: m.content + note };
+    if (Array.isArray(m.content)) {
+      let appended = false;
+      const parts = m.content.map((part) => {
+        const p = part as { type?: unknown; text?: unknown } | null;
+        if (!appended && p && typeof p === "object" && p.type === "text") {
+          appended = true;
+          return { ...(p as Record<string, unknown>), text: String(p.text ?? "") + note };
+        }
+        return part;
+      });
+      if (!appended) parts.push({ type: "text", text: note });
+      return { ...m, content: parts };
+    }
+    return m;
+  });
+}
+
 async function callOpenRouter(
   modelName: string,
   prompt: string,
@@ -108,47 +145,62 @@ async function callOpenRouter(
     };
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
-
-  try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://fahrtenbuch-pro.com", 
-        "X-Title": "Fahrtenbuch Pro",
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`OpenRouter API error: ${response.status} ${text}`);
+  const doRequest = async (body: Record<string, unknown>): Promise<Response> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+    try {
+      return await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://fahrtenbuch-pro.com",
+          "X-Title": "Fahrtenbuch Pro",
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
     }
+  };
 
-    const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: unknown } }>;
-      model?: unknown;
-      provider?: unknown;
-    };
-    const text = extractOpenRouterText(data?.choices?.[0]?.message?.content);
-    if (!text) throw new Error("OpenRouter API error: empty response content");
+  let response = await doRequest(payload);
 
-    return {
-      text,
-      provider: "openrouter",
-      model: typeof data?.model === "string" && data.model.trim() ? data.model : modelName,
-      vendor: typeof data?.provider === "string" && data.provider.trim() ? data.provider : "openrouter",
-    };
-  } catch (error) {
-    clearTimeout(timeoutId);
-    throw error;
+  // OpenRouter propio (plan Pro) debe funcionar con la MAYORÍA de modelos
+  // multimodales: muchos no soportan response_format json_schema estricto y
+  // devuelven 4xx. Reintento ÚNICO sin salida estructurada, con el esquema
+  // incrustado en el prompt; la respuesta se limpia con extractJsonPayload.
+  let usedSchemaFallback = false;
+  if (!response.ok && schema && response.status >= 400 && response.status < 500) {
+    const note = `\n\nDevuelve EXCLUSIVAMENTE un objeto JSON válido (sin markdown, sin comentarios, sin texto adicional) que cumpla exactamente este esquema JSON:\n${JSON.stringify(schema)}`;
+    usedSchemaFallback = true;
+    response = await doRequest({
+      model: modelName,
+      messages: withSchemaInstruction(finalMessages, note),
+      temperature: 0,
+    });
   }
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`OpenRouter API error: ${response.status} ${text}`);
+  }
+
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: unknown } }>;
+    model?: unknown;
+    provider?: unknown;
+  };
+  const text = extractOpenRouterText(data?.choices?.[0]?.message?.content);
+  if (!text) throw new Error("OpenRouter API error: empty response content");
+
+  return {
+    text: schema && usedSchemaFallback ? extractJsonPayload(text) : text,
+    provider: "openrouter",
+    model: typeof data?.model === "string" && data.model.trim() ? data.model : modelName,
+    vendor: typeof data?.provider === "string" && data.provider.trim() ? data.provider : "openrouter",
+  };
 }
 
 export async function generateContent(

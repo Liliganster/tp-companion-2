@@ -71,8 +71,9 @@ const handleExtract = withApiObservability(async function handler(req: any, res:
 
     // Fetch AI user settings
     let userSettings = undefined;
-    const { data: userProfile } = await supabaseAdmin.from("user_profiles").select("openrouter_enabled, openrouter_api_key, openrouter_model").eq("id", user.id).maybeSingle();
-    if (userProfile?.openrouter_enabled && userProfile?.openrouter_api_key) {
+    const { data: userProfile } = await supabaseAdmin.from("user_profiles").select("plan_tier, openrouter_enabled, openrouter_api_key, openrouter_model").eq("id", user.id).maybeSingle();
+    // OpenRouter propio = SOLO plan Pro
+    if (String(userProfile?.plan_tier ?? "").trim().toLowerCase() === "pro" && userProfile?.openrouter_enabled && userProfile?.openrouter_api_key) {
       userSettings = { openrouterEnabled: userProfile.openrouter_enabled, openrouterApiKey: userProfile.openrouter_api_key, openrouterModel: userProfile.openrouter_model };
     }
 

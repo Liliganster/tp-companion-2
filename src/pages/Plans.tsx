@@ -19,13 +19,18 @@ export default function Plans() {
     toast.info(t("common.comingSoon") || "Coming Soon");
   };
 
+  // Cantidades = las REALES de src/lib/plans.ts (Free: 3 IA/mes, lote de 3;
+  // Pro: 60 IA/mes, lote de 20). OpenRouter propio = solo Pro.
   const basicFeatures = [
     { text: t("plans.features.unlimitedTrips"), included: true },
     { text: t("plans.features.unlimitedProjects"), included: true },
     { text: t("plans.features.stops25"), included: true },
     { text: t("plans.features.ai3"), included: true },
+    { text: t("plans.features.callsheetBatch3"), included: true },
+    { text: t("plans.features.calendarSync"), included: true },
     { text: t("plans.features.reportsUnlimited"), included: true },
     { text: t("plans.features.csvExport"), included: true },
+    { text: t("plans.features.byoOpenrouter"), included: false },
   ];
 
   const proFeatures = [
@@ -34,8 +39,10 @@ export default function Plans() {
     { text: t("plans.features.stops25"), included: true },
     { text: t("plans.features.ai60"), included: true },
     { text: t("plans.features.callsheetBulk20"), included: true },
-    { text: t("plans.features.reportsUnlimited"), included: true },
+    { text: t("plans.features.byoOpenrouter"), included: true },
     { text: t("plans.features.calendarSync"), included: true },
+    { text: t("plans.features.reportsUnlimited"), included: true },
+    { text: t("plans.features.csvExport"), included: true },
     { text: t("plans.features.prioritySupport"), included: true },
   ];
 
