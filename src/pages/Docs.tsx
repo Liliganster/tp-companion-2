@@ -9,9 +9,10 @@ type DocSection = { id: string; title: string; body: Array<string | { label: str
 
 /**
  * Documentación de Fahrtenbuch Pro — contenido INLINE en 3 idiomas.
- * Reescrita 2026-07-11 para reflejar el producto real (v13 del informe,
- * planes Free/Pro, extractor multimodal). Si cambias una función, actualiza
- * su sección aquí en LOS TRES idiomas.
+ * Ampliada 2026-07-11 (2ª pasada): 11 secciones con el inventario completo
+ * de funciones (panel, viajes, callsheets IA, proyectos, informes, CO₂,
+ * calendario, planes, ajustes, problemas). Si cambias una función,
+ * actualiza su sección aquí en LOS TRES idiomas.
  */
 export default function Docs() {
   const { language } = useI18n();
@@ -34,38 +35,78 @@ export default function Docs() {
   const content = useMemo(() => {
     const es: { title: string; subtitle: string; sections: DocSection[] } = {
       title: "Documentación",
-      subtitle: "Guía de Fahrtenbuch Pro: del callsheet al informe de Kilometergeld.",
+      subtitle: "Guía completa de Fahrtenbuch Pro: del callsheet al informe de Kilometergeld.",
       sections: [
         {
           id: "start",
           title: "Primeros pasos",
           body: [
-            "Fahrtenbuch Pro organiza tus viajes de rodaje por proyecto y genera el informe de Kilometergeld listo para producción y para el fisco.",
+            "Fahrtenbuch Pro organiza tus viajes de rodaje por proyecto y genera el informe de Kilometergeld listo para producción y para el fisco. Entra con tu cuenta de Google o con email y contraseña (con recuperación si la olvidas).",
             {
               label: "Antes de nada, completa tu perfil (Ajustes → Perfil)",
               items: [
                 "Tarifa por km (€/km): sin ella no se calculan los importes.",
-                "Dirección base: con ella el origen y el destino de cada viaje se rellenan solos y la distancia se calcula automáticamente.",
-                "Recargo por pasajero (€/km), matrícula y datos del coche (consumo y precios, para el CO₂ y el margen).",
+                "Dirección base (con ciudad y país): con ella el origen y el destino de cada viaje se rellenan solos, la distancia se calcula automáticamente y funcionan la importación del calendario y los modos de ruta.",
+                "Recargo por pasajero (€/km), matrícula y NIF/UID: salen en la cabecera del informe.",
+                "Datos del coche (tipo de combustible y consumo): activan el CO₂ y el margen neto del panel.",
               ],
             },
             "El panel te avisará con un banner si falta la tarifa o la dirección base.",
+            "La primera vez que entras, un tutorial interactivo te enseña la app en 7 pasos. Puedes repetirlo cuando quieras: botón \"Iniciar tutorial\" aquí arriba o en Ajustes → Ayuda y docs.",
+          ],
+        },
+        {
+          id: "dashboard",
+          title: "Panel de control",
+          body: [
+            "El panel resume tu mes de un vistazo y concentra los accesos rápidos: \"Subir callsheet\" y \"Añadir viaje\" desde la cabecera.",
+            {
+              label: "Qué muestra",
+              items: [
+                "Cuatro tarjetas del mes con comparación contra el mes anterior: € a facturar, kilómetros, viajes y CO₂.",
+                "Contador de callsheets IA: cuántas extracciones llevas del mes y cuándo se renueva la cuota (el día 1).",
+                "Campana \"Necesita tu atención\": callsheets fallidas o pendientes de revisión y advertencias de viajes (sin proyecto, distancia 0 o improbable, sin motivo). Cada línea te lleva al lugar donde se arregla.",
+                "Margen neto de tu coche: lo facturado menos el coste estimado del coche. Necesita consumo y precios en Ajustes.",
+                "% de uso profesional: tus km de trabajo frente a los km totales anuales del coche (introdúcelos en Ajustes, de la factura del taller o la ITV). Útil para el fisco.",
+                "Últimos 6 meses (barras de km y €) y la lista de viajes recientes.",
+              ],
+            },
+            "Los primeros días del mes aparece un banner \"Informe de {mes} listo\" para generar el PDF del mes anterior con un clic.",
           ],
         },
         {
           id: "trips",
           title: "Viajes",
           body: [
-            "Crea viajes a mano con \"Añadir viaje\" o genera muchos de golpe subiendo callsheets con IA (siguiente sección).",
+            "Crea viajes a mano con \"Añadir viaje\" o genera muchos de golpe subiendo callsheets con \"Carga masiva\" (siguiente sección).",
             {
-              label: "Al crear un viaje",
+              label: "Al crear o editar un viaje",
               items: [
                 "El origen y el destino parten de tu dirección base; escribe el destino (elige la sugerencia o sal del campo) y la distancia se calcula sola con Google Maps.",
-                "Modos \"Continuación\" (el origen es el destino del viaje anterior) y \"Regreso\" (el destino es tu base).",
                 "Hasta 25 paradas por viaje, arrastrables para reordenar.",
+                "Tres modos de ruta: salida desde tu base, \"Continuar desde el último destino\" (encadena viajes de un mismo día) y \"Regresar a mi dirección base\".",
+                "Proyecto: búscalo o créalo sin salir del campo (\"Crear …\" / \"Usar … como cliente\").",
                 "Pasajeros: su suplemento se muestra SIEMPRE separado del kilometraje, también en el informe.",
-                "Gastos por viaje: peaje, parking, combustible y otros — van al informe como líneas propias.",
                 "Tarifa propia por viaje (opcional): manda sobre la del proyecto y la del perfil.",
+                "Motivo: rellénalo — el checklist del informe avisa si falta.",
+                "Si ya existe un viaje con la misma fecha y ruta, la app te avisa antes de crear un duplicado.",
+              ],
+            },
+            {
+              label: "Gastos por viaje",
+              items: [
+                "Peaje, parking, combustible y otros: introduce el importe en EUR y adjunta la foto del recibo (cámara o archivo, se puede rotar). Van al informe como líneas propias y el recibo entra en el ZIP de documentación.",
+                "Recibos extranjeros (CZK/HUF): introduce el importe ya convertido a EUR.",
+                "Litros o kWh del viaje (opcional): afinan el cálculo de CO₂ y de costes.",
+              ],
+            },
+            {
+              label: "La tabla de viajes",
+              items: [
+                "Filtros por proyecto y año, orden por fecha, y \"Cargar más\" a partir de 10 filas.",
+                "Selección múltiple con casillas para borrar en lote.",
+                "Menú de cada fila (⋮): Ver mapa, Añadir al calendario, Editar y Eliminar.",
+                "Clic en la fila = detalle del viaje: desglose de costes, pestaña Mapa con la ruta en Google Maps y pestaña Documento con vista previa, descarga y adjuntos.",
               ],
             },
             "Al borrar un viaje se eliminan también sus documentos y callsheets asociados (archivos incluidos). Si el proyecto se queda sin viajes, el proyecto y sus documentos se eliminan también. No hay papelera.",
@@ -75,7 +116,7 @@ export default function Docs() {
           id: "callsheets",
           title: "Callsheets con IA",
           body: [
-            "En Viajes → \"Carga masiva\" sube callsheets en PDF o foto (JPG, PNG, WebP, HEIC). La IA extrae la fecha, el proyecto, la productora y las localizaciones de rodaje, y te las presenta para revisar antes de guardar nada.",
+            "En Viajes → \"Carga masiva\" sube callsheets en PDF o foto (JPG, PNG, WebP, HEIC). La IA extrae la fecha, el proyecto, la productora y las localizaciones de rodaje, y te las presenta para revisar antes de guardar nada. También puedes subir callsheets dentro de una carpeta de proyecto (\"Subir hojas de llamada\") y lanzar \"Extraer datos con IA\" desde ahí.",
             {
               label: "Cómo saca las direcciones",
               items: [
@@ -85,11 +126,21 @@ export default function Docs() {
               ],
             },
             {
+              label: "Estados y revisión",
+              items: [
+                "Procesando → Completado: revisa los viajes propuestos y pulsa \"Guardar N viajes\" (o \"Descartar todos\").",
+                "\"Revisar\": la IA no está segura de algún dato (p. ej. la fecha) — confírmalo tú.",
+                "\"Error\": suele ser un PDF ilegible o una foto borrosa; \"Volver a procesar\" con una versión mejor.",
+                "\"Límite agotado\": se acabó la cuota del mes.",
+                "Si un viaje propuesto ya existe (misma fecha y ruta), se salta y se te avisa: sin duplicados.",
+              ],
+            },
+            {
               label: "Cuotas de IA",
               items: [
-                "Gratuito: 3 callsheets al mes, hasta 3 por subida.",
-                "Pro: 60 al mes, hasta 20 por subida.",
-                "Pro además permite usar tu propia clave de OpenRouter y elegir el modelo de IA (cualquier modelo multimodal del catálogo).",
+                "Gratuito: 3 extracciones al mes, lotes de hasta 3 archivos.",
+                "Pro: 60 extracciones al mes, lotes de hasta 20 archivos y procesamiento en paralelo.",
+                "Pro además puede usar su propia clave de OpenRouter y elegir casi cualquier modelo multimodal (Ajustes → APIs).",
               ],
             },
           ],
@@ -98,41 +149,73 @@ export default function Docs() {
           id: "projects",
           title: "Proyectos",
           body: [
-            "El proyecto es la carpeta que lo contiene todo: sus viajes, sus callsheets y sus gastos de proyecto (facturas no ligadas a un viaje concreto).",
+            "Cada producción es una carpeta: contiene sus viajes, callsheets, documentos y facturas, y hereda la productora. Los viajes creados desde un callsheet caen automáticamente en su proyecto.",
             {
-              label: "Detalles útiles",
+              label: "La página de proyectos",
               items: [
-                "La productora se fija sola desde la primera extracción y se hereda a los viajes del proyecto.",
-                "Cada proyecto puede tener su propia tarifa €/km (manda sobre la del perfil).",
-                "Los estados de los callsheets (procesando, revisar, error, sin cuota) se ven en el detalle del proyecto.",
+                "Búsqueda por nombre y filtros por productora y año; selección múltiple para borrar en lote.",
+                "La tabla muestra por proyecto: viajes, distancia total, CO₂, documentos/callsheets, facturas y reembolso acumulado.",
+                "Marca con la estrella tus proyectos destacados.",
               ],
             },
-            "Borrar un proyecto elimina sus viajes, callsheets y documentos, con sus archivos. Igual que con los viajes: no hay papelera.",
+            {
+              label: "Dentro de la carpeta (Ver detalles)",
+              items: [
+                "Estadísticas: kilómetros totales, días de rodaje, km por día y CO₂ estimado.",
+                "Hojas de llamada: sube hasta 20, extrae datos con IA, reprocesa o cancela; los viajes guardados quedan vinculados al callsheet.",
+                "Documentos y facturas del proyecto (las facturas adjuntadas a un viaje se gestionan desde ese viaje).",
+                "Tarifas propias del proyecto (€/km y €/pasajero): las heredan todos sus viajes, salvo que un viaje tenga tarifa propia.",
+              ],
+            },
+            "Borrar un proyecto elimina en cascada todos sus viajes, callsheets, documentos y archivos. Y al revés: si borras el último viaje de un proyecto, el proyecto entero (con sus documentos) desaparece. No hay papelera.",
           ],
         },
         {
           id: "reports",
           title: "Informes",
           body: [
-            "En Informes eliges proyecto y rango de fechas (al elegir un proyecto, el rango se ajusta solo a sus viajes) y generas el informe.",
+            "En Informes → \"Generar nuevo informe\" eliges proyecto (o todos), y el período: mes y año, o un rango libre desde–hasta.",
             {
-              label: "El informe",
+              label: "Antes de generar",
               items: [
-                "La tabla lleva sus totales integrados: viajes, km, CO₂ (opcional) e importes.",
-                "El importe de cada viaje es SOLO km × tarifa; el suplemento por pasajeros va como línea separada del resumen — o únelo al kilometraje con el interruptor \"Unir suplemento\".",
-                "\"Contenido del informe\": la columna de CO₂ y el bloque de firma son opcionales; el pie \"Creado con Fahrtenbuch Pro\" siempre está.",
-                "El PDF sale en alemán por defecto (es para producción/Finanzamt) y también en inglés o español.",
-                "Exporta PDF, CSV/Excel o un ZIP con el PDF y los recibos adjuntos; puedes guardar informes para reabrirlos.",
+                "Un checklist automático revisa los viajes del período y avisa de problemas típicos: distancia 0 o improbable y motivo vacío. Puedes corregirlos o continuar.",
               ],
             },
+            {
+              label: "En la vista del informe",
+              items: [
+                "Los totales viven dentro de la tabla, con el número de viajes en la etiqueta (\"Summe (12 Fahrten)\").",
+                "El suplemento de pasajeros va SIEMPRE separado del kilometraje; si la producción lo quiere unido, activa \"Unir suplemento de pasajeros al kilometraje\" — el total no cambia.",
+                "Menú \"Contenido del informe\": columna de CO₂ y bloque de firma, opcionales.",
+                "La tarifa por km y la matrícula salen en la cabecera; los gastos de los viajes aparecen como líneas propias.",
+                "\"Idioma del PDF\" es independiente del idioma de la app: entrega el informe en alemán a una producción alemana aunque uses la app en español.",
+              ],
+            },
+            {
+              label: "Exportar y guardar",
+              items: [
+                "PDF (el formato para producción y Finanzamt), CSV para hojas de cálculo e imprimir directamente.",
+                "\"Descargar ZIP con documentación\" (Pro): el informe junto a todos los recibos y callsheets del período, listo para adjuntar a un email.",
+                "\"Guardar\" añade el informe a la lista de Informes para volver a abrirlo o exportarlo más tarde.",
+              ],
+            },
+            "Todos los PDF llevan el pie \"Creado con Fahrtenbuch Pro\".",
           ],
         },
         {
           id: "co2",
           title: "CO₂",
           body: [
-            "El CO₂ de cada viaje se calcula con la distancia y el consumo configurado de tu coche (factores oficiales tanque-a-rueda; para eléctricos, el mix eléctrico).",
-            "En el panel lo ves como total mensual con su equivalencia en árboles; en el informe, como columna opcional.",
+            "El CO₂ se calcula con factores estáticos citados (metodología tanque-a-rueda) y el consumo real de tu coche configurado en Ajustes. Para eléctricos se usa la intensidad media anual de la red de tu país (AT/DE/CZ/HU).",
+            {
+              label: "Dónde aparece",
+              items: [
+                "En el panel: CO₂ del mes con equivalencia en árboles (~21 kg CO₂ por árbol y año).",
+                "Por proyecto y por viaje, y como columna opcional del informe (menú \"Contenido del informe\").",
+                "Litros o kWh reales introducidos en un viaje afinan el cálculo de ese viaje.",
+              ],
+            },
+            "Las fuentes exactas de los factores están citadas en Ajustes → Perfil (sección de emisiones).",
           ],
         },
         {
@@ -161,8 +244,25 @@ export default function Docs() {
           id: "plans",
           title: "Planes",
           body: [
-            "Gratuito: viajes, proyectos e informes ilimitados + 3 extracciones IA al mes. Para organizarte y probar el flujo completo.",
-            "Pro: 60 extracciones al mes, lotes de 20, y tu propia clave de OpenRouter. Mensual sin permanencia o anual con descuento — ideal si acumulas los callsheets y los vuelcas de golpe.",
+            "Gratuito: viajes, proyectos e informes ilimitados + 3 extracciones IA al mes (lotes de 3). Para organizarte y probar el flujo completo.",
+            "Pro: 60 extracciones al mes, lotes de 20, ZIP de documentación en los informes y tu propia clave de OpenRouter con el modelo multimodal que prefieras. Mensual sin permanencia o anual con descuento — ideal si acumulas los callsheets y los vuelcas de golpe.",
+          ],
+        },
+        {
+          id: "settings",
+          title: "Ajustes",
+          body: [
+            "Todo lo configurable vive en Ajustes (rueda dentada de la barra lateral).",
+            {
+              label: "Pestañas",
+              items: [
+                "Perfil: tus datos (nombre, NIF/UID, matrícula, tarifa, recargo por pasajero, dirección base) — son los que salen en el informe — y el vehículo (combustible, consumo, red eléctrica) para CO₂ y margen. Al final está la eliminación de cuenta (borra TODO de forma permanente).",
+                "APIs y servicios: la IA del servidor viene incluida; OpenRouter propio (Pro) con selector de modelos multimodales; conectar/desconectar Google Calendar.",
+                "Personalización: imagen de fondo propia o preestablecida, opacidad de la interfaz y desenfoques.",
+                "Idioma: español, inglés o alemán — cambia toda la app al instante (el PDF del informe tiene su propio selector).",
+                "Novedades: versión y changelog. Ayuda y docs: esta documentación, el tutorial interactivo y el contacto de soporte.",
+              ],
+            },
           ],
         },
         {
@@ -170,25 +270,45 @@ export default function Docs() {
           title: "Solución de problemas",
           body: [
             {
-              label: "La distancia no se calcula sola",
+              label: "La distancia no se calcula",
               items: [
-                "Comprueba en Ajustes que tienes tarifa por km y dirección base.",
-                "Confirma el destino: elige una sugerencia del desplegable o sal del campo (Tab). También tienes el botón de calcular junto a la distancia.",
+                "Comprueba que tu dirección base está completa en Ajustes → Perfil (dirección, ciudad y país).",
+                "Escribe el destino y elige una sugerencia o sal del campo (tabulador o clic fuera); ahí se dispara el cálculo.",
+                "Si editaste a mano las direcciones, usa el botón de calcular junto al campo de distancia.",
               ],
             },
             {
-              label: "Un callsheet quedó en \"Revisar\", \"Error\" o \"Sin cuota\"",
+              label: "Un callsheet está en \"Revisar\", \"Error\" o \"Límite agotado\"",
               items: [
-                "Revisar: la IA no estuvo segura de algo; ábrelo en el proyecto y confirma los datos.",
-                "Error: suele ser un PDF ilegible o una foto borrosa; sube una versión mejor.",
-                "Sin cuota: se acabaron las extracciones del mes — espera al siguiente o pasa a Pro.",
+                "Revisar: la IA no estaba segura; abre el proyecto y confirma los datos.",
+                "Error: suele ser un PDF ilegible o una foto borrosa; sube una versión mejor y reprocesa.",
+                "Límite agotado: se acabaron las extracciones del mes — espera al día 1 o pásate a Pro.",
               ],
             },
             {
               label: "Los importes no cuadran con lo que esperaba",
               items: [
-                "El importe por viaje es solo kilometraje; pasajeros y gastos van en líneas separadas del informe.",
-                "Si un viaje tiene tarifa propia, esa manda sobre la del proyecto y la del perfil.",
+                "El importe por viaje es solo kilometraje; pasajeros y gastos van como líneas separadas en el informe.",
+                "Prioridad de tarifas: la del viaje manda sobre la del proyecto, y esta sobre la del perfil.",
+              ],
+            },
+            {
+              label: "La importación desde el calendario falla",
+              items: [
+                "Necesita tu dirección base completa y que el evento tenga ubicación.",
+                "Si Google avisa de permisos insuficientes, desconecta y vuelve a conectar el calendario.",
+              ],
+            },
+            {
+              label: "El margen del coche o el % de uso profesional no aparecen",
+              items: [
+                "Faltan datos del coche en Ajustes: consumo y precios para el margen; km totales anuales para el % de uso.",
+              ],
+            },
+            {
+              label: "Quiero volver a ver el tutorial",
+              items: [
+                "Ajustes → Ayuda y docs → \"Iniciar tutorial\", o el botón de arriba de esta página.",
               ],
             },
           ],
@@ -196,64 +316,114 @@ export default function Docs() {
       ],
     };
 
-    const en: typeof es = {
+    const en: { title: string; subtitle: string; sections: DocSection[] } = {
       title: "Documentation",
-      subtitle: "Fahrtenbuch Pro guide: from callsheet to mileage report.",
+      subtitle: "The complete Fahrtenbuch Pro guide: from callsheet to Kilometergeld report.",
       sections: [
         {
           id: "start",
           title: "Getting started",
           body: [
-            "Fahrtenbuch Pro organizes your shoot trips by project and generates the mileage report ready for production and the tax office.",
+            "Fahrtenbuch Pro organizes your shooting-day trips by project and generates the Kilometergeld report, ready for production and the tax office. Sign in with your Google account or with email and password (with recovery if you forget it).",
             {
-              label: "First, complete your profile (Settings → Profile)",
+              label: "First of all, complete your profile (Settings → Profile)",
               items: [
-                "Rate per km (€/km): without it, amounts can't be calculated.",
-                "Base address: with it, origin and destination fill in automatically and the distance is computed for you.",
-                "Passenger surcharge (€/km), license plate, and car data (consumption and prices, for CO₂ and margin).",
+                "Rate per km (€/km): without it no amounts are calculated.",
+                "Base address (with city and country): with it the origin and destination of every trip are pre-filled, the distance is calculated automatically, and calendar import and route modes work.",
+                "Passenger surcharge (€/km), license plate and VAT ID: they appear in the report header.",
+                "Car data (fuel type and consumption): they enable CO₂ and the net margin on the dashboard.",
               ],
             },
-            "The dashboard shows a banner if the rate or base address is missing.",
+            "The dashboard will warn you with a banner if the rate or the base address is missing.",
+            "The first time you sign in, an interactive tour shows you the app in 7 steps. Replay it anytime: \"Start tour\" button above, or Settings → Help & docs.",
+          ],
+        },
+        {
+          id: "dashboard",
+          title: "Dashboard",
+          body: [
+            "The dashboard sums up your month at a glance and holds the quick actions: \"Upload call sheet\" and \"Add trip\" in the header.",
+            {
+              label: "What it shows",
+              items: [
+                "Four cards for the month, compared with the previous one: € to invoice, kilometres, trips and CO₂.",
+                "AI callsheet counter: how many extractions you've used this month and when the quota renews (the 1st).",
+                "The \"Needs your attention\" bell: failed or review-pending callsheets plus trip warnings (no project, zero or unlikely distance, missing purpose). Each line takes you to where it's fixed.",
+                "Your car's net margin: what you invoiced minus the car's estimated cost. Needs consumption and prices in Settings.",
+                "Professional-use %: your work km against the car's total yearly km (enter them in Settings, from the garage bill or the inspection). Useful for the tax office.",
+                "Last 6 months (km and € bars) and the recent trips list.",
+              ],
+            },
+            "During the first days of each month a \"Report ready\" banner lets you generate last month's PDF in one click.",
           ],
         },
         {
           id: "trips",
           title: "Trips",
           body: [
-            "Create trips manually with \"Add trip\", or generate many at once by uploading callsheets with AI (next section).",
+            "Create trips by hand with \"Add trip\" or generate many at once by uploading callsheets with \"Bulk upload\" (next section).",
             {
-              label: "When creating a trip",
+              label: "When creating or editing a trip",
               items: [
-                "Origin and destination start from your base address; type the destination (pick a suggestion or leave the field) and the distance is computed via Google Maps.",
-                "\"Continuation\" mode (origin = previous trip's destination) and \"Return\" mode (destination = your base).",
+                "Origin and destination start from your base address; type the destination (pick the suggestion or leave the field) and the distance is calculated automatically with Google Maps.",
                 "Up to 25 stops per trip, draggable to reorder.",
-                "Passengers: their surcharge is ALWAYS shown separately from mileage, in the report too.",
-                "Per-trip expenses: toll, parking, fuel and other — they appear as their own lines in the report.",
-                "Optional per-trip rate: overrides the project's and the profile's.",
+                "Three route modes: leave from your base, \"Continue from the last destination\" (chains same-day trips) and \"Return to my base address\".",
+                "Project: search it or create it right in the field (\"Create …\" / \"Use … as client\").",
+                "Passengers: their surcharge is ALWAYS shown separate from the mileage, in the report too.",
+                "Per-trip rate (optional): overrides the project's and the profile's.",
+                "Purpose: fill it in — the report checklist warns if it's missing.",
+                "If a trip with the same date and route already exists, the app warns you before creating a duplicate.",
               ],
             },
-            "Deleting a trip also removes its attached documents and callsheets (files included). If the project ends up with no trips, the project and its documents are removed too. There is no trash bin.",
+            {
+              label: "Per-trip expenses",
+              items: [
+                "Toll, parking, fuel and others: enter the amount in EUR and attach the receipt photo (camera or file, rotatable). They appear as their own lines in the report and the receipt goes into the documentation ZIP.",
+                "Foreign receipts (CZK/HUF): enter the amount already converted to EUR.",
+                "Litres or kWh for the trip (optional): they refine CO₂ and cost calculations.",
+              ],
+            },
+            {
+              label: "The trips table",
+              items: [
+                "Filters by project and year, date sorting, and \"Load more\" past 10 rows.",
+                "Multi-select with checkboxes for bulk deleting.",
+                "Row menu (⋮): View map, Add to calendar, Edit and Delete.",
+                "Click the row for the trip detail: cost breakdown, a Map tab with the route on Google Maps and a Document tab with preview, download and attachments.",
+              ],
+            },
+            "Deleting a trip also removes its documents and linked callsheets (files included). If the project is left with no trips, the project and its documents are removed too. There is no trash bin.",
           ],
         },
         {
           id: "callsheets",
           title: "Callsheets with AI",
           body: [
-            "In Trips → \"Bulk upload\", upload callsheets as PDF or photo (JPG, PNG, WebP, HEIC). The AI extracts the date, project, production company and shooting locations, and shows everything for review before saving.",
+            "In Trips → \"Bulk upload\", upload callsheets as PDF or photo (JPG, PNG, WebP, HEIC). The AI extracts the date, project, production company and shooting locations, and presents them for review before saving anything. You can also upload callsheets inside a project folder (\"Upload call sheets\") and run \"Extract data with AI\" from there.",
             {
               label: "How it picks addresses",
               items: [
-                "Only the shooting location counts (Motiv/Set/Location); meeting points and parking are discarded.",
-                "If the callsheet contains Google Maps links, they are the preferred source: they point to the exact pin.",
-                "You can cancel a running extraction from the modal.",
+                "Only the shooting location counts (Motiv/Set/Location); meeting points and parkings are discarded.",
+                "If the callsheet contains Google Maps links, they are the preferred source: they point at the exact pin.",
+                "You can cancel a running extraction from the modal itself.",
+              ],
+            },
+            {
+              label: "States and review",
+              items: [
+                "Processing → Done: review the proposed trips and press \"Save N trips\" (or \"Discard all\").",
+                "\"Review\": the AI is unsure about something (e.g. the date) — confirm it yourself.",
+                "\"Error\": usually an unreadable PDF or a blurry photo; \"Reprocess\" with a better version.",
+                "\"Out of quota\": this month's quota is used up.",
+                "If a proposed trip already exists (same date and route), it's skipped and you're told: no duplicates.",
               ],
             },
             {
               label: "AI quotas",
               items: [
-                "Free: 3 callsheets per month, up to 3 per upload.",
-                "Pro: 60 per month, up to 20 per upload.",
-                "Pro also lets you use your own OpenRouter key and choose the AI model (any multimodal model in the catalog).",
+                "Free: 3 extractions per month, batches of up to 3 files.",
+                "Pro: 60 extractions per month, batches of up to 20 files and parallel processing.",
+                "Pro can also use its own OpenRouter key and pick almost any multimodal model (Settings → APIs).",
               ],
             },
           ],
@@ -262,41 +432,73 @@ export default function Docs() {
           id: "projects",
           title: "Projects",
           body: [
-            "The project is the folder that contains everything: its trips, its callsheets and its project expenses (invoices not tied to a specific trip).",
+            "Each production is a folder: it holds its trips, callsheets, documents and invoices, and passes down the production company. Trips created from a callsheet land in their project automatically.",
             {
-              label: "Useful details",
+              label: "The projects page",
               items: [
-                "The production company is set automatically from the first extraction and inherited by the project's trips.",
-                "Each project can have its own €/km rate (overrides the profile's).",
-                "Callsheet states (processing, review, error, out of quota) are visible in the project detail.",
+                "Search by name and filters by producer and year; multi-select for bulk deleting.",
+                "The table shows per project: trips, total distance, CO₂, documents/callsheets, invoices and accumulated reimbursement.",
+                "Star your favourite projects.",
               ],
             },
-            "Deleting a project removes its trips, callsheets and documents, files included. Same as trips: no trash bin.",
+            {
+              label: "Inside the folder (View details)",
+              items: [
+                "Stats: total kilometres, shooting days, km per day and estimated CO₂.",
+                "Call sheets: upload up to 20, extract data with AI, reprocess or cancel; saved trips stay linked to their callsheet.",
+                "Project documents and invoices (invoices attached to a trip are managed from that trip).",
+                "Project rates (€/km and €/passenger): all its trips inherit them, unless a trip has its own rate.",
+              ],
+            },
+            "Deleting a project cascades: all its trips, callsheets, documents and files go with it. And the other way round: deleting a project's last trip removes the whole project (documents included). There is no trash bin.",
           ],
         },
         {
           id: "reports",
           title: "Reports",
           body: [
-            "In Reports, pick a project and date range (choosing a project auto-adjusts the range to its trips) and generate the report.",
+            "In Reports → \"Generate new report\" you pick a project (or all) and the period: month and year, or a free from–to range.",
             {
-              label: "The report",
+              label: "Before generating",
               items: [
-                "The table carries its own totals: trips, km, CO₂ (optional) and amounts.",
-                "Each trip's amount is ONLY km × rate; the passenger surcharge is a separate summary line — or merge it into mileage with the \"Merge surcharge\" switch.",
-                "\"Report contents\": the CO₂ column and the signature block are optional; the \"Created with Fahrtenbuch Pro\" footer is always there.",
-                "The PDF defaults to German (it's for production/tax office) and is also available in English and Spanish.",
-                "Export PDF, CSV/Excel or a ZIP with the PDF plus attached receipts; you can save reports to reopen them.",
+                "An automatic checklist scans the period's trips and warns about typical issues: zero or unlikely distances and missing purposes. Fix them or continue.",
               ],
             },
+            {
+              label: "In the report view",
+              items: [
+                "Totals live inside the table, with the trip count in the label (\"Summe (12 Fahrten)\").",
+                "The passenger surcharge is ALWAYS separate from the mileage; if the production wants it merged, switch on \"Merge passenger surcharge into mileage\" — the total doesn't change.",
+                "\"Report contents\" menu: CO₂ column and signature block, both optional.",
+                "The rate per km and the license plate appear in the header; trip expenses appear as their own lines.",
+                "\"PDF language\" is independent from the app language: hand a German report to a German production while using the app in English.",
+              ],
+            },
+            {
+              label: "Export and save",
+              items: [
+                "PDF (the format for production and the tax office), CSV for spreadsheets, and direct printing.",
+                "\"Download ZIP with documentation\" (Pro): the report together with all the period's receipts and callsheets, ready to attach to an email.",
+                "\"Save\" adds the report to the Reports list to reopen or re-export it later.",
+              ],
+            },
+            "Every PDF carries the \"Created with Fahrtenbuch Pro\" footer.",
           ],
         },
         {
           id: "co2",
           title: "CO₂",
           body: [
-            "Each trip's CO₂ is computed from the distance and your configured car consumption (official tank-to-wheel factors; for EVs, the electricity mix).",
-            "The dashboard shows it as a monthly total with its tree equivalence; in the report, as an optional column.",
+            "CO₂ is calculated with cited static factors (tank-to-wheel methodology) and your car's real consumption from Settings. For EVs, the yearly average grid intensity of your country (AT/DE/CZ/HU) is used.",
+            {
+              label: "Where it appears",
+              items: [
+                "On the dashboard: the month's CO₂ with a tree equivalence (~21 kg CO₂ per tree per year).",
+                "Per project and per trip, and as an optional report column (\"Report contents\" menu).",
+                "Real litres or kWh entered on a trip refine that trip's number.",
+              ],
+            },
+            "The exact factor sources are cited in Settings → Profile (emissions section).",
           ],
         },
         {
@@ -325,8 +527,25 @@ export default function Docs() {
           id: "plans",
           title: "Plans",
           body: [
-            "Free: unlimited trips, projects and reports + 3 AI extractions per month. To get organized and try the full flow.",
-            "Pro: 60 extractions per month, batches of 20, and your own OpenRouter key. Monthly with no commitment, or annual with a discount — ideal if you pile up callsheets and dump them all at once.",
+            "Free: unlimited trips, projects and reports + 3 AI extractions per month (batches of 3). To get organized and try the full flow.",
+            "Pro: 60 extractions per month, batches of 20, the documentation ZIP on reports, and your own OpenRouter key with the multimodal model you prefer. Monthly with no commitment, or annual with a discount — ideal if you pile up callsheets and dump them all at once.",
+          ],
+        },
+        {
+          id: "settings",
+          title: "Settings",
+          body: [
+            "Everything configurable lives in Settings (the gear in the sidebar).",
+            {
+              label: "Tabs",
+              items: [
+                "Profile: your data (name, VAT ID, license plate, rate, passenger surcharge, base address) — the ones printed on the report — and the vehicle (fuel, consumption, grid) for CO₂ and margin. Account deletion is at the bottom (removes EVERYTHING permanently).",
+                "APIs & services: server AI is included; your own OpenRouter (Pro) with a multimodal model picker; connect/disconnect Google Calendar.",
+                "Personalization: your own or preset background image, UI opacity and blur.",
+                "Language: Spanish, English or German — switches the whole app instantly (the report PDF has its own selector).",
+                "News: version and changelog. Help & docs: this documentation, the interactive tour and support contact.",
+              ],
+            },
           ],
         },
         {
@@ -334,25 +553,45 @@ export default function Docs() {
           title: "Troubleshooting",
           body: [
             {
-              label: "Distance doesn't calculate automatically",
+              label: "The distance isn't calculated",
               items: [
-                "Check that Settings has your rate per km and base address.",
-                "Confirm the destination: pick a suggestion from the dropdown or leave the field (Tab). There's also a calculate button next to the distance.",
+                "Check that your base address is complete in Settings → Profile (address, city and country).",
+                "Type the destination and pick a suggestion or leave the field (tab or click away); that's what triggers the calculation.",
+                "If you hand-edited the addresses, use the calculate button next to the distance field.",
               ],
             },
             {
-              label: "A callsheet ended in \"Review\", \"Error\" or \"Out of quota\"",
+              label: "A callsheet shows \"Review\", \"Error\" or \"Out of quota\"",
               items: [
-                "Review: the AI wasn't sure about something; open it in the project and confirm the data.",
-                "Error: usually an unreadable PDF or a blurry photo; upload a better version.",
-                "Out of quota: this month's extractions are used up — wait for next month or upgrade to Pro.",
+                "Review: the AI was unsure; open the project and confirm the data.",
+                "Error: usually an unreadable PDF or a blurry photo; upload a better version and reprocess.",
+                "Out of quota: this month's extractions are used up — wait for the 1st or upgrade to Pro.",
               ],
             },
             {
               label: "Amounts don't match what I expected",
               items: [
                 "The per-trip amount is mileage only; passengers and expenses are separate lines in the report.",
-                "If a trip has its own rate, it overrides the project's and the profile's.",
+                "Rate priority: the trip's rate beats the project's, which beats the profile's.",
+              ],
+            },
+            {
+              label: "Calendar import fails",
+              items: [
+                "It needs your complete base address and a location on the event.",
+                "If Google reports insufficient permissions, disconnect and reconnect the calendar.",
+              ],
+            },
+            {
+              label: "Car margin or professional-use % don't show up",
+              items: [
+                "Car data is missing in Settings: consumption and prices for the margin; total yearly km for the usage %.",
+              ],
+            },
+            {
+              label: "I want to see the tour again",
+              items: [
+                "Settings → Help & docs → \"Start tour\", or the button at the top of this page.",
               ],
             },
           ],
@@ -360,64 +599,114 @@ export default function Docs() {
       ],
     };
 
-    const de: typeof es = {
+    const de: { title: string; subtitle: string; sections: DocSection[] } = {
       title: "Dokumentation",
-      subtitle: "Fahrtenbuch Pro: vom Callsheet zur Kilometergeld-Abrechnung.",
+      subtitle: "Der komplette Fahrtenbuch-Pro-Leitfaden: vom Callsheet zum Kilometergeld-Bericht.",
       sections: [
         {
           id: "start",
           title: "Erste Schritte",
           body: [
-            "Fahrtenbuch Pro organisiert deine Drehfahrten nach Projekt und erstellt die Kilometergeld-Abrechnung fertig für Produktion und Finanzamt.",
+            "Fahrtenbuch Pro organisiert deine Drehtag-Fahrten nach Projekt und erstellt den Kilometergeld-Bericht — fertig für Produktion und Finanzamt. Melde dich mit deinem Google-Konto oder mit E-Mail und Passwort an (mit Wiederherstellung, falls du es vergisst).",
             {
-              label: "Zuerst das Profil vervollständigen (Einstellungen → Profil)",
+              label: "Zuallererst: Profil vervollständigen (Einstellungen → Profil)",
               items: [
-                "Satz pro km (€/km): ohne ihn können keine Beträge berechnet werden.",
-                "Basisadresse: mit ihr füllen sich Start und Ziel von selbst und die Distanz wird automatisch berechnet.",
-                "Mitfahrer-Zuschlag (€/km), Kennzeichen und Fahrzeugdaten (Verbrauch und Preise, für CO₂ und Marge).",
+                "Kilometersatz (€/km): ohne ihn werden keine Beträge berechnet.",
+                "Basisadresse (mit Stadt und Land): mit ihr füllen sich Start und Ziel jeder Fahrt von selbst, die Distanz wird automatisch berechnet, und Kalender-Import und Routenmodi funktionieren.",
+                "Mitfahrer-Zuschlag (€/km), Kennzeichen und UID: sie erscheinen im Berichtskopf.",
+                "Fahrzeugdaten (Kraftstoffart und Verbrauch): sie aktivieren CO₂ und die Netto-Marge am Dashboard.",
               ],
             },
-            "Das Dashboard zeigt einen Hinweis, wenn Satz oder Basisadresse fehlen.",
+            "Das Dashboard warnt dich mit einem Banner, wenn Satz oder Basisadresse fehlen.",
+            "Beim ersten Anmelden zeigt dir eine interaktive Tour die App in 7 Schritten. Jederzeit wiederholbar: Button \"Tour starten\" oben oder Einstellungen → Hilfe & Docs.",
+          ],
+        },
+        {
+          id: "dashboard",
+          title: "Dashboard",
+          body: [
+            "Das Dashboard fasst deinen Monat auf einen Blick zusammen und bündelt die Schnellaktionen: \"Callsheet hochladen\" und \"Fahrt hinzufügen\" im Kopfbereich.",
+            {
+              label: "Was es zeigt",
+              items: [
+                "Vier Monatskarten im Vergleich zum Vormonat: € zu fakturieren, Kilometer, Fahrten und CO₂.",
+                "KI-Callsheet-Zähler: wie viele Extraktionen du diesen Monat verbraucht hast und wann das Kontingent sich erneuert (am 1.).",
+                "Die Glocke \"Braucht deine Aufmerksamkeit\": fehlgeschlagene oder zu prüfende Callsheets plus Fahrt-Warnungen (ohne Projekt, Distanz 0 oder unplausibel, ohne Zweck). Jede Zeile führt dorthin, wo es sich beheben lässt.",
+                "Netto-Marge deines Autos: Fakturiertes minus geschätzte Autokosten. Braucht Verbrauch und Preise in den Einstellungen.",
+                "Beruflicher Nutzungsanteil: deine Arbeits-km gegen die Jahres-km des Autos (in den Einstellungen eintragen, von Werkstattrechnung oder Pickerl). Nützlich fürs Finanzamt.",
+                "Letzte 6 Monate (km- und €-Balken) und die Liste der letzten Fahrten.",
+              ],
+            },
+            "In den ersten Tagen des Monats erscheint ein Banner \"Bericht fertig\", um das PDF des Vormonats mit einem Klick zu erstellen.",
           ],
         },
         {
           id: "trips",
           title: "Fahrten",
           body: [
-            "Lege Fahrten manuell mit \"Fahrt hinzufügen\" an oder erzeuge viele auf einmal per Callsheet-Upload mit KI (nächster Abschnitt).",
+            "Lege Fahrten von Hand mit \"Fahrt hinzufügen\" an oder erzeuge viele auf einmal per Callsheet-Upload mit \"Massenimport\" (nächster Abschnitt).",
             {
-              label: "Beim Anlegen einer Fahrt",
+              label: "Beim Anlegen oder Bearbeiten einer Fahrt",
               items: [
-                "Start und Ziel gehen von deiner Basisadresse aus; tippe das Ziel (Vorschlag wählen oder Feld verlassen) und die Distanz wird über Google Maps berechnet.",
-                "Modus \"Fortsetzung\" (Start = Ziel der vorherigen Fahrt) und \"Rückfahrt\" (Ziel = deine Basis).",
-                "Bis zu 25 Stopps pro Fahrt, per Drag & Drop sortierbar.",
-                "Mitfahrer: ihr Zuschlag wird IMMER getrennt vom Kilometergeld ausgewiesen, auch im Bericht.",
-                "Ausgaben pro Fahrt: Maut, Parken, Kraftstoff und Sonstiges — eigene Zeilen im Bericht.",
-                "Optionaler Satz pro Fahrt: geht vor Projekt- und Profilsatz.",
+                "Start und Ziel gehen von deiner Basisadresse aus; tippe das Ziel (Vorschlag wählen oder Feld verlassen) und die Distanz berechnet sich automatisch über Google Maps.",
+                "Bis zu 25 Stopps pro Fahrt, per Ziehen umsortierbar.",
+                "Drei Routenmodi: Abfahrt von der Basis, \"Vom letzten Ziel fortsetzen\" (verkettet Fahrten eines Tages) und \"Zurück zu meiner Basisadresse\".",
+                "Projekt: direkt im Feld suchen oder anlegen (\"… erstellen\" / \"… als Kunde verwenden\").",
+                "Mitfahrer: ihr Zuschlag wird IMMER getrennt vom Kilometergeld gezeigt, auch im Bericht.",
+                "Eigener Satz pro Fahrt (optional): geht vor Projekt- und Profilsatz.",
+                "Zweck: ausfüllen — die Checkliste des Berichts warnt, wenn er fehlt.",
+                "Existiert schon eine Fahrt mit gleichem Datum und gleicher Route, warnt die App vor dem Duplikat.",
               ],
             },
-            "Beim Löschen einer Fahrt werden auch ihre Dokumente und Callsheets entfernt (inklusive Dateien). Bleibt das Projekt ohne Fahrten, werden Projekt und Dokumente ebenfalls gelöscht. Es gibt keinen Papierkorb.",
+            {
+              label: "Ausgaben pro Fahrt",
+              items: [
+                "Maut, Parken, Kraftstoff und Sonstiges: Betrag in EUR eintragen und Belegfoto anhängen (Kamera oder Datei, drehbar). Sie erscheinen als eigene Zeilen im Bericht, der Beleg wandert ins Dokumentations-ZIP.",
+                "Ausländische Belege (CZK/HUF): Betrag bereits in EUR umgerechnet eintragen.",
+                "Liter oder kWh der Fahrt (optional): verfeinern CO₂- und Kostenrechnung.",
+              ],
+            },
+            {
+              label: "Die Fahrten-Tabelle",
+              items: [
+                "Filter nach Projekt und Jahr, Sortierung nach Datum, \"Mehr laden\" ab 10 Zeilen.",
+                "Mehrfachauswahl mit Checkboxen zum Löschen im Stapel.",
+                "Zeilenmenü (⋮): Karte ansehen, Zum Kalender hinzufügen, Bearbeiten und Löschen.",
+                "Klick auf die Zeile = Fahrtdetail: Kostenaufstellung, Karten-Tab mit der Route auf Google Maps und Dokument-Tab mit Vorschau, Download und Anhängen.",
+              ],
+            },
+            "Beim Löschen einer Fahrt werden auch ihre Dokumente und verknüpften Callsheets entfernt (Dateien inklusive). Bleibt das Projekt ohne Fahrten, werden Projekt und Dokumente ebenfalls gelöscht. Es gibt keinen Papierkorb.",
           ],
         },
         {
           id: "callsheets",
           title: "Callsheets mit KI",
           body: [
-            "Unter Fahrten → \"Massen-Upload\" lädst du Callsheets als PDF oder Foto (JPG, PNG, WebP, HEIC) hoch. Die KI extrahiert Datum, Projekt, Produktionsfirma und Drehorte und zeigt alles zur Prüfung, bevor gespeichert wird.",
+            "Unter Fahrten → \"Massenimport\" lädst du Callsheets als PDF oder Foto hoch (JPG, PNG, WebP, HEIC). Die KI extrahiert Datum, Projekt, Produktionsfirma und Drehorte und legt sie dir zur Prüfung vor, bevor irgendetwas gespeichert wird. Callsheets lassen sich auch im Projektordner hochladen (\"Callsheets hochladen\") und dort mit \"Daten mit KI extrahieren\" verarbeiten.",
             {
-              label: "Wie Adressen erkannt werden",
+              label: "Wie sie Adressen auswählt",
               items: [
                 "Nur der Drehort zählt (Motiv/Set/Location); Treffpunkte und Parkplätze werden verworfen.",
-                "Enthält das Callsheet Google-Maps-Links, sind sie die bevorzugte Quelle: sie zeigen auf den exakten Pin.",
-                "Eine laufende Extraktion kannst du im Modal abbrechen.",
+                "Enthält das Callsheet Google-Maps-Links, sind sie die bevorzugte Quelle: Sie zeigen auf den exakten Pin.",
+                "Eine laufende Extraktion kannst du direkt im Modal abbrechen.",
+              ],
+            },
+            {
+              label: "Status und Prüfung",
+              items: [
+                "In Bearbeitung → Fertig: die vorgeschlagenen Fahrten prüfen und \"N Fahrten speichern\" drücken (oder \"Alle verwerfen\").",
+                "\"Prüfen\": die KI ist sich bei etwas unsicher (z. B. beim Datum) — bestätige es selbst.",
+                "\"Fehler\": meist ein unlesbares PDF oder ein unscharfes Foto; mit besserer Version neu verarbeiten.",
+                "\"Ohne Kontingent\": das Monatskontingent ist aufgebraucht.",
+                "Existiert eine vorgeschlagene Fahrt schon (gleiches Datum, gleiche Route), wird sie übersprungen und du wirst informiert: keine Duplikate.",
               ],
             },
             {
               label: "KI-Kontingente",
               items: [
-                "Gratis: 3 Callsheets pro Monat, bis zu 3 pro Upload.",
-                "Pro: 60 pro Monat, bis zu 20 pro Upload.",
-                "Pro erlaubt zudem den eigenen OpenRouter-Schlüssel mit frei wählbarem KI-Modell (jedes multimodale Modell im Katalog).",
+                "Gratis: 3 Extraktionen pro Monat, Uploads zu maximal 3 Dateien.",
+                "Pro: 60 Extraktionen pro Monat, Uploads zu maximal 20 Dateien und parallele Verarbeitung.",
+                "Pro kann außerdem den eigenen OpenRouter-Schlüssel nutzen und fast jedes multimodale Modell wählen (Einstellungen → APIs).",
               ],
             },
           ],
@@ -426,41 +715,73 @@ export default function Docs() {
           id: "projects",
           title: "Projekte",
           body: [
-            "Das Projekt ist der Ordner, der alles enthält: seine Fahrten, seine Callsheets und seine Projektausgaben (Rechnungen ohne konkrete Fahrt).",
+            "Jede Produktion ist ein Ordner: Er enthält ihre Fahrten, Callsheets, Dokumente und Rechnungen und vererbt die Produktionsfirma. Aus Callsheets erzeugte Fahrten landen automatisch in ihrem Projekt.",
             {
-              label: "Nützliche Details",
+              label: "Die Projektseite",
               items: [
-                "Die Produktionsfirma wird automatisch aus der ersten Extraktion gesetzt und an die Fahrten vererbt.",
-                "Jedes Projekt kann einen eigenen €/km-Satz haben (geht vor dem Profilsatz).",
-                "Callsheet-Status (in Arbeit, prüfen, Fehler, ohne Kontingent) siehst du im Projektdetail.",
+                "Suche nach Name, Filter nach Produktionsfirma und Jahr; Mehrfachauswahl zum Löschen im Stapel.",
+                "Die Tabelle zeigt pro Projekt: Fahrten, Gesamtdistanz, CO₂, Dokumente/Callsheets, Rechnungen und kumulierte Erstattung.",
+                "Markiere deine wichtigsten Projekte mit dem Stern.",
               ],
             },
-            "Das Löschen eines Projekts entfernt seine Fahrten, Callsheets und Dokumente samt Dateien. Wie bei Fahrten: kein Papierkorb.",
+            {
+              label: "Im Ordner (Details ansehen)",
+              items: [
+                "Statistiken: Gesamtkilometer, Drehtage, km pro Drehtag und geschätztes CO₂.",
+                "Callsheets: bis zu 20 hochladen, Daten mit KI extrahieren, neu verarbeiten oder abbrechen; gespeicherte Fahrten bleiben mit ihrem Callsheet verknüpft.",
+                "Projektdokumente und -rechnungen (an eine Fahrt angehängte Rechnungen werden bei der Fahrt verwaltet).",
+                "Projektsätze (€/km und €/Mitfahrer): alle Fahrten erben sie — außer eine Fahrt hat einen eigenen Satz.",
+              ],
+            },
+            "Ein Projekt zu löschen kaskadiert: alle Fahrten, Callsheets, Dokumente und Dateien gehen mit. Und umgekehrt: Löschst du die letzte Fahrt eines Projekts, verschwindet das ganze Projekt (Dokumente inklusive). Es gibt keinen Papierkorb.",
           ],
         },
         {
           id: "reports",
           title: "Berichte",
           body: [
-            "Unter Berichte wählst du Projekt und Zeitraum (bei Projektwahl passt sich der Zeitraum automatisch an) und erzeugst den Bericht.",
+            "Unter Berichte → \"Neuen Bericht erstellen\" wählst du Projekt (oder alle) und den Zeitraum: Monat und Jahr oder einen freien Von–Bis-Bereich.",
             {
-              label: "Der Bericht",
+              label: "Vor dem Erstellen",
               items: [
-                "Die Tabelle trägt ihre Summen selbst: Fahrten, km, CO₂ (optional) und Beträge.",
-                "Der Betrag jeder Fahrt ist NUR km × Satz; der Mitfahrer-Zuschlag ist eine eigene Zeile — oder rechne ihn mit dem Schalter \"Zuschlag einrechnen\" ins Kilometergeld ein.",
-                "\"Berichtsinhalt\": CO₂-Spalte und Unterschriftsblock sind optional; die Fußzeile \"Erstellt mit Fahrtenbuch Pro\" ist immer dabei.",
-                "Das PDF ist standardmäßig Deutsch (für Produktion/Finanzamt) und auch auf Englisch und Spanisch verfügbar.",
-                "Exportiere PDF, CSV/Excel oder ein ZIP mit PDF plus Belegen; Berichte lassen sich speichern und wieder öffnen.",
+                "Eine automatische Checkliste prüft die Fahrten des Zeitraums und warnt vor typischen Problemen: Distanz 0 oder unplausibel, fehlender Zweck. Beheben oder weitermachen.",
               ],
             },
+            {
+              label: "In der Berichtsansicht",
+              items: [
+                "Die Summen stehen in der Tabelle selbst, mit der Fahrtenzahl im Label (\"Summe (12 Fahrten)\").",
+                "Der Mitfahrer-Zuschlag ist IMMER vom Kilometergeld getrennt; will die Produktion ihn vereint, aktiviere \"Mitfahrer-Zuschlag ins Kilometergeld einrechnen\" — die Summe ändert sich nicht.",
+                "Menü \"Berichtsinhalt\": CO₂-Spalte und Unterschriftsblock, beide optional.",
+                "Kilometersatz und Kennzeichen stehen im Kopf; Fahrtausgaben erscheinen als eigene Zeilen.",
+                "\"PDF-Sprache\" ist unabhängig von der App-Sprache: liefere einer deutschen Produktion den Bericht auf Deutsch, auch wenn du die App auf Spanisch nutzt.",
+              ],
+            },
+            {
+              label: "Exportieren und speichern",
+              items: [
+                "PDF (das Format für Produktion und Finanzamt), CSV für Tabellenkalkulationen und direktes Drucken.",
+                "\"ZIP mit Dokumentation herunterladen\" (Pro): der Bericht zusammen mit allen Belegen und Callsheets des Zeitraums — fertig für den E-Mail-Anhang.",
+                "\"Speichern\" legt den Bericht in der Berichtsliste ab, um ihn später wieder zu öffnen oder zu exportieren.",
+              ],
+            },
+            "Jedes PDF trägt die Fußzeile \"Erstellt mit Fahrtenbuch Pro\".",
           ],
         },
         {
           id: "co2",
           title: "CO₂",
           body: [
-            "Das CO₂ jeder Fahrt wird aus Distanz und konfiguriertem Verbrauch berechnet (offizielle Tank-to-Wheel-Faktoren; bei E-Autos der Strommix).",
-            "Im Dashboard als Monatssumme mit Baum-Äquivalent; im Bericht als optionale Spalte.",
+            "CO₂ wird mit zitierten statischen Faktoren (Tank-to-Wheel-Methodik) und dem realen Verbrauch deines Autos aus den Einstellungen berechnet. Bei E-Autos zählt die Jahresdurchschnitts-Intensität des Stromnetzes deines Landes (AT/DE/CZ/HU).",
+            {
+              label: "Wo es erscheint",
+              items: [
+                "Am Dashboard: das Monats-CO₂ mit Baum-Äquivalenz (~21 kg CO₂ pro Baum und Jahr).",
+                "Pro Projekt und pro Fahrt, und als optionale Berichtsspalte (Menü \"Berichtsinhalt\").",
+                "Real eingetragene Liter oder kWh einer Fahrt verfeinern deren Wert.",
+              ],
+            },
+            "Die genauen Quellen der Faktoren sind in Einstellungen → Profil (Emissionsbereich) zitiert.",
           ],
         },
         {
@@ -489,34 +810,71 @@ export default function Docs() {
           id: "plans",
           title: "Pläne",
           body: [
-            "Gratis: unbegrenzte Fahrten, Projekte und Berichte + 3 KI-Extraktionen pro Monat. Zum Organisieren und Ausprobieren des ganzen Flows.",
-            "Pro: 60 Extraktionen pro Monat, Uploads zu 20, und eigener OpenRouter-Schlüssel. Monatlich ohne Bindung oder jährlich mit Rabatt — ideal, wenn du Callsheets sammelst und alles auf einmal hochlädst.",
+            "Gratis: unbegrenzte Fahrten, Projekte und Berichte + 3 KI-Extraktionen pro Monat (Uploads zu 3). Zum Organisieren und Ausprobieren des ganzen Flows.",
+            "Pro: 60 Extraktionen pro Monat, Uploads zu 20, das Dokumentations-ZIP bei Berichten und dein eigener OpenRouter-Schlüssel mit dem multimodalen Modell deiner Wahl. Monatlich ohne Bindung oder jährlich mit Rabatt — ideal, wenn du Callsheets sammelst und alles auf einmal hochlädst.",
+          ],
+        },
+        {
+          id: "settings",
+          title: "Einstellungen",
+          body: [
+            "Alles Konfigurierbare wohnt in den Einstellungen (Zahnrad in der Seitenleiste).",
+            {
+              label: "Tabs",
+              items: [
+                "Profil: deine Daten (Name, UID, Kennzeichen, Satz, Mitfahrer-Zuschlag, Basisadresse) — sie stehen im Bericht — und das Fahrzeug (Kraftstoff, Verbrauch, Netz) für CO₂ und Marge. Ganz unten die Kontolöschung (entfernt ALLES dauerhaft).",
+                "APIs & Dienste: Server-KI ist inklusive; eigener OpenRouter (Pro) mit multimodaler Modellauswahl; Google Kalender verbinden/trennen.",
+                "Personalisierung: eigenes oder vorgegebenes Hintergrundbild, UI-Deckkraft und Weichzeichner.",
+                "Sprache: Spanisch, Englisch oder Deutsch — stellt die ganze App sofort um (das Berichts-PDF hat einen eigenen Wähler).",
+                "Neuigkeiten: Version und Changelog. Hilfe & Docs: diese Dokumentation, die interaktive Tour und der Support-Kontakt.",
+              ],
+            },
           ],
         },
         {
           id: "troubleshooting",
-          title: "Fehlerbehebung",
+          title: "Problemlösung",
           body: [
             {
-              label: "Die Distanz wird nicht automatisch berechnet",
+              label: "Die Distanz wird nicht berechnet",
               items: [
-                "Prüfe in den Einstellungen, ob Satz pro km und Basisadresse gesetzt sind.",
-                "Bestätige das Ziel: Vorschlag aus der Liste wählen oder das Feld verlassen (Tab). Neben der Distanz gibt es auch einen Berechnen-Button.",
+                "Prüfe, ob deine Basisadresse in Einstellungen → Profil vollständig ist (Adresse, Stadt und Land).",
+                "Tippe das Ziel und wähle einen Vorschlag oder verlasse das Feld (Tab oder Klick daneben); das löst die Berechnung aus.",
+                "Hast du Adressen von Hand editiert, nutze den Berechnen-Button neben dem Distanzfeld.",
               ],
             },
             {
               label: "Ein Callsheet steht auf \"Prüfen\", \"Fehler\" oder \"Ohne Kontingent\"",
               items: [
                 "Prüfen: die KI war sich unsicher; im Projekt öffnen und die Daten bestätigen.",
-                "Fehler: meist ein unlesbares PDF oder ein unscharfes Foto; bessere Version hochladen.",
-                "Ohne Kontingent: die Extraktionen des Monats sind verbraucht — auf den nächsten Monat warten oder auf Pro wechseln.",
+                "Fehler: meist ein unlesbares PDF oder ein unscharfes Foto; bessere Version hochladen und neu verarbeiten.",
+                "Ohne Kontingent: die Extraktionen des Monats sind verbraucht — auf den 1. warten oder auf Pro wechseln.",
               ],
             },
             {
               label: "Beträge entsprechen nicht der Erwartung",
               items: [
                 "Der Betrag pro Fahrt ist nur Kilometergeld; Mitfahrer und Ausgaben sind eigene Zeilen im Bericht.",
-                "Hat eine Fahrt einen eigenen Satz, geht er vor Projekt- und Profilsatz.",
+                "Satz-Priorität: der Satz der Fahrt schlägt den des Projekts, dieser den des Profils.",
+              ],
+            },
+            {
+              label: "Der Kalender-Import schlägt fehl",
+              items: [
+                "Er braucht deine vollständige Basisadresse und einen Ort am Termin.",
+                "Meldet Google unzureichende Berechtigungen, trenne den Kalender und verbinde ihn neu.",
+              ],
+            },
+            {
+              label: "Auto-Marge oder Nutzungsanteil erscheinen nicht",
+              items: [
+                "Fahrzeugdaten fehlen in den Einstellungen: Verbrauch und Preise für die Marge; Jahres-km für den Nutzungsanteil.",
+              ],
+            },
+            {
+              label: "Ich will die Tour noch einmal sehen",
+              items: [
+                "Einstellungen → Hilfe & Docs → \"Tour starten\", oder der Button oben auf dieser Seite.",
               ],
             },
           ],

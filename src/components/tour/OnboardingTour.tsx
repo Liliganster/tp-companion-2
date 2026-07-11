@@ -14,8 +14,9 @@ import type { I18nKey } from "@/lib/i18n";
  *   dispositivos) con espejo en localStorage por si la red falla.
  * - Se relanza cuando se quiera con `window.dispatchEvent(new CustomEvent("fb:start-tour"))`
  *   (botones en Ajustes → Ayuda y docs, y en la página /docs).
- * - Los pasos apuntan a elementos con [data-tour="..."]; si uno no existe o no
- *   es visible (móvil: sidebar oculta) se omite sin romper nada.
+ * - Los pasos apuntan a elementos con [data-tour="..."]; si uno no es visible
+ *   (móvil o zoom alto: la sidebar se oculta bajo lg) el paso NO se pierde:
+ *   se muestra como tarjeta centrada sin foco. Siempre son 7 pasos.
  */
 
 type TourStep = {
@@ -56,15 +57,13 @@ export function OnboardingTour() {
   const { t, tf } = useI18n();
 
   const [active, setActive] = useState(false);
-  const [steps, setSteps] = useState<TourStep[]>(STEPS);
   const [stepIndex, setStepIndex] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [cardPos, setCardPos] = useState<{ top: number; left: number } | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  const steps = STEPS;
 
   const start = useCallback(() => {
-    const available = STEPS.filter((s) => !s.target || findTarget(s.target) !== null);
-    setSteps(available);
     setStepIndex(0);
     setCardPos(null);
     setActive(true);
@@ -94,13 +93,11 @@ export function OnboardingTour() {
     return () => window.removeEventListener("fb:start-tour", onStart);
   }, [start]);
 
-  // Arranque automático: solo la primera vez del usuario, solo en escritorio
-  // (en móvil la sidebar está oculta y el tour quedaría vacío; al no marcar
-  // "visto" aquí, saldrá cuando entre desde un escritorio).
+  // Arranque automático: solo la primera vez del usuario (cualquier tamaño de
+  // pantalla — los pasos sin ancla visible se muestran centrados).
   useEffect(() => {
     if (!user || active) return;
     if (sessionStorage.getItem(AUTO_SESSION_KEY)) return;
-    if (!window.matchMedia("(min-width: 1024px)").matches) return;
     const doneRemote = user.user_metadata?.fb_tour_done === true;
     let doneLocal = false;
     try {
