@@ -13,6 +13,10 @@ export default function Plans() {
   const { planTier, isLoading } = usePlan();
   const { session, user } = useAuth();
   const [upgrading, setUpgrading] = useState(false);
+  // Anual preseleccionado (estrategia 2026-07-11): el uso es estacional/por
+  // volcados — el anual cubre todo el año fiscal; el mensual queda como
+  // "pago por volcado" sin permanencia.
+  const [billing, setBilling] = useState<"annual" | "monthly">("annual");
 
   const handleStripeCheckout = () => {
     // Feature not available (Stripe integrations removed)
@@ -33,13 +37,14 @@ export default function Plans() {
     { text: t("plans.features.byoOpenrouter"), included: false },
   ];
 
+  // Lo fuerte primero: la IA es el motivo de compra
   const proFeatures = [
-    { text: t("plans.features.unlimitedTrips"), included: true },
-    { text: t("plans.features.unlimitedProjects"), included: true },
-    { text: t("plans.features.stops25"), included: true },
     { text: t("plans.features.ai60"), included: true },
     { text: t("plans.features.callsheetBulk20"), included: true },
     { text: t("plans.features.byoOpenrouter"), included: true },
+    { text: t("plans.features.unlimitedTrips"), included: true },
+    { text: t("plans.features.unlimitedProjects"), included: true },
+    { text: t("plans.features.stops25"), included: true },
     { text: t("plans.features.calendarSync"), included: true },
     { text: t("plans.features.reportsUnlimited"), included: true },
     { text: t("plans.features.csvExport"), included: true },
@@ -61,6 +66,35 @@ export default function Plans() {
             {t("plans.subtitle")}
           </p>
         </div>
+
+            {/* Toggle mensual/anual — anual preseleccionado con badge de ahorro */}
+            <div className="flex justify-center mb-8 animate-fade-in">
+              <div className="inline-flex items-center gap-1 rounded-xl border border-border bg-card p-1">
+                <button
+                  type="button"
+                  onClick={() => setBilling("monthly")}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    billing === "monthly" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {t("plans.billingMonthly")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBilling("annual")}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors inline-flex items-center gap-2 ${
+                    billing === "annual" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {t("plans.billingAnnual")}
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-chip ${
+                    billing === "annual" ? "bg-primary-foreground/20" : "bg-success/20 text-success"
+                  }`}>
+                    {t("plans.annualBadge")}
+                  </span>
+                </button>
+              </div>
+            </div>
 
             {/* Plans Grid - 2 columns */}
             <div className="grid gap-6 md:grid-cols-2 animate-fade-in animation-delay-100 mb-6">
@@ -119,10 +153,20 @@ export default function Plans() {
                 <Crown className="w-4 h-4 text-muted-foreground" />
                 <h2 className="text-lg font-semibold">{t("plans.pro.name")}</h2>
               </div>
-              <div className="flex items-baseline gap-1 mb-1">
-                <span className="text-3xl font-bold">8,99 €</span>
-                <span className="text-muted-foreground text-sm">/{t("plans.perMonth")}</span>
-              </div>
+              {billing === "annual" ? (
+                <>
+                  <div className="flex items-baseline gap-1 mb-0.5">
+                    <span className="text-3xl font-bold">49,99 €</span>
+                    <span className="text-muted-foreground text-sm">/{t("plans.perYear")}</span>
+                  </div>
+                  <p className="text-xs font-medium text-success mb-1">{t("plans.annualEquiv")}</p>
+                </>
+              ) : (
+                <div className="flex items-baseline gap-1 mb-1">
+                  <span className="text-3xl font-bold">8,99 €</span>
+                  <span className="text-muted-foreground text-sm">/{t("plans.perMonth")}</span>
+                </div>
+              )}
               <p className="text-xs text-muted-foreground">{t("plans.pro.description")}</p>
             </div>
 
@@ -135,12 +179,13 @@ export default function Plans() {
               ))}
             </ul>
 
-            <Button 
+            <Button
               className="w-full bg-muted text-muted-foreground font-medium py-5 text-sm cursor-not-allowed"
               disabled={true}
             >
               {t("common.comingSoon")}
             </Button>
+            <p className="mt-2 text-center text-[11px] text-muted-foreground">{t("plans.cancelAnytime")}</p>
           </div>
         </div>
 

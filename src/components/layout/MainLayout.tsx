@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { MobileHeader } from "./MobileHeader";
 import { SettingsModal } from "@/components/settings/SettingsModal";
@@ -10,6 +10,14 @@ interface MainLayoutProps {
 
 export function MainLayout({ children, backgroundVariant = "default" }: MainLayoutProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Permite abrir Ajustes desde cualquier página (p. ej. el banner de
+  // "completa tu perfil" del dashboard) sin prop drilling.
+  useEffect(() => {
+    const open = () => setSettingsOpen(true);
+    window.addEventListener("fb:open-settings", open);
+    return () => window.removeEventListener("fb:open-settings", open);
+  }, []);
 
   return (
     <div className="relative min-h-screen bg-background">

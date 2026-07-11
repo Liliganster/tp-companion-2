@@ -10,7 +10,8 @@ import { RecentTrips } from "@/components/dashboard/RecentTrips";
 import { AttentionBell } from "@/components/dashboard/AttentionBell";
 import { CarMarginCard, ProUsageCard, ReportReadyCard } from "@/components/dashboard/DashboardCards";
 import { MonthlyBars } from "@/components/dashboard/MonthlyBars";
-import { ArrowDown, ArrowUp, Sparkles } from "lucide-react";
+import { ArrowDown, ArrowUp, Sparkles, AlertTriangle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useI18n } from "@/hooks/use-i18n";
@@ -108,6 +109,13 @@ export default function Index() {
     return dt != null && dt >= startOfPrevMonth && dt < startOfThisMonth;
   });
 
+  // Onboarding: sin tarifa y dirección base la distancia y el dinero no se
+  // calculan solos — el fallo más confuso para un usuario nuevo (o para el
+  // que vuelve tras meses). El banner desaparece solo al completar el perfil.
+  const rateMissing = !(parseLocaleNumber(profile.ratePerKm) > 0);
+  const baseMissing = !profile.baseAddress.trim();
+  const profileIncomplete = rateMissing || baseMissing;
+
   // € a facturar del mes: kilometraje + pasajeros + gastos (coherente con el informe)
   const defaultRate = parseLocaleNumber(profile.ratePerKm) || 0;
   const surcharge = parseLocaleNumber(profile.passengerSurcharge) || 0;
@@ -161,6 +169,31 @@ export default function Index() {
             </div>
           </div>
         </div>
+
+        {/* Banner "completa tu perfil": guía al usuario a la tarifa y la
+            dirección base para que todo se calcule solo */}
+        {profileIncomplete && (
+          <div className="glass-card border-warning/40 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex items-start gap-3 flex-1 min-w-0">
+              <span className="p-2 rounded-lg bg-warning/15 text-warning shrink-0">
+                <AlertTriangle className="w-4 h-4" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">{t("dashboard.setupTitle")}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {rateMissing && baseMissing
+                    ? t("dashboard.setupBothMissing")
+                    : rateMissing
+                      ? t("dashboard.setupRateMissing")
+                      : t("dashboard.setupBaseMissing")}
+                </p>
+              </div>
+            </div>
+            <Button size="sm" className="shrink-0" onClick={() => window.dispatchEvent(new CustomEvent("fb:open-settings"))}>
+              {t("dashboard.setupCta")}
+            </Button>
+          </div>
+        )}
 
         {/* Fila de 4 cifras planas (sin anillos, sin nota A-D) */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
