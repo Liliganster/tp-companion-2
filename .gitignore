@@ -35,3 +35,4 @@ coverage
 # Callsheets reales del eval (datos personales del crew) y resultados generados
 docs/eval/callsheets/
 docs/eval/results/
+.claude/
