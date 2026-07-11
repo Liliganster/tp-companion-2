@@ -2,6 +2,7 @@ import { ReactNode, useEffect, useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { MobileHeader } from "./MobileHeader";
 import { SettingsModal } from "@/components/settings/SettingsModal";
+import { OnboardingTour } from "@/components/tour/OnboardingTour";
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -48,6 +49,7 @@ export function MainLayout({ children, backgroundVariant = "default" }: MainLayo
       </div>
 
       <SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <OnboardingTour />
     </div>
   );
 }

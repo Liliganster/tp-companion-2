@@ -77,6 +77,14 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     navigate("/docs");
   };
 
+  const handleStartTour = () => {
+    // Cerrar el modal primero para que el tour no quede debajo del Dialog.
+    onOpenChange(false);
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("fb:start-tour"));
+    }, 350);
+  };
+
   const handleContactSupport = () => {
     toast({
       title: t("settings.supportTitle"),
@@ -1092,6 +1100,14 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                     <p className="text-sm text-muted-foreground">{t("settings.docsBody")}</p>
                     <Button variant="outline" size="sm" type="button" onClick={handleViewDocs}>
                       {t("settings.viewDocs")}
+                    </Button>
+                  </div>
+
+                  <div className="glass-card p-4 space-y-2">
+                    <h3 className="font-medium">{t("settings.tourTitle")}</h3>
+                    <p className="text-sm text-muted-foreground">{t("settings.tourBody")}</p>
+                    <Button variant="outline" size="sm" type="button" onClick={handleStartTour}>
+                      {t("settings.tourStart")}
                     </Button>
                   </div>
 

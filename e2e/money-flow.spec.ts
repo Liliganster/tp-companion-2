@@ -78,9 +78,11 @@ test.afterAll(async () => {
 
 test("login → crear viaje → generar informe", async ({ page }) => {
   // El banner de cookies taparía los botones: consentimiento decidido de antemano.
+  // El tutorial interactivo tampoco debe auto-arrancar encima del test.
   await page.addInitScript(() => {
     try {
       localStorage.setItem("tp.analytics_consent.v1", "denied");
+      sessionStorage.setItem("fb:tour:auto-checked", "1");
     } catch {
       /* ignore */
     }

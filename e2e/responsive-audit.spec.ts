@@ -54,9 +54,11 @@ for (const vp of VIEWPORTS) {
     test.setTimeout(240_000);
     await page.setViewportSize({ width: vp.width, height: vp.height });
     // El banner de cookies taparía la página: consentimiento decidido de antemano.
+    // El tutorial interactivo tampoco debe auto-arrancar encima del test.
     await page.addInitScript(() => {
       try {
         localStorage.setItem("tp.analytics_consent.v1", "denied");
+        sessionStorage.setItem("fb:tour:auto-checked", "1");
       } catch {
         /* ignore */
       }

@@ -27,27 +27,33 @@ export function Sidebar({
   const navigation = [{
     name: t("nav.dashboard"),
     href: "/",
-    icon: LayoutDashboard
+    icon: LayoutDashboard,
+    tour: "nav-dashboard"
   }, {
     name: t("nav.trips"),
     href: "/trips",
-    icon: Route
+    icon: Route,
+    tour: "nav-trips"
   }, {
     name: t("nav.projects"),
     href: "/projects",
-    icon: FolderKanban
+    icon: FolderKanban,
+    tour: "nav-projects"
   }, {
     name: t("nav.reports"),
     href: "/reports",
-    icon: FileText
+    icon: FileText,
+    tour: "nav-reports"
   }, {
     name: t("nav.calendar"),
     href: "/calendar",
-    icon: Calendar
+    icon: Calendar,
+    tour: "nav-calendar"
   }, ...(FEATURES.advancedPages ? [{
     name: t("nav.advanced"),
     href: "/advanced",
-    icon: Sparkles
+    icon: Sparkles,
+    tour: "nav-advanced"
   }] : [])];
   return <aside
       className={cn(
@@ -101,7 +107,7 @@ export function Sidebar({
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navigation.map(item => {
         const isActive = location.pathname === item.href;
-        return <Link key={item.name} to={item.href} className={cn("nav-item", isActive && "nav-item-active", collapsed && "justify-center px-2")} title={collapsed ? item.name : undefined}>
+        return <Link key={item.name} to={item.href} data-tour={item.tour} className={cn("nav-item", isActive && "nav-item-active", collapsed && "justify-center px-2")} title={collapsed ? item.name : undefined}>
               <item.icon className="w-5 h-5 shrink-0" />
               {!collapsed && <span>{item.name}</span>}
             </Link>;
@@ -112,9 +118,10 @@ export function Sidebar({
       <div className="px-3 pb-4">
         <Link
           to="/plans"
+          data-tour="plan"
           className={cn(
             "block w-full rounded-lg p-3 transition-colors",
-            "border border-violet-500/60 bg-violet-500/10 hover:bg-violet-500/20",
+            "border border-primary/60 bg-primary/10 hover:bg-primary/20",
             collapsed && "p-2"
           )}
           title={collapsed ? t("nav.plans") : undefined}
@@ -137,7 +144,7 @@ export function Sidebar({
 
       {/* Bottom actions */}
       <div className="px-3 py-4 border-t border-border/50 space-y-3">
-        <button onClick={onSettingsClick} className={cn("nav-item w-full", collapsed && "justify-center px-2")} title={collapsed ? t("nav.settings") : undefined}>
+        <button onClick={onSettingsClick} data-tour="settings" className={cn("nav-item w-full", collapsed && "justify-center px-2")} title={collapsed ? t("nav.settings") : undefined}>
           <Settings className="w-5 h-5 shrink-0" />
           {!collapsed && <span>{t("nav.settings")}</span>}
         </button>

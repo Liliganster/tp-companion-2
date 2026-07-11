@@ -23,6 +23,14 @@ export default function Docs() {
     return "Volver";
   }, [language]);
 
+  const tourLabel = useMemo(() => {
+    if (language === "de") return "Tour starten";
+    if (language === "en") return "Start tour";
+    return "Iniciar tutorial";
+  }, [language]);
+
+  const startTour = () => window.dispatchEvent(new CustomEvent("fb:start-tour"));
+
   const content = useMemo(() => {
     const es: { title: string; subtitle: string; sections: DocSection[] } = {
       title: "Documentación",
@@ -486,9 +494,12 @@ export default function Docs() {
             <h1 className="text-2xl sm:text-3xl font-bold">{content.title}</h1>
             <p className="text-muted-foreground mt-1">{content.subtitle}</p>
           </div>
-          <Button variant="outline" onClick={() => navigate(-1)}>
-            {backLabel}
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button onClick={startTour}>{tourLabel}</Button>
+            <Button variant="outline" onClick={() => navigate(-1)}>
+              {backLabel}
+            </Button>
+          </div>
         </div>
 
         <div className="glass-card p-4">
