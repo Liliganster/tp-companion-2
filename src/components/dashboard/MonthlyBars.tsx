@@ -41,7 +41,7 @@ export function MonthlyBars() {
         <h2 className="text-sm font-semibold uppercase tracking-wide">{t("dashboard.monthlyBarsTitle")}</h2>
         <div className="flex gap-3 text-[10px] text-muted-foreground">
           <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-chart-3" /> km
+            <span className="w-2 h-2 rounded-full bg-chart-2" /> km
           </span>
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-chart-1" /> €
@@ -64,7 +64,7 @@ export function MonthlyBars() {
               }}
               formatter={(value: number, name: string) => [name === "eur" ? `${value} €` : `${value} km`, ""]}
             />
-            <Bar yAxisId="km" dataKey="km" fill="hsl(var(--chart-3))" radius={[3, 3, 0, 0]} maxBarSize={22} />
+            <Bar yAxisId="km" dataKey="km" fill="hsl(var(--chart-2))" radius={[3, 3, 0, 0]} maxBarSize={22} />
             <Bar yAxisId="eur" dataKey="eur" fill="hsl(var(--chart-1))" radius={[3, 3, 0, 0]} maxBarSize={22} />
           </BarChart>
         </ResponsiveContainer>

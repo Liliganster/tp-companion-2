@@ -6,9 +6,9 @@ import { getProjectsForDashboard } from "@/lib/projects";
 import { useI18n } from "@/hooks/use-i18n";
 
 const RING_COLORS = [
-  "#6C5DD3", // morado Unity
-  "#3F8CFF", // azul
+  "#3F8CFF", // azul Unity (acento)
   "#A0D7E7", // cian claro
+  "#6C5DD3", // morado
   "#FFCE73", // amarillo
   "#FF754C", // naranja
   "#7FBA7A", // verde
