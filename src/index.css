@@ -7,45 +7,46 @@
 @layer base {
   :root {
     /*
-     * Tema Fahrtenbuch Pro — oscuro SIEMPRE (decisión de la propietaria),
-     * estilo Unity (UI8): fondo #1B1D21, acento AZUL #3F8CFF (pedido
-     * 2026-07-10: morado → azul, casa con el logo), texto secundario
-     * #808191, avisos naranja #FF754C. Tarjetas un punto más claras que
-     * el kit (#2B2E3A) para saliencia. Tipografía Inter.
+     * Tema Fahrtenbuch Pro — oscuro SIEMPRE (decisión de la propietaria).
+     * Restyle 2026-07-12 para casar con la landing (Claude Design): fondo
+     * casi negro #0D0E12 con glow radial azul arriba, tarjetas elevadas
+     * #212330, acento AZUL #3F8CFF (botones primarios en degradado
+     * azul → azul claro con brillo), texto secundario #808191, avisos
+     * naranja #FF754C. Tipografía Inter, titulares bold tracking-tight.
      */
     /* La app es oscura SIEMPRE: se lo declaramos al navegador para que los
        controles nativos (icono y desplegable de los input date/time,
        scrollbars…) salgan claros sobre oscuro en TODOS los modales. */
     color-scheme: dark;
 
-    --background: 220 10% 12%;
+    --background: 222 14% 6%;
     --foreground: 0 0% 100%;
 
-    --card: 227 14% 20%;
+    --card: 227 14% 15%;
     --card-foreground: 0 0% 100%;
 
-    --popover: 227 14% 21%;
+    --popover: 227 14% 16%;
     --popover-foreground: 0 0% 100%;
 
     /* Azul Unity #3F8CFF con texto blanco */
     --primary: 216 100% 62%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 228 12% 25%;
+    --secondary: 228 12% 19%;
     --secondary-foreground: 228 15% 90%;
 
-    --muted: 228 12% 25%;
+    --muted: 228 12% 19%;
     --muted-foreground: 236 7% 58%;
 
     /* Hover/selección: elevación neutra sobre carbón */
-    --accent: 230 12% 27%;
+    --accent: 230 12% 21%;
     --accent-foreground: 0 0% 98%;
 
     --destructive: 9 100% 64%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 228 12% 26%;
-    --input: 228 12% 24%;
+    --border: 228 12% 20%;
+    --input: 228 12% 18%;
     --ring: 216 100% 62%;
 
     /* Radios generosos (Tailwind rounded-lg via shadcn) */
@@ -53,15 +54,20 @@
 
     /* Superficies glass neutras (tinte carbón Unity), casi opacas para que
        la tarjeta no se funda con el fondo */
-    --glass-bg: 227 14% 20% / 0.92;
-    --glass-bg-2: 227 14% 17% / 0.85;
+    --glass-bg: 227 14% 15% / 0.92;
+    --glass-bg-2: 227 14% 12% / 0.85;
     --glass-border: 240 30% 90% / 0.08;
     --glass-blur: 18px;
-    --glass-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+    --glass-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
     --app-bg-blur: 0px;
-    --app-bg-image: radial-gradient(80% 60% at 50% 0%, rgba(63, 140, 255, 0.08), transparent 60%),
-      radial-gradient(50% 50% at 15% 80%, rgba(63, 140, 255, 0.04), transparent 60%);
-    --app-bg-image-opacity: 0.9;
+    /* Fondo FIJO estilo Gemini (2026-07-12): carbón + luz azul central.
+       Un halo azul amplio y suave centrado en la parte superior que baja
+       hacia el centro, con un segundo halo tenue más abajo para dar
+       profundidad. Sin personalización — mismo fondo en toda la app. */
+    --app-bg-image: radial-gradient(60% 55% at 50% 18%, rgba(63, 140, 255, 0.20), transparent 62%),
+      radial-gradient(90% 60% at 50% 0%, rgba(63, 140, 255, 0.10), transparent 70%),
+      radial-gradient(55% 45% at 50% 95%, rgba(63, 140, 255, 0.05), transparent 65%);
+    --app-bg-image-opacity: 1;
 
     /* Degradado de marca (azul → azul claro) */
     --gradient-primary: linear-gradient(135deg, hsl(216 100% 62%), hsl(199 95% 74%));
@@ -77,13 +83,13 @@
     --action-upload-foreground: 0 0% 100%;
 
     /* Sidebar: mismo carbón que el fondo, como en Unity */
-    --sidebar-background: 220 10% 12%;
+    --sidebar-background: 222 14% 6%;
     --sidebar-foreground: 236 7% 54%;
     --sidebar-primary: 216 100% 62%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 230 13% 20%;
+    --sidebar-accent: 230 13% 14%;
     --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 227 12% 18%;
+    --sidebar-border: 227 12% 12%;
     --sidebar-ring: 216 100% 62%;
 
     /* Charts: paleta Unity con el azul primero (azul, cian claro, morado, lila, gris) */
@@ -112,11 +118,11 @@
   }
 
   h1 {
-    @apply text-3xl md:text-4xl font-semibold leading-tight tracking-tight;
+    @apply text-3xl md:text-4xl font-bold leading-tight tracking-tight;
   }
 
   h2 {
-    @apply text-2xl md:text-3xl font-semibold leading-tight;
+    @apply text-2xl md:text-3xl font-bold leading-tight tracking-tight;
   }
 }
 

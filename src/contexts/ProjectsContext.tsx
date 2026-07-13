@@ -68,9 +68,6 @@ type ProjectsContextValue = {
   addProject: (project: Project) => Promise<void>;
   updateProject: (id: string, patch: Partial<Project>) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
-  toggleStar: (id: string) => Promise<void>;
-  // Deprecated compatibility (optional, but better to remove to force refactor)
-  // setProjects: ... // Removed
 };
 
 const ProjectsContext = createContext<ProjectsContextValue | null>(null);
@@ -326,22 +323,14 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     }
   }, [queryClient, queryKey, user]);
 
-  const toggleStar = useCallback(async (id: string) => {
-    const project = projects.find(p => p.id === id);
-    if (project) {
-      await updateProject(id, { starred: !project.starred });
-    }
-  }, [projects, updateProject]);
-
-  const value = useMemo<ProjectsContextValue>(() => ({ 
-    projects, 
-    loading, 
+  const value = useMemo<ProjectsContextValue>(() => ({
+    projects,
+    loading,
     refreshProjects,
-    addProject, 
-    updateProject, 
-    deleteProject, 
-    toggleStar 
-  }), [projects, loading, refreshProjects, addProject, updateProject, deleteProject, toggleStar]);
+    addProject,
+    updateProject,
+    deleteProject,
+  }), [projects, loading, refreshProjects, addProject, updateProject, deleteProject]);
 
   return <ProjectsContext.Provider value={value}>{children}</ProjectsContext.Provider>;
 }

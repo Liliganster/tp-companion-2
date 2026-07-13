@@ -25,8 +25,6 @@ interface ProjectEditModalProps {
     producer?: string;
     description?: string;
     ratePerKm: number;
-    // ratePerPassenger logic seems unused but present in UI
-    ratePerPassenger?: number;
   }) => Promise<void>;
 }
 
@@ -43,7 +41,6 @@ export function ProjectEditModal({
   const [producer, setProducer] = useState("");
   const [description, setDescription] = useState("");
   const [ratePerKm, setRatePerKm] = useState("0.30");
-  const [ratePerPassenger, setRatePerPassenger] = useState("0.05");
 
   // Reset form when opening or changing project
   useEffect(() => {
@@ -57,16 +54,12 @@ export function ProjectEditModal({
             ? String(project.ratePerKm)
             : "0.30"
         );
-        // Passenger rate is not in project type yet, default or keep previous if needed?
-        // UI defaulted to 0.05
-        setRatePerPassenger("0.05");
       } else {
         // Create mode
         setName("");
         setProducer("");
         setDescription("");
         setRatePerKm("0.30");
-        setRatePerPassenger("0.05");
       }
     }
   }, [open, project]);
@@ -79,16 +72,12 @@ export function ProjectEditModal({
     try {
       const parsedRate = parseFloat(ratePerKm.replace(",", "."));
       const finalRate = Number.isFinite(parsedRate) ? parsedRate : 0;
-      
-      const parsedPassenger = parseFloat(ratePerPassenger.replace(",", "."));
-      const finalPassenger = Number.isFinite(parsedPassenger) ? parsedPassenger : 0;
 
       await onSave({
         name: trimmedName,
         producer: producer.trim() || undefined,
         description: description.trim() || undefined,
         ratePerKm: finalRate,
-        ratePerPassenger: finalPassenger,
       });
       onOpenChange(false);
     } catch (e) {
@@ -140,29 +129,16 @@ export function ProjectEditModal({
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="rate">{t("projects.ratePerKm")}</Label>
-              <Input
-                id="rate"
-                type="number"
-                step="0.01"
-                placeholder="0.30"
-                  value={ratePerKm}
-                onChange={(e) => setRatePerKm(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="ratePassenger">{t("projects.ratePerPassenger")}</Label>
-              <Input
-                id="ratePassenger"
-                type="number"
-                step="0.01"
-                placeholder="0.05"
-                  value={ratePerPassenger}
-                onChange={(e) => setRatePerPassenger(e.target.value)}
-              />
-            </div>
+          <div className="grid gap-2">
+            <Label htmlFor="rate">{t("projects.ratePerKm")}</Label>
+            <Input
+              id="rate"
+              type="number"
+              step="0.01"
+              placeholder="0.30"
+              value={ratePerKm}
+              onChange={(e) => setRatePerKm(e.target.value)}
+            />
           </div>
             <Button className="w-full mt-2" onClick={handleSubmit} disabled={loading}>
               {loading ? (

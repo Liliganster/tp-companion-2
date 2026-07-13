@@ -3,9 +3,13 @@
  *
  * ÚNICA implementación del PDF (antes vivía duplicada dos veces dentro de
  * ReportView.tsx). El PDF es el producto visible y el vector de marketing:
- * cabecera freelancer/producción, tabla de viajes (fecha, ruta, propósito,
- * km, tarifa, importe), gastos con nota de anexo, total destacado, línea de
- * CO2 con fuente citada + árboles, firma y pie "Erstellt mit Fahrtenbuch Pro".
+ * cabecera freelancer/producción, tabla de viajes, gastos con nota de anexo,
+ * total destacado, firma y pie "Erstellt mit Fahrtenbuch Pro".
+ *
+ * v9 (2026-07-12): estilo del mockup de la landing — título + chip de marca,
+ * cabeceras de tabla grises en MAYÚSCULAS con reglas segmentadas por columna,
+ * propósito como segunda línea de la ruta, importe en negrita y el total en
+ * caja negra redondeada (GESAMT) con el resumen km · viajes a la izquierda.
  *
  * Idioma independiente de la UI (la Aufnahmeleitung lee alemán; la dueña usa
  * la app en español): se pasa `lang` y las cadenas salen de i18n.
@@ -15,6 +19,43 @@
  */
 import type { jsPDF } from "jspdf";
 import { getLocale, loadLanguage, t as tLang, tf as tfLang, type AppLanguage, type I18nKey } from "@/lib/i18n";
+
+const ALL_LANGS: AppLanguage[] = ["es", "en", "de"];
+
+/**
+ * Reescribe un propósito AUTOGENERADO ("Rodaje/Dreh/Shoot" ± productora),
+ * detectado en cualquier idioma, al idioma del informe. Los propósitos se
+ * guardan en el idioma que tenía la app al procesar la callsheet, lo que
+ * mezclaba idiomas en el PDF. Un propósito escrito a mano por el usuario no
+ * coincide con las plantillas y se devuelve intacto.
+ */
+function localizeAutoPurpose(purpose: string, lang: AppLanguage): string {
+  const raw = (purpose ?? "").trim();
+  if (!raw) return "";
+  for (const src of ALL_LANGS) {
+    if (raw.toLowerCase() === tLang(src, "bulk.purposeDefault").trim().toLowerCase()) {
+      return tLang(lang, "bulk.purposeDefault");
+    }
+    const prefix = tLang(src, "bulk.purposeWithProducer").split("{producer}")[0].trim(); // "Rodaje:"
+    if (prefix && raw.toLowerCase().startsWith(prefix.toLowerCase())) {
+      const producer = raw.slice(prefix.length).replace(/^[:\s]+/, "").trim();
+      return tfLang(lang, "bulk.purposeWithProducer", { producer });
+    }
+  }
+  return raw;
+}
+
+/** "Todos los proyectos" guardado en la interfaz → idioma del informe. */
+function localizeAllProjects(label: string, lang: AppLanguage): string {
+  const raw = (label ?? "").trim();
+  if (!raw) return label;
+  for (const src of ALL_LANGS) {
+    if (raw.toLowerCase() === tLang(src, "reports.allProjects").trim().toLowerCase()) {
+      return tLang(lang, "reports.allProjects");
+    }
+  }
+  return label;
+}
 
 export type ReportPdfTripRow = {
   date: string;
@@ -60,11 +101,14 @@ export type ReportPdfData = {
   showSignature?: boolean;
 };
 
-const PAGE_MARGIN = 48;
+const PAGE_MARGIN = 34; // márgenes ajustados para que la tabla quepa holgada
 const FOOTER_ZONE = 64; // reserva inferior para el pie de página
 
 export async function buildReportPdf(data: ReportPdfData): Promise<jsPDF> {
-  await loadLanguage(data.lang);
+  // Los tres idiomas cargados: el PDF sale en data.lang, pero necesitamos leer
+  // las plantillas de TODOS para detectar textos autogenerados (propósito,
+  // "todos los proyectos") guardados en el idioma que tuviera la app entonces.
+  await Promise.all(ALL_LANGS.map((l) => loadLanguage(l).catch(() => {})));
   const { jsPDF: JsPdf } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
 
@@ -89,54 +133,66 @@ export async function buildReportPdf(data: ReportPdfData): Promise<jsPDF> {
     return PAGE_MARGIN + 8;
   };
 
-  // ── Cabecera ───────────────────────────────────────────────────────────────
+  // ── Cabecera (v10, 2026-07-12): título grande + dos líneas grises (periodo ·
+  //    conductor / proyecto · productora) y los datos restantes como pares
+  //    etiqueta:valor. SIN chip de marca (pedido: cabecera sobria). El pie
+  //    "Erstellt mit Fahrtenbuch Pro" sigue en todas las páginas. ────────────
   doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(15);
-  doc.text(t("reportPdf.title").toUpperCase(), PAGE_MARGIN, 62);
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(90, 90, 90);
-  doc.text(`${t("reportView.periodLabel")}: ${data.period}`, PAGE_MARGIN, 78);
-  doc.setTextColor(0, 0, 0);
-
-  // Dos bloques: freelancer (izquierda) · producción/abrechnung (derecha)
-  const drawPair = (x: number, y: number, label: string, value: string, alignRight = false) => {
-    doc.setFontSize(9);
-    if (alignRight) {
-      doc.setFont("helvetica", "normal");
-      const full = `${label}: ${value}`;
-      const startX = rightEdge - doc.getTextWidth(full);
-      doc.setFont("helvetica", "bold");
-      doc.text(`${label}: `, startX, y);
-      const lw = doc.getTextWidth(`${label}: `);
-      doc.setFont("helvetica", "normal");
-      doc.text(value, startX + lw, y);
-      return;
-    }
-    doc.setFont("helvetica", "bold");
-    doc.text(`${label}: `, x, y);
-    const lw = doc.getTextWidth(`${label}: `);
-    doc.setFont("helvetica", "normal");
-    doc.text(value, x + lw, y);
-  };
+  doc.setFontSize(16);
+  doc.text(t("reportPdf.title"), PAGE_MARGIN, 64);
 
   // Solo campos CON valor: los "—" de relleno daban aspecto de borrador (v4).
   const hasValue = (v: string) => Boolean(v && v.trim() && v.trim() !== "—");
+
+  // Proyecto en el idioma del informe: "Todos los proyectos" guardado en la
+  // interfaz (ES) se reescribe a "Alle Projekte" si el PDF es alemán.
+  const projectLabel = localizeAllProjects(data.projectLabel, data.lang);
+
+  // Subtítulos grises: periodo · conductor / proyecto · productora
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9.5);
+  doc.setTextColor(122, 124, 135);
+  doc.text([data.period, ...(hasValue(data.driver) ? [data.driver] : [])].join(" · "), PAGE_MARGIN, 84);
+  let headerY = 84;
+  const subtitle2 = [
+    ...(hasValue(projectLabel) ? [`${t("reportView.projectLabel")}: ${projectLabel}`] : []),
+    ...(hasValue(data.producer) ? [`${t("bulk.producerLabel")}: ${data.producer}`] : []),
+  ].join(" · ");
+  if (subtitle2) {
+    headerY += 14;
+    doc.text(subtitle2, PAGE_MARGIN, headerY);
+  }
+  doc.setTextColor(0, 0, 0);
+
+  // Pares etiqueta:valor restantes — etiqueta gris, valor negro
+  const drawPair = (x: number, y: number, label: string, value: string, alignRight = false) => {
+    doc.setFontSize(8.5);
+    const labelText = `${label}: `;
+    doc.setFont("helvetica", "bold");
+    const lw = doc.getTextWidth(labelText);
+    let startX = x;
+    if (alignRight) {
+      doc.setFont("helvetica", "normal");
+      const vw = doc.getTextWidth(value);
+      doc.setFont("helvetica", "bold");
+      startX = rightEdge - (lw + vw);
+    }
+    doc.setTextColor(122, 124, 135);
+    doc.text(labelText, startX, y);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0, 0, 0);
+    doc.text(value, startX + lw, y);
+  };
+
   const leftMeta: Array<[string, string]> = (
-    [
-      [t("reportView.driverLabel"), data.driver],
-      [t("reportView.addressLabel"), data.address],
-    ] as Array<[string, string]>
+    [[t("reportView.addressLabel"), data.address]] as Array<[string, string]>
   ).filter(([, v]) => hasValue(v));
   // La matrícula SIEMPRE sale (pedido 2026-07-11): producción la espera;
   // vacía se marca con raya para completar a mano.
   leftMeta.push([t("reportView.licensePlateLabel"), data.licensePlate?.trim() || "—"]);
   const rightMeta: Array<[string, string]> = (
     [
-      [t("reportView.projectLabel"), data.projectLabel],
-      [t("bulk.producerLabel"), data.producer],
       // Tarifa base del Kilometergeld (faltaba: solo salía la de pasajeros)
       ...(typeof data.ratePerKm === "number" && data.ratePerKm > 0
         ? ([[t("reportView.ratePerKmLabel"), eur(data.ratePerKm)]] as Array<[string, string]>)
@@ -147,16 +203,16 @@ export async function buildReportPdf(data: ReportPdfData): Promise<jsPDF> {
     ] as Array<[string, string]>
   ).filter(([, v]) => hasValue(v));
 
-  leftMeta.forEach(([label, value], i) => drawPair(PAGE_MARGIN, 98 + i * 14, label, value));
-  rightMeta.forEach(([label, value], i) => drawPair(0, 98 + i * 14, label, value, true));
+  const pairsY = headerY + 22;
+  leftMeta.forEach(([label, value], i) => drawPair(PAGE_MARGIN, pairsY + i * 13, label, value));
+  rightMeta.forEach(([label, value], i) => drawPair(0, pairsY + i * 13, label, value, true));
+  const tableStartY = pairsY + Math.max(leftMeta.length, rightMeta.length, 1) * 13 + 10;
 
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.8);
-  doc.line(PAGE_MARGIN, 140, rightEdge, 140);
-
-  // ── Tabla de viajes: fecha · ruta · propósito · (mitf.) · km · (CO2) · €/km · importe
-  // Columnas DINÁMICAS: Mitf. solo si hay pasajeros; CO2 solo si el usuario
-  // lo activa (v4: el CO2 vive EN la tabla, no como nota suelta).
+  // ── Tabla de viajes (v9, mockup): DATUM · ROUTE · (MITF.) · KM · (CO2) ·
+  //    €/KM · BETRAG. El propósito va como segunda línea de la ruta (si no
+  //    repite el proyecto que ya está en la cabecera); el importe en negrita.
+  //    Mitf. solo si hay pasajeros; CO2 solo si el usuario lo activa. Los
+  //    totales viven en la caja GESAMT, no en un pie de tabla.
   const showPassengers = data.trips.some((trip) => trip.passengers > 0);
   const showCo2 = data.showCo2 ?? true;
   const showSignature = data.showSignature ?? true;
@@ -166,110 +222,123 @@ export async function buildReportPdf(data: ReportPdfData): Promise<jsPDF> {
     width?: number;
     halign?: "center" | "right";
     wrap?: boolean;
+    bold?: boolean;
+    gray?: boolean;
     cell: (trip: ReportPdfTripRow) => string;
-    /** Celda de la fila de TOTALES (v8: los totales viven en la tabla). */
-    foot?: string;
   };
   const totalKmTable = data.trips.reduce((acc, trip) => acc + trip.distanceKm, 0);
   const totalAmountTable = data.trips.reduce((acc, trip) => acc + trip.amount, 0);
-  const tripsCountText =
-    data.trips.length === 1 ? t("reportView.tripsCountOne") : tf("reportView.tripsCount", { count: data.trips.length });
-  const tripsCountLabel = `${t("reportView.totalShort")} (${tripsCountText})`;
 
+  const sameAsProject = (purpose: string) =>
+    purpose.trim().toLowerCase() === projectLabel.trim().toLowerCase();
   const columns: PdfCol[] = [
-    { head: t("reportView.colDate"), width: 54, cell: (r) => r.date },
-    { head: t("reportView.colRoute"), wrap: true, cell: (r) => r.routeText, foot: tripsCountLabel },
-    { head: t("reportPdf.colPurpose"), width: 78, wrap: true, cell: (r) => r.purpose },
+    // Ancho suficiente para DD/MM/YYYY sin que la fecha se parta en dos líneas.
+    { head: t("reportView.colDate"), width: 62, gray: true, cell: (r) => r.date },
+    {
+      head: t("reportView.colRoute"),
+      wrap: true,
+      cell: (r) => {
+        // Propósito autogenerado ("Rodaje"→"Dreh"…) reescrito al idioma del PDF.
+        const purpose = localizeAutoPurpose(r.purpose, data.lang);
+        return purpose && !sameAsProject(purpose) ? `${r.routeText}\n${purpose}` : r.routeText;
+      },
+    },
     ...(showPassengers
-      ? [{ head: t("reportView.colPassengersShort"), width: 36, halign: "center", cell: (r) => String(r.passengers || "") } as PdfCol]
+      ? [{ head: t("reportView.colPassengersShort"), width: 38, halign: "center", cell: (r) => String(r.passengers || "") } as PdfCol]
+      : []),
+    // CO2 va DESPUÉS de ruta y ANTES de km (pedido 2026-07-12).
+    ...(showCo2
+      ? [{ head: t("reportPdf.colCo2"), width: 54, halign: "right", cell: (r) => nf1.format(r.co2Kg ?? 0) } as PdfCol]
       : []),
     // Totales sin unidad: la unidad ya está en la cabecera de la columna
     // ("40,0 km" no cabía y partía en dos líneas).
-    { head: "km", width: 40, halign: "right", cell: (r) => nf1.format(r.distanceKm), foot: nf1.format(totalKmTable) },
-    ...(showCo2
-      ? [{ head: t("reportPdf.colCo2"), width: 54, halign: "right", cell: (r) => nf1.format(r.co2Kg ?? 0), foot: nf1.format(data.co2Kg) } as PdfCol]
-      : []),
-    { head: t("reportPdf.colRate"), width: 36, halign: "right", cell: (r) => nf2.format(r.ratePerKm) },
-    { head: t("reportPdf.colAmount"), width: 58, halign: "right", cell: (r) => eur(r.amount), foot: eur(totalAmountTable) },
+    { head: "km", width: 44, halign: "right", cell: (r) => nf1.format(r.distanceKm) },
+    { head: t("reportPdf.colRate"), width: 42, halign: "right", cell: (r) => nf2.format(r.ratePerKm) },
+    { head: t("reportPdf.colAmount"), width: 66, halign: "right", bold: true, cell: (r) => eur(r.amount) },
   ];
 
-  const head: string[] = columns.map((c) => c.head);
+  const head: string[] = columns.map((c) => c.head.toUpperCase());
   const body = data.trips.map((trip) => columns.map((c) => c.cell(trip)));
-  const foot: string[] = columns.map((c) => c.foot ?? "");
 
   const fixedSum = columns.reduce((acc, c) => acc + (c.width ?? 0), 0);
   const routeWidth = availableWidth - fixedSum;
+  // Hueco visual entre columnas: padding derecho de cada celda + corte de las
+  // reglas segmentadas justo donde empieza (la última columna llega al borde).
+  const COL_GAP = 10;
   const colStyles: Record<number, any> = {};
   columns.forEach((c, i) => {
     colStyles[i] = {
       cellWidth: c.width ?? routeWidth,
+      cellPadding: { top: 7, bottom: 7, left: 0, right: i === columns.length - 1 ? 0 : COL_GAP },
       ...(c.halign ? { halign: c.halign } : {}),
       ...(c.wrap ? { overflow: "linebreak" } : {}),
+      ...(c.bold ? { fontStyle: "bold" } : {}),
+      ...(c.gray ? { textColor: [122, 124, 135] } : {}),
     };
   });
 
-  // Cabeceras y TOTALES heredan la alineación de su columna: un título a la
-  // izquierda sobre números a la derecha hacía que las cifras parecieran
-  // solapadas con la columna vecina. La etiqueta "Total (N viajes)" (columna
-  // ruta) se alinea a la derecha para arrimarse a las cifras.
-  const routeColIndex = 1;
-  const alignHeadWithColumn = (hookData: any) => {
-    if (hookData.section === "head" || hookData.section === "foot") {
-      const st = colStyles[hookData.column.index];
-      if (st?.halign) hookData.cell.styles.halign = st.halign;
-      if (hookData.section === "foot" && hookData.column.index === routeColIndex) {
-        hookData.cell.styles.halign = "right";
-      }
+  // columnStyles solo aplica al cuerpo: las cabeceras heredan alineación y
+  // padding de su columna vía didParseCell (números a la derecha).
+  const makeHeadStyler = (cs: Record<number, any>, lastIndex: number) => (hookData: any) => {
+    if (hookData.section !== "head") return;
+    const st = cs[hookData.column.index];
+    if (st?.halign) hookData.cell.styles.halign = st.halign;
+    if (hookData.column.index === lastIndex) {
+      hookData.cell.styles.cellPadding = { top: 4, right: 0, bottom: 6, left: 0 };
     }
+  };
+
+  // Reglas segmentadas por columna, como en el mockup: negra bajo la cabecera,
+  // gris clara bajo cada fila. autotable no dibuja bordes (lineWidth 0).
+  const makeRuleDrawer = (lastIndex: number) => (hookData: any) => {
+    const { cell, column, section } = hookData;
+    if (section !== "head" && section !== "body") return;
+    const x2 = cell.x + cell.width - (column.index === lastIndex ? 0 : COL_GAP);
+    const yy = cell.y + cell.height;
+    if (section === "head") {
+      doc.setDrawColor(17, 18, 20);
+      doc.setLineWidth(1);
+    } else {
+      doc.setDrawColor(229, 230, 233);
+      doc.setLineWidth(0.5);
+    }
+    doc.line(cell.x, yy, x2, yy);
   };
 
   const tableStyles = {
     styles: {
       font: "helvetica" as const,
-      fontSize: 8.5,
-      cellPadding: { top: 5, right: 6, bottom: 5, left: 6 },
-      textColor: [0, 0, 0] as [number, number, number],
+      fontSize: 9,
+      cellPadding: { top: 7, right: COL_GAP, bottom: 7, left: 0 },
+      textColor: [17, 18, 20] as [number, number, number],
       valign: "top" as const,
       overflow: "linebreak" as const,
-      lineWidth: { bottom: 0.3 },
-      lineColor: [222, 222, 222] as [number, number, number],
+      lineWidth: 0,
     },
     headStyles: {
       font: "helvetica" as const,
       fillColor: [255, 255, 255] as [number, number, number],
-      textColor: [0, 0, 0] as [number, number, number],
+      textColor: [122, 124, 135] as [number, number, number],
       fontStyle: "bold" as const,
-      fontSize: 8.5,
-      cellPadding: { top: 4, right: 6, bottom: 4, left: 6 },
-      lineWidth: { bottom: 0.8 },
-      lineColor: [0, 0, 0] as [number, number, number],
-    },
-    footStyles: {
-      font: "helvetica" as const,
-      fillColor: [255, 255, 255] as [number, number, number],
-      textColor: [0, 0, 0] as [number, number, number],
-      fontStyle: "bold" as const,
-      fontSize: 8.5,
-      cellPadding: { top: 5, right: 6, bottom: 5, left: 6 },
-      lineWidth: { top: 0.8 },
-      lineColor: [0, 0, 0] as [number, number, number],
+      fontSize: 7.5,
+      cellPadding: { top: 4, right: COL_GAP, bottom: 6, left: 0 },
+      lineWidth: 0,
     },
   };
 
   autoTable(doc, {
     head: [head],
     body,
-    foot: [foot],
-    showFoot: "lastPage",
-    startY: 152,
+    startY: tableStartY,
     theme: "plain",
     margin: { left: PAGE_MARGIN, right: PAGE_MARGIN, bottom: FOOTER_ZONE },
     columnStyles: colStyles,
-    didParseCell: alignHeadWithColumn,
+    didParseCell: makeHeadStyler(colStyles, columns.length - 1),
+    didDrawCell: makeRuleDrawer(columns.length - 1),
     ...tableStyles,
   });
 
-  let y = ((doc as any).lastAutoTable?.finalY ?? 152) + 16;
+  let y = ((doc as any).lastAutoTable?.finalY ?? tableStartY) + 16;
 
   // ── Gastos (solo si hay) ───────────────────────────────────────────────────
   const expensesTotal = data.expenses.reduce((acc, e) => acc + e.amount, 0);
@@ -284,18 +353,21 @@ export async function buildReportPdf(data: ReportPdfData): Promise<jsPDF> {
       fuel: t("reportPdf.expenseFuel"),
       other: t("reportPdf.expenseOther"),
     };
+    const expenseColStyles: Record<number, any> = {
+      0: { cellWidth: 70, cellPadding: { top: 7, bottom: 7, left: 0, right: COL_GAP }, textColor: [122, 124, 135] },
+      1: { cellWidth: 130, cellPadding: { top: 7, bottom: 7, left: 0, right: COL_GAP } },
+      2: { cellWidth: 80, halign: "right", cellPadding: { top: 7, bottom: 7, left: 0, right: 0 }, fontStyle: "bold" },
+    };
     autoTable(doc, {
-      head: [[t("reportView.colDate"), t("reportPdf.expensesTitle"), t("reportPdf.colAmount")]],
+      head: [[t("reportView.colDate").toUpperCase(), t("reportPdf.expensesTitle").toUpperCase(), t("reportPdf.colAmount").toUpperCase()]],
       body: data.expenses.map((e) => [e.date, kindLabel[e.kind], eur(e.amount)]),
       startY: y + 8,
       theme: "plain",
       margin: { left: PAGE_MARGIN, right: PAGE_MARGIN, bottom: FOOTER_ZONE },
       tableWidth: 280,
-      columnStyles: {
-        0: { cellWidth: 70 },
-        1: { cellWidth: 130 },
-        2: { cellWidth: 80, halign: "right" },
-      },
+      columnStyles: expenseColStyles,
+      didParseCell: makeHeadStyler(expenseColStyles, 2),
+      didDrawCell: makeRuleDrawer(2),
       ...tableStyles,
     });
     y = ((doc as any).lastAutoTable?.finalY ?? y) + 10;
@@ -311,27 +383,26 @@ export async function buildReportPdf(data: ReportPdfData): Promise<jsPDF> {
     }
   }
 
-  // ── Totales (bloque derecho, total destacado) ──────────────────────────────
+  // ── Totales ────────────────────────────────────────────────────────────────
   // Decisión de la propietaria: el importe del viaje es SOLO kilometraje; el
   // suplemento por pasajeros va como línea separada (los pasajeros por viaje
   // ya están en la tabla — producción/Finanzamt lo interpretan).
-  const travelTotal = data.trips.reduce((acc, trip) => acc + trip.amount, 0);
+  const travelTotal = totalAmountTable;
   const totalPassengers = data.trips.reduce((acc, trip) => acc + trip.passengers, 0);
   const passengerTotal = totalPassengers * data.passengerSurcharge;
   const grandTotal = travelTotal + passengerTotal + expensesTotal;
 
-  y = ensureSpace(y, 96);
-  const lineRight = (text: string, yy: number, size = 9.5, bold = false, gray = false) => {
-    doc.setFont("helvetica", bold ? "bold" : "normal");
-    doc.setFontSize(size);
-    doc.setTextColor(gray ? 110 : 0, gray ? 110 : 0, gray ? 110 : 0);
+  y = ensureSpace(y, 60);
+  const lineRight = (text: string, yy: number) => {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(122, 124, 135);
     doc.text(text, rightEdge, yy, { align: "right" });
     doc.setTextColor(0, 0, 0);
   };
 
-  // v8: sin línea de estadísticas — viajes, km y CO2 viven en la fila de
-  // totales DE la tabla. Estilo factura: el desglose SOLO cuando hay más de
-  // un componente; con solo kilometraje iría el mismo importe dos veces.
+  // Desglose SOLO cuando hay más de un componente; con solo kilometraje iría
+  // el mismo importe dos veces (estilo factura).
   if (passengerTotal > 0 || expensesTotal > 0) {
     lineRight(`${t("reportPdf.travelCosts")}: ${eur(travelTotal)}`, y);
     y += 15;
@@ -343,21 +414,43 @@ export async function buildReportPdf(data: ReportPdfData): Promise<jsPDF> {
       lineRight(`${t("reportPdf.expensesTitle")}: ${eur(expensesTotal)}`, y);
       y += 15;
     }
+    y += 4;
   }
 
-  // Total — sobrio (2ª iteración 2026-07-10): UNA regla fina y la cifra en
-  // negrita a tamaño proporcionado. Ni caja negra ni doble subrayado.
-  const totalText = `${t("reportPdf.grandTotal")}: ${eur(grandTotal)}`;
+  // Caja negra del total (v10, 2026-07-12): barra fina con ESQUINAS RECTAS
+  // (documento profesional, sin border-radius). A la izquierda "Kilometer
+  // gesamt: X km · N Drehtage · inkl. …" (el km lleva su nombre, no solo la
+  // cifra); a la derecha GESAMT + total. Aquí viven los totales.
+  const shootDays = new Set(data.trips.map((trip) => trip.date)).size;
+  const shootDaysText = shootDays === 1 ? t("reportPdf.shootDayOne") : tf("reportPdf.shootDays", { count: shootDays });
+  const BOX_H = 34;
+  const BOX_PAD = 14;
+  y = ensureSpace(y, BOX_H + 12);
+  y += 6;
+  doc.setFillColor(16, 17, 20);
+  doc.rect(PAGE_MARGIN, y, availableWidth, BOX_H, "F");
+  const midY = y + BOX_H / 2;
+
+  const summaryParts = [`${t("reportPdf.totalKmLabel")}: ${km(totalKmTable)}`, shootDaysText];
+  if (showCo2 && data.co2Kg > 0) summaryParts.push(`${t("reportPdf.totalCo2Label")}: ${nf1.format(data.co2Kg)} kg`);
+  if (passengerTotal > 0) summaryParts.push(t("reportPdf.inclPassengerSurcharge"));
+  if (expensesTotal > 0) summaryParts.push(t("reportPdf.inclExpenses"));
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(168, 171, 178);
+  doc.text(summaryParts.join(" · "), PAGE_MARGIN + BOX_PAD, midY + 2.5);
+
+  const totalText = eur(grandTotal);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  y = ensureSpace(y, 60);
-  y += 16; // aire antes del total (2026-07-11: quedaba pegado al desglose)
-  doc.setDrawColor(70, 70, 70);
-  doc.setLineWidth(0.8);
-  doc.line(rightEdge - 220, y, rightEdge, y);
+  doc.setFontSize(13);
+  const totalW = doc.getTextWidth(totalText);
+  doc.setTextColor(255, 255, 255);
+  doc.text(totalText, rightEdge - BOX_PAD, midY + 4.5, { align: "right" });
+  doc.setFontSize(7);
+  doc.setTextColor(150, 153, 160);
+  doc.text(t("reportPdf.totalBoxLabel").toUpperCase(), rightEdge - BOX_PAD - totalW - 8, midY + 2.5, { align: "right" });
   doc.setTextColor(0, 0, 0);
-  doc.text(totalText, rightEdge, y + 18, { align: "right" });
-  y += 42;
+  y += BOX_H + 14;
 
   // ── Firma (opcional): con aire generoso respecto al bloque de totales
   //    (queja 2026-07-11: quedaba muy junta) ────────────────────────────────

@@ -35,16 +35,18 @@ export function MonthlyBars() {
     });
   }, [trips, profile.ratePerKm, profile.passengerSurcharge, locale]);
 
+  // Mockup Claude Design 2026-07-12: km en azul (chart-1), € en cian claro
+  // (chart-2), barras con la punta redondeada y leyenda de cuadraditos.
   return (
-    <div className="glass-card p-4 h-full flex flex-col min-h-[260px]">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wide">{t("dashboard.monthlyBarsTitle")}</h2>
+    <div className="glass-card p-5 h-full flex flex-col min-h-[260px]">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-base font-semibold">{t("dashboard.monthlyBarsTitle")}</h2>
         <div className="flex gap-3 text-[10px] text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-chart-2" /> km
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-[3px] bg-chart-1" /> km
           </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-chart-1" /> €
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-[3px] bg-chart-2" /> €
           </span>
         </div>
       </div>
@@ -64,8 +66,8 @@ export function MonthlyBars() {
               }}
               formatter={(value: number, name: string) => [name === "eur" ? `${value} €` : `${value} km`, ""]}
             />
-            <Bar yAxisId="km" dataKey="km" fill="hsl(var(--chart-2))" radius={[3, 3, 0, 0]} maxBarSize={22} />
-            <Bar yAxisId="eur" dataKey="eur" fill="hsl(var(--chart-1))" radius={[3, 3, 0, 0]} maxBarSize={22} />
+            <Bar yAxisId="km" dataKey="km" fill="hsl(var(--chart-1))" radius={[6, 6, 0, 0]} maxBarSize={20} />
+            <Bar yAxisId="eur" dataKey="eur" fill="hsl(var(--chart-2))" radius={[6, 6, 0, 0]} maxBarSize={20} />
           </BarChart>
         </ResponsiveContainer>
       </div>

@@ -1,11 +1,11 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ModalHeaderImage } from "@/components/ui/modal-header-image";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { MapPin, FileText, CircleDot, Eye, Car, Receipt, ParkingCircle, Banknote, Users, ArrowLeft, ExternalLink } from "lucide-react";
+import { MapPin, FileText, CircleDot, Eye, Car, Receipt, ParkingCircle, Banknote, Fuel, Users, ArrowLeft, ExternalLink } from "lucide-react";
 import { useI18n } from "@/hooks/use-i18n";
 import { TripGoogleMap } from "@/components/trips/TripGoogleMap";
 import { Trip, useTrips } from "@/contexts/TripsContext";
@@ -36,15 +36,34 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
     return trips.find((t) => t.id === trip.id) ?? trip;
   }, [trip, trips]);
 
+  // Auto-cargar el primer documento SOLO al abrir o al cambiar de viaje. Antes
+  // dependía de `liveTrip` (identidad nueva en cada recálculo de CO2 de fondo),
+  // así que se re-disparaba, reseteando el documento que veías y creando URLs
+  // que nunca se liberaban. Se ancla por id del viaje.
+  const autoLoadedTripIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!open) {
       setPreviewUrl(null);
       setPreviewDocName("");
-    } else if (liveTrip?.documents && liveTrip.documents.length > 0) {
-      // Auto-load the first document
-      viewDocument(liveTrip.documents[0]);
+      autoLoadedTripIdRef.current = null;
+      return;
     }
-  }, [liveTrip, open]);
+    const currentTrip = trip ? trips.find((t) => t.id === trip.id) ?? trip : null;
+    const id = currentTrip?.id;
+    if (!id || autoLoadedTripIdRef.current === id) return;
+    if (currentTrip?.documents && currentTrip.documents.length > 0) {
+      autoLoadedTripIdRef.current = id;
+      viewDocument(currentTrip.documents[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al abrir/cambiar de viaje
+  }, [open, trip?.id]);
+
+  // Liberar el object URL del visor cuando cambia o al cerrar/desmontar.
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   // Early return AFTER all hooks
   if (!liveTrip) return null;
@@ -185,7 +204,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
             </div>
 
             {/* Trip Expenses */}
-            {(liveTrip.tollAmount || liveTrip.parkingAmount || liveTrip.otherExpenses) && (
+            {(liveTrip.tollAmount || liveTrip.parkingAmount || liveTrip.fuelAmount || liveTrip.otherExpenses) && (
               <>
                 <Separator />
                 <div>
@@ -207,6 +226,15 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
                           <span className="text-muted-foreground">{t("tripModal.parking")}</span>
                         </div>
                         <span className="font-medium">{liveTrip.parkingAmount.toFixed(2)} €</span>
+                      </div>
+                    )}
+                    {liveTrip.fuelAmount != null && liveTrip.fuelAmount > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <Fuel className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-muted-foreground">{t("tripModal.fuel")}</span>
+                        </div>
+                        <span className="font-medium">{liveTrip.fuelAmount.toFixed(2)} €</span>
                       </div>
                     )}
                     {liveTrip.otherExpenses != null && liveTrip.otherExpenses > 0 && (

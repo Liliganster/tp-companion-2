@@ -22,8 +22,6 @@ import {
 import {
   Plus,
   Search,
-  Star,
-  StarOff,
   Car,
   FileText,
   Euro,
@@ -89,7 +87,7 @@ export default function Projects() {
   const [selectedYear, setSelectedYear] = useState(() => loadProjectsFilters()?.selectedYear ?? "all");
   const [selectedProducer, setSelectedProducer] = useState(() => loadProjectsFilters()?.selectedProducer ?? "all");
   const { user } = useAuth();
-  const { projects, addProject, updateProject, deleteProject, toggleStar } = useProjects();
+  const { projects, addProject, updateProject, deleteProject } = useProjects();
   const { trips } = useTrips();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -530,9 +528,8 @@ export default function Projects() {
     producer?: string;
     description?: string;
     ratePerKm: number;
-    ratePerPassenger?: number;
   }) => {
-    const { name, producer, description, ratePerKm, ratePerPassenger } = data;
+    const { name, producer, description, ratePerKm } = data;
     
     // Check plan limits for new projects
     if (!editingProjectId && !canAddProject.allowed) {
@@ -732,19 +729,6 @@ export default function Projects() {
                             <span className="w-9 h-9 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">
                               <FolderKanban className="w-4 h-4" />
                             </span>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleStar(project.id);
-                              }}
-                              className="shrink-0 opacity-60 hover:opacity-100 transition-opacity"
-                            >
-                              {project.starred ? (
-                                <Star className="w-4 h-4 text-warning fill-warning" />
-                              ) : (
-                                <StarOff className="w-4 h-4" />
-                              )}
-                            </button>
                             <span className="font-medium">{project.name}</span>
                           </div>
                         </TableCell>
@@ -877,8 +861,6 @@ export default function Projects() {
             kmPerDay: selectedProjectStats.kmPerDay ?? 0,
             co2Emissions: selectedProjectStats.co2Emissions ?? 0,
             callSheets: selectedProjectStats.callSheetDocs ?? [],
-            invoices: selectedProjectStats.invoiceDocs ?? [],
-            totalInvoiced: selectedProjectStats.overrideCost ? selectedProjectStats.overrideCost : (selectedProjectStats.distanceAtDefaultRate ?? 0) * 0.45,
           } : null}
         />
       </div>

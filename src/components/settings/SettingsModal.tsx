@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,31 +11,25 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   User,
   Lock,
   Sparkles,
-  Palette,
   Languages,
   Newspaper,
   HelpCircle,
   Trash2,
   Save,
-  Upload,
   Info,
   ExternalLink,
-  Gauge,
   } from "lucide-react";
-import { OdometerSettingsSection } from "@/components/settings/OdometerSettingsSection";
 import { cn } from "@/lib/utils";
 import { FEATURES } from "@/lib/features";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useI18n } from "@/hooks/use-i18n";
 import { useElectricityMapsCarbonIntensity } from "@/hooks/use-electricity-maps";
 import { useClimatiqFuelFactor } from "@/hooks/use-climatiq";
-import { useAppearance } from "@/contexts/AppearanceContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePlan } from "@/contexts/PlanContext";
 import { useToast } from "@/hooks/use-toast";
@@ -94,7 +88,6 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
   const { profile, saveProfile } = useUserProfile();
   const { planTier } = usePlan();
-  const { appearance, saveAppearance, previewAppearance, resetPreview } = useAppearance();
   const { getAccessToken, signOut, user } = useAuth();
 
   // Draft form state for profile
@@ -186,43 +179,12 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     };
   }, [activeTab, open, user]);
 
-  // Personalization state (tema oscuro siempre; sin selector)
-  const theme = "dark" as const;
-  const [uiOpacity, setUiOpacity] = useState([appearance.uiOpacity]);
-  const [uiBlur, setUiBlur] = useState([appearance.uiBlur]);
-  const [bgBlur, setBgBlur] = useState([appearance.backgroundBlur]);
-  const [backgroundImage, setBackgroundImage] = useState(appearance.backgroundImage);
-  const backgroundInputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    setUiOpacity([appearance.uiOpacity]);
-    setUiBlur([appearance.uiBlur]);
-    setBgBlur([appearance.backgroundBlur]);
-    setBackgroundImage(appearance.backgroundImage);
-  }, [open, appearance]);
-
-  const draftAppearance = useMemo(
-    () => ({
-      theme,
-      uiOpacity: uiOpacity[0] ?? appearance.uiOpacity,
-      uiBlur: uiBlur[0] ?? appearance.uiBlur,
-      backgroundBlur: bgBlur[0] ?? appearance.backgroundBlur,
-      backgroundImage: backgroundImage ?? appearance.backgroundImage,
-    }),
-    [theme, uiOpacity, uiBlur, bgBlur, backgroundImage, appearance],
-  );
-
-  useEffect(() => {
-    if (!open) return;
-    previewAppearance(draftAppearance);
-  }, [open, draftAppearance, previewAppearance]);
-
+  // Personalización RETIRADA (pedido de la propietaria 2026-07-12): el fondo
+  // es fijo para toda la app — carbón + luz azul central (estilo Gemini),
+  // definido en index.css. AppearanceContext queda hibernado.
   const navItems = [
     { id: "profile", label: t("settings.tabProfile"), icon: User },
     { id: "apis", label: t("settings.tabApis"), icon: Sparkles },
-    ...(FEATURES.odometer ? [{ id: "odometer", label: t("settings.tabOdometer"), icon: Gauge }] : []),
-    { id: "personalization", label: t("settings.tabPersonalization"), icon: Palette },
     { id: "language", label: t("settings.tabLanguage"), icon: Languages },
     { id: "news", label: t("settings.tabNews"), icon: Newspaper },
     { id: "help", label: t("settings.tabHelp"), icon: HelpCircle },
@@ -380,17 +342,14 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
       successText: t("settings.toastSaved"),
     });
     if (!saved) return;
-    saveAppearance(draftAppearance);
     onOpenChange(false);
   };
 
   const handleClose = () => {
-    resetPreview();
     onOpenChange(false);
   };
 
   const handleDialogOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) resetPreview();
     onOpenChange(nextOpen);
   };
 
@@ -400,18 +359,6 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     refreshGoogleStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, activeTab]);
-
-  const handleSelectBackgroundFile = (file: File) => {
-    if (!file.type.startsWith("image/")) return;
-    if (file.size > 2_000_000) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : "";
-      if (result) setBackgroundImage(result);
-    };
-    reader.readAsDataURL(file);
-  };
 
   return (
       <Dialog open={open} onOpenChange={handleDialogOpenChange}>
@@ -917,129 +864,6 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 </div>
               )}
 
-              {activeTab === "personalization" && (
-                <div className="space-y-6">
-                  <h2 className="text-lg font-medium">{t("settings.appearanceTitle")}</h2>
-                  
-                  {/* Tema: oscuro siempre (decisión de la propietaria) — sin selector */}
-
-                  {/* Background Image */}
-                  <div className="space-y-3">
-                    <Label>{t("settings.backgroundImage")}</Label>
-                    <input
-                      ref={backgroundInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handleSelectBackgroundFile(file);
-                        e.currentTarget.value = "";
-                      }}
-                    />
-                    <div className="flex items-center gap-3">
-                      <Button
-                        variant="upload"
-                        size="sm"
-                        className="gap-2"
-                        type="button"
-                        onClick={() => backgroundInputRef.current?.click()}
-                      >
-                      <Upload className="w-4 h-4" />
-                      {t("settings.uploadFromComputer")}
-                      </Button>
-                      {backgroundImage ? (
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div
-                            className="h-9 w-14 rounded-md border border-border bg-cover bg-center shrink-0"
-                            style={{ backgroundImage: `url(${backgroundImage})` }}
-                          />
-                          <Button variant="outline" size="sm" type="button" onClick={() => setBackgroundImage("")}>
-                            {t("settings.remove")}
-                          </Button>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">{t("settings.none")}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Preset Backgrounds */}
-                  <div className="space-y-3">
-                    <Label>{t("settings.presetBackgrounds")}</Label>
-                    <div className="flex gap-3">
-                      {(() => {
-                        const presets = [
-                          "https://images.unsplash.com/photo-1501691223387-dd0500403074?w=1200&auto=format&fit=crop",
-                          "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&auto=format&fit=crop",
-                          "https://images.unsplash.com/photo-1507400492013-162706c8c05e?w=1200&auto=format&fit=crop",
-                        ];
-                        return presets.map((url) => (
-                          <button
-                            key={url}
-                            type="button"
-                            onClick={() => setBackgroundImage(url)}
-                            className={cn(
-                              "w-24 h-16 rounded-lg border-2 transition-colors overflow-hidden bg-cover bg-center",
-                              backgroundImage === url
-                                ? "border-primary"
-                                : "border-transparent hover:border-primary/50",
-                            )}
-                            style={{ backgroundImage: `url(${url})` }}
-                            aria-label={t("settings.backgroundImage")}
-                          />
-                        ));
-                      })()}
-                    </div>
-                  </div>
-
-                  {/* UI Opacity */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label>{t("settings.uiOpacity")}</Label>
-                      <span className="text-sm text-muted-foreground">{uiOpacity[0]}%</span>
-                    </div>
-                    <Slider
-                      value={uiOpacity}
-                      onValueChange={setUiOpacity}
-                      max={100}
-                      step={1}
-                      className="w-full"
-                    />
-                  </div>
-
-                  {/* UI Blur */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label>{t("settings.uiBlur")}</Label>
-                      <span className="text-sm text-muted-foreground">{uiBlur[0]}px</span>
-                    </div>
-                    <Slider
-                      value={uiBlur}
-                      onValueChange={setUiBlur}
-                      max={50}
-                      step={1}
-                      className="w-full"
-                    />
-                  </div>
-
-                  {/* Background Blur */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label>{t("settings.backgroundBlur")}</Label>
-                      <span className="text-sm text-muted-foreground">{bgBlur[0]}px</span>
-                    </div>
-                    <Slider
-                      value={bgBlur}
-                      onValueChange={setBgBlur}
-                      max={50}
-                      step={1}
-                      className="w-full"
-                    />
-                  </div>
-                </div>
-              )}
-
               {activeTab === "language" && (
                 <div className="space-y-6">
                   <h2 className="text-lg font-medium">{t("settings.tabLanguage")}</h2>
@@ -1086,10 +910,6 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                     </Button>
                   </div>
                 </div>
-              )}
-
-              {FEATURES.odometer && activeTab === "odometer" && (
-                <OdometerSettingsSection />
               )}
 
               {activeTab === "help" && (

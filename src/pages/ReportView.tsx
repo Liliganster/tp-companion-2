@@ -19,10 +19,8 @@ import { useReports, type SavedReport } from "@/contexts/ReportsContext";
 import { usePlan } from "@/contexts/PlanContext";
 import { useI18n } from "@/hooks/use-i18n";
 import { buildProjectZip } from "@/hooks/use-project-export";
-import { useOdometer } from "@/contexts/OdometerContext";
 import { buildReportPdf, type ReportPdfExpenseRow } from "@/lib/reportPdf";
 import { rateForTrip } from "@/lib/tripMoney";
-import { TREE_KG_CO2_PER_YEAR } from "@/lib/emissionFactors";
 import { FEATURES } from "@/lib/features";
 import type { AppLanguage } from "@/lib/i18n";
 
@@ -39,67 +37,6 @@ interface ReportTrip {
   co2: number;
 }
 
-/* Mock report data (unused)
-const mockReportTrips: ReportTrip[] = [
-  {
-    date: "19-11-2019",
-    project: "Fundbox",
-    producer: "",
-    route: ["Laurenzgasse, 6/31, Wien, Austria", "Stadtpark, Parkring 1, 1010 Wien, Austria", "Josefsgasse 12, 1080 Wien, Austria", "Mattiellistraße 2, 1040 Wien, Austria", "Lichtenfelsgasse & Rathausplatz, 1010 Wien, Austria", "Laurenzgasse, 6/31, Wien, Austria"],
-    passengers: 0,
-    distance: 14.5,
-  },
-  {
-    date: "19-11-2019",
-    project: "Fundbox",
-    producer: "",
-    route: ["Laurenzgasse, 6/31, Wien, Austria", "Stadtpark, Parkring 1, 1010 Wien, Austria", "Josefsgasse 12, 1080 Wien, Austria", "Mattiellistraße 2, 1040 Wien, Austria", "Lichtenfelsgasse & Rathausplatz, 1010 Wien, Austria", "Laurenzgasse, 6/31, Wien, Austria"],
-    passengers: 0,
-    distance: 14.5,
-  },
-  {
-    date: "06-05-2024",
-    project: "HOFER PREIS 2024",
-    producer: "ovi office e.U.",
-    route: ["Laurenzgasse, 6/31, Wien, Austria", "Rustenschacherallee 9, 1020 Wien, Austria", "Rustenschacherallee 32, 1020 Wien, Austria", "Laurenzgasse, 6/31, Wien, Austria"],
-    passengers: 0,
-    distance: 16.7,
-  },
-  {
-    date: "07-05-2024",
-    project: "HOFER PREIS 2024",
-    producer: "ovi office e.U.",
-    route: ["Laurenzgasse, 6/31, Wien, Austria", "Erzbischofgasse 13, 1130 Wien, Austria", "Erzbischofgasse 13, 1130 Wien, Austria", "Laurenzgasse, 6/31, Wien, Austria"],
-    passengers: 0,
-    distance: 19.0,
-  },
-  {
-    date: "07-05-2024",
-    project: "HOFER PREIS 2024",
-    producer: "ovi office e.U.",
-    route: ["Laurenzgasse, 6/31, Wien, Austria", "Erzbischofgasse 6C, 1130 Wien, Austria", "Erzbischofgasse 8, 1130 Wien, Austria", "Laurenzgasse, 6/31, Wien, Austria"],
-    passengers: 0,
-    distance: 18.8,
-  },
-  {
-    date: "08-05-2024",
-    project: "HOFER PREIS 2024",
-    producer: "ovi office e.U.",
-    route: ["Laurenzgasse, 6/31, Wien, Austria", "Nottendorfer G. 2, 1030 Wien, Austria", "Högelmüllergasse 15/8, 1050 Wien, Austria", "Laurenzgasse, 6/31, Wien, Austria"],
-    passengers: 0,
-    distance: 14.9,
-  },
-  {
-    date: "19-11-2024",
-    project: "Fundbox",
-    producer: "",
-    route: ["Laurenzgasse, 6/31, Wien, Austria", "Stadtpark, Parkring 1, 1010 Wien, Austria", "Opernring 2, 1010 Wien, Austria", "Vienna, Austria", "Vienna, Austria", "Laurenzgasse, 6/31, Wien, Austria"],
-    passengers: 0,
-    distance: 8.9,
-  },
-];
-*/
-
 const getProjectKey = (value: string) => value.trim().toLowerCase();
 
 export default function ReportView() {
@@ -112,7 +49,6 @@ export default function ReportView() {
   const { projects } = useProjects();
   const { reports, addReport } = useReports();
   const { planTier, limits } = usePlan();
-  const { computeRatio, getImageUrl, snapshots: odoSnapshots } = useOdometer();
   // El PDF va dirigido a la producción (Aufnahmeleitung) → alemán por defecto,
   // independiente del idioma de la UI (Fase 3 del PLAN.md).
   const [pdfLang, setPdfLang] = useState<AppLanguage>("de");
@@ -179,26 +115,6 @@ export default function ReportView() {
   const driver = savedReport?.driver ?? (searchParams.get("driver") || profile.fullName);
   const address = savedReport?.address ?? (searchParams.get("address") || [profile.baseAddress, profile.city].filter(Boolean).join(", "));
   const licensePlate = savedReport?.licensePlate ?? (searchParams.get("licensePlate") || profile.licensePlate);
-
-  // Compute odometer ratio for the report period (needs >= 2 snapshots that bracket the period)
-  const odometerRatio = effectiveStartDate && effectiveEndDate
-    ? computeRatio(effectiveStartDate, effectiveEndDate)
-    : null;
-
-  // Single snapshot fallback: find the best snapshot in/near the period for synthetic ratio
-  const fallbackOdoSnap = odometerRatio ? null : (() => {
-    if (!effectiveStartDate || !effectiveEndDate || odoSnapshots.length === 0) return null;
-    const inPeriod = odoSnapshots.filter(
-      (s) => s.snapshot_date >= effectiveStartDate && s.snapshot_date <= effectiveEndDate
-    );
-    if (inPeriod.length > 0) return inPeriod[inPeriod.length - 1];
-    return odoSnapshots.reduce((prev, cur) =>
-      Math.abs(cur.snapshot_date.localeCompare(effectiveEndDate)) <
-      Math.abs(prev.snapshot_date.localeCompare(effectiveEndDate))
-        ? cur : prev
-    );
-  })();
-
 
   const getProducerForProject = (projectName: string) => {
     const key = getProjectKey(projectName);
@@ -300,6 +216,8 @@ export default function ReportView() {
   const passengerSurchargeTotal = mergePassengers ? 0 : totalPassengers * passengerSurcharge;
   const grandTotal = totalReimbursement + passengerSurchargeTotal + totalExpenses;
   const totalCo2 = filteredTrips.reduce((acc, trip) => acc + (Number.isFinite(trip.co2) ? trip.co2 : 0), 0);
+  // Columna Mitf. solo si algún viaje lleva pasajeros — igual que el PDF.
+  const showPassengers = trips.some((trip) => Number(trip.passengers) > 0);
   const hasReceipts = filteredTrips.some((trip) =>
     (trip.documents ?? []).some((d) => String(d.kind ?? "").endsWith("_receipt") || d.kind === "invoice"),
   );
@@ -309,20 +227,6 @@ export default function ReportView() {
       : Array.from(new Set(reportTrips.map((trip) => trip.producer).filter(Boolean))).length === 1
         ? reportTrips.find((trip) => trip.producer)?.producer ?? ""
         : "";
-
-  // Synthetic ratio from 1 snapshot: reading_km = totalKm, workKm = trips total distance
-  const synthOdoRatio = (!odometerRatio && fallbackOdoSnap && fallbackOdoSnap.reading_km > 0)
-    ? (() => {
-        const totalKm = fallbackOdoSnap.reading_km;
-        const workKm = Math.min(totalDistance, totalKm);
-        const privateKm = Math.max(0, totalKm - workKm);
-        const pct = totalKm > 0 ? Math.min(100, (workKm / totalKm) * 100) : 0;
-        return { startSnapshot: fallbackOdoSnap, endSnapshot: fallbackOdoSnap, totalKm, workKm, privateKm, pct };
-      })()
-    : null;
-
-  // Final display ratio: prefer full 2-snapshot ratio, fallback to synthetic
-  const displayOdoRatio = odometerRatio ?? synthOdoRatio;
 
   const downloadTextFile = (content: string, fileName: string, mimeType: string) => {
     const blob = new Blob([content], { type: mimeType });
@@ -353,10 +257,10 @@ export default function ReportView() {
 
   const fileBase = `${t("reportView.filePrefix")}_${sanitizeFilePart(period)}_${sanitizeFilePart(projectLabel)}`;
 
+  // Cabeceras del export CSV/Excel (datos en crudo: mantienen proyecto y
+  // productora como columnas, útiles para analizar; el informe en pantalla y
+  // el PDF los muestran en la cabecera, no como columnas).
   const companyOrClientLabel = t("reportView.colCompanyProducer");
-
-  // For HTML table, split company/producer into two lines keeping the /
-  const companyOrClientLabelHtml = (<>{t("reportView.colCompanyProducer").split("/")[0]}/<br/>{t("reportView.colCompanyProducer").split("/")[1]}</>);
 
   const headers = [
     t("reportView.colDate"),
@@ -365,6 +269,7 @@ export default function ReportView() {
     t("reportView.colRoute"),
     t("reportPdf.colPurpose"),
     t("reportView.colPassengers"),
+    t("reportPdf.colCo2"),
     t("reportView.colDistanceKm"),
     t("reportPdf.colRate"),
     t("reportView.colReimbursement"),
@@ -377,6 +282,7 @@ export default function ReportView() {
     trip.route.join(" -> "),
     trip.purpose,
     trip.passengers,
+    trip.co2.toFixed(1),
     trip.distance,
     trip.rate.toFixed(2),
     trip.reimbursement.toFixed(2),
@@ -540,6 +446,45 @@ export default function ReportView() {
     })();
   };
 
+  // Imprimir = el MISMO PDF que Exportar (antes: window.print() del HTML, que
+  // salía en otro idioma y sin la caja de totales). Genera el PDF con jsPDF,
+  // le añade la acción de auto-impresión y lo carga en un iframe oculto (sin
+  // bloqueo de popups); el visor de PDF abre el diálogo de impresión solo.
+  const handlePrint = () => {
+    toast({
+      title: t("reportView.print"),
+      description: t("reportView.toastExportingBody"),
+    });
+    (async () => {
+      try {
+        const doc = await buildPdfDoc();
+        doc.autoPrint();
+        const blob = doc.output("blob");
+        const url = URL.createObjectURL(blob);
+        const prev = document.getElementById("fb-print-frame");
+        if (prev) prev.remove();
+        const iframe = document.createElement("iframe");
+        iframe.id = "fb-print-frame";
+        iframe.style.position = "fixed";
+        iframe.style.width = "0";
+        iframe.style.height = "0";
+        iframe.style.border = "0";
+        iframe.style.right = "0";
+        iframe.style.bottom = "0";
+        iframe.src = url;
+        document.body.appendChild(iframe);
+        // Liberar el blob cuando la pestaña se cierre; no antes (el visor lo usa).
+        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      } catch {
+        toast({
+          title: t("reportView.toastExportErrorTitle"),
+          description: t("reportView.toastExportErrorBody"),
+          variant: "destructive",
+        });
+      }
+    })();
+  };
+
   const handleExportZip = () => {
     if (planTier !== "pro") {
       toast({ title: t("reportView.exportZipProOnly") });
@@ -569,41 +514,8 @@ export default function ReportView() {
           trips: filteredTrips,
         });
 
-        // 3. Odometer photos (Pro only, non-fatal; feature hibernada en Fase 1)
-        let finalZipBlob = zipBlob;
-        if (FEATURES.odometer && planTier === "pro" && odometerRatio) {
-          try {
-            const JSZipModule = await import("jszip");
-            const JSZipCls = JSZipModule.default;
-            const zip = await JSZipCls.loadAsync(zipBlob);
-            const fetchOdoImg = async (path: string) => {
-              const signedUrl = await getImageUrl(path);
-              if (!signedUrl) return null;
-              const res = await fetch(signedUrl);
-              return res.ok ? res.arrayBuffer() : null;
-            };
-            if (odometerRatio.startSnapshot.image_storage_path) {
-              const buf = await fetchOdoImg(odometerRatio.startSnapshot.image_storage_path);
-              if (buf) {
-                const ext = odometerRatio.startSnapshot.image_storage_path.split(".").pop() ?? "jpg";
-                zip.file(`odometro/foto_inicio_${odometerRatio.startSnapshot.snapshot_date}.${ext}`, buf);
-              }
-            }
-            if (odometerRatio.endSnapshot.image_storage_path && odometerRatio.endSnapshot.id !== odometerRatio.startSnapshot.id) {
-              const buf = await fetchOdoImg(odometerRatio.endSnapshot.image_storage_path);
-              if (buf) {
-                const ext = odometerRatio.endSnapshot.image_storage_path.split(".").pop() ?? "jpg";
-                zip.file(`odometro/foto_fin_${odometerRatio.endSnapshot.snapshot_date}.${ext}`, buf);
-              }
-            }
-            finalZipBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
-          } catch {
-            // Non-fatal: proceed without odometer photos
-          }
-        }
-
         // 4. Trigger download
-        const url = URL.createObjectURL(finalZipBlob);
+        const url = URL.createObjectURL(zipBlob);
         const a = document.createElement("a");
         a.href = url;
         a.download = `${fileBase}_con_documentacion.zip`;
@@ -706,7 +618,7 @@ export default function ReportView() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button variant="outline" size="sm" onClick={() => window.print()}>
+            <Button variant="outline" size="sm" onClick={handlePrint}>
               <Printer className="w-4 h-4 sm:mr-2" />
               <span className="hidden sm:inline">{t("reportView.print")}</span>
             </Button>
@@ -757,144 +669,99 @@ export default function ReportView() {
 
             <hr className="hidden print:block border-black mb-4" />
 
-            {/* Odometer Summary Card — feature hibernada (Fase 1) */}
-            {FEATURES.odometer && displayOdoRatio && (
-              <div className="mb-4 rounded-lg bg-muted/50 border border-border print:bg-gray-50 print:border-gray-200 p-3 sm:p-4">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground print:text-gray-500 mb-2">
-                  {t("odometer.calcTitle")}
-                </p>
-                <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs sm:text-sm">
-                  <div>
-                    <span className="text-muted-foreground print:text-gray-500">{t("odometer.totalKm")}: </span>
-                    <span className="font-semibold">{Number(displayOdoRatio.totalKm).toFixed(0)} km</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground print:text-gray-500">{t("odometer.workKm")}: </span>
-                    <span className="font-semibold">{Number(displayOdoRatio.workKm).toFixed(0)} km</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground print:text-gray-500">{t("odometer.privateKm")}: </span>
-                    <span className="font-semibold">{Number(displayOdoRatio.privateKm).toFixed(0)} km</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground print:text-gray-500">{t("odometer.workPct")}: </span>
-                    <span className="font-semibold">{Number(displayOdoRatio.pct).toFixed(1)} %</span>
-                  </div>
-                </div>
-                <p className="mt-1 text-[10px] text-muted-foreground print:text-gray-400">
-                  {displayOdoRatio.startSnapshot.snapshot_date}
-                  {displayOdoRatio.startSnapshot.id !== displayOdoRatio.endSnapshot.id && (
-                    <>{" \u2192 "}{displayOdoRatio.endSnapshot.snapshot_date}</>
-                  )}
-                  {" | "}
-                  {Number(displayOdoRatio.startSnapshot.reading_km).toFixed(0)}{displayOdoRatio.startSnapshot.extraction_status === "user_edited" ? " (mod.)" : ""}
-                  {displayOdoRatio.startSnapshot.id !== displayOdoRatio.endSnapshot.id && (
-                    <>{" \u2192 "}{Number(displayOdoRatio.endSnapshot.reading_km).toFixed(0)}{displayOdoRatio.endSnapshot.extraction_status === "user_edited" ? " (mod.)" : ""}</>
-                  )} km
-                </p>
-              </div>
-            )}
-
             {/* Report Table */}
             <div className="overflow-x-auto -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 print:overflow-visible print:mx-0 print:px-0">
               <table className="w-full text-xs sm:text-sm min-w-[700px] print:min-w-0 print:text-[9pt] print:leading-normal table-fixed print:table-auto">
+                {/* Mismas columnas y MISMO orden que el PDF (2026-07-12):
+                    DATUM · ROUTE(+propósito) · [MITF] · [CO2] · KM · €/KM ·
+                    BETRAG. Proyecto y productora van en la cabecera, no como
+                    columnas. */}
                 <colgroup className="print:hidden">
-                  <col style={{ width: "8%" }} />
-                  <col style={{ width: "12%" }} />
-                  <col style={{ width: "12%" }} />
-                  <col style={{ width: showCo2 ? "24%" : "32%" }} />
+                  <col style={{ width: "9%" }} />
+                  <col style={{ width: `${100 - 9 - (showPassengers ? 8 : 0) - (showCo2 ? 9 : 0) - 10 - 9 - 14}%` }} />
+                  {showPassengers && <col style={{ width: "8%" }} />}
+                  {showCo2 && <col style={{ width: "9%" }} />}
                   <col style={{ width: "10%" }} />
-                  <col style={{ width: "12%" }} />
-                  {showCo2 && <col style={{ width: "8%" }} />}
+                  <col style={{ width: "9%" }} />
                   <col style={{ width: "14%" }} />
                 </colgroup>
                 <thead>
                   <tr className="border-b border-border print:border-gray-300">
                     <th className="text-left py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap text-white print:text-black">{t("reportView.colDate")}</th>
-                    <th className="text-left py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap text-white print:text-black">{t("reportView.colProject")}</th>
-                    <th className="text-left py-3 px-2 print:py-2 print:px-2 font-semibold hidden md:table-cell print:hidden leading-tight text-white">
-                      {companyOrClientLabelHtml}
-                    </th>
                     <th className="text-left py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap text-white print:text-black">{t("reportView.colRoute")}</th>
-                    <th className="text-center py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap hidden sm:table-cell print:table-cell text-white print:text-black">
-                      {t("reportView.colPassengersShort")}
-                    </th>
-                    <th className="text-right py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap text-white print:text-black">{t("reportView.colDistanceKm")}</th>
+                    {showPassengers && (
+                      <th className="text-center py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap text-white print:text-black">
+                        {t("reportView.colPassengersShort")}
+                      </th>
+                    )}
                     {showCo2 && (
                       <th className="text-right py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap text-white print:text-black">{t("reportPdf.colCo2")}</th>
                     )}
+                    <th className="text-right py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap text-white print:text-black">{t("reportView.colDistanceKm")}</th>
+                    <th className="text-right py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap text-white print:text-black">{t("reportPdf.colRate")}</th>
                     <th className="text-right py-3 px-2 print:py-2 print:px-2 font-semibold whitespace-nowrap text-white print:text-black">{t("reportView.colReimbursement")}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {trips.map((trip, index) => (
+                  {trips.map((trip, index) => {
+                    const purposeLine =
+                      trip.purpose && trip.purpose.trim().toLowerCase() !== projectLabel.trim().toLowerCase()
+                        ? trip.purpose
+                        : "";
+                    return (
                     <tr key={index} className={`border-b border-border/60 print:border-gray-200 ${index % 2 === 1 ? 'bg-muted/30' : ''}`}>
                       <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top whitespace-nowrap print:text-black">
                         {trip.date}
                       </td>
-                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top overflow-hidden text-ellipsis whitespace-nowrap print:text-black">
-                        {trip.project}
+                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top max-w-[200px] sm:max-w-none truncate sm:whitespace-normal print:text-black print:max-w-none print:whitespace-normal print:break-words print:overflow-visible">
+                        <div className="print:text-black">
+                          <span className="hidden print:inline">{trip.route.join(" > ")}</span>
+                          <span className="print:hidden">{trip.route.join(" -> ")}</span>
+                        </div>
+                        {purposeLine && (
+                          <div className="text-xs text-muted-foreground print:text-gray-600">{purposeLine}</div>
+                        )}
                       </td>
-                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top hidden md:table-cell print:hidden overflow-hidden text-ellipsis whitespace-nowrap">
-                        {trip.producer}
-                      </td>
-                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top text-muted-foreground max-w-[200px] sm:max-w-none truncate sm:whitespace-normal print:text-black print:max-w-none print:whitespace-normal print:break-words print:overflow-visible">
-                        <span className="hidden print:inline">{trip.route.join(" > ")}</span>
-                        <span className="print:hidden">{trip.route.join(" -> ")}</span>
-                      </td>
-                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top text-center hidden sm:table-cell print:table-cell print:text-black">
-                        {trip.passengers}
-                      </td>
-                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top text-right whitespace-nowrap print:text-black">
-                        {trip.distance.toFixed(1)} <span className="hidden print:inline">km</span>
-                      </td>
+                      {showPassengers && (
+                        <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top text-center print:text-black">
+                          {trip.passengers || ""}
+                        </td>
+                      )}
                       {showCo2 && (
                         <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top text-right whitespace-nowrap text-muted-foreground print:text-black">
                           {trip.co2.toFixed(1)}
                         </td>
                       )}
+                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top text-right whitespace-nowrap print:text-black">
+                        {trip.distance.toFixed(1)} <span className="hidden print:inline">km</span>
+                      </td>
+                      <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top text-right whitespace-nowrap text-muted-foreground print:text-black">
+                        {trip.rate.toFixed(2)}
+                      </td>
                       <td className="py-3 sm:py-4 px-2 print:py-2 print:px-2 align-top text-right font-semibold whitespace-nowrap text-success print:text-black">
                         {trip.reimbursement.toFixed(2)} €
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
-                {/* Totales EN la tabla, cada uno bajo su columna; el recuento
-                    de viajes acompaña al total de km (v8: fuera la línea
-                    flotante de estadísticas) */}
+                {/* Totales bajo su columna (km, CO2, importe); €/km no tiene
+                    total. El recuento de viajes acompaña a la izquierda. */}
                 <tfoot>
-                  <tr className="border-t-2 border-border print:hidden">
-                    <td colSpan={4} className="py-3 px-2 text-right font-semibold hidden sm:table-cell">
-                    </td>
-                    <td className="py-3 px-2 text-right font-semibold hidden sm:table-cell">
-                    </td>
-                    <td className="py-3 px-2 text-right font-semibold whitespace-nowrap">
-                      {t("reportView.totalShort")} ({trips.length === 1 ? t("reportView.tripsCountOne") : tf("reportView.tripsCount", { count: trips.length })}): {totalDistance.toFixed(1)} km
+                  <tr className="border-t-2 border-border print:border-gray-300">
+                    <td colSpan={2 + (showPassengers ? 1 : 0)} className="py-3 px-2 text-right font-semibold whitespace-nowrap text-white print:text-black">
+                      {t("reportView.totalShort")} ({trips.length === 1 ? t("reportView.tripsCountOne") : tf("reportView.tripsCount", { count: trips.length })})
                     </td>
                     {showCo2 && (
-                      <td className="py-3 px-2 text-right font-semibold whitespace-nowrap">
+                      <td className="py-3 px-2 text-right font-semibold whitespace-nowrap text-white print:text-black">
                         {totalCo2.toFixed(1)} kg
                       </td>
                     )}
-                    <td className="py-3 px-2 text-right font-semibold whitespace-nowrap text-success print:text-black">
-                      {totalReimbursement.toFixed(2)} €
-                    </td>
-                  </tr>
-                  <tr className="hidden print:table-row border-t border-gray-300">
-                    <td colSpan={3} className="py-2 px-2">
-                    </td>
-                    <td className="py-2 px-2 text-right font-bold print:text-black">
-                      {t("reportView.totalShort")} ({trips.length === 1 ? t("reportView.tripsCountOne") : tf("reportView.tripsCount", { count: trips.length })}):
-                    </td>
-                    <td className="py-2 px-2 text-right font-bold print:text-black whitespace-nowrap">
+                    <td className="py-3 px-2 text-right font-semibold whitespace-nowrap text-white print:text-black">
                       {totalDistance.toFixed(1)} km
                     </td>
-                    {showCo2 && (
-                      <td className="py-2 px-2 text-right font-bold print:text-black whitespace-nowrap">
-                        {totalCo2.toFixed(1)} kg
-                      </td>
-                    )}
-                    <td className="py-2 px-2 text-right font-bold print:text-black whitespace-nowrap">
+                    <td className="py-3 px-2" />
+                    <td className="py-3 px-2 text-right font-semibold whitespace-nowrap text-success print:text-black">
                       {totalReimbursement.toFixed(2)} €
                     </td>
                   </tr>

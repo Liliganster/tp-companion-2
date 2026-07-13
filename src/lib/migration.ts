@@ -264,14 +264,6 @@ export async function checkAndMigrateData(userId: string): Promise<MigrationResu
         profile: migratedProfile,
       },
     };
-    
-    // Optional: Clear old data to avoid confusion?
-    // localStorage.removeItem(KEYS.PROFILE);
-    // localStorage.removeItem(KEYS.PROJECTS);
-    // localStorage.removeItem(KEYS.TRIPS);
-    // localStorage.removeItem(KEYS.REPORTS);
-    // Let's keep them for safety for now, just marked "migrated"
-
   } catch (error) {
     logger.warn("Migration failed", error);
     return { ok: false, reason: "failed", error: (error as any)?.message ?? String(error) };

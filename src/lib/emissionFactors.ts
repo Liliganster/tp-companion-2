@@ -17,7 +17,6 @@
  */
 export const GASOLINE_KG_CO2_PER_LITER = 2.31;
 export const DIESEL_KG_CO2_PER_LITER = 2.68;
-export const FUEL_FACTOR_METHOD = "tank-to-wheel" as const;
 export const FUEL_FACTOR_SOURCE = "Combustión física (tanque-a-rueda) · Umweltbundesamt / JEC WTW";
 
 /**
@@ -33,7 +32,6 @@ export const FUEL_FACTOR_SOURCE = "Combustión física (tanque-a-rueda) · Umwel
  * ACTUALIZACIÓN MANUAL ANUAL: revisar esa URL y ajustar cifras + año.
  */
 export const GRID_FACTORS_YEAR = 2024;
-export const GRID_FACTOR_SOURCE = "Ember / Our World in Data · media anual";
 
 export type GridZone = "AT" | "DE" | "CZ" | "HU";
 

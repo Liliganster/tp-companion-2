@@ -12,12 +12,6 @@ export const FEATURES = {
       El análisis de costes fue ELIMINADO (no hibernado) a pedido de la
       propietaria 2026-07-10. */
   advancedPages: false,
-  /** Extracción IA de facturas (invoice-worker, ProjectInvoiceUploader). */
-  invoiceAi: false,
-  /** Extracción IA de recibos de gastos (ExpenseScanButton). Adjuntar foto + importe manual SIEMPRE disponible. */
-  expenseAi: false,
-  /** Odómetro: página pública /odometer-capture y sección de ajustes (flujo QR + foto + IA). */
-  odometer: false,
   /** Integración Google Drive (picker de importación, descarga de adjuntos). */
   googleDrive: false,
 } as const;

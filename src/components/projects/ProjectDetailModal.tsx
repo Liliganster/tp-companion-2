@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/hooks/use-i18n";
 import { tf } from "@/lib/i18n";
 import { supabase } from "@/lib/supabaseClient";
-import { cascadeDeleteCallsheetJobById, cascadeDeleteInvoiceJobById } from "@/lib/cascadeDelete";
+import { cascadeDeleteCallsheetJobById } from "@/lib/cascadeDelete";
 import { toast } from "sonner";
 import { CallsheetUploader } from "@/components/callsheets/CallsheetUploader";
 import { ProjectExpenseSection } from "@/components/projects/ProjectExpenseSection";
@@ -23,7 +23,7 @@ import { useEmissionsInput } from "@/hooks/use-emissions-input";
 import { buildBaseRouteAddress, optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
 import { uuidv4 } from "@/lib/utils";
 
-import { cancelCallsheetJobs, cancelInvoiceJobs } from "@/lib/aiJobCancellation";
+import { cancelCallsheetJobs } from "@/lib/aiJobCancellation";
 import { logger } from "@/lib/logger";
 
 const DEBUG = import.meta.env.DEV;
@@ -54,8 +54,6 @@ interface ProjectDetailModalProps {
     kmPerDay: number;
     co2Emissions: number;
     callSheets: ProjectDocument[];
-    invoices: ProjectDocument[];
-    totalInvoiced: number;
   } | null;
 }
 
@@ -66,14 +64,12 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const { refreshProjects } = useProjects();
   const { getAccessToken } = useAuth();
   const [realCallSheets, setRealCallSheets] = useState<ProjectDocument[]>([]);
-  const [projectDocs, setProjectDocs] = useState<ProjectDocument[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [triggeringWorker, setTriggeringWorker] = useState(false);
   const [pendingTrips, setPendingTrips] = useState<Trip[]>([]);
   const [showPendingTrips, setShowPendingTrips] = useState(false);
   const [savingPendingTrips, setSavingPendingTrips] = useState(false);
   const realCallSheetsRef = useRef<ProjectDocument[]>([]);
-  const projectDocsRef = useRef<ProjectDocument[]>([]);
   const isModalOpenRef = useRef<boolean>(false);
   const stopExtractionRef = useRef<boolean>(false);
   const activeExtractionCountRef = useRef<number>(0);
@@ -84,10 +80,6 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   useEffect(() => {
     realCallSheetsRef.current = realCallSheets;
   }, [realCallSheets]);
-
-  useEffect(() => {
-    projectDocsRef.current = projectDocs;
-  }, [projectDocs]);
 
   useEffect(() => {
     isModalOpenRef.current = open;
@@ -121,10 +113,9 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       .map((doc) => String(doc.id ?? "").trim())
       .filter(Boolean);
     const pendingCallsheets = Array.from(new Set([...pendingCallsheetsFromRef, ...visibleNonDoneCallsheets]));
-    const pendingInvoices = Array.from(cancelInvoiceJobIdsRef.current);
     const inFlightCount = docAbortControllersRef.current.size;
     const activeExtractionCount = activeExtractionCountRef.current;
-    const totalPending = pendingCallsheets.length + pendingInvoices.length;
+    const totalPending = pendingCallsheets.length;
     const shouldShowCancelToast = totalPending > 0 || inFlightCount > 0 || activeExtractionCount > 0;
 
     logger.warn("[runCloseCleanup] Pending jobs to cancel:", {
@@ -132,7 +123,6 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       pendingCallsheetsFromRef,
       visibleNonDoneCallsheets,
       pendingCallsheets,
-      pendingInvoices,
       totalPending,
       inFlightCount,
       activeExtractionCount,
@@ -144,7 +134,6 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     });
 
     void cancelCallsheetJobs(pendingCallsheets);
-    void cancelInvoiceJobs(pendingInvoices);
 
     if (shouldShowCancelToast) {
       const totalToCancel = Math.max(totalPending, inFlightCount, activeExtractionCount);
@@ -158,7 +147,6 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
     docAbortControllersRef.current.clear();
     cancelCallsheetJobIdsRef.current.clear();
-    cancelInvoiceJobIdsRef.current.clear();
   }, []);
 
   useEffect(() => {
@@ -178,10 +166,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
   const processedJobsRef = useRef<Set<string>>(new Set());
   const inFlightJobsRef = useRef<Set<string>>(new Set());
-  const processedInvoiceJobsRef = useRef<Set<string>>(new Set());
   const abortControllerRef = useRef<AbortController | null>(null);
   const cancelCallsheetJobIdsRef = useRef<Set<string>>(new Set());
-  const cancelInvoiceJobIdsRef = useRef<Set<string>>(new Set());
   // Per-document AbortControllers so each extraction can be cancelled individually
   const docAbortControllersRef = useRef<Map<string, AbortController>>(new Map());
   // Local status overrides — polling must NOT overwrite these until they are cleared.
@@ -192,9 +178,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     // Reset per-project session state
     processedJobsRef.current = new Set();
     inFlightJobsRef.current = new Set();
-    processedInvoiceJobsRef.current = new Set();
     cancelCallsheetJobIdsRef.current = new Set();
-    cancelInvoiceJobIdsRef.current = new Set();
     
     // Create new abort controller when modal opens
     if (open) {
@@ -418,7 +402,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           passengers: 0,
           invoice: undefined,
           distance,
-          co2: calculateCO2(distance),
+          co2: calculateCO2({ distance }),
           ratePerKmOverride: null,
           specialOrigin: "base",
           documents: [
@@ -655,108 +639,11 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         }
       };
 
-      const fetchProjectDocs = async () => {
-          // Fetch project documents.
-          // We intentionally avoid PostgREST embedding here because project_documents has no direct FK to invoice_results
-          // and embedding can fail with a 400 depending on schema cache / relationships.
-          const { data: docs, error: docsError } = await supabase
-            .from("project_documents")
-            .select("*")
-            .eq("project_id", project.id);
-
-          if (docsError) {
-            logger.warn("Error fetching project documents", docsError);
-            return;
-          }
-
-          const rows = Array.isArray(docs) ? docs : [];
-          const invoiceJobIds = Array.from(
-            new Set(rows.map((d: any) => d?.invoice_job_id).filter((id: any) => typeof id === "string" && id)),
-          );
-
-          const invoiceJobsById = new Map<string, any>();
-          const invoiceResultsByJobId = new Map<string, any>();
-
-          if (invoiceJobIds.length > 0) {
-            const { data: jobs, error: jobsError } = await supabase
-              .from("invoice_jobs")
-              .select("id, status, needs_review_reason")
-              .in("id", invoiceJobIds);
-
-            if (jobsError) {
-              logger.warn("Error fetching invoice jobs", jobsError);
-            } else {
-              for (const j of (jobs ?? []) as any[]) invoiceJobsById.set(String(j.id), j);
-            }
-
-            const { data: results, error: resultsError } = await supabase
-              .from("invoice_results")
-              .select("job_id, total_amount, currency, purpose")
-              .in("job_id", invoiceJobIds);
-
-            if (resultsError) {
-              logger.warn("Error fetching invoice results", resultsError);
-            } else {
-              for (const r of (results ?? []) as any[]) invoiceResultsByJobId.set(String(r.job_id), r);
-            }
-          }
-
-          setProjectDocs(
-            rows.map((d: any) => {
-              const jobId = typeof d?.invoice_job_id === "string" ? d.invoice_job_id : undefined;
-              const job = jobId ? invoiceJobsById.get(jobId) : null;
-              const result = jobId ? invoiceResultsByJobId.get(jobId) : null;
-
-              return {
-                id: d.id,
-                name: d.name,
-                type: (d.type as any) || "invoice",
-                storage_path: d.storage_path,
-                invoice_job_id: jobId,
-                status: job?.status,
-                needs_review_reason: job?.needs_review_reason,
-                extracted_amount: result?.total_amount,
-                extracted_currency: result?.currency,
-                extracted_purpose: result?.purpose,
-              };
-            }),
-          );
-      };
-
-      Promise.all([fetchCallSheets(), fetchProjectDocs()]).catch((err) => logger.error("[ProjectDetailModal] fetch failed", err));
+      fetchCallSheets().catch((err) => logger.error("[ProjectDetailModal] fetch failed", err));
     } else {
         setRealCallSheets([]);
-        setProjectDocs([]);
     }
   }, [open, project?.name, project?.id, refreshTrigger, trips]);
-
-  // Keep project invoices/documents list fresh when uploads/deletes happen elsewhere (trip modal, cost analysis, etc).
-  useEffect(() => {
-    if (!open || !project?.id) return;
-
-    let timer: any = null;
-    const schedule = () => {
-      if (timer) return;
-      timer = setTimeout(() => {
-        timer = null;
-        setRefreshTrigger((p) => p + 1);
-      }, 300);
-    };
-
-    const channel = supabase
-      .channel(`project-documents-${project.id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "project_documents", filter: `project_id=eq.${project.id}` },
-        () => schedule(),
-      )
-      .subscribe();
-
-    return () => {
-      if (timer) clearTimeout(timer);
-      supabase.removeChannel(channel);
-    };
-  }, [open, project?.id]);
 
   // While modal is open, poll for completed extractions and materialize trips.
   useEffect(() => {
@@ -900,74 +787,6 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           }
         }
 
-        // 3) Poll invoice jobs too
-        const invoiceJobIds = projectDocsRef.current
-          .map(d => d.invoice_job_id)
-          .filter(Boolean);
-
-        if (invoiceJobIds.length > 0) {
-          const { data: invoiceJobs } = await supabase
-            .from("invoice_jobs")
-            .select("id, status, needs_review_reason")
-            .in("id", invoiceJobIds);
-
-          if (invoiceJobs && invoiceJobs.length > 0) {
-            notifyQuotaIfNeeded((invoiceJobs as any[]) ?? []);
-            // Fetch results for done jobs
-            const doneInvoiceJobIds = invoiceJobs
-              .filter((j: any) => j.status === "done")
-              .map((j: any) => j.id);
-
-            let invoiceResults: any[] = [];
-            if (doneInvoiceJobIds.length > 0) {
-              const { data } = await supabase
-                .from("invoice_results")
-                .select("job_id, total_amount, currency, purpose")
-                .in("job_id", doneInvoiceJobIds);
-              invoiceResults = data || [];
-            }
-
-            const newlyDone = doneInvoiceJobIds.filter((id: string) => !processedInvoiceJobsRef.current.has(id));
-            if (newlyDone.length > 0) {
-              for (const id of newlyDone) processedInvoiceJobsRef.current.add(id);
-              refreshProjects();
-            }
-
-            setProjectDocs((prev) => {
-              let changed = false;
-              const updated = prev.map(doc => {
-                if (!doc.invoice_job_id) return doc;
-                
-                const job = invoiceJobs.find((j: any) => j.id === doc.invoice_job_id);
-                if (!job) return doc;
-
-                const result = invoiceResults.find((r: any) => r.job_id === doc.invoice_job_id);
-
-                if (
-                  doc.status !== job.status ||
-                  doc.needs_review_reason !== job.needs_review_reason ||
-                  doc.extracted_amount !== result?.total_amount ||
-                  doc.extracted_currency !== result?.currency ||
-                  doc.extracted_purpose !== result?.purpose
-                ) {
-                  changed = true;
-                  return {
-                    ...doc,
-                    status: job.status,
-                    needs_review_reason: job.needs_review_reason,
-                    extracted_amount: result?.total_amount,
-                    extracted_currency: result?.currency,
-                    extracted_purpose: result?.purpose,
-                  };
-                }
-                return doc;
-              });
-
-              return changed ? updated : prev;
-            });
-          }
-        }
-
         // 4) If nothing is pending, stop polling.
         if (abortControllerRef.current?.signal.aborted) {
           if (interval) {
@@ -980,11 +799,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         const hasPending = (jobs ?? []).some(
           (j: any) => j?.status === "queued" || j?.status === "processing" || j?.status === "created",
         );
-        const hasInvoicePending = projectDocsRef.current.some(
-          (d: any) => d.status === "queued" || d.status === "processing" || d.status === "created"
-        );
-        
-        if (!hasPending && !hasInvoicePending && interval) {
+
+        if (!hasPending && interval) {
           if (DEBUG) logger.debug("[Polling] No pending jobs, stopping polling");
           clearInterval(interval);
           interval = null;
@@ -1017,20 +833,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
   if (!project) return null;
 
-  function uniqueDocuments(docs: ProjectDocument[]) {
-      const map = new Map<string, ProjectDocument>();
-      docs.forEach(d => map.set(d.id, d));
-      return Array.from(map.values());
-  }
-
   // Only use dynamically fetched data, not the props, to avoid duplicates
   const allCallSheets = realCallSheets;
-  const allInvoices = projectDocs;
-
-  const totalInvoicedLabel = `${project.totalInvoiced.toLocaleString(locale, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })} €`;
 
   const handleJobCreated = (jobId: string) => {
     const id = String(jobId ?? "").trim();
@@ -1039,14 +843,6 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     // starts processing. Cancelling an unqueued job on modal close is unnecessary.
     setRefreshTrigger((p) => p + 1);
     toast.success(t("projectDetail.toastDocumentUploaded"));
-  };
-
-  const handleUploadComplete = (jobIds: string[]) => {
-    for (const jobId of jobIds ?? []) {
-      const id = String(jobId ?? "").trim();
-      if (id) cancelInvoiceJobIdsRef.current.add(id);
-    }
-    setRefreshTrigger((p) => p + 1);
   };
 
   const handleDialogOpenChange = (nextOpen: boolean) => {
@@ -1297,155 +1093,6 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     }
   };
 
-  const handleViewInvoice = async (doc: ProjectDocument) => {
-      if (doc.storage_path) {
-          // Project document (Project Invoices)
-           try {
-            const { data, error } = await supabase.storage.from("project_documents").download(doc.storage_path);
-            if (error) throw error;
-            const url = URL.createObjectURL(data);
-            window.open(url, "_blank");
-          } catch (e: any) {
-            toast.error(tf("projectDetail.toastOpenDocumentError", { message: e.message }));
-          }
-      } else {
-          // Trip Invoice (likely linked to a trip)
-          toast.info("Para ver esta factura, ve al Viaje correspondiente.");
-      }
-  };
-
-  const handleExtractInvoice = async (doc: ProjectDocument) => {
-    if (doc.status === 'queued' || doc.status === 'processing') {
-      toast.info("La factura ya se está procesando");
-      return;
-    }
-    
-    if (doc.status === 'done') {
-      if (!confirm("Esta factura ya fue procesada. ¿Quieres volver a procesarla? Se borrarán los datos anteriores.")) {
-        return;
-      }
-    }
-    
-    try {
-      if (!doc.invoice_job_id) {
-        toast.error(t("projectDetail.toastInvoiceNoJob"));
-        return;
-      }
-
-      // If it's done, clean previous results
-      if (doc.status === 'done') {
-        const { error: resultsError } = await supabase
-          .from("invoice_results")
-          .delete()
-          .eq("job_id", doc.invoice_job_id);
-        if (resultsError) logger.warn("Error eliminando resultados", resultsError);
-      }
-
-      // Queue the job
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        toast.error(t("projectDetail.toastInvalidSession"));
-        return;
-      }
-
-      const res = await fetch('/api/invoices/queue', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ jobId: doc.invoice_job_id }),
-        signal: abortControllerRef.current?.signal,
-      });
-
-      if (!res.ok) throw new Error('Error al encolar job');
-
-      cancelInvoiceJobIdsRef.current.add(doc.invoice_job_id);
-
-      toast.success(doc.status === "done" ? t("projectDetail.toastReprocessingStarted") : t("projectDetail.toastExtractionStartedShort"));
-      setProjectDocs(prev => prev.map(p => 
-        p.id === doc.id ? { ...p, status: 'queued' } : p
-      ));
-
-      // Best-effort: kick the worker so the user doesn't have to wait for cron.
-      try {
-        void fetch(`/api/invoices/trigger-worker?jobId=${encodeURIComponent(doc.invoice_job_id)}`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-            "Content-Type": "application/json",
-          },
-          signal: abortControllerRef.current?.signal,
-        }).catch((err) => {
-          if (err?.name === "AbortError") return;
-        });
-      } catch {
-        // ignore: cron/manual trigger can still process later
-      }
-    } catch (e: any) {
-      if (e?.name === "AbortError") return;
-      toast.error(tf("projectDetail.toastExtractionStartError", { message: e.message }));
-    }
-  };
-
-  const handleDeleteInvoice = async (doc: ProjectDocument) => {
-    if (!confirm(t("projectDetail.confirmDeleteInvoice") as any)) return;
-
-    // Optimistic UI update
-    setProjectDocs((prev) => prev.filter((p) => p.id !== doc.id));
-
-    try {
-      if (doc.invoice_job_id) {
-        const { data: job, error: jobFetchError } = await supabase
-          .from("invoice_jobs")
-          .select("id, trip_id, storage_path")
-          .eq("id", doc.invoice_job_id)
-          .maybeSingle();
-
-        if (jobFetchError) throw jobFetchError;
-
-        const tripId = typeof (job as any)?.trip_id === "string" ? (job as any).trip_id : "";
-        const storagePath =
-          typeof (job as any)?.storage_path === "string"
-            ? (job as any).storage_path
-            : (doc.storage_path ?? "");
-
-        await cascadeDeleteInvoiceJobById(supabase, doc.invoice_job_id);
-
-        if (tripId) {
-          const target = trips.find((t) => t.id === tripId);
-          const nextDocs = (target?.documents ?? []).filter((d) => {
-            if (d?.invoiceJobId && d.invoiceJobId === doc.invoice_job_id) return false;
-            if (storagePath && d?.storagePath && d.storagePath === storagePath) return false;
-            return true;
-          });
-
-          await updateTrip(tripId, {
-            invoiceAmount: null,
-            invoiceCurrency: null,
-            invoiceJobId: null,
-            documents: nextDocs,
-          });
-        }
-      } else {
-        // Legacy: only a project_documents row
-        if (doc.storage_path) {
-          const { error: storageError } = await supabase.storage.from("project_documents").remove([doc.storage_path]);
-          if (storageError) throw storageError;
-        }
-        const { error } = await supabase.from("project_documents").delete().eq("id", doc.id);
-        if (error) throw error;
-      }
-
-      toast.success(t("projectDetail.toastInvoiceDeleted"));
-      refreshProjects();
-    } catch (e: any) {
-      // Rollback optimistic removal
-      setProjectDocs((prev) => (prev.some((p) => p.id === doc.id) ? prev : [doc, ...prev]));
-      toast.error(tf("projectDetail.toastDeleteError", { message: e.message }));
-    }
-  };
-
   const handleSaveAllPendingTrips = async () => {
     if (pendingTrips.length === 0) return;
     if (savingPendingTrips) return;
@@ -1545,7 +1192,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                   <div className="text-sm space-y-1">
                     <p><span className="text-muted-foreground">{t("tripModal.purpose")}:</span> {trip.purpose}</p>
                     <p><span className="text-muted-foreground">{t("trips.distance")}:</span> {trip.distance.toFixed(1)} km</p>
-                    <p><span className="text-muted-foreground">{t("trips.co2")}:</span> {calculateCO2(trip.distance).toFixed(2)} kg</p>
+                    <p><span className="text-muted-foreground">{t("trips.co2")}:</span> {calculateCO2({ distance: trip.distance }).toFixed(2)} kg</p>
                     <div>
                       <span className="text-muted-foreground">{t("trips.route")}:</span>
                       <ul className="ml-4 mt-1 space-y-0.5">

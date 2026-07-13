@@ -2,14 +2,13 @@ import { useCallback, useRef, useState, DragEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ModalHeaderImage } from "@/components/ui/modal-header-image";
-import { Camera, Loader2, RotateCw, Check, X, AlertCircle, Upload, ImageIcon, Trash2, FileText, Plus } from "lucide-react";
+import { Camera, Loader2, RotateCw, Check, X, Upload, ImageIcon, Trash2, FileText, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { useI18n } from "@/hooks/use-i18n";
 import { cn, uuidv4 } from "@/lib/utils";
 import { logger } from "@/lib/logger";
-import { FEATURES } from "@/lib/features";
 
 export type ExpenseType = "toll" | "parking" | "fuel" | "other";
 
@@ -117,7 +116,7 @@ export function ExpenseScanButton({
   projectId,
 }: ExpenseScanButtonProps) {
   const { t } = useI18n();
-  const { user, getAccessToken } = useAuth();
+  const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -128,9 +127,6 @@ export function ExpenseScanButton({
   const [rotation, setRotation] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [deletingReceiptId, setDeletingReceiptId] = useState<string | null>(null);
-  const [extractionResult, setExtractionResult] = useState<ExpenseExtractResult | null>(null);
-  const [extractionError, setExtractionError] = useState<string | null>(null);
-  const [storagePath, setStoragePath] = useState<string | null>(null);
 
   const receiptCount = existingReceipts.length;
 
@@ -138,9 +134,6 @@ export function ExpenseScanButton({
     setImagePreview(null);
     setRotation(0);
     setIsProcessing(false);
-    setExtractionResult(null);
-    setExtractionError(null);
-    setStoragePath(null);
     setIsDragging(false);
   }, []);
 
@@ -239,8 +232,6 @@ export function ExpenseScanButton({
     if (!imagePreview || !user || !supabase) return;
 
     setIsProcessing(true);
-    setExtractionError(null);
-
     try {
       // Convert data URL to blob
       const response = await fetch(imagePreview);
@@ -267,83 +258,23 @@ export function ExpenseScanButton({
         throw new Error(uploadError.message);
       }
 
-      setStoragePath(fileName);
-
-      // IA de gastos hibernada (Fase 1): el recibo se adjunta tal cual y el
-      // importe se introduce a mano en EUR en el campo correspondiente.
-      if (!FEATURES.expenseAi) {
-        onExtracted(
-          { amount: null, currency: null, quantity: null, unit: null, pricePerUnit: null, vendorName: null, date: null },
-          fileName,
-        );
-        setIsOpen(false);
-        setShowUploadOptions(false);
-        resetState();
-        toast.success(t("expenseScan.receiptAttached"));
-        return;
-      }
-
-      // Call extraction API
-      const token = await getAccessToken();
-      if (!token) throw new Error("Not authenticated");
-
-      const extractResponse = await fetch("/api/expenses/extract", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          storagePath: fileName,
-          expenseType,
-          tripId,
-          projectId,
-        }),
-      });
-
-      if (!extractResponse.ok) {
-        const errorData = await extractResponse.json().catch(() => ({}));
-        const status = extractResponse.status;
-        
-        // Provide user-friendly error messages
-        if (status === 401) {
-          throw new Error(t("expenseScan.errorNotAuthenticated"));
-        } else if (status === 429) {
-          throw new Error(t("expenseScan.errorQuotaExceeded"));
-        } else if (status === 404) {
-          throw new Error(t("expenseScan.errorFileNotFound"));
-        } else if (status >= 500) {
-          throw new Error(t("expenseScan.errorServer"));
-        }
-        throw new Error(errorData.error || t("expenseScan.error"));
-      }
-
-      const result: ExpenseExtractResult = await extractResponse.json();
-      
-      // Check if extraction returned useful data
-      if (result.amount == null) {
-        setExtractionError(t("expenseScan.noDataExtracted"));
-        return;
-      }
-      
-      setExtractionResult(result);
+      // El recibo se adjunta tal cual; el importe se introduce a mano en EUR
+      // en el campo correspondiente (extracción IA retirada 2026-07-12).
+      onExtracted(
+        { amount: null, currency: null, quantity: null, unit: null, pricePerUnit: null, vendorName: null, date: null },
+        fileName,
+      );
+      setIsOpen(false);
+      setShowUploadOptions(false);
+      resetState();
+      toast.success(t("expenseScan.receiptAttached"));
     } catch (err: any) {
       logger.warn("Processing error", err);
-      setExtractionError(err.message || t("expenseScan.error"));
+      toast.error(err.message || t("expenseScan.error"));
     } finally {
       setIsProcessing(false);
     }
-  }, [imagePreview, user, getAccessToken, expenseType, tripId, projectId, t, onExtracted, resetState]);
-
-  const handleConfirm = useCallback(() => {
-    if (!extractionResult || !storagePath) return;
-
-    onExtracted(extractionResult, storagePath);
-    setIsOpen(false);
-    setShowUploadOptions(false);
-    resetState();
-    toast.success(t("expenseScan.extracted"));
-  }, [extractionResult, storagePath, onExtracted, resetState, t]);
+  }, [imagePreview, user, t, onExtracted, resetState]);
 
   const handleCancel = useCallback(() => {
     // If we uploaded but user cancels, optionally delete the file
@@ -523,7 +454,7 @@ export function ExpenseScanButton({
             )}
 
             {/* Image Preview */}
-            {imagePreview && !extractionResult && (
+            {imagePreview && (
               <div className="relative">
                 <div className="aspect-[3/4] bg-secondary/50 rounded-lg overflow-hidden">
                   <img
@@ -558,129 +489,32 @@ export function ExpenseScanButton({
               </div>
             )}
 
-            {/* Error state */}
-            {extractionError && (
-              <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-destructive">{t("expenseScan.error")}</p>
-                    <p className="text-sm text-muted-foreground mt-1">{extractionError}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Extraction Result */}
-            {extractionResult && (
-              <div className="bg-secondary/30 rounded-lg p-4 space-y-3">
-                <div className="flex items-center gap-2 text-foreground">
-                  <Check className="w-5 h-5" />
-                  <span className="font-medium">{t("expenseScan.dataExtracted")}</span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  {extractionResult.amount != null && (
-                    <div>
-                      <span className="text-muted-foreground">{t("expenseScan.amount")}:</span>
-                      <span className="ml-2 font-medium">
-                        {extractionResult.amount.toFixed(2)} {extractionResult.currency || "EUR"}
-                      </span>
-                    </div>
-                  )}
-
-                  {expenseType === "fuel" && extractionResult.quantity != null && (
-                    <>
-                      <div>
-                        <span className="text-muted-foreground">{t("expenseScan.quantity")}:</span>
-                        <span className="ml-2 font-medium">
-                          {extractionResult.quantity.toFixed(2)} {extractionResult.unit || "L"}
-                        </span>
-                      </div>
-                      {extractionResult.pricePerUnit != null && (
-                        <div>
-                          <span className="text-muted-foreground">{t("expenseScan.pricePerUnit")}:</span>
-                          <span className="ml-2 font-medium">
-                            {extractionResult.pricePerUnit.toFixed(3)} €/L
-                          </span>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {extractionResult.vendorName && (
-                    <div className="col-span-2">
-                      <span className="text-muted-foreground">{t("expenseScan.vendor")}:</span>
-                      <span className="ml-2">{extractionResult.vendorName}</span>
-                    </div>
-                  )}
-
-                  {extractionResult.date && (
-                    <div>
-                      <span className="text-muted-foreground">{t("expenseScan.date")}:</span>
-                      <span className="ml-2">{extractionResult.date}</span>
-                    </div>
-                  )}
-                </div>
-
-                <p className="text-xs text-muted-foreground">
-                  {t("expenseScan.canEditAfter")}
-                </p>
-              </div>
-            )}
-
             {/* Action buttons - only show when image is loaded */}
             {imagePreview && (
               <div className="flex gap-2">
-                {!extractionResult ? (
-                  <>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="flex-1"
-                      onClick={handleCancel}
-                      disabled={isProcessing}
-                    >
-                      <X className="w-4 h-4 mr-2" />
-                      {t("expenseScan.cancel")}
-                    </Button>
-                    <Button
-                      type="button"
-                      className="flex-1"
-                      onClick={handleProcess}
-                      disabled={isProcessing}
-                    >
-                      {isProcessing ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <Check className="w-4 h-4 mr-2" />
-                      )}
-                      {FEATURES.expenseAi ? t("expenseScan.extract") : t("expenseScan.attach")}
-                    </Button>
-                  </>
-              ) : (
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => {
-                      setExtractionResult(null);
-                      setExtractionError(null);
-                    }}
-                  >
-                    {t("expenseScan.retry")}
-                  </Button>
-                  <Button
-                    type="button"
-                    className="flex-1"
-                    onClick={handleConfirm}
-                  >
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={handleCancel}
+                  disabled={isProcessing}
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  {t("expenseScan.cancel")}
+                </Button>
+                <Button
+                  type="button"
+                  className="flex-1"
+                  onClick={handleProcess}
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
                     <Check className="w-4 h-4 mr-2" />
-                    {t("expenseScan.useData")}
-                  </Button>
-                </>
-              )}
+                  )}
+                  {t("expenseScan.attach")}
+                </Button>
               </div>
             )}
           </div>

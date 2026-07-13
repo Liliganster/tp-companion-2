@@ -299,7 +299,7 @@ export default function CalendarPage() {
           createdAt: new Date(event.date).toISOString(),
         };
         
-        const result = await addProject(newProject);
+        await addProject(newProject);
         projectId = newProject.id;
       }
       

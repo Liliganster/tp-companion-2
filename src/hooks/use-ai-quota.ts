@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePlan } from "@/contexts/PlanContext";
 import { logger } from "@/lib/logger";
@@ -18,13 +18,11 @@ export function useAiQuota() {
   const [limit, setLimit] = useState<number>(limits.aiJobsPerMonth);
   const [bypass, setBypass] = useState(false);
   const [loading, setLoading] = useState(false);
-  const pollingDisabled = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
 
     async function fetchAiQuota() {
-      if (pollingDisabled.current) return;
       if (!user?.id) {
         setUsed(null);
         return;
@@ -68,7 +66,6 @@ export function useAiQuota() {
               setUsed(count);
               setLimit(limits.aiJobsPerMonth);
               setBypass(false);
-              pollingDisabled.current = true;
               return;
             }
           }

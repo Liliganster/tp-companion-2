@@ -70,9 +70,9 @@ function FlatKpi({
 }) {
   return (
     <Link to={to} className="block h-full">
-      <div className="glass-card p-4 h-full flex flex-col gap-1 hover:border-primary/40 transition-colors">
+      <div className="glass-card p-5 h-full flex flex-col gap-1.5 hover:border-primary/40 transition-colors">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
-        <span className={`font-bold text-foreground tabular-nums ${big ? "text-3xl sm:text-4xl" : "text-2xl"}`}>{value}</span>
+        <span className={`font-bold text-foreground tabular-nums tracking-tight ${big ? "text-4xl" : "text-3xl"}`}>{value}</span>
         {sub}
       </div>
     </Link>
@@ -131,42 +131,42 @@ export default function Index() {
 
   return (
     <MainLayout>
-      <div className="page-container flex flex-col gap-3">
-        {/* Cabecera: saludo + contador de IA pequeño + campana de atención
-            (estilo Unity; sin botones redundantes con Viajes — decisión de
-            la propietaria). El ancho 85% centrado lo pone .page-container. */}
-        <div className="glass-panel p-4 md:p-5 animate-fade-in">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h1 className="text-foreground text-xl sm:text-2xl font-semibold leading-tight tracking-tight">
-                {greeting}
-                {profile.fullName.trim() ? <span className="text-foreground"> {profile.fullName.trim()}</span> : null}
-              </h1>
-              <p className="text-muted-foreground mt-1">{t("dashboard.subtitle")}</p>
-            </div>
-            <div className="flex items-center gap-2" data-tour="attention">
-              <Link
-                to="/plans"
-                className="flex items-center gap-2 px-3 py-1.5 border rounded-lg border-border bg-muted hover:bg-muted/70 transition-colors"
-                title={t("dashboard.aiCounterTitle")}
+      <div className="page-container flex flex-col gap-4">
+        {/* Cabecera (estilo mockup Claude Design 2026-07-12): saludo grande
+            directo sobre el fondo, sin panel; a la derecha el chip de IA con
+            etiqueta y la campana de atención. Sin botones redundantes con
+            Viajes — decisión de la propietaria. */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in">
+          <div>
+            <h1 className="text-foreground text-2xl sm:text-3xl font-bold leading-tight tracking-tight">
+              {greeting}
+              {profile.fullName.trim() ? <span className="text-foreground"> {profile.fullName.trim()}</span> : null}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">{t("dashboard.subtitle")}</p>
+          </div>
+          <div className="flex items-center gap-2" data-tour="attention">
+            <Link
+              to="/plans"
+              className="flex items-center gap-2 px-3 py-2 border rounded-xl border-border bg-card/60 hover:bg-accent transition-colors"
+              title={t("dashboard.aiCounterTitle")}
+            >
+              <Sparkles className="w-4 h-4 text-primary" />
+              <span
+                className={`text-xs font-semibold tabular-nums ${
+                  !aiQuota.bypass && aiQuota.used != null && Number.isFinite(aiQuota.limit) && aiQuota.used >= aiQuota.limit
+                    ? "text-destructive"
+                    : "text-foreground"
+                }`}
               >
-                <Sparkles className="w-4 h-4 text-muted-foreground" />
-                <span
-                  className={`text-xs font-medium tabular-nums ${
-                    !aiQuota.bypass && aiQuota.used != null && Number.isFinite(aiQuota.limit) && aiQuota.used >= aiQuota.limit
-                      ? "text-destructive"
-                      : "text-foreground"
-                  }`}
-                >
-                  {aiQuota.loading && aiQuota.used == null
-                    ? "…"
-                    : aiQuota.bypass
-                      ? `${aiQuota.used ?? 0}`
-                      : `${aiQuota.used ?? "—"}/${Number.isFinite(aiQuota.limit) ? aiQuota.limit : "∞"}`}
-                </span>
-              </Link>
-              <AttentionBell />
-            </div>
+                {aiQuota.loading && aiQuota.used == null
+                  ? "…"
+                  : aiQuota.bypass
+                    ? `${aiQuota.used ?? 0}`
+                    : `${aiQuota.used ?? "—"}/${Number.isFinite(aiQuota.limit) ? aiQuota.limit : "∞"}`}
+              </span>
+              <span className="text-xs text-muted-foreground hidden sm:inline">{t("dashboard.aiChipLabel")}</span>
+            </Link>
+            <AttentionBell />
           </div>
         </div>
 
@@ -196,7 +196,7 @@ export default function Index() {
         )}
 
         {/* Fila de 4 cifras planas (sin anillos, sin nota A-D) */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-tour="kpis">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4" data-tour="kpis">
           <FlatKpi
             label={t("dashboard.kpiBillableMonth")}
             value={eur0(billableThisMonth)}
@@ -235,13 +235,13 @@ export default function Index() {
         {/* Margen del coche + % de uso profesional: siempre a ancho
             completo, mitad y mitad (la atención vive en la campana de la
             cabecera, estilo Unity) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <CarMarginCard />
           <ProUsageCard />
         </div>
 
         {/* Paisaje: barras km/€ de 6 meses + últimos viajes */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <MonthlyBars />
           <RecentTrips />
         </div>

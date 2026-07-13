@@ -6,8 +6,6 @@ import { UserProfileProvider } from "@/contexts/UserProfileContext";
 import { ProjectsProvider } from "@/contexts/ProjectsContext";
 import { TripsProvider } from "@/contexts/TripsContext";
 import { ReportsProvider } from "@/contexts/ReportsContext";
-import { OdometerProvider } from "@/contexts/OdometerContext";
-import { AppearanceProvider } from "@/contexts/AppearanceContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { PlanProvider } from "@/contexts/PlanContext";
 import { RequireAuth } from "@/components/auth/RequireAuth";
@@ -43,7 +41,6 @@ const Auth = lazy(() => import("./pages/Auth"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const NotFound = lazy(() => import("./pages/NotFound"));
-const OdometerCapture = lazy(() => import("./pages/OdometerCapture"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -91,9 +88,6 @@ function AppContent() {
           <Route path="/auth" element={<Auth />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/auth/reset" element={<ResetPassword />} />
-          {/* Public page — no auth required, token-based access */}
-          {FEATURES.odometer && <Route path="/odometer-capture" element={<OdometerCapture />} />}
-
           <Route path="/legal/terms" element={<LegalTerms />} />
           <Route path="/legal/privacy" element={<LegalPrivacy />} />
           <Route path="/legal/cookies" element={<LegalCookies />} />
@@ -123,14 +117,12 @@ function AppContent() {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <AppearanceProvider>
       <AuthProvider>
         <PlanProvider>
           <DataMigration />
           <UserProfileProvider>
             <ProjectsProvider>
               <TripsProvider>
-                <OdometerProvider>
                 <ReportsProvider>
                   <TooltipProvider>
                     <Sonner />
@@ -143,13 +135,11 @@ const App = () => (
                     <AppContent />
                   </TooltipProvider>
                 </ReportsProvider>
-                </OdometerProvider>
               </TripsProvider>
             </ProjectsProvider>
           </UserProfileProvider>
         </PlanProvider>
       </AuthProvider>
-    </AppearanceProvider>
   </QueryClientProvider>
 );
 

@@ -3,8 +3,9 @@
  *
  * - ReportReadyCard: contextual los primeros días del mes → informe del mes
  *   anterior listo para generar.
- * - CarMarginCard: sustituto del odómetro — Kilometergeld facturado menos
- *   coste real por km del PERFIL (sin fotos, sin IA).
+ * - CarMarginCard: sustituto del odómetro — margen por km (tarifa Kilometergeld
+ *   menos coste real por km del PERFIL, sin fotos ni IA; cifra por km desde el
+ *   mockup de Claude Design 2026-07-12).
  * - ProUsageCard: % de uso profesional manual (km totales anuales del perfil
  *   ÷ km profesionales registrados).
  *
@@ -12,12 +13,11 @@
  * decisión de la propietaria — y como línea en el modal de subida.)
  */
 import { Link } from "react-router-dom";
-import { FileText } from "lucide-react";
 import { useI18n } from "@/hooks/use-i18n";
 import { useTrips } from "@/contexts/TripsContext";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { parseLocaleNumber } from "@/lib/number";
-import { tripKilometrageAmount, vehicleCostPerKm } from "@/lib/tripMoney";
+import { vehicleCostPerKm } from "@/lib/tripMoney";
 import { parseTripDate } from "@/lib/tripDates";
 import { Button } from "@/components/ui/button";
 
@@ -34,24 +34,27 @@ export function ReportReadyCard() {
 
   const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const prevEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-  const hasPrevMonthTrips = trips.some((trip) => {
+  const prevMonthTrips = trips.filter((trip) => {
     const dt = parseTripDate(trip.date);
     return dt != null && dt >= prevStart && dt <= prevEnd;
   });
-  if (!hasPrevMonthTrips) return null;
+  if (prevMonthTrips.length === 0) return null;
 
   const toDateOnly = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const monthName = prevStart.toLocaleDateString(locale, { month: "long" });
   const link = `/reports/view?project=all&startDate=${toDateOnly(prevStart)}&endDate=${toDateOnly(prevEnd)}`;
 
+  // Banner con tinte azul + CTA degradado (mockup Claude Design 2026-07-12)
   return (
-    <div className="glass-card p-4 border-primary/40 flex flex-col sm:flex-row sm:items-center gap-3">
-      <div className="flex items-center gap-2 flex-1 min-w-0">
-        <FileText className="w-4 h-4 text-primary shrink-0" />
-        <span className="text-sm font-semibold">{tf("dashboard.reportReadyTitle", { month: monthName })}</span>
+    <div className="glass-card p-5 border-primary/40 bg-primary/5 flex flex-col sm:flex-row sm:items-center gap-4">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold">{tf("dashboard.reportReadyTitle", { month: monthName })}</p>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          {tf("dashboard.reportReadyDesc", { count: prevMonthTrips.length })}
+        </p>
       </div>
-      <Button asChild size="sm" className="w-full sm:w-auto">
+      <Button asChild className="w-full sm:w-auto shrink-0">
         <Link to={link}>{t("dashboard.reportReadyCta")}</Link>
       </Button>
     </div>
@@ -60,42 +63,32 @@ export function ReportReadyCard() {
 
 export function CarMarginCard() {
   const { t, tf, locale } = useI18n();
-  const { trips } = useTrips();
   const { profile } = useUserProfile();
 
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const monthTrips = trips.filter((trip) => {
-    const dt = parseTripDate(trip.date);
-    return dt != null && dt >= startOfMonth && dt < startOfNextMonth;
-  });
-
+  // Mockup Claude Design 2026-07-12: la cifra protagonista es el margen POR
+  // KM (tarifa − coste real), no el total del mes — es estable y se entiende
+  // de un vistazo; el desglose va en la sublínea.
   const defaultRate = parseLocaleNumber(profile.ratePerKm) || 0;
-  const kmMonth = monthTrips.reduce((acc, trip) => acc + (Number.isFinite(trip.distance) ? trip.distance : 0), 0);
-  const billed = monthTrips.reduce((acc, trip) => acc + tripKilometrageAmount(trip, defaultRate), 0);
   const costPerKm = vehicleCostPerKm(profile);
 
   return (
-    <div className="glass-card p-4 h-full flex flex-col">
-      <h2 className="text-sm font-semibold uppercase tracking-wide mb-2">{t("dashboard.carMarginTitle")}</h2>
+    <div className="glass-card p-5 h-full flex flex-col">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+        {t("dashboard.carMarginTitle")}
+      </h2>
       {costPerKm == null ? (
         <p className="text-sm text-muted-foreground my-auto">{t("dashboard.carMarginMissing")}</p>
       ) : (
         (() => {
-          const cost = costPerKm * kmMonth;
-          const margin = billed - cost;
+          const margin = defaultRate - costPerKm;
           return (
             <>
-              <p className={`text-3xl font-bold ${margin >= 0 ? "text-success" : "text-destructive"}`}>
-                {margin >= 0 ? "+" : ""}
-                {eur(margin, locale)}
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {tf("dashboard.carMarginMonth", { amount: eur(margin, locale) })}
+              <p className={`text-4xl font-bold tracking-tight tabular-nums ${margin >= 0 ? "text-primary" : "text-destructive"}`}>
+                {eur(margin, locale, 2)}
+                <span className="text-base font-medium text-muted-foreground"> /km</span>
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
-                {tf("dashboard.carMarginDetail", { billed: eur(billed, locale), cost: eur(cost, locale) })}
+                {tf("dashboard.carMarginPerKmDetail", { rate: eur(defaultRate, locale, 2), cost: eur(costPerKm, locale, 2) })}
               </p>
             </>
           );
@@ -121,16 +114,17 @@ export function ProUsageCard() {
   const pct = annualTotal > 0 ? Math.min(100, (kmWorkYear / annualTotal) * 100) : null;
 
   return (
-    <div className="glass-card p-4 h-full flex flex-col">
-      <h2 className="text-sm font-semibold uppercase tracking-wide mb-2">{t("dashboard.proUsageTitle")}</h2>
+    <div className="glass-card p-5 h-full flex flex-col">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+        {t("dashboard.proUsageTitle")}
+      </h2>
       {pct == null ? (
         <p className="text-sm text-muted-foreground my-auto">{t("dashboard.proUsageMissing")}</p>
       ) : (
         <>
-          <p className="text-3xl font-bold">{pct.toLocaleString(locale, { maximumFractionDigits: 1 })} %</p>
-          <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
-            <div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${pct}%` }} />
-          </div>
+          <p className="text-4xl font-bold tracking-tight tabular-nums">
+            {pct.toLocaleString(locale, { maximumFractionDigits: 1 })} %
+          </p>
           <p className="mt-2 text-xs text-muted-foreground">
             {tf("dashboard.proUsageDetail", {
               workKm: Math.round(kmWorkYear).toLocaleString(locale),
@@ -138,6 +132,12 @@ export function ProUsageCard() {
               year,
             })}
           </p>
+          <div className="mt-3 h-2 rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full rounded-full [background:var(--gradient-primary)] transition-all duration-500"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
         </>
       )}
     </div>

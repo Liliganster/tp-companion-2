@@ -100,14 +100,6 @@ function badRequest(res: any, message: string) {
   res.end(JSON.stringify({ error: message }));
 }
 
-function readBody(req: any) {
-  if (req?.body == null) return null;
-  if (typeof req.body === "string") {
-    try { return JSON.parse(req.body); } catch { return null; }
-  }
-  return req.body;
-}
-
 // ─── /api/google/geocode ─────────────────────────────────────────────────────
 async function handleGeocode(req: any, res: any) {
   if (req.method !== "POST") {
@@ -359,7 +351,7 @@ async function handleOAuthStart(req: any, res: any) {
   const scheme = proto === "http" || proto === "https" ? proto : "https";
   const baseUrl = host ? `${scheme}://${host}` : "";
 
-  const body = readBody(req);
+  const body = getBody(req);
   const rawReturnTo = typeof body?.returnTo === "string" ? body.returnTo : "/";
   const returnToPath = rawReturnTo.startsWith("/") ? rawReturnTo : "/";
   const returnTo = baseUrl ? `${baseUrl}${returnToPath}` : returnToPath;
@@ -505,7 +497,7 @@ async function handleCalendarCreateEvent(req: any, res: any) {
   const allowed = await enforceRateLimit({ req, res, name: "google_calendar_create_event", identifier: user.id, limit: 20, windowMs: 60_000 });
   if (!allowed) return;
 
-  const body = readBody(req);
+  const body = getBody(req);
   const calendarId = typeof body?.calendarId === "string" && body.calendarId.trim() ? body.calendarId.trim() : "primary";
   const summary = typeof body?.summary === "string" ? body.summary : "";
   const description = typeof body?.description === "string" ? body.description : "";
@@ -645,7 +637,7 @@ async function handleDriveUpload(req: any, res: any) {
   const allowed = await enforceRateLimit({ req, res, name: "google_drive_upload", identifier: user.id, limit: 20, windowMs: 60_000 });
   if (!allowed) return;
 
-  const body = readBody(req);
+  const body = getBody(req);
   const name = typeof body?.name === "string" ? body.name : "document";
   const dataUrl = typeof body?.dataUrl === "string" ? body.dataUrl : "";
   if (!dataUrl) return sendJson(res, 400, { error: "dataUrl required" });

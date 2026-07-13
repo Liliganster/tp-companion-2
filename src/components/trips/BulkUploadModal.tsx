@@ -18,7 +18,7 @@ import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { useTrips } from "@/contexts/TripsContext";
 import { uuidv4 } from "@/lib/utils";
-import { buildBaseRouteAddress, optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
+import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
 import { useAuth } from "@/contexts/AuthContext";
 import { getBulkCloseCancellation } from "@/components/trips/bulkUploadClose";
 import { getBulkDisplayStatus, getInitialBulkJobStateById } from "@/components/trips/bulkUploadProcessingState";
@@ -98,12 +98,19 @@ async function loadGooglePickerApi() {
   await googlePickerApiPromise;
 }
 
+type DrivePickedFile = { fileId: string; name: string; mimeType: string };
+
+/**
+ * Abre el selector de Google Drive y devuelve TODOS los archivos elegidos
+ * (multi-selección opcional). Array vacío = el usuario canceló.
+ */
 async function openGoogleDrivePicker(params: {
   apiKey: string;
   oauthToken: string;
   title: string;
   mimeTypes?: string[];
-}): Promise<{ fileId: string; name: string; mimeType: string } | null> {
+  multiselect?: boolean;
+}): Promise<DrivePickedFile[]> {
   await loadGooglePickerApi();
 
   const w = window as any;
@@ -121,27 +128,34 @@ async function openGoogleDrivePicker(params: {
 
   return await new Promise((resolve, reject) => {
     try {
-      const picker = new google.picker.PickerBuilder()
+      let builder = new google.picker.PickerBuilder()
         .setDeveloperKey(params.apiKey)
         .setOAuthToken(params.oauthToken)
         .setOrigin(window.location.origin)
         .setTitle(params.title)
-        .addView(view)
+        .addView(view);
+      if (params.multiselect) {
+        builder = builder.enableFeature(google.picker.Feature.MULTISELECT_ENABLED);
+      }
+      const picker = builder
         .setCallback((data: any) => {
           const action = data?.action;
           if (action === google.picker.Action.CANCEL) {
             picker.setVisible(false);
-            return resolve(null);
+            return resolve([]);
           }
           if (action !== google.picker.Action.PICKED) return;
-          const doc = Array.isArray(data?.docs) ? data.docs[0] : null;
           picker.setVisible(false);
-          if (!doc?.id) return resolve(null);
-          resolve({
-            fileId: String(doc.id),
-            name: typeof doc.name === "string" ? doc.name : "import.csv",
-            mimeType: typeof doc.mimeType === "string" ? doc.mimeType : "",
-          });
+          const docs = Array.isArray(data?.docs) ? data.docs : [];
+          resolve(
+            docs
+              .filter((doc: any) => doc?.id)
+              .map((doc: any) => ({
+                fileId: String(doc.id),
+                name: typeof doc.name === "string" ? doc.name : "import",
+                mimeType: typeof doc.mimeType === "string" ? doc.mimeType : "",
+              })),
+          );
         })
         .build();
 
@@ -152,11 +166,58 @@ async function openGoogleDrivePicker(params: {
   });
 }
 
+let googleIdentityServicesPromise: Promise<void> | null = null;
+
+/** Carga (una vez) el script de Google Identity Services. */
+async function loadGoogleIdentityServices(): Promise<void> {
+  if (typeof window === "undefined") throw new Error("Google Identity Services no disponible");
+  const w = window as any;
+  if (w.google?.accounts?.oauth2) return;
+  if (!googleIdentityServicesPromise) {
+    googleIdentityServicesPromise = new Promise<void>((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://accounts.google.com/gsi/client";
+      script.async = true;
+      script.defer = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("No se pudo cargar Google Identity Services"));
+      document.head.appendChild(script);
+    });
+  }
+  await googleIdentityServicesPromise;
+}
+
+/**
+ * Pide un token de acceso de Drive (solo lectura) por el popup nativo de
+ * Google — sin redirección ni dependencia del servidor. Único punto de
+ * autorización, compartido por el import de CSV y el de callsheets.
+ */
+async function getDriveReadonlyToken(clientId: string): Promise<string> {
+  await loadGoogleIdentityServices();
+  return await new Promise<string>((resolve, reject) => {
+    const w = window as any;
+    const tokenClient = w.google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: "https://www.googleapis.com/auth/drive.readonly",
+      callback: (response: any) => {
+        if (response.error) {
+          reject(new Error(response.error_description || response.error));
+          return;
+        }
+        resolve(response.access_token);
+      },
+      error_callback: (error: any) => reject(new Error(error?.message || "Google authorization failed")),
+    });
+    tokenClient.requestAccessToken();
+  });
+}
+
 export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUploadModalProps) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(defaultOpen);
   const [csvText, setCsvText] = useState("");
   const [csvBusy, setCsvBusy] = useState(false);
+  const [driveBusy, setDriveBusy] = useState(false);
   const resumeDriveImportRef = useRef(false);
   const importFromGoogleDriveRef = useRef<(() => Promise<void>) | null>(null);
   
@@ -176,8 +237,6 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     Record<string, { fileName: string; mimeType: string; storagePath: string }>
   >({});
   const [aiLoading, setAiLoading] = useState(false);
-  const [processingTotal, setProcessingTotal] = useState(0);
-  const [processingDone, setProcessingDone] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const csvFileInputRef = useRef<HTMLInputElement>(null);
   
@@ -215,6 +274,12 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
   // Contador de IA transparente en el punto de gasto (Fase 4 del PLAN.md)
   const aiQuota = useAiQuota();
   const exampleText = t("bulk.examplePlaceholder");
+  // Import desde Drive disponible cuando las claves del picker están configuradas
+  // (independiente del flag global FEATURES.googleDrive, que rige la conexión
+  // persistente de Calendar/Drive en Ajustes).
+  const driveConfigured = Boolean(
+    import.meta.env.VITE_GOOGLE_PICKER_API_KEY && import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID,
+  );
   const { getAccessToken } = useAuth();
   const { profile } = useUserProfile();
   const { projects, addProject, updateProject } = useProjects();
@@ -276,7 +341,6 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
         ),
       );
       setJobStateById(Object.fromEntries(rows.map((r) => [String(r.id), { status: String(r.status) as JobStatus }])));
-      setProcessingTotal(ids.length);
       setJobIds(ids);
       // El polling existente carga los resultados y avanza a "review" solo.
       setAiStep("processing");
@@ -303,8 +367,6 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     setJobIds([]);
     setJobMetaById({});
     setAiLoading(false);
-    setProcessingTotal(0);
-    setProcessingDone(0);
     setJobStateById({});
     setReviewByJobId({});
     setSavingByJobId({});
@@ -354,22 +416,6 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
       .trim()
       .replace(/^\uFEFF/, "")
       .toLowerCase();
-
-  const parseDriveFileId = (input: string): string | null => {
-    const trimmed = String(input ?? "").trim();
-    if (!trimmed) return null;
-
-    // Raw id
-    if (/^[a-zA-Z0-9_-]{10,}$/.test(trimmed) && !trimmed.includes("/") && !trimmed.includes("?")) return trimmed;
-
-    // URL patterns
-    const m1 = /[?&]id=([^&]+)/.exec(trimmed);
-    if (m1?.[1]) return decodeURIComponent(m1[1]);
-    const m2 = /\/file\/d\/([^/]+)/.exec(trimmed);
-    if (m2?.[1]) return decodeURIComponent(m2[1]);
-
-    return null;
-  };
 
   function detectDelimiter(headerLine: string): "," | ";" {
     // Count separators outside quotes
@@ -705,8 +751,11 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
             if (typeof computedKm === "number" && computedKm > 0) distance = computedKm;
           }
 
-          onSave({ ...trip, projectId, distance });
-          ok += 1;
+          // Esperar el guardado: sin await los fallos se contaban como éxito
+          // y los inserts salían en paralelo (rompía el "secuencial").
+          const saved = await Promise.resolve(onSave({ ...trip, projectId, distance }));
+          if (saved === false) failed += 1;
+          else ok += 1;
         } catch (e) {
           logger.warn("Bulk upload error", e);
           failed += 1;
@@ -739,66 +788,19 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
   };
 
   const importFromGoogleDrive = async () => {
-    const token = await getAccessToken();
-    if (!token) {
-      toast.error(t("bulk.errorLoginDrive"));
-      return;
-    }
-
     const pickerApiKey = import.meta.env.VITE_GOOGLE_PICKER_API_KEY as string | undefined;
-    if (!pickerApiKey) {
-      toast.error(t("bulk.errorDrivePickerNotConfigured"));
-      return;
-    }
-
     const clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID as string | undefined;
-    if (!clientId) {
-      toast.error("Google OAuth Client ID not configured");
+    if (!pickerApiKey || !clientId) {
+      toast.error(t("bulk.errorDrivePickerNotConfigured"));
       return;
     }
 
     setCsvBusy(true);
     try {
-      // Load the Google Identity Services script if not already loaded
-      await new Promise<void>((resolve, reject) => {
-        const w = window as any;
-        if (w.google?.accounts?.oauth2) return resolve();
-        const existingScript = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
-        if (existingScript) {
-          existingScript.addEventListener("load", () => resolve());
-          return;
-        }
-        const script = document.createElement("script");
-        script.src = "https://accounts.google.com/gsi/client";
-        script.async = true;
-        script.defer = true;
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error("Failed to load Google Identity Services"));
-        document.head.appendChild(script);
-      });
+      const driveAccessToken = await getDriveReadonlyToken(clientId);
 
-      // Request Drive access token via Google's built-in popup (no redirect needed)
-      const driveAccessToken = await new Promise<string>((resolve, reject) => {
-        const w = window as any;
-        const tokenClient = w.google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: "https://www.googleapis.com/auth/drive.readonly",
-          callback: (response: any) => {
-            if (response.error) {
-              reject(new Error(response.error_description || response.error));
-              return;
-            }
-            resolve(response.access_token);
-          },
-          error_callback: (error: any) => {
-            reject(new Error(error?.message || "Google authorization failed"));
-          },
-        });
-        tokenClient.requestAccessToken();
-      });
-
-      // Open the Google Drive Picker with the obtained token
-      const picked = await openGoogleDrivePicker({
+      // Selector para hojas de cálculo / CSV (import de viajes por CSV)
+      const [picked] = await openGoogleDrivePicker({
         apiKey: pickerApiKey,
         oauthToken: driveAccessToken,
         title: t("bulk.drivePickerTitle"),
@@ -837,73 +839,62 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
   };
   importFromGoogleDriveRef.current = importFromGoogleDrive;
 
-  const importPdfFromDrive = async () => {
+  // Importa callsheets desde Google Drive en TODOS los formatos permitidos
+  // (PDF + imágenes) y en LOTE (multi-selección). Cada archivo se descarga con
+  // el token de solo lectura y entra en el mismo flujo que la subida local.
+  const importCallsheetsFromDrive = async () => {
     const pickerApiKey = import.meta.env.VITE_GOOGLE_PICKER_API_KEY as string | undefined;
-    if (!pickerApiKey) {
+    const clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID as string | undefined;
+    if (!pickerApiKey || !clientId) {
       toast.error(t("bulk.errorDrivePickerNotConfigured"));
       return;
     }
-    const clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID as string | undefined;
-    if (!clientId) {
-      toast.error("Google OAuth Client ID not configured");
-      return;
-    }
 
+    setDriveBusy(true);
     try {
-      // Load GIS script
-      await new Promise<void>((resolve, reject) => {
-        const w = window as any;
-        if (w.google?.accounts?.oauth2) return resolve();
-        const existingScript = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
-        if (existingScript) { existingScript.addEventListener("load", () => resolve()); return; }
-        const script = document.createElement("script");
-        script.src = "https://accounts.google.com/gsi/client";
-        script.async = true; script.defer = true;
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error("Failed to load Google Identity Services"));
-        document.head.appendChild(script);
-      });
+      const driveAccessToken = await getDriveReadonlyToken(clientId);
 
-      // Get Drive token via GIS popup
-      const driveAccessToken = await new Promise<string>((resolve, reject) => {
-        const w = window as any;
-        const tokenClient = w.google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: "https://www.googleapis.com/auth/drive.readonly",
-          callback: (response: any) => {
-            if (response.error) { reject(new Error(response.error_description || response.error)); return; }
-            resolve(response.access_token);
-          },
-          error_callback: (error: any) => {
-            reject(new Error(error?.message || "Google authorization failed"));
-          },
-        });
-        tokenClient.requestAccessToken();
-      });
-
-      // Open picker for PDF files
       const picked = await openGoogleDrivePicker({
         apiKey: pickerApiKey,
         oauthToken: driveAccessToken,
-        title: t("bulk.drivePickerTitlePdf") || "Select PDFs from Drive",
-        mimeTypes: ["application/pdf"],
+        title: t("bulk.drivePickerTitleCallsheets"),
+        mimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"],
+        multiselect: true,
       });
-      if (!picked) return;
+      if (picked.length === 0) return;
 
-      // Download the PDF file directly from Drive using the access token
-      toast.info(t("bulk.downloadingFromDrive") || "Downloading from Drive...");
-      const downloadUrl = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(picked.fileId)}?alt=media`;
-      const response = await fetch(downloadUrl, {
-        headers: { Authorization: `Bearer ${driveAccessToken}` },
-      });
-      if (!response.ok) throw new Error("Failed to download file from Drive");
+      toast.info(t("bulk.downloadingFromDrive"));
+      const files: File[] = [];
+      for (const doc of picked) {
+        try {
+          const downloadUrl = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(doc.fileId)}?alt=media`;
+          const response = await fetch(downloadUrl, {
+            headers: { Authorization: `Bearer ${driveAccessToken}` },
+          });
+          if (!response.ok) {
+            logger.warn("Drive download failed", doc.name);
+            continue;
+          }
+          const blob = await response.blob();
+          // El mime de Drive manda; si falta, se deduce de la extensión (HEIC…).
+          const mime = doc.mimeType || resolveCallsheetMime(doc.name, blob.type);
+          files.push(new File([blob], doc.name || "callsheet", { type: mime }));
+        } catch (err) {
+          logger.warn("Drive download error", err);
+        }
+      }
 
-      const blob = await response.blob();
-      const file = new File([blob], picked.name || "document.pdf", { type: "application/pdf" });
-      selectAiFiles([file]);
+      if (files.length === 0) {
+        toast.error(t("bulk.errorDriveDownload"));
+        return;
+      }
+      // selectAiFiles valida formato, el tope de 20 y el límite del plan.
+      selectAiFiles(files);
     } catch (err: any) {
       if (err?.message?.includes("popup_closed") || err?.message?.includes("access_denied")) return;
-      toast.error("Google Drive", { description: err?.message ?? "Error importing from Drive" });
+      toast.error("Google Drive", { description: err?.message ?? t("bulk.errorDriveDownload") });
+    } finally {
+      setDriveBusy(false);
     }
   };
 
@@ -1263,7 +1254,9 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
           if (isAiCancelled(aiSignal)) return;
 
           createdJobIds.push(job.id);
-          metaById[job.id] = { fileName: file.name, mimeType: file.type, storagePath: filePath };
+          // resolveCallsheetMime: los HEIC/algunos drag&drop llegan sin file.type;
+          // se deduce de la extensión para que el worker envíe el mime correcto.
+          metaById[job.id] = { fileName: file.name, mimeType: resolveCallsheetMime(file.name, file.type), storagePath: filePath };
           initialJobStateById[job.id] = { status: "queued" };
           successCount += 1;
         } catch (err) {
@@ -1316,8 +1309,6 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
       setJobIds(createdJobIds);
       setJobMetaById(metaById);
       setJobStateById(getInitialBulkJobStateById({ createdJobIds, jobStateById: initialJobStateById }) as Record<string, JobState>);
-      setProcessingTotal(createdJobIds.length);
-      setProcessingDone(0);
       // Start extraction from the browser so bulk uploads don't depend on trigger-worker.
       try {
         await triggerBulkProcessing(createdJobIds, aiSignal, "initial_batch");
@@ -1542,7 +1533,6 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
           return s === "created" || s === "queued" || s === "processing";
         });
 
-        setProcessingDone(doneIds.length);
         setJobStateById((prev) => {
           const next = { ...prev };
           for (const j of jobs as any[]) {
@@ -1872,105 +1862,6 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
 
   const handleSaveTrip = async () => {
     await saveAllReadyTrips();
-    return;
-    /*
-    const currentMeta = jobMetaById[currentJobId];
-    if (!currentMeta) return;
-    
-    // Use base address for Origin and Destination
-    const baseAddress = buildBaseRouteAddress(profile);
-    
-    // Construct route: Origin -> [Extracted Stops] -> Destination
-    // Only add base address if it exists, otherwise just use extracted locations (though strictly user wants base -> stops -> base)
-    // If baseAddress is empty, we might want to prompt or just leave it. Assuming it exists or user is fine with empty for now if not set.
-    const fullRoute = baseAddress 
-        ? [baseAddress, ...reviewLocations, baseAddress]
-        : reviewLocations;
-
-    const trimmedProjectName = reviewProject.trim();
-    let projectIdToUse: string | undefined;
-
-    // 1. Resolve Project ID
-    if (trimmedProjectName) {
-        const existingProject = projects.find(p => p.name.trim().toLowerCase() === trimmedProjectName.toLowerCase());
-        
-        if (existingProject) {
-            projectIdToUse = existingProject.id;
-        } else {
-            // New Project
-            const newProjectId = uuidv4();
-            projectIdToUse = newProjectId;
-            
-            await addProject({
-                id: newProjectId,
-                name: trimmedProjectName,
-                producer: reviewProducer,
-              description: `Created from AI Upload: ${currentMeta.fileName}`,
-                ratePerKm: 0.30, 
-                starred: false,
-                trips: 0,
-                totalKm: 0,
-                documents: 0,
-                invoices: 0,
-                estimatedCost: 0,
-                shootingDays: 0,
-                kmPerDay: 0,
-                co2Emissions: 0
-            });
-            toast.success(`Proyecto "${trimmedProjectName}" creado automáticamente`);
-        }
-    }
-
-    // Create trip object
-    const newTrip: SavedTrip = {
-        id: uuidv4(),
-        date: reviewDate,
-        project: trimmedProjectName,
-        projectId: projectIdToUse, // Pass the ID
-        purpose: reviewProducer ? tf("bulk.purposeWithProducer", { producer: reviewProducer }) : t("bulk.purposeDefault"), // Default purpose
-        route: fullRoute, 
-        passengers: 0,
-        distance: parseFloat(reviewDistance) || 0,
-        specialOrigin: "base",
-        documents: currentMeta.storagePath ? [{
-            id: crypto.randomUUID(),
-            name: currentMeta.fileName || "Documento Original",
-            mimeType: currentMeta.mimeType || resolveCallsheetMime(currentMeta.storagePath),
-            storagePath: currentMeta.storagePath,
-            createdAt: new Date().toISOString()
-        }] : undefined
-    };
-
-    onSave(newTrip);
-    toast.success("Viaje guardado correctamente");
-
-    const remainingJobIds = jobIds.filter((id) => id !== currentJobId);
-
-    // Remove the current job and continue with the next ones (if any).
-    setJobIds((prev) => prev.filter((id) => id !== currentJobId));
-    setJobMetaById((prev) => {
-      const next = { ...prev };
-      delete next[currentJobId];
-      return next;
-    });
-
-    setCurrentJobId(null);
-    setExtractedData(null);
-    setIsOptimizing(false);
-    setReviewDate("");
-    setReviewProject("");
-    setReviewProducer("");
-    setReviewLocations([]);
-    setReviewDistance("0");
-
-    if (remainingJobIds.length > 0) {
-      setProcessingTotal(remainingJobIds.length);
-      setProcessingDone(0);
-      setAiStep("processing");
-    } else {
-      setOpen(false);
-    }
-    */
   };
 
   return (
@@ -2024,11 +1915,12 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                 <Upload className="w-4 h-4" />
                 {t("bulk.selectCsvFile")}
               </Button>
-              {FEATURES.googleDrive && (
+              {driveConfigured && (
                 <Button
                   variant="outline"
                   className="h-12 gap-2"
                   type="button"
+                  disabled={csvBusy}
                   onClick={() => void importFromGoogleDrive()}
                 >
                   <CloudUpload className="w-4 h-4" />
@@ -2109,15 +2001,16 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                     </p>
                     </div>
 
-                    {FEATURES.googleDrive && (
+                    {driveConfigured && (
                       <Button
                         variant="outline"
                         className="w-full h-12 gap-2"
                         type="button"
-                        onClick={() => void importPdfFromDrive()}
+                        disabled={driveBusy}
+                        onClick={() => void importCallsheetsFromDrive()}
                       >
-                        <CloudUpload className="w-4 h-4" />
-                        {t("bulk.importPdfFromDrive") || "Import PDFs from Google Drive"}
+                        {driveBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CloudUpload className="w-4 h-4" />}
+                        {t("bulk.importFromDrive")}
                       </Button>
                     )}
 
