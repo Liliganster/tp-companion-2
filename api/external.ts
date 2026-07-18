@@ -137,9 +137,9 @@ async function handleClimatiqFuelFactor(req: any, res: any) {
     const attempt = await estimateOnce(selection.activityId, selection.region);
     const data: any = attempt.data;
 
-    let co2e = Number(data?.co2e);
-    let unit = typeof data?.co2e_unit === "string" ? data.co2e_unit : "kg";
-    let co2eKg = Number.isFinite(co2e) ? co2eToKg(co2e, unit) : null;
+    const co2e = Number(data?.co2e);
+    const unit = typeof data?.co2e_unit === "string" ? data.co2e_unit : "kg";
+    const co2eKg = Number.isFinite(co2e) ? co2eToKg(co2e, unit) : null;
 
     if (!attempt.ok || !data || !Number.isFinite(co2e) || co2e <= 0 || co2eKg == null || !Number.isFinite(co2eKg) || co2eKg <= 0) {
       if (cachedData) {

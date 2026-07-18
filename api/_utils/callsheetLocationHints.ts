@@ -11,7 +11,7 @@ const LOCATION_LABEL_WITH_VALUE_RE =
 const EXCLUDED_LOCATION_LABEL_RE =
   /^(?:lunch|mittag|mittagessen|catering|parking|parken|crew parking|crew parken|crew bus|base(?:camp)?|basis|base\s*[&+]\s*park(?:en|ing)|make(?:-?up)?|hair|wardrobe|kost[uü]m|garderobe|production office|produktionsb[uü]ro|office|hospital|doctor|medic|load(?:\s*&\s*unload)?|unload|pickup|dropoff|tech\s*park(?:en|ing))\b/i;
 const TABLE_HEADER_WORDS_RE =
-  /^(?:adresse|address|location|loc|set|motiv|drehort|basis|base|parken|parking|\&|und|and|,|\s)+$/i;
+  /^(?:adresse|address|location|loc|set|motiv|drehort|basis|base|parken|parking|&|und|and|,|\s)+$/i;
 const GENERIC_LOCATION_VALUE_RE =
   /^(?:location|loc(?:ation)?|address|adresse|set|motiv|drehort|drehlocation|film(?:ing)?\s+location|shoot(?:ing)?\s+location)$/i;
 const TABLE_SPLIT_RE = /\s+\|\s+|\|+|\t+|\s{2,}/;
@@ -233,7 +233,7 @@ const ABBREVIATION_MAP: Record<string, string> = {
 };
 const ABBREVIATION_RE = new RegExp(
   Object.keys(ABBREVIATION_MAP)
-    .map((k) => k.replace(/[.*+?^${}()|[\]\\\/]/g, "\\$&"))
+    .map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     .join("|"),
   "gi"
 );
@@ -406,7 +406,7 @@ export function filterHallucinatedLocations(args: {
     // Extract significant tokens (3+ chars, not generic city/filler)
     // NOTE: street-type words (straße, gasse, platz, ring, weg) are kept as meaningful tokens
     const tokens = trimmed
-      .replace(/[,.:;()\-\/|@#]+/g, " ")
+      .replace(/[,.:;()/|@#-]+/g, " ")
       .split(/\s+/)
       .map((t) => t.trim().toLowerCase())
       .filter((t) => t.length >= 3)

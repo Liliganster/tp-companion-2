@@ -14,7 +14,7 @@ import { resolve } from "node:path";
 
 function loadEnvLocal(): Record<string, string> {
   try {
-    const raw = readFileSync(resolve(process.cwd(), ".env.local"), "utf8").replace(/^﻿/, "");
+    const raw = readFileSync(resolve(process.cwd(), ".env.local"), "utf8").replace(/^\uFEFF/, "");
     const out: Record<string, string> = {};
     for (const line of raw.split(/\r?\n/)) {
       const m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/.exec(line);

@@ -45,7 +45,7 @@ export function classifyLabeledLocations(items: LabeledLocation[]): ClassifiedLo
     // de calle ("WEINBERGE - NÄHE HAUS MAX", "Tennisplatz"). Una esquina real
     // como "Lichtenfelsgasse Ecke Rathausplatz" se conserva por gasse/Ecke.
     const addressAscii = address.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-    const STREETISH_RE = /(gasse|stra(?:ss|ß)e|str|str\.|allee|ring|weg|ecke|markt|ufer|kai|zeile|l(?:ae|a)nde|chaussee|damm|promenade)/;
+    const STREETISH_RE = /(gasse|stra(?:ss|ß)e|\bstr\b|\bstr\.|allee|ring\b|\bweg\b|ecke|markt|ufer|kai|zeile|l(?:ae|a)nde|chaussee|damm|promenade)/;
     if (!/\d/.test(address) && !address.includes(",") && !STREETISH_RE.test(addressAscii)) {
       dropped.push({ label, address, reason: "scene_descriptor_no_address" });
       continue;

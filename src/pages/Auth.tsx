@@ -145,10 +145,10 @@ export default function Auth() {
       {/* ── Panel derecho: formulario ── */}
       <div className="lg:w-1/2 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+          <h2 className="text-2xl font-bold tracking-tight text-foreground text-center">
             {isLogin ? t("auth.welcomeBackTitle") : t("auth.createAccountTitle")}
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-sm text-muted-foreground text-center">
             {isLogin ? t("auth.welcomeBackSubtitle") : t("auth.createAccountSubtitle")}
           </p>
 
@@ -198,7 +198,7 @@ export default function Auth() {
               <Input
                 id="email"
                 type="email"
-                placeholder="tu@correo.at"
+                placeholder={t("auth.emailPlaceholder")}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
@@ -232,11 +232,11 @@ export default function Auth() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                  title={showPassword ? "Hide password" : "Show password"}
+                  aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
+                  title={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  <span className="sr-only">{showPassword ? "Hide password" : "Show password"}</span>
+                  <span className="sr-only">{showPassword ? t("auth.hidePassword") : t("auth.showPassword")}</span>
                 </button>
               </div>
             </div>

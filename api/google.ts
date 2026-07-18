@@ -426,7 +426,7 @@ async function handleOAuthCallback(req: any, res: any) {
   if (state.flow === "popup") {
     res.statusCode = 200;
     res.setHeader("Content-Type", "text/html");
-    res.end(`<html><body><script>if(window.opener){window.opener.postMessage({type:'OAUTH_SUCCESS',scopes:'${mergedScopes}'},'*');}window.close();<\/script></body></html>`);
+    res.end(`<html><body><script>if(window.opener){window.opener.postMessage({type:'OAUTH_SUCCESS',scopes:'${mergedScopes}'},'*');}window.close();</script></body></html>`);
     return;
   }
 
