@@ -106,6 +106,7 @@ type DrivePickedFile = { fileId: string; name: string; mimeType: string };
  */
 async function openGoogleDrivePicker(params: {
   apiKey: string;
+  appId: string;
   oauthToken: string;
   title: string;
   mimeTypes?: string[];
@@ -125,11 +126,13 @@ async function openGoogleDrivePicker(params: {
   view.setIncludeFolders(false);
   view.setSelectFolderEnabled(false);
   view.setMimeTypes(mimeTypes.join(","));
+  view.setMode(google.picker.DocsViewMode.LIST);
 
   return await new Promise((resolve, reject) => {
     try {
       let builder = new google.picker.PickerBuilder()
         .setDeveloperKey(params.apiKey)
+        .setAppId(params.appId)
         .setOAuthToken(params.oauthToken)
         .setOrigin(window.location.origin)
         .setTitle(params.title)
@@ -210,6 +213,12 @@ async function getDriveFileToken(clientId: string): Promise<string> {
     });
     tokenClient.requestAccessToken();
   });
+}
+
+function getGoogleCloudProjectNumber(clientId: string): string {
+  const projectNumber = clientId.trim().match(/^(\d+)-/)?.[1];
+  if (!projectNumber) throw new Error("Google OAuth Client ID no contiene un número de proyecto válido");
+  return projectNumber;
 }
 
 export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUploadModalProps) {
@@ -798,10 +807,12 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     setCsvBusy(true);
     try {
       const driveAccessToken = await getDriveFileToken(clientId);
+      const appId = getGoogleCloudProjectNumber(clientId);
 
       // Selector para hojas de cálculo / CSV (import de viajes por CSV)
       const [picked] = await openGoogleDrivePicker({
         apiKey: pickerApiKey,
+        appId,
         oauthToken: driveAccessToken,
         title: t("bulk.drivePickerTitle"),
       });
@@ -853,9 +864,11 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     setDriveBusy(true);
     try {
       const driveAccessToken = await getDriveFileToken(clientId);
+      const appId = getGoogleCloudProjectNumber(clientId);
 
       const picked = await openGoogleDrivePicker({
         apiKey: pickerApiKey,
+        appId,
         oauthToken: driveAccessToken,
         title: t("bulk.drivePickerTitleCallsheets"),
         mimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"],
