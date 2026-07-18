@@ -276,6 +276,7 @@ export const en: Record<I18nKey, string> = {
   "dashboard.viewAll": "View all",
   "bulk.aiExtraction": "AI extraction",
   "bulk.title": "Bulk upload assistant",
+  "bulk.subtitle": "Import trips from a CSV or let AI read your call sheets.",
   "bulk.tabCsv": "Import CSV",
   "bulk.tabAi": "AI extraction",
   "bulk.csvInstructionsTitle": "CSV import instructions",

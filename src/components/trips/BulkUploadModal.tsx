@@ -1,23 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ModalHeaderImage } from "@/components/ui/modal-header-image";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload, Sparkles, FileSpreadsheet, CloudUpload, Loader2, MapPin, Calendar, Building2, CheckCircle, Save, AlertTriangle, XCircle } from "lucide-react";
+import { Upload, Sparkles, FileSpreadsheet, FileText, CloudUpload, Info, Loader2, MapPin, Calendar, Building2, CheckCircle, Save, AlertTriangle, XCircle } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useI18n } from "@/hooks/use-i18n";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useProjects } from "@/contexts/ProjectsContext";
 import { useTrips } from "@/contexts/TripsContext";
-import { uuidv4 } from "@/lib/utils";
+import { cn, uuidv4 } from "@/lib/utils";
 import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
 import { useAuth } from "@/contexts/AuthContext";
 import { getBulkCloseCancellation } from "@/components/trips/bulkUploadClose";
@@ -1828,10 +1827,13 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     if (failCount > 0) toast.error(tf("bulk.toastFailedTrips", { count: failCount }));
   };
 
+  // Badges con código de color: verde = guardado, azul = listo/en curso,
+  // neutro = en cola, rojo = fallo, ámbar = revisión/límite.
   const renderJobStatusBadge = (status: JobStatus, saved: boolean) => {
     if (saved) {
       return (
-        <Badge variant="outline" className="border-white/15 text-foreground">
+        <Badge variant="outline" className="gap-1 border-success/30 bg-success/10 text-success">
+          <CheckCircle className="h-3 w-3" />
           {t("bulk.statusSaved")}
         </Badge>
       );
@@ -1840,26 +1842,39 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     switch (status) {
       case "done":
         return (
-          <Badge variant="outline" className="border-white/15 text-foreground">
+          <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
             {t("bulk.statusReady")}
           </Badge>
         );
       case "processing":
-        return <Badge variant="secondary">{t("bulk.statusProcessing")}</Badge>;
+        return (
+          <Badge variant="outline" className="gap-1.5 border-primary/30 bg-primary/10 text-primary">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+            {t("bulk.statusProcessing")}
+          </Badge>
+        );
       case "queued":
       case "created":
-        return <Badge variant="secondary">{t("bulk.statusQueued")}</Badge>;
+        return (
+          <Badge variant="outline" className="border-white/10 bg-white/5 text-muted-foreground">
+            {t("bulk.statusQueued")}
+          </Badge>
+        );
       case "failed":
-        return <Badge variant="outline" className="bg-white/5 border-white/15 text-foreground">{t("bulk.statusFailed")}</Badge>;
+        return (
+          <Badge variant="outline" className="border-destructive/30 bg-destructive/10 text-destructive">
+            {t("bulk.statusFailed")}
+          </Badge>
+        );
       case "needs_review":
         return (
-          <Badge variant="outline" className="border-white/15 text-muted-foreground">
+          <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning">
             {t("bulk.statusNeedsReview")}
           </Badge>
         );
       case "out_of_quota":
         return (
-          <Badge variant="outline" className="bg-white/5 border-white/15 text-muted-foreground">
+          <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning">
             {t("bulk.statusOutOfQuota")}
           </Badge>
         );
@@ -1880,98 +1895,112 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="glass w-[95vw] sm:max-w-5xl max-h-[90vh] overflow-y-auto p-0">
-        <ModalHeaderImage />
-        <div className="px-6 pb-6">
-        <DialogHeader className="flex flex-row items-center justify-between pb-4">
-          <DialogTitle>{t("bulk.title")}</DialogTitle>
-          <DialogDescription className="sr-only">{t("bulk.title")}</DialogDescription>
-        </DialogHeader>
+      <DialogContent className="glass w-[95vw] sm:max-w-5xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+        <ModalHeaderImage className="h-36 sm:h-40">
+          <DialogTitle className="text-2xl font-bold tracking-tight">{t("bulk.title")}</DialogTitle>
+          <DialogDescription>{t("bulk.subtitle")}</DialogDescription>
+        </ModalHeaderImage>
+        <div className="px-6 pb-6 pt-5">
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "csv" | "ai")} className="w-full">
-          <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 mb-6">
-            <TabsTrigger value="csv" className="gap-2">
+          <TabsList className="mb-6 grid w-full max-w-md mx-auto grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-background/40 p-1">
+            <TabsTrigger
+              value="csv"
+              className="gap-2 rounded-xl border-0 py-2 data-[state=active]:shadow-[0_0_20px_hsl(var(--primary)/0.3)]"
+            >
               <FileSpreadsheet className="w-4 h-4" />
               {t("bulk.tabCsv")}
             </TabsTrigger>
-            <TabsTrigger value="ai" className="gap-2">
+            <TabsTrigger
+              value="ai"
+              className="gap-2 rounded-xl border-0 py-2 data-[state=active]:shadow-[0_0_20px_hsl(var(--primary)/0.3)]"
+            >
               <Sparkles className="w-4 h-4" />
               {t("bulk.tabAi")}
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="csv" className="space-y-6">
-             {/* CSV Config logic remains same ... */}
-            <div className="rounded-lg border border-border/50 bg-secondary/30 p-4 space-y-3">
-              <h4 className="font-semibold text-sm uppercase tracking-wide">{t("bulk.csvInstructionsTitle")}</h4>
-              <ul className="text-sm text-muted-foreground space-y-2 list-disc list-inside">
-                <li>{t("bulk.csvInstructionsRequired")}</li>
-                <li>{t("bulk.csvInstructionsStops")}</li>
-                <li>{t("bulk.csvInstructionsSeparator")}</li>
-              </ul>
-            </div>
+          <TabsContent value="csv" className="space-y-5">
+            <input
+              type="file"
+              ref={csvFileInputRef}
+              className="hidden"
+              accept=".csv,text/csv"
+              onChange={handleCsvFileSelect}
+            />
 
-            <div className="grid grid-cols-2 gap-4">
-              <input
-                type="file"
-                ref={csvFileInputRef}
-                className="hidden"
-                accept=".csv,text/csv"
-                onChange={handleCsvFileSelect}
-              />
-              <Button
-                variant="outline"
-                className="h-12 gap-2"
+            {/* Fuentes de importación como tarjetas de acción */}
+            <div className={cn("grid gap-3", driveConfigured && "sm:grid-cols-2")}>
+              <button
                 type="button"
                 onClick={() => csvFileInputRef.current?.click()}
+                className="group flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-secondary/20 px-6 py-6 text-center transition-all hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <Upload className="w-4 h-4" />
-                {t("bulk.selectCsvFile")}
-              </Button>
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/15 text-primary ring-1 ring-primary/25 transition-transform duration-200 group-hover:scale-110">
+                  <Upload className="h-5 w-5" />
+                </span>
+                <span className="text-sm font-medium">{t("bulk.selectCsvFile")}</span>
+              </button>
               {driveConfigured && (
-                <Button
-                  variant="outline"
-                  className="h-12 gap-2"
+                <button
                   type="button"
                   disabled={csvBusy}
                   onClick={() => void importFromGoogleDrive()}
+                  className="group flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-secondary/20 px-6 py-6 text-center transition-all hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
                 >
-                  <CloudUpload className="w-4 h-4" />
-                  {t("bulk.importFromDrive")}
-                </Button>
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/15 text-primary ring-1 ring-primary/25 transition-transform duration-200 group-hover:scale-110">
+                    {csvBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <CloudUpload className="h-5 w-5" />}
+                  </span>
+                  <span className="text-sm font-medium">{t("bulk.importFromDrive")}</span>
+                </button>
               )}
             </div>
 
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-border/50" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">{t("bulk.or")}</span>
-              </div>
+            <div className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
+              <span className="h-px flex-1 bg-white/10" />
+              {t("bulk.or")}
+              <span className="h-px flex-1 bg-white/10" />
             </div>
 
             <div className="space-y-3">
-              <Label className="text-xs uppercase tracking-wide text-muted-foreground">{t("bulk.pasteCsv")}</Label>
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("bulk.pasteCsv")}</Label>
               <Textarea
                 placeholder={exampleText}
                 value={csvText}
                 onChange={(e) => setCsvText(e.target.value)}
-                className="min-h-[140px] font-mono text-sm bg-secondary/30"
+                className="min-h-[150px] rounded-xl border-white/10 bg-background/40 font-mono text-xs leading-relaxed placeholder:text-muted-foreground/60"
               />
               <Button
-                variant="secondary"
-                className="w-full"
+                className="w-full gap-2"
                 disabled={!csvText.trim() || csvBusy}
                 type="button"
                 onClick={() => void importCsvText(csvText, "pasted")}
               >
+                {csvBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
                 {t("bulk.processPasted")}
               </Button>
             </div>
 
-            <div className="flex justify-end pt-2">
-              <Button variant="outline" onClick={() => handleOpenChange(false)}>
+            {/* Referencia de formato, discreta al final */}
+            <div className="rounded-2xl border border-white/10 bg-secondary/20 p-4">
+              <div className="flex items-center gap-2">
+                <Info className="h-4 w-4 shrink-0 text-primary" />
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {t("bulk.csvInstructionsTitle")}
+                </h4>
+              </div>
+              <ul className="mt-3 space-y-2 text-xs leading-relaxed text-muted-foreground">
+                {[t("bulk.csvInstructionsRequired"), t("bulk.csvInstructionsStops"), t("bulk.csvInstructionsSeparator")].map((line) => (
+                  <li key={line} className="flex gap-2.5">
+                    <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-primary/70" />
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <Button variant="ghost" onClick={() => handleOpenChange(false)}>
                 {t("bulk.cancel")}
               </Button>
             </div>
@@ -1988,95 +2017,126 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
             />
             
             {aiStep === "upload" && (
-                <>
-                    <div 
-                        onClick={() => fileInputRef.current?.click()}
-                        onDrop={onDropFiles}
-                        onDragEnter={onDragEnter}
-                        onDragLeave={onDragLeave}
-                        onDragOver={onDragOver}
-                        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${
-                          isDragActive
-                            ? "border-primary/70 bg-primary/5"
-                            : "border-border/50 hover:border-primary/50"
-                        }`}
-                    >
-                    <Sparkles className="w-12 h-12 text-primary mx-auto mb-4" />
-                    <p className="font-medium text-lg">
+              <>
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  onDrop={onDropFiles}
+                  onDragEnter={onDragEnter}
+                  onDragLeave={onDragLeave}
+                  onDragOver={onDragOver}
+                  className={cn(
+                    "group flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 py-10 text-center transition-all",
+                    isDragActive
+                      ? "border-primary bg-primary/10 shadow-[inset_0_0_60px_hsl(var(--primary)/0.08)]"
+                      : "border-white/15 bg-secondary/20 hover:border-primary/50 hover:bg-secondary/30",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15 text-primary ring-1 ring-primary/25 transition-transform duration-200",
+                      isDragActive ? "scale-110" : "group-hover:scale-105",
+                    )}
+                  >
+                    <Sparkles className="h-6 w-6" />
+                  </span>
+                  <div className="space-y-1">
+                    <p className="font-medium">
                       {selectedFiles.length > 0
                         ? selectedFiles.length === 1
                           ? selectedFiles[0].name
                           : tf("bulk.aiFilesSelected", { count: selectedFiles.length })
                         : t("bulk.aiDropTitle")}
                     </p>
-                    <p className="text-sm text-muted-foreground mt-2">
+                    <p className="text-sm text-muted-foreground">
                       {selectedFiles.length > 0 ? t("bulk.aiChangeFilesHint") : t("bulk.aiDropSubtitle")}
                     </p>
+                  </div>
+                  {selectedFiles.length > 1 && (
+                    <div className="flex max-w-full flex-wrap items-center justify-center gap-1.5">
+                      {selectedFiles.slice(0, 4).map((file, idx) => (
+                        <span
+                          key={`${file.name}-${idx}`}
+                          className="inline-flex max-w-[180px] items-center gap-1.5 rounded-full border border-white/10 bg-background/40 px-2.5 py-1 text-xs text-muted-foreground"
+                        >
+                          <FileText className="h-3 w-3 shrink-0 text-primary" />
+                          <span className="truncate">{file.name}</span>
+                        </span>
+                      ))}
+                      {selectedFiles.length > 4 && (
+                        <span className="text-xs text-muted-foreground">+{selectedFiles.length - 4}</span>
+                      )}
                     </div>
+                  )}
+                </div>
 
-                    {driveConfigured && (
-                      <Button
-                        variant="outline"
-                        className="w-full h-12 gap-2"
-                        type="button"
-                        disabled={driveBusy}
-                        onClick={() => void importCallsheetsFromDrive()}
-                      >
-                        {driveBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CloudUpload className="w-4 h-4" />}
-                        {t("bulk.importFromDrive")}
-                      </Button>
-                    )}
+                {driveConfigured && (
+                  <Button
+                    variant="outline"
+                    className="w-full h-11 gap-2 rounded-xl border-white/10 bg-secondary/20 hover:border-primary/40 hover:bg-primary/5"
+                    type="button"
+                    disabled={driveBusy}
+                    onClick={() => void importCallsheetsFromDrive()}
+                  >
+                    {driveBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CloudUpload className="w-4 h-4 text-primary" />}
+                    {t("bulk.importFromDrive")}
+                  </Button>
+                )}
 
-                    {/* Contador de IA transparente ANTES de gastar (Fase 4) */}
-                    {aiQuota.used != null && Number.isFinite(aiQuota.limit) && !aiQuota.bypass && (
-                      <p className="text-xs text-muted-foreground text-center">
-                        {tf("bulk.aiQuotaLine", { used: aiQuota.used, limit: aiQuota.limit })}
-                        {" · "}
-                        {tf("dashboard.aiCounterRenews", {
-                          month: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toLocaleDateString(locale, { month: "long" }),
-                        })}
-                      </p>
-                    )}
+                {/* Contador de IA transparente ANTES de gastar (Fase 4) */}
+                {aiQuota.used != null && Number.isFinite(aiQuota.limit) && !aiQuota.bypass && (
+                  <div className="flex justify-center">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-secondary/30 px-3 py-1 text-xs text-muted-foreground">
+                      <Sparkles className="h-3 w-3 text-primary" />
+                      {tf("bulk.aiQuotaLine", { used: aiQuota.used, limit: aiQuota.limit })}
+                      {" · "}
+                      {tf("dashboard.aiCounterRenews", {
+                        month: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toLocaleDateString(locale, { month: "long" }),
+                      })}
+                    </span>
+                  </div>
+                )}
 
-                    <div className="flex items-start gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20">
-                      <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
-                      <p className="text-xs text-warning">
-                        {t("bulk.aiDisclaimer")}
-                      </p>
-                    </div>
+                <p className="text-center text-sm text-muted-foreground">
+                  {t("bulk.aiDescription")}
+                </p>
 
-                    <p className="text-sm text-muted-foreground text-center">
-                      {t("bulk.aiDescription")}
-                    </p>
+                <div className="flex items-start gap-2.5 rounded-xl border border-warning/20 bg-warning/10 p-3">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                  <p className="text-xs leading-relaxed text-warning">
+                    {t("bulk.aiDisclaimer")}
+                  </p>
+                </div>
 
-                    <div className="flex justify-end gap-2 pt-2">
-                    <Button variant="outline" onClick={() => handleOpenChange(false)}>
-                        {t("bulk.cancel")}
-                    </Button>
-                    <Button 
-                        variant="add" 
-                        className="gap-2" 
-                        onClick={startAiProcess} 
-                      disabled={selectedFiles.length === 0 || aiLoading}
-                    >
-                        {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                        {t("bulk.aiProcess")}
-                    </Button>
-                    </div>
-                </>
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button variant="ghost" onClick={() => handleOpenChange(false)}>
+                    {t("bulk.cancel")}
+                  </Button>
+                  <Button
+                    variant="add"
+                    className="gap-2"
+                    onClick={startAiProcess}
+                    disabled={selectedFiles.length === 0 || aiLoading}
+                  >
+                    {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    {t("bulk.aiProcess")}
+                  </Button>
+                </div>
+              </>
             )}
 
             {aiStep === "processing" && (
-              <div className="space-y-4">
-                <div className="text-center py-10 space-y-3">
-                  {jobStats.total > 0 && jobStats.pending === 0 ? (
-                    <CheckCircle className="w-12 h-12 text-primary mx-auto" />
-                  ) : (
-                    <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto" />
-                  )}
-                  <div>
-                    <h3 className="text-lg font-medium">{t("bulk.aiProcessingTitle")}</h3>
-                    <p className="text-muted-foreground">
+              <div className="space-y-5">
+                <div className="space-y-4 py-6 text-center">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 ring-1 ring-primary/25">
+                    {jobStats.total > 0 && jobStats.pending === 0 ? (
+                      <CheckCircle className="h-7 w-7 text-success" />
+                    ) : (
+                      <Loader2 className="h-7 w-7 animate-spin text-primary" />
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-lg font-semibold tracking-tight">{t("bulk.aiProcessingTitle")}</h3>
+                    <p className="text-sm text-muted-foreground">
                       {jobStats.total > 0
                         ? tf("bulk.aiProcessingProgress", {
                             done: jobStats.done,
@@ -2087,44 +2147,53 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                         : t("bulk.aiProcessingHint")}
                     </p>
                   </div>
-                </div>
-
-                <div className="flex items-start gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20">
-                  <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
-                  <p className="text-xs text-warning">
-                    {t("bulk.aiDisclaimer")}
-                  </p>
+                  {jobStats.total > 0 && (
+                    <div className="mx-auto h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-secondary/60">
+                      <div
+                        className="h-full rounded-full [background:var(--gradient-primary)] transition-all duration-500"
+                        style={{ width: `${Math.round(((jobStats.total - jobStats.pending) / jobStats.total) * 100)}%` }}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {jobsForUi.length > 0 && (
-                  <Card className="bg-secondary/20">
-                    <CardContent className="p-3 space-y-2 max-h-64 overflow-y-auto">
-                      {jobsForUi.map((job) => (
-                        <div
-                          key={job.id}
-                          className="flex items-center justify-between gap-3 p-2 bg-background rounded border border-border/50"
-                        >
+                  <div className="max-h-64 space-y-2 overflow-y-auto rounded-2xl border border-white/10 bg-secondary/20 p-3">
+                    {jobsForUi.map((job) => (
+                      <div
+                        key={job.id}
+                        className="flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-background/40 px-3 py-2.5"
+                      >
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                           <div className="min-w-0">
                             <p className="text-sm font-medium truncate">{job.fileName}</p>
                             {job.reason && <p className="text-xs text-muted-foreground truncate">{job.reason}</p>}
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            {job.review?.optimizing && (
-                              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                            )}
-                            {renderJobStatusBadge(job.status, job.saved)}
-                          </div>
                         </div>
-                      ))}
-                    </CardContent>
-                  </Card>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {job.review?.optimizing && (
+                            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                          )}
+                          {renderJobStatusBadge(job.status, job.saved)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
+
+                <div className="flex items-start gap-2.5 rounded-xl border border-warning/20 bg-warning/10 p-3">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                  <p className="text-xs leading-relaxed text-warning">
+                    {t("bulk.aiDisclaimer")}
+                  </p>
+                </div>
 
                 {/* Botón de pánico: detiene y descarta la extracción en curso. */}
                 <div className="flex justify-center pt-1">
                   <Button
                     variant="outline"
-                    className="gap-2 text-destructive hover:bg-destructive/10"
+                    className="gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
                     onClick={() => void cancelActiveExtraction()}
                   >
                     <XCircle className="w-4 h-4" />
@@ -2135,215 +2204,229 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
             )}
 
             {aiStep === "review" && (
-              <>
-
-                <div className="space-y-4 animate-fade-in">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-2 text-foreground">
-                      <CheckCircle className="w-5 h-5" />
-                      <div>
-                        <p className="font-medium">{t("bulk.aiParallelReviewTitle")}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {tf("bulk.aiParallelReviewStats", {
-                            ready: jobStats.ready,
-                            saved: jobStats.saved,
-                            pending: jobStats.pending,
-                            failed: jobStats.failed,
-                          })}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2 shrink-0">
-                      <Button variant="outline" type="button" onClick={resetAiState}>
-                        {t("bulk.back")}
-                      </Button>
-                      <Button
-                        type="button"
-                        className="gap-2"
-                        onClick={() => void saveAllReadyTrips()}
-                        disabled={!onSave || jobStats.ready === 0}
-                      >
-                        <Save className="w-4 h-4" />
-                        {t("bulk.saveAll")}
-                      </Button>
+              <div className="space-y-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-success/10 text-success ring-1 ring-success/25">
+                      <CheckCircle className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <p className="font-semibold tracking-tight">{t("bulk.aiParallelReviewTitle")}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {tf("bulk.aiParallelReviewStats", {
+                          ready: jobStats.ready,
+                          saved: jobStats.saved,
+                          pending: jobStats.pending,
+                          failed: jobStats.failed,
+                        })}
+                      </p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                    {jobsForUi.map((job) => {
-                      const review = job.review;
-                      const showProcessing = job.status === "processing" || job.status === "queued" || job.status === "created";
-                      const showFailed = job.status === "failed" || job.status === "needs_review" || job.status === "out_of_quota";
-                      const showDoneNoReview = job.status === "done" && !review && !job.saved;
+                  <div className="flex gap-2 shrink-0">
+                    <Button variant="ghost" type="button" onClick={resetAiState}>
+                      {t("bulk.back")}
+                    </Button>
+                    <Button
+                      type="button"
+                      className="gap-2"
+                      onClick={() => void saveAllReadyTrips()}
+                      disabled={!onSave || jobStats.ready === 0}
+                    >
+                      <Save className="w-4 h-4" />
+                      {t("bulk.saveAll")}
+                    </Button>
+                  </div>
+                </div>
 
-                      return (
-                        <Card key={job.id} className="bg-secondary/10">
-                          <CardContent className="p-4 space-y-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className="font-medium truncate">{job.fileName}</p>
-                                {job.reason && <p className="text-xs text-muted-foreground truncate">{job.reason}</p>}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {jobsForUi.map((job) => {
+                    const review = job.review;
+                    const showProcessing = job.status === "processing" || job.status === "queued" || job.status === "created";
+                    const showFailed = job.status === "failed" || job.status === "needs_review" || job.status === "out_of_quota";
+                    const showDoneNoReview = job.status === "done" && !review && !job.saved;
+
+                    return (
+                      <div
+                        key={job.id}
+                        className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-secondary/20 p-4 transition-colors hover:border-white/15"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-2.5">
+                            <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">{job.fileName}</p>
+                              {job.reason && <p className="text-xs text-muted-foreground truncate">{job.reason}</p>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {review?.optimizing && (
+                              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                            )}
+                            {renderJobStatusBadge(job.status, job.saved)}
+                          </div>
+                        </div>
+
+                        {review && job.status === "done" && (
+                          <>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div className="space-y-1.5">
+                                <Label className="text-xs text-muted-foreground">{t("tripModal.project")}</Label>
+                                <Input
+                                  value={review.project}
+                                  onChange={(e) => updateReview(job.id, { project: e.target.value })}
+                                  className="rounded-xl border-white/10 bg-background/40"
+                                />
                               </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                {review?.optimizing && (
-                                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                              <div className="space-y-1.5">
+                                <Label className="text-xs text-muted-foreground">{t("tripModal.date")}</Label>
+                                <div className="relative">
+                                  <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                  <Input
+                                    value={review.date}
+                                    onChange={(e) => updateReview(job.id, { date: e.target.value })}
+                                    className="rounded-xl border-white/10 bg-background/40 pl-9"
+                                  />
+                                </div>
+                              </div>
+                              <div className="space-y-1.5 sm:col-span-2">
+                                <Label className="text-xs text-muted-foreground">{t("bulk.producerLabel")}</Label>
+                                <div className="relative">
+                                  <Building2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                  <Input
+                                    value={review.producer}
+                                    onChange={(e) => updateReview(job.id, { producer: e.target.value })}
+                                    className="rounded-xl border-white/10 bg-background/40 pl-9"
+                                  />
+                                </div>
+                              </div>
+                              <div className="space-y-1.5 sm:col-span-2">
+                                <Label className="text-xs text-muted-foreground">{t("tripModal.distance")}</Label>
+                                <Input
+                                  type="number"
+                                  value={review.distance}
+                                  onChange={(e) =>
+                                    updateReview(job.id, { distance: e.target.value, distanceDirty: true })
+                                  }
+                                  className="rounded-xl border-white/10 bg-background/40"
+                                />
+                                {review.optimizing && (
+                                  <p className="text-xs text-muted-foreground">{t("bulk.optimizingHint")}</p>
                                 )}
-                                {renderJobStatusBadge(job.status, job.saved)}
                               </div>
                             </div>
 
-                            {review && job.status === "done" && (
-                              <>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                  <div className="space-y-2">
-                                    <Label>{t("tripModal.project")}</Label>
-                                    <Input
-                                      value={review.project}
-                                      onChange={(e) => updateReview(job.id, { project: e.target.value })}
-                                      className="bg-secondary/30"
-                                    />
-                                  </div>
-                                  <div className="space-y-2">
-                                    <Label>{t("tripModal.date")}</Label>
-                                    <div className="relative">
-                                      <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                      <Input
-                                        value={review.date}
-                                        onChange={(e) => updateReview(job.id, { date: e.target.value })}
-                                        className="pl-9 bg-secondary/30"
-                                      />
-                                    </div>
-                                  </div>
-                                  <div className="space-y-2 sm:col-span-2">
-                                    <Label>{t("bulk.producerLabel")}</Label>
-                                    <div className="relative">
-                                      <Building2 className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                      <Input
-                                        value={review.producer}
-                                        onChange={(e) => updateReview(job.id, { producer: e.target.value })}
-                                        className="pl-9 bg-secondary/30"
-                                      />
-                                    </div>
-                                  </div>
-                                  <div className="space-y-2 sm:col-span-2">
-                                    <Label>{t("tripModal.distance")}</Label>
-                                    <Input
-                                      type="number"
-                                      value={review.distance}
-                                      onChange={(e) =>
-                                        updateReview(job.id, { distance: e.target.value, distanceDirty: true })
-                                      }
-                                      className="bg-secondary/30"
-                                    />
-                                    {review.optimizing && (
-                                      <p className="text-xs text-muted-foreground">{t("bulk.optimizingHint")}</p>
-                                    )}
-                                  </div>
+                            {/* Ruta como recorrido: origen → paradas numeradas → destino */}
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">
+                                {tf("bulk.locationsRouteLabel", { count: review.locations.length })}
+                              </Label>
+                              <div className="space-y-2 rounded-xl border border-white/10 bg-background/40 p-3">
+                                <div className="flex items-center gap-2.5 text-xs text-muted-foreground">
+                                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success/15 text-success ring-1 ring-success/25">
+                                    <MapPin className="h-3 w-3" />
+                                  </span>
+                                  <span className="font-semibold">{t("bulk.originLabel")}:</span>
+                                  <span className="truncate">{profile.baseAddress || t("bulk.notSet")}</span>
                                 </div>
 
-                                <div className="space-y-2">
-                                  <Label>{tf("bulk.locationsRouteLabel", { count: review.locations.length })}</Label>
-
-                                  <div className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1.5">
-                                    <MapPin className="w-3 h-3 text-muted-foreground" />
-                                    <span className="font-semibold">{t("bulk.originLabel")}:</span>{" "}
-                                    {profile.baseAddress || t("bulk.notSet")}
-                                  </div>
-
-                                  <Card className="bg-secondary/20">
-                                    <CardContent className="p-3 max-h-48 overflow-y-auto space-y-2">
-                                      {review.locations.map((loc, idx) => (
-                                        <div
-                                          key={idx}
-                                          className="flex items-start gap-2 text-sm p-2 bg-background rounded border border-border/50"
-                                        >
-                                          <MapPin className="w-4 h-4 mt-0.5 text-primary shrink-0" />
-                                          <span>{loc}</span>
-                                        </div>
-                                      ))}
-                                      {review.locations.length === 0 && (
-                                        <p className="text-sm text-muted-foreground italic">{t("bulk.noLocationsFound")}</p>
-                                      )}
-                                    </CardContent>
-                                  </Card>
-
-                                  <div className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5">
-                                    <MapPin className="w-3 h-3 text-muted-foreground" />
-                                    <span className="font-semibold">{t("bulk.destinationLabel")}:</span>{" "}
-                                    {profile.baseAddress || t("bulk.notSet")}
-                                  </div>
-                                </div>
-
-                                <div className="flex justify-end gap-2">
-                                  <Button
-                                    type="button"
-                                    className="gap-2"
-                                    onClick={() => void saveTripForJob(job.id)}
-                                    disabled={!onSave || job.saving || job.saved || review.optimizing}
-                                  >
-                                    {job.saving ? (
-                                      <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                      <Save className="w-4 h-4" />
-                                    )}
-                                    {job.saved ? t("bulk.statusSaved") : t("bulk.saveTrip")}
-                                  </Button>
-                                </div>
-                              </>
-                            )}
-
-                            {showProcessing && (
-                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                <span>
-                                  {job.status === "processing"
-                                    ? t("bulk.statusProcessingEllipsis")
-                                    : t("bulk.statusQueuedEllipsis")}
-                                </span>
-                              </div>
-                            )}
-
-                            {showDoneNoReview && (
-                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                <span>{t("bulk.loadingResults")}</span>
-                              </div>
-                            )}
-
-                            {showFailed && (
-                              <>
-                                {job.status === "out_of_quota" ? (
-                                  <div className="rounded-lg bg-white/5 border border-white/15 p-3 space-y-2">
-                                    <p className="text-sm font-semibold text-foreground">
-                                      {t("bulk.outOfQuotaTitle")}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {t("bulk.outOfQuotaMessage")}
-                                    </p>
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      className="w-full gap-1"
-                                      onClick={() => navigate("/plans")}
+                                <div className="max-h-44 space-y-1.5 overflow-y-auto">
+                                  {review.locations.map((loc, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="flex items-start gap-2.5 rounded-lg bg-secondary/30 px-2.5 py-2 text-sm"
                                     >
-                                      {t("bulk.outOfQuotaButton")}
-                                    </Button>
-                                  </div>
+                                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[10px] font-semibold text-primary ring-1 ring-primary/25">
+                                        {idx + 1}
+                                      </span>
+                                      <span className="min-w-0 break-words">{loc}</span>
+                                    </div>
+                                  ))}
+                                  {review.locations.length === 0 && (
+                                    <p className="text-sm text-muted-foreground italic">{t("bulk.noLocationsFound")}</p>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-2.5 text-xs text-muted-foreground">
+                                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary ring-1 ring-primary/25">
+                                    <MapPin className="h-3 w-3" />
+                                  </span>
+                                  <span className="font-semibold">{t("bulk.destinationLabel")}:</span>
+                                  <span className="truncate">{profile.baseAddress || t("bulk.notSet")}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="mt-auto flex justify-end gap-2">
+                              <Button
+                                type="button"
+                                className="gap-2"
+                                onClick={() => void saveTripForJob(job.id)}
+                                disabled={!onSave || job.saving || job.saved || review.optimizing}
+                              >
+                                {job.saving ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
                                 ) : (
-                                  <div className="text-sm text-muted-foreground">
-                                    {job.reason || t("bulk.docProcessFailed")}
-                                  </div>
+                                  <Save className="w-4 h-4" />
                                 )}
-                              </>
+                                {job.saved ? t("bulk.statusSaved") : t("bulk.saveTrip")}
+                              </Button>
+                            </div>
+                          </>
+                        )}
+
+                        {showProcessing && (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>
+                              {job.status === "processing"
+                                ? t("bulk.statusProcessingEllipsis")
+                                : t("bulk.statusQueuedEllipsis")}
+                            </span>
+                          </div>
+                        )}
+
+                        {showDoneNoReview && (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>{t("bulk.loadingResults")}</span>
+                          </div>
+                        )}
+
+                        {showFailed && (
+                          <>
+                            {job.status === "out_of_quota" ? (
+                              <div className="space-y-2 rounded-xl border border-warning/20 bg-warning/10 p-3">
+                                <p className="text-sm font-semibold text-warning">
+                                  {t("bulk.outOfQuotaTitle")}
+                                </p>
+                                <p className="text-xs leading-relaxed text-muted-foreground">
+                                  {t("bulk.outOfQuotaMessage")}
+                                </p>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="w-full gap-1"
+                                  onClick={() => navigate("/plans")}
+                                >
+                                  {t("bulk.outOfQuotaButton")}
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex items-start gap-2.5 rounded-xl border border-destructive/20 bg-destructive/10 p-3">
+                                <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                                <p className="text-xs leading-relaxed text-destructive">
+                                  {job.reason || t("bulk.docProcessFailed")}
+                                </p>
+                              </div>
                             )}
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
-                  </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              </>
+              </div>
             )}
           </TabsContent>
         </Tabs>

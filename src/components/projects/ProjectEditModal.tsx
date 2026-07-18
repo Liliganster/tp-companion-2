@@ -3,7 +3,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -90,16 +89,15 @@ export function ProjectEditModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="glass max-w-lg max-h-[90vh] overflow-y-auto p-0">
-        <ModalHeaderImage />
+        <ModalHeaderImage>
+          <DialogTitle className="text-xl font-bold tracking-tight">
+            {project ? t("projects.edit") : t("projects.createNewProject")}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            {project ? t("projects.edit") : t("projects.createNewProject")}
+          </DialogDescription>
+        </ModalHeaderImage>
         <div className="px-6 pb-6">
-          <DialogHeader className="pb-4">
-            <DialogTitle>
-              {project ? t("projects.edit") : t("projects.createNewProject")}
-            </DialogTitle>
-            <DialogDescription className="sr-only">
-              {project ? t("projects.edit") : t("projects.createNewProject")}
-            </DialogDescription>
-          </DialogHeader>
           <div className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor="name">{t("projects.projectName")}</Label>

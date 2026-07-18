@@ -275,6 +275,7 @@ export const de: Record<I18nKey, string> = {
   "dashboard.viewAll": "Alle ansehen",
   "bulk.aiExtraction": "KI-Extraktion",
   "bulk.title": "Assistent für Massenimport",
+  "bulk.subtitle": "Importiere Fahrten aus einer CSV oder lass die KI deine Callsheets lesen.",
   "bulk.tabCsv": "CSV importieren",
   "bulk.tabAi": "KI-Extraktion",
   "bulk.csvInstructionsTitle": "Hinweise zum CSV-Import",

@@ -293,6 +293,7 @@ export const es = {
   "dashboard.viewAll": "Ver todos",
   "bulk.aiExtraction": "Extracción IA",
   "bulk.title": "Asistente de carga masiva",
+  "bulk.subtitle": "Importa viajes desde un CSV o deja que la IA lea tus hojas de rodaje.",
   "bulk.tabCsv": "Importar CSV",
   "bulk.tabAi": "Extracción IA",
   "bulk.csvInstructionsTitle": "Instrucciones de importación CSV",

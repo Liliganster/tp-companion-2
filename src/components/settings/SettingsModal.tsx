@@ -3,9 +3,9 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ModalHeaderImage } from "@/components/ui/modal-header-image";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -363,10 +363,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   return (
       <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent className="max-w-3xl w-full sm:w-[800px] h-[90vh] sm:h-[600px] p-0 gap-0 overflow-hidden flex flex-col">
-        <DialogHeader className="px-4 sm:px-6 py-3 sm:py-4 border-b border-border shrink-0">
-          <DialogTitle className="text-lg sm:text-xl font-semibold">{t("settings.title")}</DialogTitle>
+        <ModalHeaderImage className="h-20">
+          <DialogTitle className="text-lg sm:text-xl font-bold tracking-tight">{t("settings.title")}</DialogTitle>
           <DialogDescription className="sr-only">{t("settings.title")}</DialogDescription>
-        </DialogHeader>
+        </ModalHeaderImage>
 
         {/* Mobile Navigation - Outside flex container */}
         <div className="sm:hidden border-b border-border shrink-0 overflow-x-auto">

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { ModalHeaderImage } from "@/components/ui/modal-header-image";
 import { Button } from "@/components/ui/button";
 import { Car, Calendar, Route, Leaf, FileText, Sparkles, Eye, Trash2, Upload, Receipt, Loader2, X } from "lucide-react";
@@ -1160,17 +1160,16 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       {/* Pending Trips Review Dialog */}
       <Dialog open={showPendingTrips} onOpenChange={setShowPendingTrips}>
         <DialogContent className="glass sm:max-w-4xl max-h-[90vh] p-0 gap-0 overflow-hidden z-[70] flex flex-col">
-          <ModalHeaderImage className="h-16" />
-          <DialogHeader className="p-6 pb-4">
-            <DialogTitle className="text-xl font-semibold">
+          <ModalHeaderImage className="h-28">
+            <DialogTitle className="text-xl font-bold tracking-tight">
               Viajes procesados ({pendingTrips.length})
             </DialogTitle>
             <DialogDescription>
               Revisa los viajes extraídos automáticamente y guárdalos todos juntos
             </DialogDescription>
-          </DialogHeader>
+          </ModalHeaderImage>
 
-          <ScrollArea className="max-h-[calc(90vh-200px)] px-6">
+          <ScrollArea className="flex-1 min-h-0 px-6 pt-4">
             <div className="space-y-4 pb-4">
               {pendingTrips.map((trip, index) => (
                 <div key={trip.id} className="glass-card p-4 space-y-2">
@@ -1230,15 +1229,14 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       {/* Main Project Detail Dialog */}
       <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent className="glass sm:max-w-2xl max-h-[90vh] p-0 gap-0 overflow-hidden">
-        <ModalHeaderImage />
-        <DialogHeader className="p-6 pb-4">
-          <DialogTitle className="text-xl font-semibold">{project.name}</DialogTitle>
+        <ModalHeaderImage>
+          <DialogTitle className="text-xl font-bold tracking-tight">{project.name}</DialogTitle>
           <DialogDescription className="sr-only">{project.name}</DialogDescription>
-        </DialogHeader>
+        </ModalHeaderImage>
 
-        {/* 208px = cabecera de imagen (128) + título (80) */}
-        <ScrollArea className="max-h-[calc(90vh-208px)]">
-          <div className="px-6 pb-6 space-y-6">
+        {/* 144px = cabecera hero (128, el título va dentro) + respiro superior */}
+        <ScrollArea className="max-h-[calc(90vh-144px)]">
+          <div className="px-6 pb-6 pt-5 space-y-6">
             {/* Stats Grid */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <div>

@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { ModalHeaderImage } from "@/components/ui/modal-header-image";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -130,11 +130,10 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
           Cabecera de imagen BAJA (h-16) por lo mismo: estilo unificado sin
           robarle altura al documento. */}
       <DialogContent className="glass w-[96vw] sm:w-[96vw] sm:max-w-[1500px] h-[92vh] max-h-[92vh] p-0 gap-0 overflow-hidden flex flex-col">
-        <ModalHeaderImage className="h-16" />
-        <DialogHeader className="p-4 pb-0 shrink-0">
-          <DialogTitle>{t("tripDetail.title")}</DialogTitle>
+        <ModalHeaderImage className="h-20">
+          <DialogTitle className="text-lg font-bold tracking-tight">{t("tripDetail.title")}</DialogTitle>
           <DialogDescription className="sr-only">{t("tripDetail.title")}</DialogDescription>
-        </DialogHeader>
+        </ModalHeaderImage>
 
         <div className="flex flex-col md:flex-row flex-1 min-h-0">
           <div className="w-full md:w-80 max-h-[45%] md:max-h-none p-4 space-y-4 overflow-y-auto border-b md:border-b-0 md:border-r border-border/50 bg-secondary/20 min-h-0">

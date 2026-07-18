@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState, DragEvent } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { ModalHeaderImage } from "@/components/ui/modal-header-image";
 import { Camera, Loader2, RotateCw, Check, X, Upload, ImageIcon, Trash2, FileText, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
@@ -340,13 +340,12 @@ export function ExpenseScanButton({
 
       <Dialog open={isOpen} onOpenChange={(open) => !open && handleCancel()}>
         <DialogContent className="glass max-w-md max-h-[90vh] overflow-hidden p-0">
-          <ModalHeaderImage className="h-16" />
-          <DialogHeader className="px-4 pt-4 pb-2">
-            <DialogTitle>{t("expenseScan.title")}</DialogTitle>
+          <ModalHeaderImage className="h-24">
+            <DialogTitle className="text-lg font-bold tracking-tight">{t("expenseScan.title")}</DialogTitle>
             <DialogDescription>
               {getExpenseTypeLabel()}
             </DialogDescription>
-          </DialogHeader>
+          </ModalHeaderImage>
 
           <div className="px-4 pb-4 space-y-4 overflow-y-auto max-h-[70vh]">
             {/* Existing receipts list */}

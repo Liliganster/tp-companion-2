@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, GripVertical, X, MapPin, Calendar, Home, Route, Loader2, Check, ChevronsUpDown, FileUp, Camera, Info, HelpCircle } from "lucide-react";
 import { TripModalTour, shouldAutoShowTripTour } from "@/components/tour/TripModalTour";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -821,26 +821,25 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
         if (tripTourActive) e.preventDefault();
       }}
     >
-      <ModalHeaderImage />
+      <ModalHeaderImage>
+        <DialogTitle className="flex items-center gap-2 text-xl font-bold tracking-tight">
+          {isEditing ? t("tripModal.editTitle") : t("tripModal.addTitle")}
+          <button
+            type="button"
+            onClick={() => setTripTourActive(true)}
+            title={t("tripTour.help")}
+            aria-label={t("tripTour.help")}
+            className="text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <HelpCircle className="w-4 h-4" />
+          </button>
+        </DialogTitle>
+        <DialogDescription className="sr-only">
+          {isEditing ? t("tripModal.editTitle") : t("tripModal.addTitle")}
+        </DialogDescription>
+      </ModalHeaderImage>
 
         <div className="px-6 pb-6">
-          <DialogHeader className="pb-4">
-            <DialogTitle className="flex items-center gap-2">
-              {isEditing ? t("tripModal.editTitle") : t("tripModal.addTitle")}
-              <button
-                type="button"
-                onClick={() => setTripTourActive(true)}
-                title={t("tripTour.help")}
-                aria-label={t("tripTour.help")}
-                className="text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <HelpCircle className="w-4 h-4" />
-              </button>
-            </DialogTitle>
-            <DialogDescription className="sr-only">
-              {isEditing ? t("tripModal.editTitle") : t("tripModal.addTitle")}
-            </DialogDescription>
-          </DialogHeader>
 
         <div className="grid gap-4">
           <div className="grid grid-cols-2 gap-4">
