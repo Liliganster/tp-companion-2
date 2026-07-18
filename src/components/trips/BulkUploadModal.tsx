@@ -192,13 +192,13 @@ async function loadGoogleIdentityServices(): Promise<void> {
  * Google — sin redirección ni dependencia del servidor. Único punto de
  * autorización, compartido por el import de CSV y el de callsheets.
  */
-async function getDriveReadonlyToken(clientId: string): Promise<string> {
+async function getDriveFileToken(clientId: string): Promise<string> {
   await loadGoogleIdentityServices();
   return await new Promise<string>((resolve, reject) => {
     const w = window as any;
     const tokenClient = w.google.accounts.oauth2.initTokenClient({
       client_id: clientId,
-      scope: "https://www.googleapis.com/auth/drive.readonly",
+      scope: "https://www.googleapis.com/auth/drive.file",
       callback: (response: any) => {
         if (response.error) {
           reject(new Error(response.error_description || response.error));
@@ -797,7 +797,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
 
     setCsvBusy(true);
     try {
-      const driveAccessToken = await getDriveReadonlyToken(clientId);
+      const driveAccessToken = await getDriveFileToken(clientId);
 
       // Selector para hojas de cálculo / CSV (import de viajes por CSV)
       const [picked] = await openGoogleDrivePicker({
@@ -852,7 +852,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
 
     setDriveBusy(true);
     try {
-      const driveAccessToken = await getDriveReadonlyToken(clientId);
+      const driveAccessToken = await getDriveFileToken(clientId);
 
       const picked = await openGoogleDrivePicker({
         apiKey: pickerApiKey,

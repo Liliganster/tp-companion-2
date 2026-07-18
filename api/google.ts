@@ -13,6 +13,18 @@ import {
   buildApiGeocodeCacheKey,
   buildDirectionsCacheKey,
 } from "./_utils/geocode.js";
+import {
+  PLACES_AUTOCOMPLETE_API_URL,
+  PLACES_AUTOCOMPLETE_FIELD_MASK,
+  ROUTES_API_URL,
+  ROUTES_FIELD_MASK,
+  adaptPlacesAutocompleteApiResponse,
+  adaptRoutesApiResponse,
+  buildPlaceDetailsApiUrl,
+  buildPlacesAutocompleteApiRequest,
+  buildRoutesApiRequest,
+  getGoogleApiError,
+} from "./_utils/googleMapsNew.js";
 
 // ─── shared helper (was google/_utils.ts) ───────────────────────────────────
 async function getGoogleAccessTokenForUser(userId: string) {
@@ -52,13 +64,6 @@ function normalizeRegion(value: unknown) {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim().toLowerCase();
   return trimmed ? trimmed : undefined;
-}
-
-function normalizePlacesAutocompleteType(value: unknown) {
-  if (typeof value !== "string") return "address";
-  const trimmed = value.trim().toLowerCase();
-  if (trimmed === "address" || trimmed === "establishment" || trimmed === "geocode") return trimmed;
-  return "address";
 }
 
 function regionFromComponents(components: unknown) {
@@ -197,37 +202,31 @@ async function handleDirections(req: any, res: any) {
     res.end(JSON.stringify(cached)); return;
   }
 
-  const params = new URLSearchParams({ origin, destination, key, mode: "driving", units: "metric", departure_time: "now" });
   const derivedLanguage = languageForRegion(region);
-  if (derivedLanguage) params.set("language", derivedLanguage);
-  if (region) params.set("region", region);
-  if (waypoints.length) params.set("waypoints", waypoints.join("|"));
-
-  const url = `${GOOGLE_BASE}/directions/json?${params.toString()}`;
-  const response = await fetch(url);
+  const requestBody = buildRoutesApiRequest({ origin, destination, waypoints, region, language: derivedLanguage });
+  const response = await fetch(ROUTES_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": key,
+      "X-Goog-FieldMask": ROUTES_FIELD_MASK,
+    },
+    body: JSON.stringify(requestBody),
+  });
   const data: any = await response.json().catch(() => null);
 
   if (!response.ok || !data) {
-    res.statusCode = 502; res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify({ error: "Failed to contact Google Directions API" })); return;
+    const error = getGoogleApiError(data, "Failed to contact Google Routes API");
+    res.statusCode = response.status >= 400 && response.status < 500 ? 400 : 502;
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify(error)); return;
   }
-  if (data.status !== "OK" || !data.routes?.[0]) {
+
+  const payload = adaptRoutesApiResponse(data);
+  if (!payload) {
     res.statusCode = 400; res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify({ error: data.status ?? "UNKNOWN", message: data.error_message })); return;
+    res.end(JSON.stringify({ error: "ZERO_RESULTS", message: "Google Routes API returned no route" })); return;
   }
-
-  const route = data.routes[0];
-  const legs = Array.isArray(route.legs)
-    ? route.legs.map((leg: any) => ({
-        startLocation: leg?.start_location, endLocation: leg?.end_location,
-        distanceMeters: typeof leg?.distance?.value === "number" ? leg.distance.value : null,
-        durationSeconds: typeof leg?.duration?.value === "number" ? leg.duration.value : null,
-        durationInTrafficSeconds: typeof leg?.duration_in_traffic?.value === "number" ? leg.duration_in_traffic.value : null,
-      }))
-    : [];
-  const totalDistanceMeters = legs.reduce((acc: number, leg: any) => acc + (typeof leg?.distanceMeters === "number" ? leg.distanceMeters : 0), 0);
-
-  const payload = { overviewPolyline: route?.overview_polyline?.points ?? "", bounds: route?.bounds ?? null, legs, totalDistanceMeters };
   await cacheSet(cacheKey, "directions", payload);
   res.statusCode = 200; res.setHeader("Content-Type", "application/json");
   res.end(JSON.stringify(payload));
@@ -258,39 +257,41 @@ async function handlePlacesAutocomplete(req: any, res: any) {
   const location = typeof body?.location === "string" ? body.location : undefined;
   const radius = typeof body?.radius === "number" ? body.radius : undefined;
   const strictbounds = body?.strictbounds === true;
-  const types = normalizePlacesAutocompleteType(body?.types);
 
   if (typeof input !== "string" || !input.trim()) return badRequest(res, "input is required");
   if (input.length > 120) return badRequest(res, "input too long");
 
-  const params = new URLSearchParams({ input, key, types });
   const derivedLanguage = languageForRegion(region);
-  if (derivedLanguage) params.set("language", derivedLanguage);
-  if (components) params.set("components", components);
-  if (region) params.set("region", region);
-  if (sessiontoken) params.set("sessiontoken", sessiontoken);
-  if (location) params.set("location", location);
-  if (radius) params.set("radius", String(radius));
-  if (strictbounds) params.set("strictbounds", "true");
-
-  const url = `${GOOGLE_BASE}/place/autocomplete/json?${params.toString()}`;
-  const response = await fetch(url);
+  const requestBody = buildPlacesAutocompleteApiRequest({
+    input,
+    components,
+    region,
+    language: derivedLanguage,
+    sessionToken: sessiontoken,
+    location,
+    radius,
+    strictBounds: strictbounds,
+  });
+  const response = await fetch(PLACES_AUTOCOMPLETE_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": key,
+      "X-Goog-FieldMask": PLACES_AUTOCOMPLETE_FIELD_MASK,
+    },
+    body: JSON.stringify(requestBody),
+  });
   const data: any = await response.json().catch(() => null);
 
   if (!response.ok || !data) {
-    res.statusCode = 502; res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify({ error: "Failed to contact Google Places API" })); return;
-  }
-  if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
-    res.statusCode = 400; res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify({ error: data.status ?? "UNKNOWN", message: data.error_message })); return;
+    const error = getGoogleApiError(data, "Failed to contact Google Places API");
+    res.statusCode = response.status >= 400 && response.status < 500 ? 400 : 502;
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify(error)); return;
   }
 
-  const predictions = Array.isArray(data.predictions)
-    ? data.predictions.slice(0, 8).map((p: any) => ({ description: p?.description ?? "", placeId: p?.place_id ?? "" }))
-    : [];
   res.statusCode = 200; res.setHeader("Content-Type", "application/json");
-  res.end(JSON.stringify({ predictions }));
+  res.end(JSON.stringify(adaptPlacesAutocompleteApiResponse(data)));
 }
 
 // ─── /api/google/place-details ───────────────────────────────────────────────
@@ -313,27 +314,29 @@ async function handlePlaceDetails(req: any, res: any) {
   const body = getBody(req);
   const placeId = body?.placeId;
   const region = normalizeRegion(body?.region);
+  const sessionToken = typeof body?.sessiontoken === "string" ? body.sessiontoken : undefined;
 
   if (typeof placeId !== "string" || !placeId.trim()) return badRequest(res, "placeId is required");
 
-  const params = new URLSearchParams({ place_id: placeId, key, fields: "formatted_address" });
   const derivedLanguage = languageForRegion(region);
-  if (derivedLanguage) params.set("language", derivedLanguage);
-
-  const url = `${GOOGLE_BASE}/place/details/json?${params.toString()}`;
-  const response = await fetch(url);
+  const url = buildPlaceDetailsApiUrl(placeId, { language: derivedLanguage, region, sessionToken });
+  const response = await fetch(url, {
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": key,
+      "X-Goog-FieldMask": "formattedAddress",
+    },
+  });
   const data: any = await response.json().catch(() => null);
 
   if (!response.ok || !data) {
-    res.statusCode = 502; res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify({ error: "Failed to contact Google Places API" })); return;
-  }
-  if (data.status !== "OK") {
-    res.statusCode = 400; res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify({ error: data.status ?? "UNKNOWN", message: data.error_message })); return;
+    const error = getGoogleApiError(data, "Failed to contact Google Places API");
+    res.statusCode = response.status >= 400 && response.status < 500 ? 400 : 502;
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify(error)); return;
   }
   res.statusCode = 200; res.setHeader("Content-Type", "application/json");
-  res.end(JSON.stringify({ formattedAddress: data.result?.formatted_address ?? "" }));
+  res.end(JSON.stringify({ formattedAddress: typeof data.formattedAddress === "string" ? data.formattedAddress : "" }));
 }
 
 // ─── /api/google/oauth/start ─────────────────────────────────────────────────

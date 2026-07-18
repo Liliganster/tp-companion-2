@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MapPin, Loader2 } from "lucide-react";
 import { useI18n } from "@/hooks/use-i18n";
 import { useUserProfile } from "@/contexts/UserProfileContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { logger } from "@/lib/logger";
 
 function TripGoogleMapLoaded({ route, open, browserKey }: { route: string[]; open: boolean; browserKey: string }) {
-  const { t, locale } = useI18n();
-  const language = useMemo(() => locale.split("-")[0] ?? "en", [locale]);
+  const { t } = useI18n();
+  const { getAccessToken } = useAuth();
   const { profile } = useUserProfile();
 
   const googleRegion = useMemo(() => {
@@ -52,9 +53,8 @@ function TripGoogleMapLoaded({ route, open, browserKey }: { route: string[]; ope
 
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMapRef = useRef<google.maps.Map | null>(null);
-  const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
-  // markersRef removed as we use default markers
-
+  const routePolylineRef = useRef<google.maps.Polyline | null>(null);
+  const markersRef = useRef<google.maps.Marker[]>([]);
 
   const [scriptLoaded, setScriptLoaded] = useState(false);
   const [mapReady, setMapReady] = useState(false);
@@ -103,7 +103,7 @@ function TripGoogleMapLoaded({ route, open, browserKey }: { route: string[]; ope
 
     // Cargar el script
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${browserKey}&libraries=places,geometry&v=weekly`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${browserKey}&libraries=geometry&v=weekly`;
     script.async = true;
     script.defer = true;
 
@@ -175,66 +175,83 @@ function TripGoogleMapLoaded({ route, open, browserKey }: { route: string[]; ope
       try {
         setRequestError(null);
 
-        // Limpiar marcadores anteriores
-        // Limpiar marcadores anteriores (Managed by DirectionsRenderer now)
-
-
-        // Limpiar renderer anterior
-        if (directionsRendererRef.current) {
-          directionsRendererRef.current.setMap(null);
-        }
+        routePolylineRef.current?.setMap(null);
+        markersRef.current.forEach((marker) => marker.setMap(null));
+        markersRef.current = [];
 
         if (!window.google?.maps) return;
 
-        if (!mounted) return;
-
-        // Crear DirectionsService y DirectionsRenderer
-        const directionsService = new google.maps.DirectionsService();
-        const directionsRenderer = new google.maps.DirectionsRenderer({
-          map: googleMapRef.current,
-          suppressMarkers: false,
-          polylineOptions: {
-            strokeColor: "#3F8CFF",
-            strokeOpacity: 0.8,
-            strokeWeight: 5,
-          },
-        });
-
-        directionsRendererRef.current = directionsRenderer;
-
-        // Preparar waypoints
-        const waypointsFormatted = waypoints.map(location => ({
-          location,
-          stopover: true,
-        }));
-
-        // Calcular la ruta
-        // Evita pedir direcciones para rutas triviales (A -> A sin paradas), que suelen devolver NOT_FOUND.
-        if (origin.trim() === destination.trim() && waypointsFormatted.length === 0) {
+        if (origin.trim() === destination.trim() && waypoints.length === 0) {
           setRequestError(t("tripDetail.mapNoRoute"));
           return;
         }
 
-        const request: google.maps.DirectionsRequest = {
-          origin,
-          destination,
-          waypoints: waypointsFormatted,
-          travelMode: google.maps.TravelMode.DRIVING,
-          region: googleRegion,
-          language,
-        };
+        const token = await getAccessToken();
+        if (!token || !mounted) return;
 
-        directionsService.route(request, (result, status) => {
-          if (!mounted) return;
-
-          if (status === google.maps.DirectionsStatus.OK && result) {
-            // Renderizar la ruta
-            directionsRenderer.setDirections(result);
-          } else {
-            logger.warn("Directions request failed", status);
-            setRequestError(t("tripDetail.mapNoRoute"));
-          }
+        const response = await fetch("/api/google/directions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ origin, destination, waypoints, region: googleRegion }),
         });
+        const data = (await response.json().catch(() => null)) as {
+          overviewPolyline?: string;
+          bounds?: {
+            southwest?: { lat?: number; lng?: number };
+            northeast?: { lat?: number; lng?: number };
+          } | null;
+          legs?: Array<{
+            startLocation?: { lat?: number; lng?: number } | null;
+            endLocation?: { lat?: number; lng?: number } | null;
+          }>;
+        } | null;
+
+        if (!response.ok || !data?.overviewPolyline || !mounted) {
+          setRequestError(t("tripDetail.mapNoRoute"));
+          return;
+        }
+
+        const path = google.maps.geometry.encoding.decodePath(data.overviewPolyline);
+        if (!path.length || !googleMapRef.current) {
+          setRequestError(t("tripDetail.mapNoRoute"));
+          return;
+        }
+
+        routePolylineRef.current = new google.maps.Polyline({
+          map: googleMapRef.current,
+          path,
+          strokeColor: "#3F8CFF",
+          strokeOpacity: 0.8,
+          strokeWeight: 5,
+        });
+
+        const firstLeg = data.legs?.[0];
+        const lastLeg = data.legs?.[data.legs.length - 1];
+        const markerInputs = [
+          { label: "A", location: firstLeg?.startLocation },
+          { label: "B", location: lastLeg?.endLocation },
+        ];
+        markersRef.current = markerInputs.flatMap(({ label, location }) => {
+          if (typeof location?.lat !== "number" || typeof location?.lng !== "number") return [];
+          return [new google.maps.Marker({
+            map: googleMapRef.current,
+            position: { lat: location.lat, lng: location.lng },
+            label,
+          })];
+        });
+
+        const southwest = data.bounds?.southwest;
+        const northeast = data.bounds?.northeast;
+        if (
+          typeof southwest?.lat === "number" && typeof southwest?.lng === "number" &&
+          typeof northeast?.lat === "number" && typeof northeast?.lng === "number"
+        ) {
+          googleMapRef.current.fitBounds(new google.maps.LatLngBounds(southwest, northeast), 32);
+        } else {
+          const bounds = new google.maps.LatLngBounds();
+          path.forEach((point) => bounds.extend(point));
+          googleMapRef.current.fitBounds(bounds, 32);
+        };
       } catch (error) {
         logger.warn("Error rendering route", error);
         if (mounted) {
@@ -246,7 +263,7 @@ function TripGoogleMapLoaded({ route, open, browserKey }: { route: string[]; ope
     return () => {
       mounted = false;
     };
-  }, [origin, destination, waypoints, open, mapReady, scriptLoaded, routeKey, t, language, googleRegion]);
+  }, [origin, destination, waypoints, normalizedRoute.length, open, mapReady, scriptLoaded, routeKey, t, googleRegion, getAccessToken]);
 
   const isLoading = !scriptLoaded || !mapReady;
 
