@@ -18,7 +18,7 @@ type GoogleIdentityApi = {
     options: {
       type: "standard";
       theme: "outline";
-      size: "large";
+      size: "medium";
       shape: "rectangular";
       text: "signin_with" | "signup_with";
       logo_alignment: "left";
@@ -143,7 +143,9 @@ export function GoogleSignInButton({ disabled = false, isSignUp = false, onCrede
       googleIdentity.renderButton(containerRef.current, {
         type: "standard",
         theme: "outline",
-        size: "large",
+        // Google no personaliza los botones medium: siempre muestra el texto
+        // genérico, sin nombre, foto ni correo de la sesión activa.
+        size: "medium",
         shape: "rectangular",
         text: isSignUp ? "signup_with" : "signin_with",
         logo_alignment: "left",
@@ -173,7 +175,7 @@ export function GoogleSignInButton({ disabled = false, isSignUp = false, onCrede
   }, [isSignUp]);
 
   return (
-    <div className="relative mt-6 h-10 w-full overflow-hidden rounded-md">
+    <div className="relative mt-6 h-8 w-full overflow-hidden rounded-md">
       {initializing && (
         <div className="absolute inset-0 flex items-center justify-center rounded-md border border-border bg-secondary">
           <Loader2 className="h-4 w-4 animate-spin" aria-label="Google" />
@@ -181,7 +183,7 @@ export function GoogleSignInButton({ disabled = false, isSignUp = false, onCrede
       )}
       <div
         ref={containerRef}
-        className={`h-10 w-full overflow-hidden ${disabled ? "pointer-events-none opacity-50" : ""}`}
+        className={`h-8 w-full overflow-hidden ${disabled ? "pointer-events-none opacity-50" : ""}`}
       />
     </div>
   );
