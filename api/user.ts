@@ -4,6 +4,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { OAuth2Client } from "google-auth-library";
 import { z } from "zod";
 import { requireSupabaseUser, sendJson } from "./_utils/supabase.js";
 import { supabaseAdmin } from "../src/lib/supabaseServer.js";
@@ -13,6 +14,66 @@ import { getPlanLimits, DEFAULT_PLAN, PLAN_LIMITS, type PlanTier } from "./_util
 
 // PlanTier, PLAN_LIMITS, getPlanLimits, DEFAULT_PLAN all come from _utils/plans.ts
 export type { PlanTier };
+
+const googleIdentityClient = new OAuth2Client();
+
+const GoogleAccountStatusBodySchema = z.object({
+  credential: z.string().trim().min(100).max(20_000),
+});
+
+function getGoogleLoginClientIds(): string[] {
+  const raw = process.env.GOOGLE_LOGIN_CLIENT_ID || process.env.VITE_GOOGLE_LOGIN_CLIENT_ID || "";
+  return raw.split(",").map((value) => value.trim()).filter(Boolean);
+}
+
+async function authUserExistsByEmail(email: string): Promise<boolean> {
+  const normalizedEmail = email.trim().toLowerCase();
+  const perPage = 1_000;
+
+  for (let page = 1; page <= 10_000; page += 1) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+    if (error) throw error;
+    const users = data.users as Array<{ email?: string }>;
+    if (users.some((user) => user.email?.trim().toLowerCase() === normalizedEmail)) return true;
+    if (users.length < perPage) return false;
+  }
+
+  throw new Error("User lookup exceeded the supported pagination limit");
+}
+
+async function handleGoogleAccountStatus(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const parsed = GoogleAccountStatusBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: "invalid_credential" });
+
+  const audiences = getGoogleLoginClientIds();
+  if (audiences.length === 0) {
+    console.error("[google-account-status] Missing GOOGLE_LOGIN_CLIENT_ID or VITE_GOOGLE_LOGIN_CLIENT_ID");
+    return res.status(500).json({ error: "google_login_not_configured" });
+  }
+
+  try {
+    const ticket = await googleIdentityClient.verifyIdToken({
+      idToken: parsed.data.credential,
+      audience: audiences,
+    });
+    const payload = ticket.getPayload();
+    const email = payload?.email?.trim().toLowerCase();
+    if (!email || payload?.email_verified !== true) {
+      return res.status(401).json({ error: "invalid_google_identity" });
+    }
+
+    const exists = await authUserExistsByEmail(email);
+    return res.status(200).json({ exists });
+  } catch (error) {
+    console.warn("[google-account-status] Google credential or user lookup failed", error);
+    return res.status(401).json({ error: "invalid_google_credential" });
+  }
+}
 
 
 
@@ -257,6 +318,7 @@ async function handleCleanupDuplicateTrips(req: any, res: any) {
 // ─── Main router ─────────────────────────────────────────────────────────────
 // Rate limits por ruta (por IP): estrictos en las rutas destructivas.
 const USER_ROUTE_LIMITS: Record<string, { name: string; limit: number; windowMs: number }> = {
+  "/api/user/google-account-status": { name: "user_google_account_status", limit: 20, windowMs: 60_000 },
   "/api/user/ai-quota": { name: "user_ai_quota", limit: 60, windowMs: 60_000 },
   "/api/user/profile": { name: "user_profile", limit: 30, windowMs: 60_000 },
   "/api/user/subscription": { name: "user_subscription", limit: 60, windowMs: 60_000 },
@@ -273,6 +335,7 @@ export default async function handler(req: any, res: any) {
     if (!allowed) return;
   }
 
+  if (path === "/api/user/google-account-status")     return handleGoogleAccountStatus(req, res);
   if (path === "/api/user/ai-quota")                  return handleAiQuota(req, res);
   if (path === "/api/user/profile")                   return handleProfile(req, res);
   if (path === "/api/user/subscription")              return handleSubscription(req, res);

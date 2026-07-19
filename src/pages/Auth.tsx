@@ -92,6 +92,26 @@ export default function Auth() {
   const handleGoogle = useCallback(async (idToken: string, nonce: string) => {
     setIsLoading(true);
     try {
+      if (isLogin) {
+        const response = await fetch("/api/user/google-account-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ credential: idToken }),
+        });
+        const result = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(result?.message ?? t("auth.googleAccountCheckFailed"));
+        }
+        if (result?.exists !== true) {
+          toast({
+            title: t("auth.googleAccountNotFoundTitle"),
+            description: t("auth.googleAccountNotFoundBody"),
+            variant: "destructive",
+          });
+          setIsLoading(false);
+          return;
+        }
+      }
       await signInWithGoogle(idToken, nonce);
     } catch (err: any) {
       toast({
@@ -101,7 +121,7 @@ export default function Auth() {
       });
       setIsLoading(false);
     }
-  }, [signInWithGoogle, toast]);
+  }, [isLogin, signInWithGoogle, t, toast]);
 
   const handleGoogleError = useCallback((err: Error) => {
     toast({
