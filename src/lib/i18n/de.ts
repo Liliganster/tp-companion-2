@@ -440,6 +440,10 @@ export const de: Record<I18nKey, string> = {
   "plans.features.callsheetBatch3": "Bis zu 3 Callsheets pro Upload",
   "plans.features.byoOpenrouter": "Eigener OpenRouter-Schlüssel: KI-Modell frei wählbar (multimodal)",
   "plans.upgradeButton": "Auf Pro upgraden",
+  "plans.checkoutSuccess": "Zahlung abgeschlossen. Dein Pro-Plan wird aktiviert.",
+  "plans.checkoutCancelled": "Die Zahlung wurde abgebrochen und es wurde nichts berechnet.",
+  "plans.checkoutError": "Der sichere Stripe-Checkout konnte nicht geöffnet werden.",
+  "plans.portalError": "Die Abo-Verwaltung konnte nicht geöffnet werden.",
 
   "tripDetail.title": "Fahrt-Details",
   "tripDetail.date": "Datum",

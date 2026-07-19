@@ -441,6 +441,10 @@ export const en: Record<I18nKey, string> = {
   "plans.features.callsheetBatch3": "Up to 3 callsheets per upload",
   "plans.features.byoOpenrouter": "Your own OpenRouter key: choose the AI model (multimodal)",
   "plans.upgradeButton": "Upgrade to Pro",
+  "plans.checkoutSuccess": "Payment completed. We are activating your Pro plan.",
+  "plans.checkoutCancelled": "Payment was cancelled and no charge was made.",
+  "plans.checkoutError": "Stripe secure checkout could not be opened.",
+  "plans.portalError": "Subscription management could not be opened.",
 
   "tripDetail.title": "Trip details",
   "tripDetail.date": "Date",

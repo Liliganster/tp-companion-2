@@ -34,6 +34,11 @@ const envSchema = z.object({
   SENTRY_DSN: optionalString(z.string().url()),
   VITE_SENTRY_DSN: optionalString(z.string().url()),
   VITE_GA_MEASUREMENT_ID: optionalString(z.string().min(6)),
+  STRIPE_SECRET_KEY: optionalString(z.string().regex(/^(sk|rk)_(test|live)_/)),
+  STRIPE_WEBHOOK_SECRET: optionalString(z.string().startsWith("whsec_")),
+  STRIPE_PRICE_PRO_MONTHLY: optionalString(z.string().startsWith("price_")),
+  STRIPE_PRICE_PRO_ANNUAL: optionalString(z.string().startsWith("price_")),
+  APP_URL: optionalString(z.string().url()),
 });
 
 const mode = (process.argv[2] || "production").trim() || "production";

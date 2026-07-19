@@ -6,21 +6,64 @@ import { useI18n } from "@/hooks/use-i18n";
 import { usePlan } from "@/contexts/PlanContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { useState } from "react";
-import { logger } from "@/lib/logger";
+import { useEffect, useState } from "react";
+
 export default function Plans() {
   const { t } = useI18n();
-  const { planTier, isLoading } = usePlan();
-  const { session, user } = useAuth();
+  const { planTier, isLoading, refreshSubscription } = usePlan();
+  const { getAccessToken } = useAuth();
   const [upgrading, setUpgrading] = useState(false);
   // Anual preseleccionado (estrategia 2026-07-11): el uso es estacional/por
   // volcados — el anual cubre todo el año fiscal; el mensual queda como
   // "pago por volcado" sin permanencia.
   const [billing, setBilling] = useState<"annual" | "monthly">("annual");
 
-  const handleStripeCheckout = () => {
-    // Feature not available (Stripe integrations removed)
-    toast.info(t("common.comingSoon") || "Coming Soon");
+  useEffect(() => {
+    const result = new URLSearchParams(window.location.search).get("checkout");
+    if (!result) return;
+    if (result === "success") {
+      toast.success(t("plans.checkoutSuccess"));
+      void refreshSubscription();
+    } else if (result === "cancelled") {
+      toast.info(t("plans.checkoutCancelled"));
+    }
+    window.history.replaceState({}, "", window.location.pathname);
+  }, [refreshSubscription, t]);
+
+  const redirectToStripe = async (path: "/api/stripe/checkout" | "/api/stripe/portal", body?: object) => {
+    const token = await getAccessToken();
+    if (!token) throw new Error("missing_session");
+    const response = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body ?? {}),
+    });
+    const data = await response.json().catch(() => null) as { url?: string; manage?: boolean } | null;
+    if (response.status === 409 && data?.manage && path === "/api/stripe/checkout") {
+      return redirectToStripe("/api/stripe/portal");
+    }
+    if (!response.ok || !data?.url) throw new Error("stripe_redirect_failed");
+    window.location.assign(data.url);
+  };
+
+  const handleStripeCheckout = async () => {
+    setUpgrading(true);
+    try {
+      await redirectToStripe("/api/stripe/checkout", { billing });
+    } catch {
+      toast.error(t("plans.checkoutError"));
+      setUpgrading(false);
+    }
+  };
+
+  const handleStripePortal = async () => {
+    setUpgrading(true);
+    try {
+      await redirectToStripe("/api/stripe/portal");
+    } catch {
+      toast.error(t("plans.portalError"));
+      setUpgrading(false);
+    }
   };
 
   // Cantidades = las REALES de src/lib/plans.ts (Free: 3 IA/mes, lote de 3;
@@ -127,17 +170,18 @@ export default function Plans() {
               ))}
             </ul>
 
-            <Button 
-              variant="outline" 
-              className="w-full py-5 border-zinc-700/80 bg-zinc-950/20 hover:bg-zinc-800/60 text-sm disabled:opacity-100 disabled:bg-zinc-950/30 disabled:border-zinc-800/80 disabled:text-zinc-500" 
+            <Button
+              variant="outline"
+              className="w-full py-5 border-zinc-700/80 bg-zinc-950/20 hover:bg-zinc-800/60 text-sm disabled:opacity-100 disabled:bg-zinc-950/30 disabled:border-zinc-800/80 disabled:text-zinc-500"
               disabled={planTier === "basic" || upgrading || isLoading}
+              onClick={handleStripePortal}
             >
               {upgrading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : planTier === "basic" ? (
                 t("plans.currentPlan")
               ) : (
-                t("plans.basic.name")
+                t("plans.sidebar.manage")
               )}
             </Button>
           </div>
@@ -180,10 +224,17 @@ export default function Plans() {
             </ul>
 
             <Button
-              className="w-full bg-muted text-muted-foreground font-medium py-5 text-sm cursor-not-allowed"
-              disabled={true}
+              className="w-full font-medium py-5 text-sm"
+              disabled={upgrading || isLoading}
+              onClick={planTier === "pro" ? handleStripePortal : handleStripeCheckout}
             >
-              {t("common.comingSoon")}
+              {upgrading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : planTier === "pro" ? (
+                t("plans.sidebar.manage")
+              ) : (
+                t("plans.upgradeButton")
+              )}
             </Button>
             <p className="mt-2 text-center text-[11px] text-muted-foreground">{t("plans.cancelAnytime")}</p>
           </div>

@@ -1143,6 +1143,10 @@ export const es = {
   "plans.features.callsheetBatch3": "Hasta 3 callsheets por subida",
   "plans.features.byoOpenrouter": "Tu clave de OpenRouter: elige el modelo de IA (multimodal)",
   "plans.upgradeButton": "Actualizar a Pro",
+  "plans.checkoutSuccess": "Pago completado. Estamos activando tu plan Pro.",
+  "plans.checkoutCancelled": "El pago se canceló y no se realizó ningún cargo.",
+  "plans.checkoutError": "No se pudo abrir el pago seguro de Stripe.",
+  "plans.portalError": "No se pudo abrir la gestión de la suscripción.",
 
   // Odómetro (cuentakilómetros) — solo plan Pro
   "settings.tabOdometer": "Odómetro",

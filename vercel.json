@@ -8,6 +8,7 @@
   "rewrites": [
     { "source": "/api/google/(.*)", "destination": "/api/google" },
     { "source": "/api/user/(.*)", "destination": "/api/user" },
+    { "source": "/api/stripe/(.*)", "destination": "/api/stripe" },
     { "source": "/api/callsheets/(.*)", "destination": "/api/callsheets" },
     { "source": "/api/climatiq/(.*)", "destination": "/api/external" },
     { "source": "/api/electricity-maps/(.*)", "destination": "/api/external" },
