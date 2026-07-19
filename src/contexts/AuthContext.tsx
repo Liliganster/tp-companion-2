@@ -11,7 +11,7 @@ type AuthContextValue = {
   loading: boolean;
   signInWithPassword: (email: string, password: string) => Promise<void>;
   signUpWithPassword: (email: string, password: string, fullName?: string) => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
+  signInWithGoogle: (idToken: string, nonce?: string) => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   getAccessToken: () => Promise<string | null>;
@@ -87,15 +87,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logger.debug("[AuthContext] Sign up successful");
   }, []);
 
-  const signInWithGoogle = useCallback(async () => {
-    const { error } = await requireSupabase().auth.signInWithOAuth({
+  const signInWithGoogle = useCallback(async (idToken: string, nonce?: string) => {
+    const { error } = await requireSupabase().auth.signInWithIdToken({
       provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: {
-          prompt: "select_account",
-        },
-      },
+      token: idToken,
+      ...(nonce ? { nonce } : {}),
     });
     if (error) throw error;
   }, []);

@@ -5,7 +5,7 @@ import React from "react";
 const mocks = vi.hoisted(() => {
   const signInWithPassword = vi.fn(async () => ({ error: null }));
   const signUp = vi.fn(async () => ({ error: null }));
-  const signInWithOAuth = vi.fn(async () => ({ error: null }));
+  const signInWithIdToken = vi.fn(async () => ({ error: null }));
   const signOut = vi.fn(async () => ({ error: null }));
   const getSession = vi.fn(async () => ({ data: { session: null } }));
   const unsubscribe = vi.fn();
@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => {
     data: { subscription: { unsubscribe } },
   }));
 
-  return { signInWithPassword, signUp, signInWithOAuth, signOut, getSession, onAuthStateChange, unsubscribe };
+  return { signInWithPassword, signUp, signInWithIdToken, signOut, getSession, onAuthStateChange, unsubscribe };
 });
 
 vi.mock("@/lib/supabaseClient", () => ({
@@ -22,7 +22,7 @@ vi.mock("@/lib/supabaseClient", () => ({
     auth: {
       signInWithPassword: mocks.signInWithPassword,
       signUp: mocks.signUp,
-      signInWithOAuth: mocks.signInWithOAuth,
+      signInWithIdToken: mocks.signInWithIdToken,
       signOut: mocks.signOut,
       getSession: mocks.getSession,
       onAuthStateChange: mocks.onAuthStateChange,
@@ -58,6 +58,12 @@ describe("AuthContext", () => {
 
     await out.current!.signUpWithPassword("a@b.com", "pw", "Name");
     expect(mocks.signUp).toHaveBeenCalled();
+
+    await out.current!.signInWithGoogle("google-id-token", "raw-nonce");
+    expect(mocks.signInWithIdToken).toHaveBeenCalledWith({
+      provider: "google",
+      token: "google-id-token",
+      nonce: "raw-nonce",
+    });
   });
 });
-
