@@ -17,7 +17,7 @@ type GoogleIdentityApi = {
     parent: HTMLElement,
     options: {
       type: "standard";
-      theme: "filled_black";
+      theme: "outline";
       size: "large";
       shape: "rectangular";
       text: "signin_with" | "signup_with";
@@ -135,15 +135,29 @@ export function GoogleSignInButton({ disabled = false, isSignUp = false, onCrede
       });
 
       containerRef.current.replaceChildren();
+      const buttonWidth = Math.min(
+        400,
+        Math.max(200, Math.round(containerRef.current.getBoundingClientRect().width)),
+      );
+
       googleIdentity.renderButton(containerRef.current, {
         type: "standard",
-        theme: "filled_black",
+        theme: "outline",
         size: "large",
         shape: "rectangular",
         text: isSignUp ? "signup_with" : "signin_with",
         logo_alignment: "left",
-        width: 350,
+        width: buttonWidth,
       });
+
+      // Google añade 10 px laterales y 2 px verticales dentro de su iframe.
+      // Recortarlos evita el efecto visual de un botón dentro de otro sin
+      // modificar el botón oficial ni interferir con su área clicable.
+      const iframe = containerRef.current.querySelector("iframe");
+      if (iframe) {
+        iframe.style.marginLeft = "-10px";
+        iframe.style.marginTop = "-2px";
+      }
       setInitializing(false);
     };
 
@@ -159,7 +173,7 @@ export function GoogleSignInButton({ disabled = false, isSignUp = false, onCrede
   }, [isSignUp]);
 
   return (
-    <div className="relative mt-6 h-11 w-full">
+    <div className="relative mt-6 h-10 w-full overflow-hidden rounded-md">
       {initializing && (
         <div className="absolute inset-0 flex items-center justify-center rounded-md border border-border bg-secondary">
           <Loader2 className="h-4 w-4 animate-spin" aria-label="Google" />
@@ -167,7 +181,7 @@ export function GoogleSignInButton({ disabled = false, isSignUp = false, onCrede
       )}
       <div
         ref={containerRef}
-        className={`flex h-11 w-full justify-center overflow-hidden ${disabled ? "pointer-events-none opacity-50" : ""}`}
+        className={`h-10 w-full overflow-hidden ${disabled ? "pointer-events-none opacity-50" : ""}`}
       />
     </div>
   );
