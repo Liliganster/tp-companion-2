@@ -34,6 +34,8 @@ const envSchema = z.object({
   SENTRY_DSN: optionalString(z.string().url()),
   VITE_SENTRY_DSN: optionalString(z.string().url()),
   VITE_GA_MEASUREMENT_ID: optionalString(z.string().min(6)),
+  VITE_GOOGLE_LOGIN_CLIENT_ID: optionalString(z.string().endsWith(".apps.googleusercontent.com")),
+  VITE_GOOGLE_OAUTH_CLIENT_ID: optionalString(z.string().endsWith(".apps.googleusercontent.com")),
   STRIPE_SECRET_KEY: optionalString(z.string().regex(/^(sk|rk)_(test|live)_/)),
   STRIPE_WEBHOOK_SECRET: optionalString(z.string().startsWith("whsec_")),
   STRIPE_PRICE_PRO_MONTHLY: optionalString(z.string().startsWith("price_")),

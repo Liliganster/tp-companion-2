@@ -105,8 +105,12 @@ export function GoogleSignInButton({ disabled = false, isSignUp = false, onCrede
     setInitializing(true);
 
     const initialize = async () => {
-      const clientId = String(import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID ?? "").trim();
-      if (!clientId) throw new Error("Falta VITE_GOOGLE_OAUTH_CLIENT_ID en la configuración de la aplicación.");
+      const clientId = String(
+        import.meta.env.VITE_GOOGLE_LOGIN_CLIENT_ID
+        ?? import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID
+        ?? "",
+      ).trim();
+      if (!clientId) throw new Error("Falta VITE_GOOGLE_LOGIN_CLIENT_ID en la configuración de la aplicación.");
 
       const [{ nonce, hashedNonce }] = await Promise.all([createNoncePair(), loadGoogleIdentityScript()]);
       if (cancelled || !containerRef.current) return;
