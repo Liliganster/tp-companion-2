@@ -1,6 +1,6 @@
 import type Stripe from "stripe";
-import { supabaseAdmin } from "../src/lib/supabaseServer.js";
 import { getAllowedStripePriceIds, getStripeClient, getStripeWebhookSecret } from "./_utils/stripeClient.js";
+import { findUserIdByStripeIds, saveStripeSubscription } from "./_utils/entitlements.js";
 import {
   getPlanTierForSubscription,
   getSubscriptionCustomerId,
@@ -12,39 +12,24 @@ import {
 async function findUserId(subscription: Stripe.Subscription): Promise<string | null> {
   const metadataId = getSubscriptionUserId(subscription);
   if (metadataId) return metadataId;
-
-  const customerId = getSubscriptionCustomerId(subscription);
-  const { data: byCustomer } = await supabaseAdmin
-    .from("user_profiles")
-    .select("id")
-    .eq("stripe_customer_id", customerId)
-    .maybeSingle();
-  if ((byCustomer as any)?.id) return String((byCustomer as any).id);
-
-  const { data: bySubscription } = await supabaseAdmin
-    .from("user_profiles")
-    .select("id")
-    .eq("stripe_subscription_id", subscription.id)
-    .maybeSingle();
-  return (bySubscription as any)?.id ? String((bySubscription as any).id) : null;
+  return findUserIdByStripeIds(getSubscriptionCustomerId(subscription), subscription.id);
 }
 
-async function syncSubscription(subscription: Stripe.Subscription) {
+async function syncSubscription(subscription: Stripe.Subscription, eventCreated: number) {
   const userId = await findUserId(subscription);
   if (!userId) throw new Error(`No user mapping for Stripe subscription ${subscription.id}`);
 
-  const { error } = await supabaseAdmin.from("user_profiles").upsert({
-    id: userId,
-    plan_tier: getPlanTierForSubscription(subscription, getAllowedStripePriceIds()),
-    stripe_customer_id: getSubscriptionCustomerId(subscription),
-    stripe_subscription_id: subscription.id,
-    stripe_subscription_status: subscription.status,
-    stripe_price_id: getSubscriptionPriceId(subscription),
-    stripe_current_period_end: getSubscriptionPeriodEnd(subscription),
-    stripe_cancel_at_period_end: subscription.cancel_at_period_end,
-    stripe_updated_at: new Date().toISOString(),
-  }, { onConflict: "id" });
-  if (error) throw new Error(`Unable to sync Stripe subscription: ${error.message}`);
+  await saveStripeSubscription({
+    userId,
+    planTier: getPlanTierForSubscription(subscription, getAllowedStripePriceIds()),
+    customerId: getSubscriptionCustomerId(subscription),
+    subscriptionId: subscription.id,
+    status: subscription.status,
+    priceId: getSubscriptionPriceId(subscription),
+    currentPeriodEnd: getSubscriptionPeriodEnd(subscription),
+    cancelAtPeriodEnd: subscription.cancel_at_period_end,
+    eventCreatedAt: new Date(eventCreated * 1000).toISOString(),
+  });
 }
 
 function getInvoiceSubscriptionId(invoice: any): string | null {
@@ -61,7 +46,11 @@ async function processEvent(event: Stripe.Event) {
     event.type === "customer.subscription.updated" ||
     event.type === "customer.subscription.deleted"
   ) {
-    await syncSubscription(event.data.object as Stripe.Subscription);
+    // Stripe no garantiza el orden de los webhooks. Recuperar el recurso
+    // actual evita que un evento antiguo vuelva a conceder o quite Pro.
+    const snapshot = event.data.object as Stripe.Subscription;
+    const latest = await stripe.subscriptions.retrieve(snapshot.id);
+    await syncSubscription(latest, event.created);
     return;
   }
 
@@ -70,13 +59,13 @@ async function processEvent(event: Stripe.Event) {
     const subscriptionId = typeof session.subscription === "string"
       ? session.subscription
       : session.subscription?.id;
-    if (subscriptionId) await syncSubscription(await stripe.subscriptions.retrieve(subscriptionId));
+    if (subscriptionId) await syncSubscription(await stripe.subscriptions.retrieve(subscriptionId), event.created);
     return;
   }
 
   if (event.type === "invoice.paid" || event.type === "invoice.payment_failed") {
     const subscriptionId = getInvoiceSubscriptionId(event.data.object);
-    if (subscriptionId) await syncSubscription(await stripe.subscriptions.retrieve(subscriptionId));
+    if (subscriptionId) await syncSubscription(await stripe.subscriptions.retrieve(subscriptionId), event.created);
   }
 }
 
@@ -105,4 +94,3 @@ export default {
     }
   },
 };
-

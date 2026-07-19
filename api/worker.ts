@@ -2,6 +2,7 @@ import { supabaseAdmin } from "../src/lib/supabaseServer.js";
 import { captureServerException, withApiObservability } from "./_utils/observability.js";
 import { enforceRateLimit } from "./_utils/rateLimit.js";
 import { checkAiMonthlyQuota } from "./_utils/aiQuota.js";
+import { getServerPlanTier } from "./_utils/entitlements.js";
 import { calculateNextRetry, DEFAULT_RETRY_STRATEGY } from "./_utils/retry.js";
 import { extractCallsheet } from "./_utils/callsheetExtraction.js";
 import {
@@ -231,13 +232,16 @@ export default withApiObservability(async function handler(req: any, res: any, {
     );
 
     for (const uid of userIds) {
-      const { data: profile } = await supabaseAdmin
-        .from("user_profiles")
-        .select("plan_tier, openrouter_enabled, openrouter_api_key, openrouter_model")
-        .eq("id", uid)
-        .maybeSingle();
+      const [{ data: profile }, planTier] = await Promise.all([
+        supabaseAdmin
+          .from("user_profiles")
+          .select("openrouter_enabled, openrouter_api_key, openrouter_model")
+          .eq("id", uid)
+          .maybeSingle(),
+        getServerPlanTier(uid),
+      ]);
       userProfileCache.set(uid, profile ?? {});
-      planTierByUserId.set(uid, String((profile as any)?.plan_tier ?? "basic").trim());
+      planTierByUserId.set(uid, planTier);
     }
 
     const limitedJobs = limitCallsheetJobsByPlan({ jobs, planTierByUserId });
@@ -337,7 +341,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
           log,
         });
 
-        if (!outcome.ok) {
+        if (outcome.ok === false) {
           if (outcome.kind === "cancelled") {
             processedResults.push({ id: jobId, status: "cancelled" });
             return;
@@ -356,7 +360,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
           return;
         }
 
-        if (outcome.cached) {
+        if (outcome.cached === true) {
           await supabaseAdmin.from("callsheet_jobs").update({ status: "done" }).eq("id", jobId).eq("status", "processing");
           processedResults.push({ id: jobId, status: "done", cached: true });
           return;

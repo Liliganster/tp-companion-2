@@ -218,7 +218,7 @@ export async function generateContent(
     model: modelName,
     generationConfig: schema ? {
         responseMimeType: "application/json",
-        responseSchema: schema,
+        responseSchema: schema as any,
         // Extracción determinista: sin temperatura fijada, el modelo variaba
         // entre corridas (2 vs 6 localizaciones del mismo PDF).
         temperature: 0,
@@ -288,7 +288,7 @@ export async function generateContentFromPDF(
         model: modelName,
         generationConfig: schema ? {
             responseMimeType: "application/json",
-            responseSchema: schema,
+            responseSchema: schema as any,
             temperature: 0, // extracción determinista
         } : undefined
     });
@@ -355,7 +355,7 @@ export async function generateContentFromImages(
         model: modelName,
         generationConfig: schema ? {
             responseMimeType: "application/json",
-            responseSchema: schema,
+            responseSchema: schema as any,
             temperature: 0, // extracción determinista
         } : undefined
     });
@@ -365,7 +365,7 @@ export async function generateContentFromImages(
     );
 
     // Build parts array: all images + prompt
-    const parts: Array<Record<string, unknown> | string> = images.map(img => ({
+    const parts: any[] = images.map(img => ({
       inlineData: {
         data: img,
         mimeType: "image/png",

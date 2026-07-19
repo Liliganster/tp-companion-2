@@ -11,6 +11,7 @@ import { supabaseAdmin } from "../src/lib/supabaseServer.js";
 import { checkAiMonthlyQuota } from "./_utils/aiQuota.js";
 import { enforceRateLimit } from "./_utils/rateLimit.js";
 import { getPlanLimits, DEFAULT_PLAN, PLAN_LIMITS, type PlanTier } from "./_utils/plans.js";
+import { getBillingEntitlement, getServerPlanTier } from "./_utils/entitlements.js";
 
 // PlanTier, PLAN_LIMITS, getPlanLimits, DEFAULT_PLAN all come from _utils/plans.ts
 export type { PlanTier };
@@ -79,6 +80,7 @@ async function handleGoogleAccountStatus(req: VercelRequest, res: VercelResponse
 
 // ─── /api/user/ai-quota ──────────────────────────────────────────────────────
 function envTruthy(name: string): boolean {
+  if (process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production") return false;
   const v = process.env[name];
   if (!v) return false;
   const s = String(v).trim().toLowerCase();
@@ -96,11 +98,7 @@ async function handleAiQuota(req: VercelRequest, res: VercelResponse) {
     const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
     if (authError || !user) return res.status(401).json({ error: "Invalid token" });
 
-    const { data: profile } = await supabaseAdmin.from("user_profiles").select("plan_tier").eq("id", user.id).maybeSingle();
-    const rawTier = String((profile as any)?.plan_tier ?? "").trim().toLowerCase();
-    let planTier: PlanTier = DEFAULT_PLAN;
-    if (rawTier === "pro") planTier = "pro";
-    if (rawTier === "basic" || rawTier === "free") planTier = DEFAULT_PLAN;
+    const planTier = await getServerPlanTier(user.id);
 
     const baseLimits = getPlanLimits(planTier);
     const aiJobsLimit = baseLimits.aiJobsPerMonth;
@@ -133,6 +131,7 @@ const ProfileBodySchema = z.object({
   electricity_price_per_kwh: z.coerce.number().nullable().optional(),
   maintenance_eur_per_km: z.coerce.number().nullable().optional(),
   other_eur_per_km: z.coerce.number().nullable().optional(),
+  annual_car_total_km: z.coerce.number().nullable().optional(),
   openrouter_enabled: z.boolean().nullable().optional(),
   openrouter_api_key: z.string().trim().nullable().optional(),
   openrouter_model: z.string().trim().nullable().optional(),
@@ -153,30 +152,22 @@ async function handleProfile(req: any, res: any) {
 }
 
 // ─── /api/user/subscription ──────────────────────────────────────────────────
-function normalizeTier(input: unknown): PlanTier {
-  const v = String(input ?? "").trim().toLowerCase();
-  if (v === "pro") return "pro";
-  if (v === "basic") return "basic";
-  if (v === "free") return "basic";
-  return "basic";
-}
-
 async function handleSubscription(req: VercelRequest, res: VercelResponse) {
   const user = await requireSupabaseUser(req, res);
   if (!user) return;
 
   try {
     if (req.method === "GET") {
-      const { data: profile, error } = await supabaseAdmin.from("user_profiles").select("plan_tier").eq("id", user.id).maybeSingle();
-      if (error) console.error("Error fetching user_profiles plan_tier:", error);
-      const tier = normalizeTier((profile as any)?.plan_tier);
+      const entitlement = await getBillingEntitlement(user.id);
+      const tier = entitlement.planTier;
       const baseLimits = PLAN_LIMITS[tier] || PLAN_LIMITS.basic;
       return sendJson(res, 200, {
         tier,
-        status: "active",
+        status: entitlement.status ?? (tier === "pro" ? "active" : "free"),
         limits: baseLimits,
         startedAt: null,
-        expiresAt: null,
+        expiresAt: entitlement.currentPeriodEnd,
+        cancelAtPeriodEnd: entitlement.cancelAtPeriodEnd,
         priceCents: tier === "pro" ? 1900 : 0,
         currency: "EUR",
       });

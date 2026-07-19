@@ -283,56 +283,17 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
     };
     toast.loading(options?.loadingText ?? "Guardando...", { id: toastId });
 
-    // Avoid UPSERT here: in Supabase/Postgres, INSERT ... ON CONFLICT DO UPDATE still evaluates INSERT RLS.
-    // If INSERT policies were tightened/removed, updates would incorrectly fail. We update first and only insert if needed.
-    const { id: _id, ...updatePayload } = dbPayload;
-    const { data: updated, error: updateError } = await supabase
-      .from("user_profiles")
-      .update(updatePayload)
-      .eq("id", user.id)
-      .select("id");
-
-    if (updateError) {
-      logger.warn("Error saving profile (update)", updateError);
-      const ok = await saveViaApi();
-      if (ok) {
-        toast.success(options?.successText ?? "Perfil guardado", { id: toastId });
-        return true;
-      }
-
-      rollbackProfile();
-      toast.error("No se pudo guardar: " + updateError.message, { id: toastId });
-      return false;
+    // Escritura exclusivamente por la API: el navegador no tiene permisos de
+    // INSERT/UPDATE sobre user_profiles y nunca puede tocar plan_tier/Stripe.
+    const ok = await saveViaApi();
+    if (ok) {
+      toast.success(options?.successText ?? "Perfil guardado", { id: toastId });
+      return true;
     }
 
-    if (!updated || updated.length === 0) {
-      const ok = await saveViaApi();
-      if (ok) {
-        toast.success(options?.successText ?? "Perfil guardado", { id: toastId });
-        return true;
-      }
-
-      const { error: insertError } = await supabase
-        .from("user_profiles")
-        .insert(dbPayload)
-        .select("id");
-
-      if (insertError) {
-        logger.warn("Error saving profile (insert)", insertError);
-        const ok2 = await saveViaApi();
-        if (ok2) {
-          toast.success(options?.successText ?? "Perfil guardado", { id: toastId });
-          return true;
-        }
-
-        rollbackProfile();
-        toast.error("No se pudo guardar: " + insertError.message, { id: toastId });
-        return false;
-      }
-    }
-
-    toast.success(options?.successText ?? "Perfil guardado", { id: toastId });
-    return true;
+    rollbackProfile();
+    toast.error("No se pudo guardar el perfil.", { id: toastId });
+    return false;
   }, [offlineCacheKey, profile, user]);
 
   const updateProfile = useCallback(async (patch: Partial<UserProfile>) => {

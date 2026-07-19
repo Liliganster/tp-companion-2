@@ -1,7 +1,6 @@
 import { createContext, ReactNode, useContext, useMemo, useState, useEffect, useCallback } from "react";
 import { useAuth } from "./AuthContext";
 import { PlanTier, PlanLimits, getPlanLimits, DEFAULT_PLAN } from "@/lib/plans";
-import { supabase } from "@/lib/supabaseClient";
 import { logger } from "@/lib/logger";
 
 export type { PlanTier, PlanLimits };
@@ -45,7 +44,7 @@ interface PlanContextValue {
 const PlanContext = createContext<PlanContextValue | null>(null);
 
 export function PlanProvider({ children }: { children: ReactNode }) {
-  const { user, session } = useAuth();
+  const { user, getAccessToken } = useAuth();
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -58,87 +57,43 @@ export function PlanProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      // Preferred: a single column on user_profiles
-      const { data: profile, error: profileError } = await supabase
-        .from("user_profiles")
-        .select("plan_tier")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (!profileError && profile) {
-        setSubscription({
-          plan_tier: normalizePlanTier((profile as any).plan_tier),
-          status: "active",
-          started_at: null,
-          expires_at: null,
-          custom_limits: null,
-          price_cents: null,
-          currency: "EUR",
-        });
-        return;
-      }
-
-      // Default
+      const token = await getAccessToken();
+      if (!token) throw new Error("missing_session");
+      const response = await fetch("/api/user/subscription", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error(`subscription_fetch_failed:${response.status}`);
+      const data = await response.json();
+      setSubscription({
+        plan_tier: normalizePlanTier(data?.tier),
+        status: typeof data?.status === "string" ? data.status : "free",
+        started_at: typeof data?.startedAt === "string" ? data.startedAt : null,
+        expires_at: typeof data?.expiresAt === "string" ? data.expiresAt : null,
+        custom_limits: null,
+        price_cents: typeof data?.priceCents === "number" ? data.priceCents : 0,
+        currency: typeof data?.currency === "string" ? data.currency : "EUR",
+      });
+    } catch (err) {
+      logger.warn("[PlanContext] Failed to fetch subscription", err);
+      // Fallo cerrado: una interrupción nunca concede Pro.
       setSubscription({
         plan_tier: DEFAULT_PLAN,
-        status: "active",
+        status: "free",
         started_at: null,
         expires_at: null,
         custom_limits: null,
         price_cents: 0,
         currency: "EUR",
       });
-    } catch (err) {
-      logger.warn("[PlanContext] Failed to fetch subscription", err);
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, getAccessToken]);
 
   // Fetch subscription on mount and when user changes
   useEffect(() => {
     fetchSubscription();
   }, [fetchSubscription]);
-
-  // Subscribe to realtime changes
-  useEffect(() => {
-    if (!user?.id) return;
-
-    const channel = supabase
-      .channel("user_subscription_changes")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "user_profiles",
-          filter: `id=eq.${user.id}`,
-        },
-        (payload) => {
-          if (!payload.new) return;
-          const next = payload.new as any;
-          if (typeof next.plan_tier !== "undefined") {
-            setSubscription((prev) => ({
-              ...(prev ?? {
-                plan_tier: DEFAULT_PLAN,
-                status: "active",
-                started_at: null,
-                expires_at: null,
-                custom_limits: null,
-                price_cents: null,
-                currency: "EUR",
-              }),
-              plan_tier: normalizePlanTier(next.plan_tier),
-            }));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user?.id]);
 
   // Plan tier from subscription or default
   const planTier: PlanTier = useMemo(() => {

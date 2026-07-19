@@ -1,5 +1,7 @@
 import { supabaseAdmin } from "../../src/lib/supabaseServer.js";
 import { getPlanLimits, DEFAULT_PLAN, type PlanTier } from "./plans.js";
+import { getServerPlanTier } from "./entitlements.js";
+import { getFreeAiUsage, incrementFreeAiUsage } from "./freeUsage.js";
 
 // Get AI monthly limit from plan (default to basic plan)
 function getAIMonthlyLimit(planTier?: PlanTier | string | null): number {
@@ -15,6 +17,7 @@ export type QuotaDecision = {
 };
 
 function envTruthy(name: string): boolean {
+  if (process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production") return false;
   const v = process.env[name];
   if (!v) return false;
   const s = String(v).trim().toLowerCase();
@@ -101,12 +104,15 @@ async function countExtractionsThisMonth(
 export async function checkAiMonthlyQuota(userId: string, planTierParams?: PlanTier | string | null): Promise<QuotaDecision> {
   let planTier = planTierParams;
   if (!planTier) {
-    const { data } = await supabaseAdmin.from("user_profiles").select("plan_tier").eq("id", userId).maybeSingle();
-    planTier = data?.plan_tier;
+    planTier = await getServerPlanTier(userId);
   }
   const limit = getAIMonthlyLimit(planTier);
   const sinceIso = startOfCurrentMonthUtcIso();
   const counts = await countExtractionsThisMonth(userId, sinceIso);
+  if (String(planTier).toLowerCase() !== "pro") {
+    const identityUsage = await getFreeAiUsage(userId);
+    if (typeof identityUsage === "number") counts.done = Math.max(counts.done, identityUsage);
+  }
   const reserved = counts.done + counts.processing;
 
   // When bypass is enabled, always allow but still count usage for monitoring
@@ -135,13 +141,16 @@ export async function checkAiMonthlyQuota(userId: string, planTierParams?: PlanT
  */
 export async function recordAiUsage(userId: string, kind: string, jobId: string): Promise<void> {
   try {
-    await supabaseAdmin.from("ai_usage_events").insert({
+    const planTier = await getServerPlanTier(userId);
+    const { error } = await supabaseAdmin.from("ai_usage_events").insert({
       user_id: userId,
       kind,
       job_id: jobId,
       run_at: new Date().toISOString(),
       status: "done",
     });
+    if (error) throw error;
+    if (planTier !== "pro" && kind === "callsheet") await incrementFreeAiUsage(userId);
   } catch (err) {
     // Best-effort - don't fail the request if recording fails
     console.warn("Failed to record AI usage:", err);

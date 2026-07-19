@@ -1,23 +1,15 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type Stripe from "stripe";
 import { requireSupabaseUser, sendJson } from "./_utils/supabase.js";
-import { supabaseAdmin } from "../src/lib/supabaseServer.js";
 import { enforceRateLimit } from "./_utils/rateLimit.js";
 import { getPublicAppUrl, getStripeClient, getStripePriceId } from "./_utils/stripeClient.js";
+import { getBillingEntitlement, saveStripeCustomerId } from "./_utils/entitlements.js";
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set<Stripe.Subscription.Status>(["active", "trialing", "past_due"]);
 
 async function getOrCreateStripeCustomer(user: { id: string; email?: string }) {
   const stripe = getStripeClient();
-  const { data: profile } = await supabaseAdmin
-    .from("user_profiles")
-    .select("stripe_customer_id")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  const existingId = typeof (profile as any)?.stripe_customer_id === "string"
-    ? (profile as any).stripe_customer_id
-    : null;
+  const existingId = (await getBillingEntitlement(user.id)).customerId;
   if (existingId) return existingId;
 
   const customer = await stripe.customers.create({
@@ -25,12 +17,7 @@ async function getOrCreateStripeCustomer(user: { id: string; email?: string }) {
     metadata: { user_id: user.id },
   }, { idempotencyKey: `customer:${user.id}` });
 
-  const { error } = await supabaseAdmin.from("user_profiles").upsert({
-    id: user.id,
-    stripe_customer_id: customer.id,
-    stripe_updated_at: new Date().toISOString(),
-  }, { onConflict: "id" });
-  if (error) throw new Error(`Unable to save Stripe customer: ${error.message}`);
+  await saveStripeCustomerId(user.id, customer.id);
   return customer.id;
 }
 
@@ -88,12 +75,7 @@ async function handlePortal(req: VercelRequest, res: VercelResponse) {
   if (!await enforceRateLimit({ req, res, name: "stripe_portal", identifier: user.id, limit: 10, windowMs: 60_000 })) return;
 
   try {
-    const { data: profile } = await supabaseAdmin
-      .from("user_profiles")
-      .select("stripe_customer_id")
-      .eq("id", user.id)
-      .maybeSingle();
-    const customerId = (profile as any)?.stripe_customer_id;
+    const customerId = (await getBillingEntitlement(user.id)).customerId;
     if (typeof customerId !== "string" || !customerId) return sendJson(res, 409, { error: "no_stripe_customer" });
 
     const session = await getStripeClient().billingPortal.sessions.create({
@@ -113,4 +95,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (path === "/api/stripe/portal") return handlePortal(req, res);
   return sendJson(res, 404, { error: "not_found" });
 }
-

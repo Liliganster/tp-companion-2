@@ -8,6 +8,7 @@ import { withApiObservability } from "./_utils/observability.js";
 import { getBearerToken, requireSupabaseUser, sendJson } from "./_utils/supabase.js";
 import { enforceRateLimit } from "./_utils/rateLimit.js";
 import { checkAiMonthlyQuota, recordAiUsage } from "./_utils/aiQuota.js";
+import { getServerPlanTier } from "./_utils/entitlements.js";
 import { extractCallsheet } from "./_utils/callsheetExtraction.js";
 import { z } from "zod";
 
@@ -66,10 +67,13 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
 
   try {
     // 1. Fetch user profile to get AI plan tier
-    const { data: profile } = await supabaseAdmin.from("user_profiles").select("plan_tier, openrouter_enabled, openrouter_api_key, openrouter_model").eq("id", user.id).maybeSingle();
+    const [{ data: profile }, planTier] = await Promise.all([
+      supabaseAdmin.from("user_profiles").select("openrouter_enabled, openrouter_api_key, openrouter_model").eq("id", user.id).maybeSingle(),
+      getServerPlanTier(user.id),
+    ]);
 
     // 2. Check monthly quota
-    const quota = await checkAiMonthlyQuota(user.id, profile?.plan_tier);
+    const quota = await checkAiMonthlyQuota(user.id, planTier);
     if (!quota.allowed) {
       await deleteUnprocessedCallsheetJob({ userId: user.id, jobId });
 
@@ -122,7 +126,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
     // 3. Load user AI settings (OpenRouter override if configured).
     // OpenRouter propio = SOLO plan Pro (regla de la propietaria 2026-07-10):
     // la UI ya lo esconde en Free, pero el servidor no debe fiarse del perfil.
-    const isPro = String(profile?.plan_tier ?? "").trim().toLowerCase() === "pro";
+    const isPro = planTier === "pro";
     const userSettings = isPro && profile?.openrouter_enabled && profile?.openrouter_api_key
       ? { openrouterEnabled: true, openrouterApiKey: profile.openrouter_api_key, openrouterModel: profile.openrouter_model }
       : undefined;
@@ -138,7 +142,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
       log,
     });
 
-    if (!outcome.ok) {
+    if (outcome.ok === false) {
       await deleteUnprocessedCallsheetJob({ userId: user.id, jobId });
       if (outcome.kind === "download_failed") {
         return sendJson(res, 500, { error: "download_failed", message: outcome.message });
@@ -154,7 +158,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
 
     // Resultados ya existentes (job interrumpido tras guardar): done sin
     // gastar otra llamada de IA ni contar uso de nuevo.
-    if (outcome.cached) {
+    if (outcome.cached === true) {
       log.info({ jobId }, "callsheet_process_done");
       return sendJson(res, 200, { ok: true, jobId, cached: true });
     }
