@@ -347,6 +347,9 @@ async function handleOAuthStart(req: any, res: any) {
   const user = await requireSupabaseUser(req, res);
   if (!user) return;
 
+  const allowed = await enforceRateLimit({ req, res, name: "google_oauth_start", identifier: user.id, limit: 10, windowMs: 60_000 });
+  if (!allowed) return;
+
   const protoRaw = req?.headers?.["x-forwarded-proto"] ?? req?.headers?.["x-forwarded-protocol"];
   const hostRaw = req?.headers?.["x-forwarded-host"] ?? req?.headers?.host;
   const proto = String(Array.isArray(protoRaw) ? protoRaw[0] : protoRaw || "https").split(",")[0].trim().toLowerCase();
@@ -391,6 +394,10 @@ async function handleOAuthCallback(req: any, res: any) {
   if (req.method !== "GET") {
     res.statusCode = 405; res.setHeader("Allow", "GET"); res.end(); return;
   }
+
+  // Endpoint público (vuelve Google): límite por IP contra fuerza bruta del state.
+  const allowed = await enforceRateLimit({ req, res, name: "google_oauth_callback", limit: 10, windowMs: 60_000 });
+  if (!allowed) return;
 
   const code = typeof req.query?.code === "string" ? req.query.code : null;
   const stateRaw = typeof req.query?.state === "string" ? req.query.state : null;
@@ -454,6 +461,9 @@ async function handleOAuthStatus(req: any, res: any) {
   const user = await requireSupabaseUser(req, res);
   if (!user) return;
 
+  const allowed = await enforceRateLimit({ req, res, name: "google_oauth_status", identifier: user.id, limit: 60, windowMs: 60_000 });
+  if (!allowed) return;
+
   const row = await supabaseGetGoogleConnection(user.id).catch(() => null);
   if (!row?.refresh_token) return sendJson(res, 200, { connected: false });
   sendJson(res, 200, { connected: true, email: row.provider_account_email ?? null, scopes: typeof row.scopes === "string" ? row.scopes : "" });
@@ -466,6 +476,8 @@ async function handleOAuthDisconnect(req: any, res: any) {
   }
   const user = await requireSupabaseUser(req, res);
   if (!user) return;
+  const allowed = await enforceRateLimit({ req, res, name: "google_oauth_disconnect", identifier: user.id, limit: 10, windowMs: 60_000 });
+  if (!allowed) return;
   await supabaseDeleteGoogleConnection(user.id);
   return sendJson(res, 200, { ok: true });
 }

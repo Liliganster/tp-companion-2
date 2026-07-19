@@ -189,20 +189,6 @@ export default function Plans() {
           </div>
         </div>
 
-            {/* Enterprise CTA Banner */}
-            <div className="bg-zinc-900/35 backdrop-blur-md px-6 py-8 rounded-lg border border-zinc-800/80 text-center animate-fade-in animation-delay-200">
-              <h3 className="text-sm font-semibold mb-2">{t("plans.needMore")}</h3>
-              <p className="text-muted-foreground text-xs mb-4 max-w-xl mx-auto">
-                {t("plans.enterpriseContact")}
-              </p>
-              <Button 
-                variant="outline"
-                className="h-9 px-4 text-xs border-zinc-700/80 bg-zinc-950/20 text-muted-foreground/50 cursor-not-allowed"
-                disabled={true}
-              >
-                {t("common.comingSoon")}
-              </Button>
-            </div>
       </div>
     </MainLayout>
   );

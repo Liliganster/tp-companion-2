@@ -8,6 +8,7 @@ import { z } from "zod";
 import { requireSupabaseUser, sendJson } from "./_utils/supabase.js";
 import { supabaseAdmin } from "../src/lib/supabaseServer.js";
 import { checkAiMonthlyQuota } from "./_utils/aiQuota.js";
+import { enforceRateLimit } from "./_utils/rateLimit.js";
 import { getPlanLimits, DEFAULT_PLAN, PLAN_LIMITS, type PlanTier } from "./_utils/plans.js";
 
 // PlanTier, PLAN_LIMITS, getPlanLimits, DEFAULT_PLAN all come from _utils/plans.ts
@@ -254,8 +255,23 @@ async function handleCleanupDuplicateTrips(req: any, res: any) {
 }
 
 // ─── Main router ─────────────────────────────────────────────────────────────
+// Rate limits por ruta (por IP): estrictos en las rutas destructivas.
+const USER_ROUTE_LIMITS: Record<string, { name: string; limit: number; windowMs: number }> = {
+  "/api/user/ai-quota": { name: "user_ai_quota", limit: 60, windowMs: 60_000 },
+  "/api/user/profile": { name: "user_profile", limit: 30, windowMs: 60_000 },
+  "/api/user/subscription": { name: "user_subscription", limit: 60, windowMs: 60_000 },
+  "/api/user/delete-account": { name: "user_delete_account", limit: 3, windowMs: 60_000 },
+  "/api/user/cleanup-duplicate-trips": { name: "user_cleanup_trips", limit: 5, windowMs: 60_000 },
+};
+
 export default async function handler(req: any, res: any) {
   const path = (req.url || "").split("?")[0].replace(/\/$/, "");
+
+  const routeLimit = USER_ROUTE_LIMITS[path];
+  if (routeLimit) {
+    const allowed = await enforceRateLimit({ req, res, ...routeLimit });
+    if (!allowed) return;
+  }
 
   if (path === "/api/user/ai-quota")                  return handleAiQuota(req, res);
   if (path === "/api/user/profile")                   return handleProfile(req, res);

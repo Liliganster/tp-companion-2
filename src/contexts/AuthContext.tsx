@@ -3,6 +3,7 @@ import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 import { setSentryUser } from "@/lib/sentryClient";
 import { logger } from "@/lib/logger";
+import { clearSensitiveLocalData } from "@/lib/offlineCache";
 
 type AuthContextValue = {
   session: Session | null;
@@ -69,7 +70,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUpWithPassword = useCallback(async (email: string, password: string, fullName?: string) => {
-    const { data, error } = await requireSupabase().auth.signUp({
+    // Solo se destructura `error`: el `data` del signUp contiene el objeto de
+    // usuario (email) y no debe acabar en logs.
+    const { error } = await requireSupabase().auth.signUp({
       email,
       password,
       options: {
@@ -81,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logger.warn("[AuthContext] Sign up error", error);
       throw error;
     }
-    logger.debug("[AuthContext] Sign up successful", data);
+    logger.debug("[AuthContext] Sign up successful");
   }, []);
 
   const signInWithGoogle = useCallback(async () => {
@@ -107,6 +110,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     const { error } = await requireSupabase().auth.signOut();
     if (error) throw error;
+    // Dispositivo compartido: al salir no debe quedar NINGÚN dato personal
+    // en el navegador (cachés offline, filtros, calendarios, datos legacy).
+    clearSensitiveLocalData();
   }, []);
 
   const getAccessToken = useCallback(async () => {

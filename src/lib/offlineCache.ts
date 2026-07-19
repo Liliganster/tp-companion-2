@@ -33,3 +33,30 @@ export function readOfflineCacheEntry<T>(key: string, maxAgeMs: number): { ts: n
 export function readOfflineCache<T>(key: string, maxAgeMs: number): T | null {
   return readOfflineCacheEntry<T>(key, maxAgeMs)?.data ?? null;
 }
+
+/**
+ * Borra del navegador todo dato personal persistido al cerrar sesión
+ * (dispositivo compartido: el siguiente usuario no debe ver nada del anterior).
+ * - `cache:*` — cachés offline por usuario (viajes/proyectos/perfil: direcciones, matrícula…)
+ * - `filters:*` — filtros guardados (contienen nombres de proyecto/productora)
+ * - `calendar.enabledIds` — ids de calendarios de Google
+ * - claves de la app local antigua (pre-Supabase) que aún pudieran quedar
+ * Se conservan: preferencias de apariencia, flags de tours y consentimiento
+ * de analytics (no contienen datos personales).
+ */
+export function clearSensitiveLocalData() {
+  try {
+    const legacyKeys = new Set(["user-profile", "projects", "trips", "reports", "migration-completed-v1"]);
+    const toRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (key.startsWith("cache:") || key.startsWith("filters:") || key === "calendar.enabledIds" || legacyKeys.has(key)) {
+        toRemove.push(key);
+      }
+    }
+    toRemove.forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // ignore (modo privado, storage lleno…)
+  }
+}

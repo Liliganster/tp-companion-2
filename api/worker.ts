@@ -43,10 +43,9 @@ export default withApiObservability(async function handler(req: any, res: any, {
     warningMs: CALLSHEET_WORKER_RUNTIME_WARNING_MS,
   });
 
-  const queryKey = typeof req.query?.key === "string" ? req.query.key : null;
-
   // In production/preview: require CRON_SECRET and only accept Authorization header.
-  // In development: allow unauthenticated runs if CRON_SECRET is not set; if set, allow header or ?key=.
+  // In development: allow unauthenticated runs if CRON_SECRET is not set.
+  // El secreto NUNCA se acepta por query string (?key=) — acabaría en logs de URLs.
   if (requireSecret) {
     if (!cronSecret) {
       res.status(500).json({ error: "Missing CRON_SECRET" });
@@ -57,10 +56,18 @@ export default withApiObservability(async function handler(req: any, res: any, {
       return;
     }
   } else if (cronSecret) {
-    if (authHeader !== `Bearer ${cronSecret}` && queryKey !== cronSecret) {
+    if (authHeader !== `Bearer ${cronSecret}`) {
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
+  }
+
+  // Defensa en profundidad: un run manual de un job concreto SIEMPRE lleva el
+  // userId del dueño (trigger-worker y el eval lo mandan). Sin él, un
+  // CRON_SECRET filtrado permitiría procesar jobs de cualquier usuario.
+  if (manual && manualJobId && !manualUserId) {
+    res.status(400).json({ error: "userId is required for manual single-job runs" });
+    return;
   }
 
   if (req.method !== "POST" && req.method !== "GET") {
@@ -160,8 +167,13 @@ export default withApiObservability(async function handler(req: any, res: any, {
     let jobs: any[] = [];
 
     if (manual && manualJobId) {
-      const q = supabaseAdmin.from("callsheet_jobs").select("*").eq("id", manualJobId);
-      if (manualUserId) q.eq("user_id", manualUserId);
+      // manualUserId está garantizado por el guard de arriba: el fetch queda
+      // SIEMPRE escopado al dueño declarado.
+      const q = supabaseAdmin
+        .from("callsheet_jobs")
+        .select("*")
+        .eq("id", manualJobId)
+        .eq("user_id", manualUserId!);
       const { data: job, error: jobError } = await q.maybeSingle();
 
       if (jobError) throw jobError;

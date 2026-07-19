@@ -189,7 +189,9 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
 
   // E. Contrato híbrido: el modelo devuelve {label, address}; el clasificador
   // separa rodaje (visible) de logística/descriptores (invisible, auditado
-  // en callsheet_excluded_blocks — base del futuro multi-crew).
+  // en callsheet_excluded_blocks — base del multi-crew de la v2, decisión de
+  // la propietaria 2026-07-19: se CONSERVA). RLS: solo el dueño del job puede
+  // leer sus bloques; el insert es best-effort y nunca rompe la extracción.
   const { filming, dropped } = classifyLabeledLocations(validated.data.locations as any);
   if (dropped.length > 0) {
     log.info({ jobId, dropped: dropped.map((d: any) => `${d.label}|${d.reason}`) }, "callsheet_labels_dropped");

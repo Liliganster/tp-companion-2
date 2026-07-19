@@ -1,5 +1,4 @@
 import { Toaster as Sonner } from "@/components/ui/sonner";
-import { Toaster } from "@/components/ui/toaster";
 import { OnboardingTour } from "@/components/tour/OnboardingTour";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { UserProfileProvider } from "@/contexts/UserProfileContext";
@@ -11,7 +10,6 @@ import { PlanProvider } from "@/contexts/PlanContext";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { AnalyticsListener } from "@/components/AnalyticsListener";
 import { CookieConsentBanner } from "@/components/analytics/CookieConsentBanner";
-import { DataMigration } from "@/components/DataMigration";
 import { GlobalLoadingBar } from "@/components/app/GlobalLoadingBar";
 import { NetworkStatusBanner } from "@/components/app/NetworkStatusBanner";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -119,17 +117,15 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <PlanProvider>
-          <DataMigration />
           <UserProfileProvider>
             <ProjectsProvider>
               <TripsProvider>
                 <ReportsProvider>
                   <TooltipProvider>
+                    {/* Único sistema de toasts: sonner. use-toast es un
+                        adaptador que también desemboca aquí (el Toaster de
+                        radix quedó muerto y se eliminó 2026-07-19). */}
                     <Sonner />
-                    {/* Toaster de use-toast: 9 páginas/modales lanzan avisos con
-                        este sistema y nadie lo montaba — los toasts se perdían
-                        en silencio (bug encontrado en la limpieza 2026-07-10) */}
-                    <Toaster />
                     <UpdatePrompt />
                     <GlobalLoadingBar />
                     <AppContent />

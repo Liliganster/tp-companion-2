@@ -53,6 +53,14 @@ function initSentryServer() {
   });
 }
 
+// Las URLs se loguean SIN query string: puede llevar tokens/secretos
+// (p.ej. ?key= en dev) o identificadores que no deben persistir en logs.
+function sanitizeUrlForLog(url: unknown): string | undefined {
+  if (typeof url !== "string" || url.length === 0) return undefined;
+  const q = url.indexOf("?");
+  return q === -1 ? url : url.slice(0, q);
+}
+
 function getRequestId(req: any): string {
   const h = req?.headers || {};
   const id =
@@ -83,7 +91,7 @@ export function withApiObservability<TReq = any, TRes = any>(
       requestId,
       handler: meta?.name,
       method: req?.method,
-      url: req?.url,
+      url: sanitizeUrlForLog(req?.url),
     });
 
     const start = Date.now();
@@ -102,7 +110,7 @@ export function withApiObservability<TReq = any, TRes = any>(
       return out;
     } catch (err: any) {
       log.error({ err, status: res?.statusCode, duration_ms: Date.now() - start }, "request_failed");
-      captureServerException(err, { requestId, handler: meta?.name, url: req?.url, method: req?.method });
+      captureServerException(err, { requestId, handler: meta?.name, url: sanitizeUrlForLog(req?.url), method: req?.method });
       if (!res?.headersSent) {
         res.statusCode = 500;
         res.setHeader("Content-Type", "application/json");

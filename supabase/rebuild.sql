@@ -78,7 +78,9 @@ CREATE TABLE IF NOT EXISTS callsheet_locations (
     geocode_quality TEXT
 );
 
--- Table: callsheet_excluded_blocks (Audit)
+-- Table: callsheet_excluded_blocks (Audit — base del multi-crew de la v2;
+-- la propietaria decidió CONSERVARLA 2026-07-19. Solo escribe el service
+-- role; el dueño del job puede leer los suyos por RLS.)
 CREATE TABLE IF NOT EXISTS callsheet_excluded_blocks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     job_id UUID NOT NULL REFERENCES callsheet_jobs(id) ON DELETE CASCADE,
@@ -617,12 +619,11 @@ CREATE TABLE IF NOT EXISTS public.google_connections (
 
 ALTER TABLE public.google_connections ENABLE ROW LEVEL SECURITY;
 
+-- SIN policies de cliente (2026-07-19): la tabla guarda refresh/access tokens
+-- de Google y el navegador no debe poder leerlos. Deny-all para
+-- anon/authenticated; solo el service role (bypass de RLS) la usa. El estado
+-- de conexión se consulta vía /api/google/oauth/status.
 DROP POLICY IF EXISTS "read_own_google_connection" ON public.google_connections;
-CREATE POLICY "read_own_google_connection"
-ON public.google_connections
-FOR SELECT
-TO authenticated
-USING (auth.uid() = user_id);
 
 -- ------------------------------------------------------------
 -- Migración: 20251224000001_fix_missing_rls_policies.sql
@@ -1257,9 +1258,10 @@ create policy "Users can view their own extraction logs"
   on ai_extraction_logs for select
   using (auth.uid() = user_id);
 
-create policy "Service role can insert extraction logs"
-  on ai_extraction_logs for insert
-  with check (true);
+-- SIN policy de INSERT (2026-07-19): la versión anterior ("Service role can
+-- insert extraction logs") aplicaba a todos los roles con WITH CHECK (true) y
+-- permitía insertar filas con el user_id de otro. El worker escribe con
+-- service role (bypass de RLS); los clientes no insertan aquí.
 
 -- ------------------------------------------------------------
 -- Migración: 20260105_climatiq_cache.sql
@@ -1484,7 +1486,8 @@ CREATE POLICY "Users can insert their own project expenses"
 CREATE POLICY "Users can update their own project expenses"
   ON public.project_expenses
   FOR UPDATE
-  USING (auth.uid() = user_id);
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users can delete their own project expenses"
   ON public.project_expenses

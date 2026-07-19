@@ -364,7 +364,6 @@
 @media print {
   /* Hide toasts and notifications */
   [data-sonner-toaster],
-  [data-radix-toast-viewport],
   .toaster,
   .toast,
   [role="status"],
