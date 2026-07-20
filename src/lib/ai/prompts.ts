@@ -2,7 +2,6 @@ export function buildUniversalExtractorPrompt(text: string) {
   return [
     "You are a structured-data extractor for film/TV call sheets (Drehplan / Tagesdispo).",
     "Return a single valid JSON object. No markdown, no explanations.",
-    "SCOPE: Only analyze the FIRST 2 PAGES. Ignore everything after page 2.",
     "",
     "── date ──",
     "Main shooting day date from document header. Normalize to YYYY-MM-DD.",
