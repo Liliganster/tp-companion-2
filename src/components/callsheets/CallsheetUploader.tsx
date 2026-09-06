@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { usePlan } from "@/contexts/PlanContext";
 import { supabase } from "@/lib/supabaseClient";
 import { formatSupabaseError } from "@/lib/supabaseErrors";
@@ -19,8 +18,7 @@ interface CallsheetUploaderProps {
 
 export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue = true }: CallsheetUploaderProps) {
   const [uploading, setUploading] = useState(false);
-  const { limits, planTier } = usePlan();
-  const navigate = useNavigate();
+  const { limits } = usePlan();
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -29,18 +27,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
     logger.debug("CallsheetUploader: uploading files", { filesCount: files.length, projectId, tripId });
 
     if (files.length > limits.maxCallsheetsPerBatch) {
-      if (planTier === "basic") {
-        toast.error("Solo 1 documento por vez en el plan Basic", {
-          description: "El plan Basic permite subir y procesar 1 callsheet a la vez. Con Pro puedes subir hasta 20 y se procesan automaticamente de 5 en 5 sin hacer nada.",
-          action: {
-            label: "Ver planes",
-            onClick: () => navigate("/plans"),
-          },
-          duration: 8000,
-        });
-      } else {
-        toast.error(`Maximo ${limits.maxCallsheetsPerBatch} documentos por vez`);
-      }
+      toast.error(`Maximo ${limits.maxCallsheetsPerBatch} documentos por vez`);
       e.target.value = "";
       return;
     }

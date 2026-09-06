@@ -469,13 +469,18 @@ export async function buildReportPdf(data: ReportPdfData): Promise<jsPDF> {
 
   // ── Pie "Creado con Fahrtenbuch Pro" en TODAS las páginas ──────────────────
   // Obligatorio y legible (antes salía tan claro que parecía no estar).
+  // Enlace clicable a la landing; ?ref=report mide el bucle viral del informe.
+  const FOOTER_URL = "https://fahrtenbuchpro.com/?ref=report";
   const pages = doc.getNumberOfPages();
   for (let i = 1; i <= pages; i += 1) {
     doc.setPage(i);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(115, 115, 115);
-    doc.text(t("reportPdf.footer"), pageWidth / 2, pageHeight - 28, { align: "center" });
+    const footerText = t("reportPdf.footer");
+    // textWithLink no respeta align:center — se centra calculando la x a mano.
+    const footerX = pageWidth / 2 - doc.getTextWidth(footerText) / 2;
+    doc.textWithLink(footerText, footerX, pageHeight - 28, { url: FOOTER_URL });
     doc.text(tf("reportPdf.pageOf", { page: i, pages }), rightEdge, pageHeight - 28, { align: "right" });
     doc.setTextColor(0, 0, 0);
   }

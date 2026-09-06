@@ -62,7 +62,7 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
 
     maxSavedReportsPerMonth: -1,
 
-    maxCallsheetsPerBatch: 3,
+    maxCallsheetsPerBatch: 20,
     maxCallsheetsPerWorkerRun: 1,
   },
 
