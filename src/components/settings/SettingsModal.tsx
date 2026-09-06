@@ -689,7 +689,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       className="w-full sm:w-auto" 
                       onClick={() => {
                         onOpenChange(false);
-                        navigate("/auth/reset");
+                        navigate("/auth/reset?mode=change");
                       }}
                     >
                       <Lock className="w-4 h-4 mr-2" />

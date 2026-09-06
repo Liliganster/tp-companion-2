@@ -37,11 +37,11 @@ export default function AuthCallback() {
     // Listen for Auth events (most reliable for PKCE)
     const { data: { subscription } } = supabase!.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY") {
-        navigate("/auth/reset");
+        navigate("/auth/reset?mode=recovery");
       } else if (event === "SIGNED_IN") {
         // If we found the recovery flag in URL, prefer that over generic sign-in
         if (isRecoveryUrl) {
-          navigate("/auth/reset");
+          navigate("/auth/reset?mode=recovery");
         } else {
           navigate("/");
         }
@@ -99,7 +99,7 @@ export default function AuthCallback() {
       }
 
       // If no event fired (race), navigate based on URL flags.
-      if (isRecoveryUrl) navigate("/auth/reset");
+      if (isRecoveryUrl) navigate("/auth/reset?mode=recovery");
       else navigate("/");
     };
 
