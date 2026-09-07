@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,8 @@ export default function Auth() {
   const [name, setName] = useState("");
   const [showVerifyEmailNotice, setShowVerifyEmailNotice] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const passwordUpdated = searchParams.get("passwordUpdated") === "1";
 
   // Redirect if already logged in
   useEffect(() => {
@@ -186,6 +188,13 @@ export default function Auth() {
             <Alert className="mt-6 bg-secondary/20 border-border/60">
               <AlertTitle>{t("auth.verifyEmailTitle")}</AlertTitle>
               <AlertDescription>{t("auth.verifyEmailBody")}</AlertDescription>
+            </Alert>
+          )}
+
+          {passwordUpdated && (
+            <Alert className="mt-6 bg-secondary/20 border-border/60">
+              <AlertTitle>Contraseña actualizada</AlertTitle>
+              <AlertDescription>Ya puedes iniciar sesión con tu nueva contraseña.</AlertDescription>
             </Alert>
           )}
 

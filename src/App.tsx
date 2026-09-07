@@ -37,6 +37,7 @@ const LegalPrivacy = lazy(() => import("./pages/LegalPrivacy"));
 const LegalCookies = lazy(() => import("./pages/LegalCookies"));
 const Auth = lazy(() => import("./pages/Auth"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
+const AuthConfirm = lazy(() => import("./pages/AuthConfirm"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -85,6 +86,7 @@ function AppContent() {
         <Routes>
           <Route path="/auth" element={<Auth />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/auth/confirm" element={<AuthConfirm />} />
           <Route path="/auth/reset" element={<ResetPassword />} />
           <Route path="/legal/terms" element={<LegalTerms />} />
           <Route path="/legal/privacy" element={<LegalPrivacy />} />

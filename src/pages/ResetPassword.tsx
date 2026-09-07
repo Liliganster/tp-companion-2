@@ -84,6 +84,14 @@ export default function ResetPassword() {
           };
       const { error } = await supabase.auth.updateUser(attributes);
       if (error) throw error;
+
+      if (isRecovery && window.location.hostname === "auth.fahrtenbuchpro.com") {
+        const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
+        if (signOutError) throw signOutError;
+        window.location.replace("https://dashboard.fahrtenbuchpro.com/auth?passwordUpdated=1");
+        return;
+      }
+
       toast({
         title: "Contraseña actualizada",
         description: "Ya puedes iniciar sesión con email y contraseña.",
