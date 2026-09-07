@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   verifyOtp: vi.fn(),
   toast: vi.fn(),
+  navigateToRecoveryForm: vi.fn(),
 }));
 
 vi.mock("@/lib/supabaseClient", () => ({
@@ -14,6 +15,10 @@ vi.mock("@/lib/supabaseClient", () => ({
 
 vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: mocks.toast }),
+}));
+
+vi.mock("@/lib/recoveryNavigation", () => ({
+  navigateToRecoveryForm: mocks.navigateToRecoveryForm,
 }));
 
 import AuthConfirm from "./AuthConfirm";
@@ -34,10 +39,11 @@ describe("AuthConfirm", () => {
   beforeEach(() => {
     mocks.verifyOtp.mockReset();
     mocks.toast.mockReset();
+    mocks.navigateToRecoveryForm.mockReset();
   });
 
   it("espera la confirmación del usuario antes de consumir el código", async () => {
-    mocks.verifyOtp.mockResolvedValue({ error: null });
+    mocks.verifyOtp.mockResolvedValue({ data: { session: { access_token: "test" } }, error: null });
     renderAt("/auth/confirm?token_hash=secure-hash&type=recovery");
 
     expect(mocks.verifyOtp).not.toHaveBeenCalled();
@@ -46,7 +52,22 @@ describe("AuthConfirm", () => {
     await waitFor(() => {
       expect(mocks.verifyOtp).toHaveBeenCalledWith({ token_hash: "secure-hash", type: "recovery" });
     });
-    expect(await screen.findByText("Reset listo")).toBeInTheDocument();
+    expect(mocks.navigateToRecoveryForm).toHaveBeenCalledOnce();
+  });
+
+  it("muestra el error en la misma pantalla cuando el enlace ha caducado", async () => {
+    mocks.verifyOtp.mockResolvedValue({
+      data: { session: null },
+      error: new Error("Email link is invalid or has expired"),
+    });
+    renderAt("/auth/confirm?token_hash=expired-hash&type=recovery");
+
+    await userEvent.click(screen.getByRole("button", { name: "Continuar de forma segura" }));
+
+    expect(
+      await screen.findByText("Este enlace ha caducado o ya fue utilizado. Solicita un nuevo correo de recuperación."),
+    ).toBeInTheDocument();
+    expect(mocks.navigateToRecoveryForm).not.toHaveBeenCalled();
   });
 
   it("rechaza enlaces incompletos sin llamar a Supabase", async () => {
