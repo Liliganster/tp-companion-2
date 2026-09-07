@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -35,9 +36,12 @@ describe("AuthConfirm", () => {
     mocks.toast.mockReset();
   });
 
-  it("verifica exclusivamente enlaces de recuperación y abre el formulario seguro", async () => {
+  it("espera la confirmación del usuario antes de consumir el código", async () => {
     mocks.verifyOtp.mockResolvedValue({ error: null });
     renderAt("/auth/confirm?token_hash=secure-hash&type=recovery");
+
+    expect(mocks.verifyOtp).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Continuar de forma segura" }));
 
     await waitFor(() => {
       expect(mocks.verifyOtp).toHaveBeenCalledWith({ token_hash: "secure-hash", type: "recovery" });
@@ -48,8 +52,8 @@ describe("AuthConfirm", () => {
   it("rechaza enlaces incompletos sin llamar a Supabase", async () => {
     renderAt("/auth/confirm?type=recovery");
 
-    expect(await screen.findByText("Login")).toBeInTheDocument();
+    expect(await screen.findByText("Enlace no válido")).toBeInTheDocument();
     expect(mocks.verifyOtp).not.toHaveBeenCalled();
-    expect(mocks.toast).toHaveBeenCalled();
+    expect(mocks.toast).not.toHaveBeenCalled();
   });
 });

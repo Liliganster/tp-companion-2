@@ -1,54 +1,64 @@
-import { useEffect, useRef } from "react";
+import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import { Loader2, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 
 export default function AuthConfirm() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
-  const processedRef = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const tokenHash = searchParams.get("token_hash");
+  const type = searchParams.get("type");
+  const isValidRequest = Boolean(supabase && tokenHash && type === "recovery");
 
-  useEffect(() => {
-    if (processedRef.current) return;
-    processedRef.current = true;
-
-    const tokenHash = searchParams.get("token_hash");
-    const type = searchParams.get("type");
-
-    const fail = () => {
+  const confirmRecovery = async () => {
+    if (!supabase || !tokenHash || type !== "recovery" || busy) return;
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "recovery" });
+      if (error) throw error;
+      navigate("/auth/reset?mode=recovery", { replace: true });
+    } catch {
       toast({
         title: "Enlace no válido",
         description: "Solicita un nuevo correo para restablecer tu contraseña.",
         variant: "destructive",
       });
       navigate("/auth", { replace: true });
-    };
-
-    if (!supabase || !tokenHash || type !== "recovery") {
-      fail();
-      return;
+    } finally {
+      setBusy(false);
     }
+  };
 
-    void supabase.auth
-      .verifyOtp({ token_hash: tokenHash, type: "recovery" })
-      .then(({ error }) => {
-        if (error) {
-          fail();
-          return;
-        }
-        navigate("/auth/reset?mode=recovery", { replace: true });
-      })
-      .catch(fail);
-  }, [navigate, searchParams, toast]);
+  if (!isValidRequest) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-6">
+        <div className="glass-card p-6 w-full max-w-md space-y-4 text-center">
+          <h1 className="text-xl font-semibold">Enlace no válido</h1>
+          <p className="text-sm text-muted-foreground">Solicita un nuevo correo para restablecer tu contraseña.</p>
+          <Button asChild variant="outline" className="w-full">
+            <Link to="/auth">Volver al login</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-6">
-      <div className="text-center space-y-3">
-        <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
-        <h1 className="text-lg font-semibold">Verificando enlace seguro</h1>
-        <p className="text-sm text-muted-foreground">Fahrtenbuch Pro está comprobando tu solicitud.</p>
+      <div className="glass-card p-6 w-full max-w-md space-y-4 text-center">
+        <ShieldCheck className="w-10 h-10 text-primary mx-auto" />
+        <h1 className="text-xl font-semibold">Restablecimiento seguro</h1>
+        <p className="text-sm text-muted-foreground">
+          Confirma que quieres continuar para crear una nueva contraseña de Fahrtenbuch Pro.
+        </p>
+        <Button type="button" className="w-full" disabled={busy} onClick={confirmRecovery}>
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Continuar de forma segura"}
+        </Button>
       </div>
     </div>
   );
