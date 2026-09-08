@@ -425,6 +425,9 @@ export function ExpenseScanButton({
                     <p className="text-xs text-muted-foreground mt-1">
                       {t("expenseScan.clickToUpload")}
                     </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {t("expenseScan.fileHint")}
+                    </p>
                   </div>
                 </div>
 

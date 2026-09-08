@@ -2,6 +2,11 @@ import type { I18nKey } from "./es";
 
 // Cargado perezosamente por src/lib/i18n.ts (chunk separado del bundle principal).
 export const en: Record<I18nKey, string> = {
+  "uploads.callsheetFormats": "PDF, JPG/JPEG, PNG, WebP, HEIC and HEIF.",
+  "uploads.callsheetLimits": "Up to {count} files per batch. Storage: up to 50 MB per file. AI extraction: up to 15 MB per file.",
+  "uploads.callsheetConversion": "To extract a callsheet from Excel or an email, export it to PDF first. This option does not import spreadsheets or emails directly.",
+  "bulk.csvExcelHint": "To import trips from Excel, save a copy as CSV using the template columns. XLS/XLSX files cannot be imported directly.",
+  "expenseScan.fileHint": "Images up to 10 MB, one per selection. You can add multiple receipts to the same expense. This scanner does not accept PDFs.",
   "nav.dashboard": "Dashboard",
   "nav.trips": "Trips",
   "nav.projects": "Projects",
@@ -303,7 +308,7 @@ export const en: Record<I18nKey, string> = {
   "bulk.aiCancelExtraction": "Cancel extraction",
   "bulk.toastBackgroundProcessing": "Extraction continues in the background. Reopen the assistant to review it.",
   "bulk.aiDropTitle": "Drop documents here",
-  "bulk.aiDropSubtitle": "Call sheets as PDF or photo (JPG/PNG)",
+  "bulk.aiDropSubtitle": "Call sheets as PDF or images (JPG/JPEG, PNG, WebP, HEIC and HEIF)",
   "bulk.aiChangeFilesHint": "Click to change files",
   "bulk.aiFilesSelected": "{count} files selected",
   "bulk.aiDescription": "Upload your call sheets as PDF or photo. AI will automatically extract dates, locations, project and distances.",
@@ -329,7 +334,7 @@ export const en: Record<I18nKey, string> = {
   "bulk.outOfQuotaMessage": "You have reached the limit of documents your AI can process this month. Upgrade your plan to continue.",
   "bulk.outOfQuotaButton": "Upgrade plan",
   "bulk.batchLimitTitle": "Only 1 document at a time",
-  "bulk.batchLimitMessage": "The Basic plan allows 1 document per upload. Upgrade to Pro to process up to 20 at once.",
+  "bulk.batchLimitMessage": "Up to {count} documents per upload. Split your files into several batches.",
   "bulk.docProcessFailed": "Couldn't process this document.",
   "bulk.optimizingHint": "Optimizing route and addresses...",
   "bulk.locationsRouteLabel": "Locations / Route ({count})",

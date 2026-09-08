@@ -2,6 +2,11 @@ import type { I18nKey } from "./es";
 
 // Cargado perezosamente por src/lib/i18n.ts (chunk separado del bundle principal).
 export const de: Record<I18nKey, string> = {
+  "uploads.callsheetFormats": "PDF, JPG/JPEG, PNG, WebP, HEIC und HEIF.",
+  "uploads.callsheetLimits": "Bis zu {count} Dateien pro Stapel. Speicherung: bis zu 50 MB pro Datei. KI-Auswertung: bis zu 15 MB pro Datei.",
+  "uploads.callsheetConversion": "Exportiere Callsheets aus Excel oder E-Mails zuerst als PDF für die Auswertung. Diese Option importiert Tabellen und E-Mails nicht direkt.",
+  "bulk.csvExcelHint": "Speichere Fahrten aus Excel als CSV mit den Spalten der Vorlage. XLS/XLSX-Dateien können nicht direkt importiert werden.",
+  "expenseScan.fileHint": "Bilder bis zu 10 MB, einzeln auswählen. Du kannst mehrere Belege zu derselben Ausgabe hinzufügen. Dieser Scanner akzeptiert keine PDFs.",
   "nav.dashboard": "Übersicht",
   "nav.trips": "Fahrten",
   "nav.projects": "Projekte",
@@ -302,7 +307,7 @@ export const de: Record<I18nKey, string> = {
   "bulk.aiCancelExtraction": "Extraktion abbrechen",
   "bulk.toastBackgroundProcessing": "Die Extraktion läuft im Hintergrund weiter. Öffne den Assistenten erneut, um sie zu prüfen.",
   "bulk.aiDropTitle": "Dokumente hier ablegen",
-  "bulk.aiDropSubtitle": "Callsheets als PDF oder Foto (JPG/PNG)",
+  "bulk.aiDropSubtitle": "Callsheets als PDF oder Bilder (JPG/JPEG, PNG, WebP, HEIC und HEIF)",
   "bulk.aiChangeFilesHint": "Klicken, um Dateien zu ändern",
   "bulk.aiFilesSelected": "{count} Dateien ausgewählt",
   "bulk.aiDescription": "Lade deine Callsheets als PDF oder Foto hoch. Die KI extrahiert automatisch Datum, Orte, Projekt und Distanzen.",
@@ -328,7 +333,7 @@ export const de: Record<I18nKey, string> = {
   "bulk.outOfQuotaMessage": "Du hast das Limit der Dokumente erreicht, die deine KI diesen Monat verarbeiten kann. Upgrade deinen Plan, um fortzufahren.",
   "bulk.outOfQuotaButton": "Plan upgraden",
   "bulk.batchLimitTitle": "Nur 1 Dokument auf einmal",
-  "bulk.batchLimitMessage": "Der Basic-Plan erlaubt 1 Dokument pro Upload. Upgrade auf Pro für bis zu 20 auf einmal.",
+  "bulk.batchLimitMessage": "Bis zu {count} Dokumente pro Upload. Teile die Dateien auf mehrere Stapel auf.",
   "bulk.docProcessFailed": "Dieses Dokument konnte nicht verarbeitet werden.",
   "bulk.optimizingHint": "Route und Adressen werden optimiert...",
   "bulk.locationsRouteLabel": "Orte / Route ({count})",

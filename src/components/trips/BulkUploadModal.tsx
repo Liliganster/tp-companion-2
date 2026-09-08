@@ -31,6 +31,7 @@ import { FEATURES } from "@/lib/features";
 import { findProjectByCompatibleName } from "@/lib/projects";
 import { buildTripDuplicateKey } from "@/lib/trip-warnings";
 import { CALLSHEET_ACCEPT, isSupportedCallsheetFile, resolveCallsheetMime } from "@/lib/callsheetMime";
+import { CallsheetUploadHelp } from "@/components/callsheets/CallsheetUploadHelp";
 import { useAiQuota } from "@/hooks/use-ai-quota";
 
 interface SavedTrip {
@@ -1080,14 +1081,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
       toast.error(t("bulk.batchLimitTitle"), {
         description: (
           <div className="flex flex-col gap-3 mt-1">
-            <span>{t("bulk.batchLimitMessage")}</span>
-            <button
-              type="button"
-              onClick={() => navigate("/plans")}
-              className="self-start rounded-md bg-white/10 hover:bg-white/20 px-3 py-1.5 text-sm font-medium transition-colors"
-            >
-              {t("bulk.outOfQuotaButton")}
-            </button>
+            <span>{tf("bulk.batchLimitMessage", { count: limits.maxCallsheetsPerBatch })}</span>
           </div>
         ),
         duration: Infinity,
@@ -1989,6 +1983,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                   {t("bulk.csvInstructionsTitle")}
                 </h4>
               </div>
+              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{t("bulk.csvExcelHint")}</p>
               <ul className="mt-3 space-y-2 text-xs leading-relaxed text-muted-foreground">
                 {[t("bulk.csvInstructionsRequired"), t("bulk.csvInstructionsStops"), t("bulk.csvInstructionsSeparator")].map((line) => (
                   <li key={line} className="flex gap-2.5">
@@ -2018,6 +2013,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
             
             {aiStep === "upload" && (
               <>
+                <CallsheetUploadHelp maxFiles={Math.min(20, limits.maxCallsheetsPerBatch)} />
                 <div
                   onClick={() => fileInputRef.current?.click()}
                   onDrop={onDropFiles}

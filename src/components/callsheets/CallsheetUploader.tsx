@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
+import { CallsheetUploadHelp } from "./CallsheetUploadHelp";
 
 interface CallsheetUploaderProps {
   onJobCreated?: (jobId: string) => void;
@@ -148,7 +149,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
   };
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-col items-start gap-2">
       <input
         type="file"
         accept={CALLSHEET_ACCEPT}
@@ -166,6 +167,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
           </span>
         </Button>
       </label>
+      <CallsheetUploadHelp maxFiles={limits.maxCallsheetsPerBatch} />
     </div>
   );
 }

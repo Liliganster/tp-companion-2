@@ -1,6 +1,11 @@
 // Idioma base de Fahrtenbuch Pro. Las claves tipadas (I18nKey) derivan de este objeto.
 // ES se queda: es el idioma de la propietaria (decisión registrada en PLAN.md).
 export const es = {
+  "uploads.callsheetFormats": "PDF, JPG/JPEG, PNG, WebP, HEIC y HEIF.",
+  "uploads.callsheetLimits": "Hasta {count} archivos por lote. Almacenamiento: hasta 50 MB por archivo. Extracción por IA: hasta 15 MB por archivo.",
+  "uploads.callsheetConversion": "Para extraer un callsheet de Excel o de un correo, expórtalo primero a PDF. Esta opción no importa hojas de cálculo ni correos directamente.",
+  "bulk.csvExcelHint": "Para importar viajes desde Excel, guarda una copia como CSV respetando las columnas de la plantilla. No se importan archivos XLS/XLSX directamente.",
+  "expenseScan.fileHint": "Imágenes de hasta 10 MB, una por selección. Puedes añadir varios recibos al mismo gasto. Este escáner no admite PDF.",
   "common.comingSoon": "Próximamente",
   // Nav / layout
   "nav.dashboard": "Panel de control",
@@ -320,7 +325,7 @@ export const es = {
   "bulk.aiCancelExtraction": "Cancelar extracción",
   "bulk.toastBackgroundProcessing": "La extracción sigue en segundo plano. Reabre el asistente para revisarla.",
   "bulk.aiDropTitle": "Arrastra documentos aquí",
-  "bulk.aiDropSubtitle": "Hojas de rodaje en PDF o foto (JPG/PNG)",
+  "bulk.aiDropSubtitle": "Hojas de rodaje en PDF o imágenes (JPG/JPEG, PNG, WebP, HEIC y HEIF)",
   "bulk.aiChangeFilesHint": "Haz clic para cambiar archivos",
   "bulk.aiFilesSelected": "{count} archivos seleccionados",
   "bulk.aiDescription": "Sube tus hojas de rodaje (call sheets) en PDF o como foto. La IA extraerá automáticamente fechas, ubicaciones, proyecto y distancias.",
@@ -346,7 +351,7 @@ export const es = {
   "bulk.outOfQuotaMessage": "Has llegado al límite de documentos que puede procesar la IA este mes. Mejora tu plan para continuar.",
   "bulk.outOfQuotaButton": "Mejorar plan",
   "bulk.batchLimitTitle": "Solo 1 documento por vez",
-  "bulk.batchLimitMessage": "El plan Basic permite 1 documento por operación. Actualiza a Pro para subir hasta 20 a la vez.",
+  "bulk.batchLimitMessage": "Hasta {count} documentos por operación. Divide los archivos en varios lotes.",
   "bulk.docProcessFailed": "No se pudo procesar este documento.",
   "bulk.optimizingHint": "Optimizando ruta y direcciones...",
   "bulk.locationsRouteLabel": "Ubicaciones / Ruta ({count})",
