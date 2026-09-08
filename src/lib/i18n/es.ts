@@ -374,7 +374,7 @@ export const es = {
   "bulk.errorDriveDownload": "Falló la descarga desde Drive",
   "bulk.toastCsvImportedDrive": "CSV importado desde Drive",
   "bulk.errorMaxDocuments": "Máximo 20 documentos por vez",
-  "bulk.errorOnlyPdf": "Solo se permiten PDF o imágenes (JPG, PNG) para la extracción IA",
+  "bulk.errorOnlyPdf": "Solo se permiten PDF o imágenes (JPG, PNG, WebP, HEIC) para la extracción IA",
   "bulk.errorNotAuthenticated": "No estás autenticado",
   "bulk.errorUploadNone": "No se pudo subir ningún documento",
   "bulk.toastUploadedDocs": "Se subieron {count} documentos",

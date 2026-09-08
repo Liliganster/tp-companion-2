@@ -1,5 +1,3 @@
-import { secureUpload } from "@/lib/secureUpload";
-import { validateUploadMetadata } from "@/lib/uploadPolicy";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -872,7 +870,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
         appId,
         oauthToken: driveAccessToken,
         title: t("bulk.drivePickerTitleCallsheets"),
-        mimeTypes: ["application/pdf", "image/jpeg", "image/png"],
+        mimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"],
         multiselect: true,
       });
       if (picked.length === 0) return;
@@ -1071,8 +1069,6 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     }
 
     for (const file of nextFiles) {
-      try { validateUploadMetadata("callsheets", file.name, file.type, file.size); }
-      catch (error) { toast.error((error as Error).message); if (fileInputRef.current) fileInputRef.current.value = ""; return; }
       if (!isSupportedCallsheetFile(file)) {
         toast.error(t("bulk.errorOnlyPdf"));
         if (fileInputRef.current) fileInputRef.current.value = "";
@@ -1256,7 +1252,8 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
 
           // 2. Upload File
           const filePath = `${user.id}/${job.id}/${file.name}`;
-          await secureUpload("callsheets", filePath, file);
+          const { error: uploadError } = await supabase.storage.from("callsheets").upload(filePath, file);
+          if (uploadError) throw uploadError;
 
           if (isAiCancelled(aiSignal)) return;
 
