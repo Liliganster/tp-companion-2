@@ -1092,7 +1092,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                     const newDoc = {
                       id: uuidv4(),
                       name: `toll_receipt_${Date.now()}.webp`,
-                      mimeType: "image/webp",
+                      mimeType: "image/jpeg",
                       storagePath: storagePath,
                       bucketId: "project_documents" as const,
                       kind: "toll_receipt" as const,
@@ -1140,7 +1140,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                     const newDoc = {
                       id: uuidv4(),
                       name: `parking_receipt_${Date.now()}.webp`,
-                      mimeType: "image/webp",
+                      mimeType: "image/jpeg",
                       storagePath: storagePath,
                       bucketId: "project_documents" as const,
                       kind: "parking_receipt" as const,
@@ -1188,7 +1188,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                     const newDoc = {
                       id: uuidv4(),
                       name: `other_receipt_${Date.now()}.webp`,
-                      mimeType: "image/webp",
+                      mimeType: "image/jpeg",
                       storagePath: storagePath,
                       bucketId: "project_documents" as const,
                       kind: "other_receipt" as const,
@@ -1236,7 +1236,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                     const newDoc = {
                       id: uuidv4(),
                       name: `fuel_receipt_${Date.now()}.webp`,
-                      mimeType: "image/webp",
+                      mimeType: "image/jpeg",
                       storagePath: storagePath,
                       bucketId: "project_documents" as const,
                       kind: "fuel_receipt" as const,

@@ -1,3 +1,5 @@
+import { secureUpload } from "@/lib/secureUpload";
+import { validateUploadMetadata } from "@/lib/uploadPolicy";
 import { useState } from "react";
 import { usePlan } from "@/contexts/PlanContext";
 import { supabase } from "@/lib/supabaseClient";
@@ -33,8 +35,10 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
     }
 
     for (const file of files) {
+      try { validateUploadMetadata("callsheets", file.name, file.type, file.size); }
+      catch (error) { toast.error((error as Error).message); e.target.value = ""; return; }
       if (!isSupportedCallsheetFile(file)) {
-        toast.error("Solo se permiten PDF o imágenes (JPG, PNG, WebP, HEIC)");
+        toast.error("Solo se permiten PDF o imágenes (JPG, PNG)");
         e.target.value = "";
         return;
       }
@@ -70,8 +74,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
           createdJobId = job.id;
 
           const filePath = `${user.id}/${job.id}/${file.name}`;
-          const { error: uploadError } = await supabase.storage.from("callsheets").upload(filePath, file);
-          if (uploadError) throw uploadError;
+          await secureUpload("callsheets", filePath, file);
 
           const { error: updateError } = await supabase
             .from("callsheet_jobs")
@@ -162,7 +165,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
         <Button variant="outline" size="sm" asChild disabled={uploading} className="cursor-pointer">
           <span>
             {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-            Subir Callsheet
+            Subir Callsheet (PDF/JPG/PNG · 10 MB)
           </span>
         </Button>
       </label>

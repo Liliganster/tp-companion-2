@@ -1,3 +1,4 @@
+import { validateUploadBytes, validateUploadMetadata, UPLOAD_LIMITS } from "../../src/lib/uploadPolicy.js";
 /**
  * Pipeline de extracción de callsheets — módulo COMPARTIDO (Fase 2).
  *
@@ -35,7 +36,7 @@ import {
 import { geocodeAddressCached } from "./googleCache.js";
 import { isImageCallsheetMime, resolveCallsheetMime } from "../../src/lib/callsheetMime.js";
 
-const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024; // 15MB: evita timeouts y latencia de la IA
+const MAX_FILE_SIZE_BYTES = UPLOAD_LIMITS.callsheets; // Same limit enforced before storage
 
 type LogLike = {
   info: (obj: any, msg?: string) => void;
@@ -104,10 +105,16 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
 
   if (fileData.size > MAX_FILE_SIZE_BYTES) {
     const sizeMB = Math.round(fileData.size / 1024 / 1024);
-    return { ok: false, kind: "file_too_large", message: `file_too_large:${sizeMB}MB_exceeds_15MB_limit` };
+    return { ok: false, kind: "file_too_large", message: `file_too_large:${sizeMB}MB_exceeds_10MB_limit` };
   }
 
   const buffer = Buffer.from(await fileData.arrayBuffer());
+  try {
+    const validatedMime = validateUploadMetadata("callsheets", storagePath, fileData.type, buffer.length);
+    validateUploadBytes(buffer, validatedMime);
+  } catch (error) {
+    return { ok: false, kind: "invalid_extraction", message: error instanceof Error ? error.message : "Archivo inválido" };
+  }
 
   if (checkCancellation) {
     const { data: preAiJob } = await supabaseAdmin

@@ -1,3 +1,4 @@
+import { handleSecureUpload } from "./_utils/secureUpload.js";
 /**
  * Consolidated router for all /api/callsheets/* routes.
  * Handler logic is verbatim from original files.
@@ -181,40 +182,8 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
 }, { name: "callsheets/process" });
 
 // ─── /api/callsheets/create-upload ──────────────────────────────────────────
-const CreateUploadBodySchema = z.object({
-  filename: z.string().max(180).optional(),
-  contentType: z.string().max(120).optional(),
-  size: z.number().int().min(0).max(25_000_000).optional(),
-});
-
-const handleCreateUpload = withApiObservability(async function handler(req: any, res: any, { log, requestId }) {
-  if (req.method !== "POST") { res.statusCode = 405; res.setHeader("Allow", "POST"); res.end(); return; }
-
-  const user = await requireSupabaseUser(req, res);
-  if (!user) return;
-
-  const allowed = await enforceRateLimit({ req, res, name: "callsheet_create_upload", identifier: user.id, limit: 20, windowMs: 60_000, requestId });
-  if (!allowed) return;
-
-  const parsed = CreateUploadBodySchema.safeParse(req.body ?? {});
-  if (!parsed.success) return sendJson(res, 400, { error: "invalid_body", details: parsed.error.issues });
-
-  try {
-    const { filename } = parsed.data;
-    const { data: job, error: jobError } = await supabaseAdmin.from("callsheet_jobs").insert({ user_id: user.id, storage_path: "pending", status: "created" }).select("id").single();
-    if (jobError || !job?.id) { log.error({ jobError }, "[callsheets/create-upload] job insert failed"); return sendJson(res, 500, { error: "job_insert_failed", message: jobError?.message }); }
-
-    const filePath = `${user.id}/${job.id}/${filename || "document.pdf"}`;
-    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage.from("callsheets").createSignedUploadUrl(filePath);
-    if (uploadError || !uploadData?.signedUrl) { log.error({ uploadError }, "[callsheets/create-upload] createSignedUploadUrl failed"); return sendJson(res, 500, { error: "signed_upload_failed", message: uploadError?.message }); }
-
-    try { await supabaseAdmin.from("callsheet_jobs").update({ storage_path: filePath }).eq("id", job.id); } catch { /* best-effort */ }
-    return sendJson(res, 200, { jobId: job.id, uploadUrl: uploadData.signedUrl, path: uploadData.path });
-  } catch (err: any) {
-    log.error({ err }, "[callsheets/create-upload] error");
-    return sendJson(res, 500, { error: "create_upload_failed", message: err?.message ?? "Create upload failed" });
-  }
-}, { name: "callsheets/create-upload" });
+// Legacy signed URLs bypass content validation; old clients must update.
+const handleCreateUpload = (_req: any, res: any) => sendJson(res, 410, { error: "client_update_required", message: "Actualiza la aplicación para subir archivos de forma segura." });
 
 // ─── /api/callsheets/queue ───────────────────────────────────────────────────
 const QueueBodySchema = z.object({ jobId: z.string().uuid() });
@@ -405,6 +374,8 @@ export default async function handler(req: any, res: any) {
   const rawPath = (req.url || "").split("?")[0].replace(/\/$/, "");
   const path = rawPath.includes("/api/callsheets") ? rawPath : `/api/callsheets/${rawPath.replace(/^\//, "")}`;
 
+  if (path.endsWith("/upload-prepare")) return handleSecureUpload(req, res, false);
+  if (path.endsWith("/upload-finalize")) return handleSecureUpload(req, res, true);
   if (path === "/api/callsheets/process"        || path.endsWith("/process"))        return handleProcess(req, res);
   if (path === "/api/callsheets/create-upload" || path.endsWith("/create-upload"))   return handleCreateUpload(req, res);
   if (path === "/api/callsheets/queue"          || path.endsWith("/queue"))           return handleQueue(req, res);

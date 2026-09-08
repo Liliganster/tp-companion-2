@@ -116,7 +116,7 @@ export default function Docs() {
           id: "callsheets",
           title: "Callsheets con IA",
           body: [
-            "En Viajes → \"Carga masiva\" sube callsheets en PDF o foto (JPG, PNG, WebP, HEIC). La IA extrae la fecha, el proyecto, la productora y las localizaciones de rodaje, y te las presenta para revisar antes de guardar nada. También puedes subir callsheets dentro de una carpeta de proyecto (\"Subir hojas de llamada\") y lanzar \"Extraer datos con IA\" desde ahí.",
+            "En Viajes → \"Carga masiva\" sube callsheets en PDF o foto (JPG, PNG). La IA extrae la fecha, el proyecto, la productora y las localizaciones de rodaje, y te las presenta para revisar antes de guardar nada. También puedes subir callsheets dentro de una carpeta de proyecto (\"Subir hojas de llamada\") y lanzar \"Extraer datos con IA\" desde ahí.",
             {
               label: "Cómo saca las direcciones",
               items: [
@@ -399,7 +399,7 @@ export default function Docs() {
           id: "callsheets",
           title: "Callsheets with AI",
           body: [
-            "In Trips → \"Bulk upload\", upload callsheets as PDF or photo (JPG, PNG, WebP, HEIC). The AI extracts the date, project, production company and shooting locations, and presents them for review before saving anything. You can also upload callsheets inside a project folder (\"Upload call sheets\") and run \"Extract data with AI\" from there.",
+            "In Trips → \"Bulk upload\", upload callsheets as PDF or photo (JPG, PNG). The AI extracts the date, project, production company and shooting locations, and presents them for review before saving anything. You can also upload callsheets inside a project folder (\"Upload call sheets\") and run \"Extract data with AI\" from there.",
             {
               label: "How it picks addresses",
               items: [
@@ -682,7 +682,7 @@ export default function Docs() {
           id: "callsheets",
           title: "Callsheets mit KI",
           body: [
-            "Unter Fahrten → \"Massenimport\" lädst du Callsheets als PDF oder Foto hoch (JPG, PNG, WebP, HEIC). Die KI extrahiert Datum, Projekt, Produktionsfirma und Drehorte und legt sie dir zur Prüfung vor, bevor irgendetwas gespeichert wird. Callsheets lassen sich auch im Projektordner hochladen (\"Callsheets hochladen\") und dort mit \"Daten mit KI extrahieren\" verarbeiten.",
+            "Unter Fahrten → \"Massenimport\" lädst du Callsheets als PDF oder Foto hoch (JPG, PNG). Die KI extrahiert Datum, Projekt, Produktionsfirma und Drehorte und legt sie dir zur Prüfung vor, bevor irgendetwas gespeichert wird. Callsheets lassen sich auch im Projektordner hochladen (\"Callsheets hochladen\") und dort mit \"Daten mit KI extrahieren\" verarbeiten.",
             {
               label: "Wie sie Adressen auswählt",
               items: [

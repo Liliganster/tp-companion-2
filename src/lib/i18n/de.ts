@@ -356,7 +356,7 @@ export const de: Record<I18nKey, string> = {
   "bulk.errorDriveDownload": "Drive-Download fehlgeschlagen",
   "bulk.toastCsvImportedDrive": "CSV aus Drive importiert",
   "bulk.errorMaxDocuments": "Maximal 20 Dokumente auf einmal",
-  "bulk.errorOnlyPdf": "Für die KI-Extraktion sind nur PDF- oder Bilddateien (JPG, PNG, WebP, HEIC) erlaubt",
+  "bulk.errorOnlyPdf": "Für die KI-Extraktion sind nur PDF- oder Bilddateien (JPG, PNG) erlaubt",
   "bulk.errorNotAuthenticated": "Du bist nicht angemeldet",
   "bulk.errorUploadNone": "Kein Dokument konnte hochgeladen werden",
   "bulk.toastUploadedDocs": "{count} Dokumente hochgeladen",

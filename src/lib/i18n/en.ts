@@ -357,7 +357,7 @@ export const en: Record<I18nKey, string> = {
   "bulk.errorDriveDownload": "Drive download failed",
   "bulk.toastCsvImportedDrive": "CSV imported from Drive",
   "bulk.errorMaxDocuments": "Maximum 20 documents at a time",
-  "bulk.errorOnlyPdf": "Only PDF or image files (JPG, PNG, WebP, HEIC) are allowed for AI extraction",
+  "bulk.errorOnlyPdf": "Only PDF or image files (JPG, PNG) are allowed for AI extraction",
   "bulk.errorNotAuthenticated": "You're not authenticated",
   "bulk.errorUploadNone": "Couldn't upload any document",
   "bulk.toastUploadedDocs": "Uploaded {count} documents",

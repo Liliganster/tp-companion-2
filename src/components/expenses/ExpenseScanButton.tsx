@@ -1,3 +1,4 @@
+import { secureUpload } from "@/lib/secureUpload";
 import { useCallback, useRef, useState, DragEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -70,7 +71,7 @@ async function compressImage(file: File, maxWidth = 1600, quality = 0.75): Promi
           if (blob) resolve(blob);
           else reject(new Error("Failed to compress image"));
         },
-        "image/webp",
+        "image/jpeg",
         quality
       );
     };
@@ -97,7 +98,7 @@ async function rotateImage(imageUrl: string, degrees: number): Promise<string> {
       ctx?.rotate((degrees * Math.PI) / 180);
       ctx?.drawImage(img, -img.width / 2, -img.height / 2);
 
-      resolve(canvas.toDataURL("image/webp", 0.85));
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
     };
 
     img.onerror = () => reject(new Error("Failed to rotate image"));
@@ -236,7 +237,7 @@ export function ExpenseScanButton({
       // Convert data URL to blob
       const response = await fetch(imagePreview);
       const originalBlob = await response.blob();
-      const originalFile = new File([originalBlob], "receipt.webp", { type: "image/webp" });
+      const originalFile = new File([originalBlob], "receipt.jpg", { type: "image/jpeg" });
 
       // Compress image
       const compressedBlob = await compressImage(originalFile, 1600, 0.75);
@@ -244,19 +245,10 @@ export function ExpenseScanButton({
       // Generate storage path
       const date = new Date();
       const yearMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-      const fileName = `${user.id}/${yearMonth}/${uuidv4()}.webp`;
+      const fileName = `${user.id}/${yearMonth}/${uuidv4()}.jpg`;
 
       // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from("project_documents")
-        .upload(fileName, compressedBlob, {
-          contentType: "image/webp",
-          upsert: false,
-        });
-
-      if (uploadError) {
-        throw new Error(uploadError.message);
-      }
+      await secureUpload("project_documents", fileName, compressedBlob);
 
       // El recibo se adjunta tal cual; el importe se introduce a mano en EUR
       // en el campo correspondiente (extracción IA retirada 2026-07-12).
