@@ -1,10 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, waitFor } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { act, render, waitFor } from "@testing-library/react";
+import { beforeEach, describe, it, expect, vi } from "vitest";
 import React from "react";
 
 const mocks = vi.hoisted(() => {
-  const insert = vi.fn(() => ({ error: null }));
+  const insert = vi.fn(async (): Promise<{ error: unknown }> => ({ error: null }));
   const orderReports = vi.fn(() => ({ data: [], error: null }));
 
   const makeSelectBuilder = () => {
@@ -48,6 +48,33 @@ function CaptureReports({ out }: { out: { current: ReturnType<typeof useReports>
 }
 
 describe("ReportsContext", () => {
+  beforeEach(() => mocks.insert.mockReset().mockResolvedValue({ error: null }));
+
+  it.each(["database", "network"])("rejects a %s failure, rolls back and allows a successful retry", async (failure) => {
+    const out: { current: ReturnType<typeof useReports> | null } = { current: null };
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={queryClient}><ReportsProvider><CaptureReports out={out} /></ReportsProvider></QueryClientProvider>);
+    await waitFor(() => expect(queryClient.getQueryState(["reports", "user-1"])?.status).toBe("success"));
+    const input = {
+      month: "01", year: "2025", project: "all", tripIds: ["t1"],
+      startDate: "2025-01-01", endDate: "2025-01-31", totalDistanceKm: 10,
+      tripsCount: 1, driver: "Driver", address: "Address", licensePlate: "AAA",
+    };
+    const error = new Error("Simulated persistence failure");
+    if (failure === "database") mocks.insert.mockResolvedValueOnce({ error });
+    else mocks.insert.mockRejectedValueOnce(error);
+    await act(async () => {
+      await expect(out.current!.addReport(input)).rejects.toBe(error);
+    });
+    expect(queryClient.getQueryData(["reports", "user-1"])).toEqual([]);
+    await act(async () => {
+      const saved = await out.current!.addReport(input);
+      expect(saved.id).toBeTruthy();
+    });
+    await waitFor(() => expect(out.current!.reports).toHaveLength(1));
+    expect(mocks.insert).toHaveBeenCalledTimes(2);
+  });
+
   it("addReport persists and updates context list", async () => {
     localStorage.clear();
     const out: { current: ReturnType<typeof useReports> | null } = { current: null };

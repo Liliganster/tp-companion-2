@@ -1219,7 +1219,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                   {t("projectDetail.saving")}
                 </>
               ) : (
-                <>{t("projectDetail.saveTrips", { count: pendingTrips.length })}</>
+                <>{tf("projectDetail.saveTrips", { count: pendingTrips.length })}</>
               )}
             </Button>
           </div>

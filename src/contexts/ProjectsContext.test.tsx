@@ -110,6 +110,7 @@ describe("ProjectsContext", () => {
 
     const p: Project = {
       id: "project-1",
+      createdAt: "2025-01-01T00:00:00.000Z",
       name: "My Project",
       ratePerKm: 0,
       starred: false,

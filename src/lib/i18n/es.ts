@@ -214,6 +214,7 @@ export const es = {
   "calendar.importError": "No se pudo importar el evento",
   "calendar.importNoLocations": "No se encontraron ubicaciones en el evento. Agrega una ubicación o descripción con origen y destino.",
   "calendar.importNoDistance": "No se pudo calcular la distancia. Verifica las ubicaciones.",
+  "calendar.importNeedBaseAddress": "Completa tu dirección base, ciudad y país en Ajustes antes de importar el evento.",
 
   // Advanced
   "advanced.title": "Avanzado",
@@ -587,6 +588,8 @@ export const es = {
   "reportView.exportZipProOnly": "Solo disponible en plan Pro",
   "reportView.print": "Imprimir",
   "reportView.saveReport": "Guardar",
+  "reportView.toastSaveErrorTitle": "No se pudo guardar el informe",
+  "reportView.toastSaveErrorBody": "El informe sigue abierto. Comprueba la conexión y vuelve a intentar guardarlo.",
   "reportView.toastSavedTitle": "Informe guardado",
   "reportView.toastSavedBody": "El informe se ha guardado en la lista.",
   "reportView.notFoundTitle": "Informe no encontrado",
@@ -835,6 +838,7 @@ export const es = {
   "advancedEmissions.treeSingular": "árbol",
   "advancedEmissions.treePlural": "árboles",
   "advancedEmissions.breakdownTitle": "Desglose de Proyectos",
+  "advancedEmissions.breakdownTitleTrips": "Desglose de viajes",
   "advancedEmissions.trendChartTitle": "Tendencia de Emisiones (kg CO₂)",
   "advancedEmissions.trendChartProjected": "Proyectado",
   "advancedEmissions.trendChartReal": "Real",

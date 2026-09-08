@@ -246,7 +246,10 @@ function TripGoogleMapLoaded({ route, open, browserKey }: { route: string[]; ope
           typeof southwest?.lat === "number" && typeof southwest?.lng === "number" &&
           typeof northeast?.lat === "number" && typeof northeast?.lng === "number"
         ) {
-          googleMapRef.current.fitBounds(new google.maps.LatLngBounds(southwest, northeast), 32);
+          googleMapRef.current.fitBounds(new google.maps.LatLngBounds(
+            { lat: southwest.lat, lng: southwest.lng },
+            { lat: northeast.lat, lng: northeast.lng },
+          ), 32);
         } else {
           const bounds = new google.maps.LatLngBounds();
           path.forEach((point) => bounds.extend(point));

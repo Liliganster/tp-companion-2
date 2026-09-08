@@ -203,6 +203,7 @@ export const de: Record<I18nKey, string> = {
   "calendar.importError": "Termin konnte nicht importiert werden",
   "calendar.importNoLocations": "Keine Orte im Termin gefunden. Füge einen Ort oder eine Beschreibung mit Ursprung und Ziel hinzu.",
   "calendar.importNoDistance": "Entfernung konnte nicht berechnet werden. Überprüfe die Orte.",
+  "calendar.importNeedBaseAddress": "Ergänze deine Basisadresse, Stadt und dein Land in den Einstellungen, bevor du das Ereignis importierst.",
 
   // Advanced
   "advanced.title": "Erweitert",
@@ -634,6 +635,8 @@ export const de: Record<I18nKey, string> = {
   "reportView.exportZipProOnly": "Nur im Pro-Plan verfügbar",
   "reportView.print": "Drucken",
   "reportView.saveReport": "Speichern",
+  "reportView.toastSaveErrorTitle": "Bericht konnte nicht gespeichert werden",
+  "reportView.toastSaveErrorBody": "Der Bericht bleibt geöffnet. Prüfe die Verbindung und versuche erneut zu speichern.",
   "reportView.toastSavedTitle": "Bericht gespeichert",
   "reportView.toastSavedBody": "Der Bericht wurde in der Liste gespeichert.",
   "reportView.notFoundTitle": "Bericht nicht gefunden",
@@ -882,6 +885,7 @@ export const de: Record<I18nKey, string> = {
   "advancedEmissions.treeSingular": "Baum",
   "advancedEmissions.treePlural": "Bäume",
   "advancedEmissions.breakdownTitle": "Projektaufschlüsselung",
+  "advancedEmissions.breakdownTitleTrips": "Fahrtenaufschlüsselung",
   "advancedEmissions.trendChartTitle": "Emissionstrend (kg CO₂)",
   "advancedEmissions.trendChartProjected": "Prognose",
   "advancedEmissions.trendChartReal": "Real",

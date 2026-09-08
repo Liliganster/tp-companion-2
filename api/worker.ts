@@ -22,7 +22,6 @@ export default withApiObservability(async function handler(req: any, res: any, {
   const cronSecret = process.env.CRON_SECRET;
   const vercelEnv = process.env.VERCEL_ENV; // "production" | "preview" | "development" | undefined
   const requireSecret = vercelEnv ? vercelEnv !== "development" : process.env.NODE_ENV === "production";
-  const isVercelCron = Boolean(req.headers?.["x-vercel-cron"]);
   const manual = String(req.query?.manual ?? "").trim() === "1";
   const skipGeocode = manual && String(req.query?.skipGeocode ?? "").trim() === "1";
   const manualJobId = manual && typeof req.query?.jobId === "string" ? String(req.query.jobId).trim() : null;
@@ -52,7 +51,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
       res.status(500).json({ error: "Missing CRON_SECRET" });
       return;
     }
-    if (authHeader !== `Bearer ${cronSecret}` && !isVercelCron) {
+    if (authHeader !== `Bearer ${cronSecret}`) {
       res.status(401).json({ error: "Unauthorized" });
       return;
     }

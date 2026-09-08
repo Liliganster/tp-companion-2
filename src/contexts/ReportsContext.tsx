@@ -77,8 +77,7 @@ export function ReportsProvider({ children }: { children: ReactNode }) {
 
   const addReport = useCallback<ReportsContextValue["addReport"]>(async (report) => {
     if (!user || !supabase) {
-        // Fallback or error? For now just return local object but won't save
-        return { ...report, id: "temp", createdAt: new Date().toISOString() } as SavedReport;
+        throw new Error("reports.persistenceUnavailable");
     }
 
     // Enforce monthly report limit for Basic plan
@@ -114,7 +113,8 @@ export function ReportsProvider({ children }: { children: ReactNode }) {
     const prev = (queryClient.getQueryData<SavedReport[]>(queryKey) ?? []) as SavedReport[];
     queryClient.setQueryData<SavedReport[]>(queryKey, [nextReport, ...prev]);
 
-    const { error } = await supabase.from("reports").insert({
+    try {
+      const { error } = await supabase.from("reports").insert({
         id: nextReport.id,
         user_id: user.id,
         month: nextReport.month,
@@ -131,9 +131,11 @@ export function ReportsProvider({ children }: { children: ReactNode }) {
         created_at: nextReport.createdAt
     });
 
-    if (error) {
+      if (error) throw error;
+    } catch (error) {
         logger.warn("Error saving report", error);
         queryClient.setQueryData<SavedReport[]>(queryKey, (cur) => (cur ?? []).filter((r) => r.id !== nextReport.id));
+        throw error;
     }
 
     return nextReport;

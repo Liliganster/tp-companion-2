@@ -64,8 +64,10 @@ function RouteFallback() {
 function ProtectedLayout() {
   return (
     <RequireAuth>
-      <OnboardingTour />
-      <Outlet />
+      <>
+        <OnboardingTour />
+        <Outlet />
+      </>
     </RequireAuth>
   );
 }

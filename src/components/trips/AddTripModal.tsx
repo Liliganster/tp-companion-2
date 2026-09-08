@@ -228,6 +228,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
 
       const newProject = {
         id: uuidv4(),
+        createdAt: new Date().toISOString(),
         name: trimmedName,
         producer: (() => {
            // Try to inherit producer logic
@@ -605,7 +606,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
             return { ...stop, value: baseLocation };
           }
 
-          if (prevSpecialOrigin === "return" && next !== "return") {
+          if (prevSpecialOrigin === "return") {
             const restored = destinationBeforeReturnRef.current ?? "";
             if (restored) stopDraftsRef.current.destination = restored;
             else delete stopDraftsRef.current.destination;
@@ -1084,7 +1085,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                   onExtracted={(result, storagePath) => {
                     // SUM the new amount to existing
                     if (result.amount != null) {
-                      const currentValue = parseLocaleNumber(tollAmount, locale) || 0;
+                      const currentValue = parseLocaleNumber(tollAmount) || 0;
                       const newTotal = currentValue + result.amount;
                       setTollAmount(formatLocaleNumber(newTotal));
                     }
@@ -1105,7 +1106,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                     // Find the receipt to get its amount
                     const receipt = tollReceipts.find(r => r.id === receiptId);
                     if (receipt?.amount) {
-                      const currentValue = parseLocaleNumber(tollAmount, locale) || 0;
+                      const currentValue = parseLocaleNumber(tollAmount) || 0;
                       const newTotal = Math.max(0, currentValue - receipt.amount);
                       setTollAmount(newTotal > 0 ? formatLocaleNumber(newTotal) : "");
                     }
@@ -1132,7 +1133,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                   onExtracted={(result, storagePath) => {
                     // SUM the new amount to existing
                     if (result.amount != null) {
-                      const currentValue = parseLocaleNumber(parkingAmount, locale) || 0;
+                      const currentValue = parseLocaleNumber(parkingAmount) || 0;
                       const newTotal = currentValue + result.amount;
                       setParkingAmount(formatLocaleNumber(newTotal));
                     }
@@ -1153,7 +1154,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                     // Find the receipt to get its amount
                     const receipt = parkingReceipts.find(r => r.id === receiptId);
                     if (receipt?.amount) {
-                      const currentValue = parseLocaleNumber(parkingAmount, locale) || 0;
+                      const currentValue = parseLocaleNumber(parkingAmount) || 0;
                       const newTotal = Math.max(0, currentValue - receipt.amount);
                       setParkingAmount(newTotal > 0 ? formatLocaleNumber(newTotal) : "");
                     }
@@ -1180,7 +1181,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                   onExtracted={(result, storagePath) => {
                     // SUM the new amount to existing
                     if (result.amount != null) {
-                      const currentValue = parseLocaleNumber(otherExpenses, locale) || 0;
+                      const currentValue = parseLocaleNumber(otherExpenses) || 0;
                       const newTotal = currentValue + result.amount;
                       setOtherExpenses(formatLocaleNumber(newTotal));
                     }
@@ -1201,7 +1202,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                     // Find the receipt to get its amount
                     const receipt = otherReceipts.find(r => r.id === receiptId);
                     if (receipt?.amount) {
-                      const currentValue = parseLocaleNumber(otherExpenses, locale) || 0;
+                      const currentValue = parseLocaleNumber(otherExpenses) || 0;
                       const newTotal = Math.max(0, currentValue - receipt.amount);
                       setOtherExpenses(newTotal > 0 ? formatLocaleNumber(newTotal) : "");
                     }
@@ -1228,7 +1229,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                   onExtracted={(result, storagePath) => {
                     // SUM the new amount to existing
                     if (result.amount != null) {
-                      const currentValue = parseLocaleNumber(fuelAmount, locale) || 0;
+                      const currentValue = parseLocaleNumber(fuelAmount) || 0;
                       const newTotal = currentValue + result.amount;
                       setFuelAmount(formatLocaleNumber(newTotal));
                     }
@@ -1249,7 +1250,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                     // Find the receipt to get its amount
                     const receipt = fuelReceipts.find(r => r.id === receiptId);
                     if (receipt?.amount) {
-                      const currentValue = parseLocaleNumber(fuelAmount, locale) || 0;
+                      const currentValue = parseLocaleNumber(fuelAmount) || 0;
                       const newTotal = Math.max(0, currentValue - receipt.amount);
                       setFuelAmount(newTotal > 0 ? formatLocaleNumber(newTotal) : "");
                     }

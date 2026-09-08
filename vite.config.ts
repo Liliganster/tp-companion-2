@@ -59,7 +59,7 @@ function googleApiProxy(serverKey: string | undefined): Plugin {
         const body = await readBody(req);
         const language = typeof body?.language === "string" ? body.language : undefined;
 
-        if (req.url.startsWith("/api/google/directions")) {
+        if (url.startsWith("/api/google/directions")) {
           const origin = body?.origin;
           const destination = body?.destination;
           const waypoints = Array.isArray(body?.waypoints) ? body.waypoints : [];
@@ -90,7 +90,7 @@ function googleApiProxy(serverKey: string | undefined): Plugin {
 	          return send(res, 200, { overviewPolyline: route?.overview_polyline?.points ?? "", bounds: route?.bounds ?? null, legs, totalDistanceMeters });
 	        }
 
-        if (req.url.startsWith("/api/google/geocode")) {
+        if (url.startsWith("/api/google/geocode")) {
           const address = body?.address;
           if (typeof address !== "string" || !address.trim()) return send(res, 400, { error: "address is required" });
 
@@ -111,7 +111,7 @@ function googleApiProxy(serverKey: string | undefined): Plugin {
           });
         }
 
-        if (req.url.startsWith("/api/google/places-autocomplete")) {
+        if (url.startsWith("/api/google/places-autocomplete")) {
           const input = body?.input;
           if (typeof input !== "string" || !input.trim()) return send(res, 400, { error: "input is required" });
 
@@ -130,7 +130,7 @@ function googleApiProxy(serverKey: string | undefined): Plugin {
           return send(res, 200, { predictions });
         }
 
-        if (req.url.startsWith("/api/google/place-details")) {
+        if (url.startsWith("/api/google/place-details")) {
           const placeId = body?.placeId;
           if (typeof placeId !== "string" || !placeId.trim()) return send(res, 400, { error: "placeId is required" });
 
@@ -267,7 +267,10 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
             body: JSON.stringify(requestBody),
           });
 
-          const data = await upstream.json().catch(() => null);
+          const rawData: unknown = await upstream.json().catch(() => null);
+          const data = rawData && typeof rawData === "object" && !Array.isArray(rawData)
+            ? rawData as Record<string, unknown>
+            : null;
           
           if (!upstream.ok || !data) {
             return send(res, 502, {
@@ -282,6 +285,10 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
             return send(res, 502, { error: "climatiq_error", message: "Invalid co2e payload" });
           }
 
+          const rawFactor = data.emission_factor;
+          const factor = rawFactor && typeof rawFactor === "object" && !Array.isArray(rawFactor)
+            ? rawFactor as Record<string, unknown>
+            : {};
           const payload = {
             fuelType,
             ...(config.paramType === "volume" 
@@ -290,9 +297,9 @@ function climatiqProxy(apiKey: string | undefined): Plugin {
             ),
             activityId: config.activityId,
             dataVersion: DEFAULT_DATA_VERSION,
-            source: data?.emission_factor?.source ?? "climatiq",
-            year: data?.emission_factor?.year ?? null,
-            region: data?.emission_factor?.region || config.region,
+            source: factor.source ?? "climatiq",
+            year: factor.year ?? null,
+            region: factor.region || config.region,
             cachedTtlSeconds: 2592000,
             method: "data",
             fallback: false,

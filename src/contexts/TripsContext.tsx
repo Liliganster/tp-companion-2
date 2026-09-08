@@ -499,7 +499,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     if (safePatch.clientName !== undefined) {
         // Documentos actuales desde el caché de React Query (no desde `trips`,
         // que es un closure obsoleto fuera de las deps de este useCallback).
-      const currentDocs = nextDocuments || (queryClient.getQueryData<Trip[]>(queryKey)?.find(t => t.id === id)?.documents || []);
+      const currentDocs: TripDocumentRow[] = nextDocuments || (queryClient.getQueryData<Trip[]>(queryKey)?.find(t => t.id === id)?.documents || []);
       const filtered: TripDocumentRow[] = currentDocs.filter((d) => d.kind !== "client_meta");
 
         if (safePatch.clientName) {

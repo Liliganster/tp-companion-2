@@ -374,8 +374,15 @@ export default function ReportView() {
         address,
         licensePlate,
       });
-    } catch {
-      // addReport already shows the error toast (e.g. monthly limit reached)
+    } catch (error) {
+      // The plan limit already has its own notification.
+      if (!(error instanceof Error && error.message === "limits.maxReportsPerMonthReached")) {
+        toast({
+          title: t("reportView.toastSaveErrorTitle"),
+          description: t("reportView.toastSaveErrorBody"),
+          variant: "destructive",
+        });
+      }
       return;
     }
 
