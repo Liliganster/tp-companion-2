@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("../../src/lib/supabaseServer.js", () => ({ supabaseAdmin: { from: mocks.from } }));
 vi.mock("./observability.js", () => ({
-  withApiObservability: (handler: Function) => (req: unknown, res: unknown) => handler(req, res, {
+  withApiObservability: (handler: (...args: any[]) => unknown) => (req: unknown, res: unknown) => handler(req, res, {
     requestId: "test", log: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
   }),
   captureServerException: vi.fn(),
