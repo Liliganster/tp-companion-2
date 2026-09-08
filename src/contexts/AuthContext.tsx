@@ -9,10 +9,10 @@ type AuthContextValue = {
   session: Session | null;
   user: User | null;
   loading: boolean;
-  signInWithPassword: (email: string, password: string) => Promise<void>;
-  signUpWithPassword: (email: string, password: string, fullName?: string) => Promise<void>;
-  signInWithGoogle: (idToken: string, nonce?: string) => Promise<void>;
-  requestPasswordReset: (email: string) => Promise<void>;
+  signInWithPassword: (email: string, password: string, captchaToken?: string) => Promise<void>;
+  signUpWithPassword: (email: string, password: string, fullName?: string, captchaToken?: string) => Promise<void>;
+  signInWithGoogle: (idToken: string, nonce?: string, captchaToken?: string) => Promise<void>;
+  requestPasswordReset: (email: string, captchaToken?: string) => Promise<void>;
   signOut: () => Promise<void>;
   getAccessToken: () => Promise<string | null>;
 };
@@ -64,18 +64,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signInWithPassword = useCallback(async (email: string, password: string) => {
-    const { error } = await requireSupabase().auth.signInWithPassword({ email, password });
+  const signInWithPassword = useCallback(async (email: string, password: string, captchaToken?: string) => {
+    const { error } = await requireSupabase().auth.signInWithPassword({ email, password, ...(captchaToken ? { options: { captchaToken } } : {}) });
     if (error) throw error;
   }, []);
 
-  const signUpWithPassword = useCallback(async (email: string, password: string, fullName?: string) => {
+  const signUpWithPassword = useCallback(async (email: string, password: string, fullName?: string, captchaToken?: string) => {
     // Solo se destructura `error`: el `data` del signUp contiene el objeto de
     // usuario (email) y no debe acabar en logs.
     const { error } = await requireSupabase().auth.signUp({
       email,
       password,
       options: {
+        ...(captchaToken ? { captchaToken } : {}),
         data: fullName ? { full_name: fullName } : undefined,
         emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
@@ -87,17 +88,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logger.debug("[AuthContext] Sign up successful");
   }, []);
 
-  const signInWithGoogle = useCallback(async (idToken: string, nonce?: string) => {
+  const signInWithGoogle = useCallback(async (idToken: string, nonce?: string, captchaToken?: string) => {
     const { error } = await requireSupabase().auth.signInWithIdToken({
       provider: "google",
+      ...(captchaToken ? { options: { captchaToken } } : {}),
       token: idToken,
       ...(nonce ? { nonce } : {}),
     });
     if (error) throw error;
   }, []);
 
-  const requestPasswordReset = useCallback(async (email: string) => {
+  const requestPasswordReset = useCallback(async (email: string, captchaToken?: string) => {
     const { error } = await requireSupabase().auth.resetPasswordForEmail(email, {
+      ...(captchaToken ? { captchaToken } : {}),
       redirectTo: `${window.location.origin}/auth/callback`,
     });
     if (error) throw error;

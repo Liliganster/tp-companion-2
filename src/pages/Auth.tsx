@@ -13,10 +13,17 @@ import { Link } from "react-router-dom";
 import { logger } from "@/lib/logger";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 
+import { AuthCaptcha } from "@/components/auth/AuthCaptcha";
+
 export default function Auth() {
   const { t } = useI18n();
   const { signInWithPassword, signUpWithPassword, signInWithGoogle, requestPasswordReset, user, loading } = useAuth();
   const { toast } = useToast();
+  const captchaSiteKey = String(import.meta.env.VITE_TURNSTILE_SITE_KEY ?? "").trim();
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaAttempt, setCaptchaAttempt] = useState(0);
+  const captchaPending = Boolean(captchaSiteKey) && !captchaToken;
+  const resetCaptcha = () => { setCaptchaToken(""); setCaptchaAttempt(value => value + 1); };
   const [isLogin, setIsLogin] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState("");
@@ -37,13 +44,14 @@ export default function Auth() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading || captchaPending) return;
     setIsLoading(true);
     setShowVerifyEmailNotice(false);
     try {
       if (isLogin) {
-        await signInWithPassword(email, password);
+        await signInWithPassword(email, password, captchaToken || undefined);
       } else {
-        await signUpWithPassword(email, password, name);
+        await signUpWithPassword(email, password, name, captchaToken || undefined);
         setIsLogin(true);
         setPassword("");
         setShowVerifyEmailNotice(true);
@@ -57,11 +65,13 @@ export default function Auth() {
         variant: "destructive",
       });
     } finally {
+      resetCaptcha();
       setIsLoading(false);
     }
   };
 
   const handleForgotPassword = async () => {
+    if (isLoading || captchaPending) return;
     const cleanEmail = email.trim();
     if (!cleanEmail) {
       toast({
@@ -74,7 +84,7 @@ export default function Auth() {
 
     setIsLoading(true);
     try {
-      await requestPasswordReset(cleanEmail);
+      await requestPasswordReset(cleanEmail, captchaToken || undefined);
       toast({
         title: "Email enviado",
         description: "Revisa tu bandeja de entrada para restablecer la contraseña.",
@@ -87,11 +97,13 @@ export default function Auth() {
         variant: "destructive",
       });
     } finally {
+      resetCaptcha();
       setIsLoading(false);
     }
   };
 
   const handleGoogle = useCallback(async (idToken: string, nonce: string) => {
+    if (isLoading || captchaPending) return;
     setIsLoading(true);
     try {
       if (isLogin) {
@@ -114,7 +126,7 @@ export default function Auth() {
           return;
         }
       }
-      await signInWithGoogle(idToken, nonce);
+      await signInWithGoogle(idToken, nonce, ...(captchaToken ? [captchaToken] : []));
     } catch (err: any) {
       toast({
         title: "No se pudo iniciar sesión con Google",
@@ -123,7 +135,8 @@ export default function Auth() {
       });
       setIsLoading(false);
     }
-  }, [isLogin, signInWithGoogle, t, toast]);
+      finally { setCaptchaToken(""); setCaptchaAttempt(value => value + 1); }
+  }, [isLogin, isLoading, captchaPending, captchaToken, signInWithGoogle, t, toast]);
 
   const handleGoogleError = useCallback((err: Error) => {
     toast({
@@ -199,7 +212,7 @@ export default function Auth() {
           )}
 
           <GoogleSignInButton
-            disabled={isLoading}
+            disabled={isLoading || captchaPending}
             isSignUp={!isLogin}
             onCredential={handleGoogle}
             onError={handleGoogleError}
@@ -249,7 +262,7 @@ export default function Auth() {
                     type="button"
                     className="text-xs text-primary hover:underline"
                     onClick={handleForgotPassword}
-                    disabled={isLoading}
+                    disabled={isLoading || captchaPending}
                   >
                     {t("auth.forgotPassword")}
                   </button>
@@ -277,7 +290,9 @@ export default function Auth() {
               </div>
             </div>
 
-            <Button type="submit" className="w-full h-11" variant="add" disabled={isLoading}>
+            {captchaSiteKey && <AuthCaptcha key={captchaAttempt} siteKey={captchaSiteKey} onToken={setCaptchaToken} />}
+
+            <Button type="submit" className="w-full h-11" variant="add" disabled={isLoading || captchaPending}>
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
@@ -291,7 +306,8 @@ export default function Auth() {
             <button
               type="button"
               className="text-primary font-semibold hover:underline"
-              onClick={() => setIsLogin(!isLogin)}
+              disabled={isLoading}
+              onClick={() => { resetCaptcha(); setIsLogin(!isLogin); }}
             >
               {isLogin ? t("auth.startFree") : t("auth.login")}
             </button>

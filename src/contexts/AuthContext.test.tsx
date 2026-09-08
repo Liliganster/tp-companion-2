@@ -23,6 +23,7 @@ vi.mock("@/lib/supabaseClient", () => ({
       signInWithPassword: mocks.signInWithPassword,
       signUp: mocks.signUp,
       signInWithIdToken: mocks.signInWithIdToken,
+      resetPasswordForEmail: vi.fn(async () => ({ error: null })),
       signOut: mocks.signOut,
       getSession: mocks.getSession,
       onAuthStateChange: mocks.onAuthStateChange,
@@ -58,6 +59,10 @@ describe("AuthContext", () => {
 
     await out.current!.signUpWithPassword("a@b.com", "pw", "Name");
     expect(mocks.signUp).toHaveBeenCalled();
+    await out.current!.signInWithPassword("a@b.com", "pw", "captcha-token");
+    expect(mocks.signInWithPassword).toHaveBeenLastCalledWith({ email: "a@b.com", password: "pw", options: { captchaToken: "captcha-token" } });
+    await out.current!.signUpWithPassword("a@b.com", "pw", "Name", "captcha-token");
+    expect(mocks.signUp).toHaveBeenLastCalledWith(expect.objectContaining({ options: expect.objectContaining({ captchaToken: "captcha-token" }) }));
 
     await out.current!.signInWithGoogle("google-id-token", "raw-nonce");
     expect(mocks.signInWithIdToken).toHaveBeenCalledWith({
