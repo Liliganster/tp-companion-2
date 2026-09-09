@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import { useI18n } from "@/hooks/use-i18n";
 import { cn, uuidv4 } from "@/lib/utils";
 import { logger } from "@/lib/logger";
+import { deleteReceipt } from "@/lib/deleteReceipt";
+import { useQueryClient } from "@tanstack/react-query";
 
 export type ExpenseType = "toll" | "parking" | "fuel" | "other";
 
@@ -36,6 +38,7 @@ interface ExpenseScanButtonProps {
   expenseType: ExpenseType;
   onExtracted: (result: ExpenseExtractResult, storagePath: string) => void;
   onReceiptDeleted?: (receiptId: string) => void;
+  onDeletionBusyChange?: (busy: boolean) => void;
   existingReceipts?: ReceiptDocument[];
   disabled?: boolean;
   className?: string;
@@ -109,6 +112,7 @@ export function ExpenseScanButton({
   expenseType,
   onExtracted,
   onReceiptDeleted,
+  onDeletionBusyChange,
   existingReceipts = [],
   disabled,
   className,
@@ -117,6 +121,8 @@ export function ExpenseScanButton({
 }: ExpenseScanButtonProps) {
   const { t } = useI18n();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const deleteInFlight = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -139,26 +145,32 @@ export function ExpenseScanButton({
 
   // Delete a specific receipt from storage
   const handleDeleteReceipt = useCallback(async (receipt: ReceiptDocument) => {
-    if (!receipt.storagePath || !supabase) return;
+    if (deleteInFlight.current) return;
+    if (!receipt.storagePath || !supabase || !user) {
+      toast.error(t("expenseScan.deleteError"));
+      return;
+    }
+    if (!window.confirm(t("expenseScan.deleteConfirm"))) return;
 
+    deleteInFlight.current = true;
+    onDeletionBusyChange?.(true);
     setDeletingReceiptId(receipt.id);
     try {
-      // Delete from Supabase Storage
-      const { error } = await supabase.storage
-        .from("project_documents")
-        .remove([receipt.storagePath]);
+      await deleteReceipt(supabase, { receipt, userId: user.id, tripId, projectId, expenseType });
 
-      if (error) throw error;
-
-      toast.success(t("expenseScan.receiptDeleted"));
       onReceiptDeleted?.(receipt.id);
+      toast.success(t("expenseScan.receiptDeleted"));
+      void queryClient.invalidateQueries({ queryKey: ["trips", user.id] });
     } catch (err) {
       logger.warn("Delete error", err);
-      toast.error(t("expenseScan.deleteError"));
+      toast.error(t(err instanceof Error && err.message === "receipt_delete_recovery_failed"
+        ? "expenseScan.deleteRecoveryError" : "expenseScan.deleteError"));
     } finally {
+      deleteInFlight.current = false;
+      onDeletionBusyChange?.(false);
       setDeletingReceiptId(null);
     }
-  }, [onReceiptDeleted, t]);
+  }, [onReceiptDeleted, onDeletionBusyChange, t, user, tripId, projectId, expenseType, queryClient]);
 
   // Process a file (from input, camera, or drag & drop)
   const processFile = useCallback((file: File) => {
@@ -277,6 +289,7 @@ export function ExpenseScanButton({
   }, [imagePreview, user, t, onExtracted, resetState]);
 
   const handleCancel = useCallback(() => {
+    if (deleteInFlight.current) return;
     // If we uploaded but user cancels, optionally delete the file
     // For now, we'll keep it (they might retry)
     setIsOpen(false);
@@ -338,7 +351,7 @@ export function ExpenseScanButton({
         )}
       </Button>
 
-      <Dialog open={isOpen} onOpenChange={(open) => !open && handleCancel()}>
+      <Dialog open={isOpen} onOpenChange={(open) => !open && !deleteInFlight.current && handleCancel()}>
         <DialogContent className="glass max-w-md max-h-[90vh] overflow-hidden p-0">
           <ModalHeaderImage className="h-24">
             <DialogTitle className="text-lg font-bold tracking-tight">{t("expenseScan.title")}</DialogTitle>
@@ -371,7 +384,8 @@ export function ExpenseScanButton({
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 shrink-0 text-destructive hover:bg-destructive/10"
-                        disabled={deletingReceiptId === receipt.id}
+                        aria-label={t("expenseScan.deleteReceipt")}
+                        disabled={deletingReceiptId !== null}
                         onClick={() => handleDeleteReceipt(receipt)}
                       >
                         {deletingReceiptId === receipt.id ? (

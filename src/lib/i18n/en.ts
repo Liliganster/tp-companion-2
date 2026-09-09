@@ -2,6 +2,8 @@ import type { I18nKey } from "./es";
 
 // Cargado perezosamente por src/lib/i18n.ts (chunk separado del bundle principal).
 export const en: Record<I18nKey, string> = {
+  "expenseScan.deleteConfirm": "This receipt will be permanently deleted",
+  "expenseScan.deleteRecoveryError": "The deletion could not be completed and the receipt link could not be restored. Deletion has not been confirmed. Reload the trip or project and contact support if the receipt is still missing.",
   "uploads.invalidNameTitle": "Rename the file",
   "uploads.invalidNameBody": "“{name}” cannot be processed with this name. Remove #, %, ?, /, backslashes and leading or trailing spaces. Keep the extension and select the file again.",
   "uploads.fileNameHint": "File names: avoid #, %, ?, /, backslashes and leading or trailing spaces. Example: CW_Dispo_17_7.8.pdf.",

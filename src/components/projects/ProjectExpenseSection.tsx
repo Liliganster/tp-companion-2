@@ -160,8 +160,11 @@ export function ProjectExpenseSection({ projectId, onExpenseChange }: ProjectExp
     const newAmount = Math.max(0, currentExpense.amount - (receipt?.amount || 0));
     const newReceipts = currentExpense.receipts.filter(r => r.id !== receiptId);
     
-    saveExpense(type, newAmount, newReceipts);
-  }, [expenses, saveExpense]);
+    // The deletion operation has already persisted this change.
+    setExpenses(prev => prev.map(e => e.id === currentExpense.id
+      ? { ...e, amount: newAmount, receipts: newReceipts } : e));
+    onExpenseChange?.();
+  }, [expenses, onExpenseChange]);
 
   // Render expense row
   const renderExpenseRow = (

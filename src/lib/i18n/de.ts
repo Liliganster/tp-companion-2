@@ -2,6 +2,8 @@ import type { I18nKey } from "./es";
 
 // Cargado perezosamente por src/lib/i18n.ts (chunk separado del bundle principal).
 export const de: Record<I18nKey, string> = {
+  "expenseScan.deleteConfirm": "Dieser Beleg wird endgültig gelöscht",
+  "expenseScan.deleteRecoveryError": "Das Löschen konnte nicht abgeschlossen und die Belegverknüpfung nicht wiederhergestellt werden. Die Löschung wurde nicht bestätigt. Lade die Fahrt oder das Projekt neu und kontaktiere den Support, falls der Beleg weiterhin fehlt.",
   "uploads.invalidNameTitle": "Datei umbenennen",
   "uploads.invalidNameBody": "„{name}“ kann mit diesem Namen nicht verarbeitet werden. Entferne #, %, ?, /, Rückstriche und Leerzeichen am Anfang oder Ende. Behalte die Dateiendung und wähle die Datei erneut aus.",
   "uploads.fileNameHint": "Dateinamen: Vermeide #, %, ?, /, Rückstriche und Leerzeichen am Anfang oder Ende. Beispiel: CW_Dispo_17_7.8.pdf.",

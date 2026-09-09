@@ -531,6 +531,8 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
 
   // Document states
   const [existingDocuments, setExistingDocuments] = useState<Trip["documents"]>([]);
+  const initializedFormKey = useRef<string | null>(null);
+  const [deletingReceipt, setDeletingReceipt] = useState(false);
 
   // Helper to get receipts by type from documents
   const getReceiptsByType = useCallback((kind: string): ReceiptDocument[] => {
@@ -619,7 +621,15 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
   };
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      initializedFormKey.current = null;
+      return;
+    }
+    // Receipt deletion updates the persisted trip immediately. Realtime/query
+    // refreshes must not reset the other unsaved fields of this open form.
+    const formKey = trip?.id ?? "new";
+    if (initializedFormKey.current === formKey) return;
+    initializedFormKey.current = formKey;
 
     const defaultSpecialOrigin: TripData["specialOrigin"] = seedTrip?.specialOrigin ?? "base";
 
@@ -1080,6 +1090,8 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                                  />
                 <ExpenseScanButton
                   expenseType="toll"
+                  disabled={deletingReceipt}
+                  onDeletionBusyChange={setDeletingReceipt}
                   tripId={trip?.id}
                   existingReceipts={tollReceipts}
                   onExtracted={(result, storagePath) => {
@@ -1128,6 +1140,8 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                                  />
                 <ExpenseScanButton
                   expenseType="parking"
+                  disabled={deletingReceipt}
+                  onDeletionBusyChange={setDeletingReceipt}
                   tripId={trip?.id}
                   existingReceipts={parkingReceipts}
                   onExtracted={(result, storagePath) => {
@@ -1176,6 +1190,8 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                                  />
                 <ExpenseScanButton
                   expenseType="other"
+                  disabled={deletingReceipt}
+                  onDeletionBusyChange={setDeletingReceipt}
                   tripId={trip?.id}
                   existingReceipts={otherReceipts}
                   onExtracted={(result, storagePath) => {
@@ -1224,6 +1240,8 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                                  />
                 <ExpenseScanButton
                   expenseType="fuel"
+                  disabled={deletingReceipt}
+                  onDeletionBusyChange={setDeletingReceipt}
                   tripId={trip?.id}
                   existingReceipts={fuelReceipts}
                   onExtracted={(result, storagePath) => {
@@ -1349,6 +1367,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
               <Button
                 variant="save"
                 className="flex-1"
+                disabled={deletingReceipt}
               onClick={async (event) => {
                 const distanceValue = parseLocaleNumber(distance) ?? 0;
                 const passengersValue = parseLocaleNumber(passengers) ?? 0;
@@ -1452,7 +1471,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
   );
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={(next) => { if (!deletingReceipt) setIsOpen(next); }}>
       {!isControlled && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       {dialogContent}
     </Dialog>

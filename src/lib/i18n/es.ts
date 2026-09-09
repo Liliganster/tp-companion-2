@@ -1,6 +1,8 @@
 // Idioma base de Fahrtenbuch Pro. Las claves tipadas (I18nKey) derivan de este objeto.
 // ES se queda: es el idioma de la propietaria (decisión registrada en PLAN.md).
 export const es = {
+  "expenseScan.deleteConfirm": "Este recibo se eliminará definitivamente",
+  "expenseScan.deleteRecoveryError": "No se pudo completar el borrado ni restablecer el vínculo del recibo. No se ha confirmado su eliminación. Recarga el viaje o proyecto y contacta con soporte si sigue faltando.",
   "uploads.invalidNameTitle": "Cambia el nombre del archivo",
   "uploads.invalidNameBody": "No se puede procesar «{name}» con ese nombre. Quita #, %, ?, /, barras invertidas y espacios al principio o al final. Conserva la extensión y vuelve a seleccionar el archivo.",
   "uploads.fileNameHint": "Nombres de archivo: evita #, %, ?, /, barras invertidas y espacios al principio o al final. Ejemplo: CW_Dispo_17_7.8.pdf.",
