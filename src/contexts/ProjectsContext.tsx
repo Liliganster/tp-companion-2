@@ -319,6 +319,12 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         );
       }
       queryClient.setQueryData<Trip[]>(tripsQueryKey, prevTrips);
+      // Some children may already be gone: reload the persisted state after a partial failure.
+      await Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey }),
+        queryClient.invalidateQueries({ queryKey: tripsQueryKey }),
+        queryClient.invalidateQueries({ queryKey: reportsQueryKey }),
+      ]);
       throw err;
     }
   }, [queryClient, queryKey, user]);

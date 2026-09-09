@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logger } from "@/lib/logger";
+import { deleteCompleteProject } from "./deleteProject";
 
 type AnyRow = Record<string, any>;
 
@@ -133,6 +134,12 @@ export async function cascadeDeleteTripById(supabase: SupabaseClient, tripId: st
   }
 
   const projectId = tripRow?.project_id || null;
+  // Route the last trip through the complete project inventory before removing links.
+  if (projectId) {
+    const { count, error } = await supabase.from("trips").select("id", { count: "exact", head: true }).eq("project_id", projectId);
+    if (error) throw error;
+    if (count === 1) { await deleteCompleteProject(supabase, projectId); return; }
+  }
   const callsheetJobId = typeof tripRow?.callsheet_job_id === "string" ? String(tripRow.callsheet_job_id).trim() : "";
   const docs: AnyRow[] = Array.isArray(tripRow?.documents) ? (tripRow as AnyRow).documents : [];
 
@@ -278,76 +285,7 @@ export async function cascadeDeleteTripById(supabase: SupabaseClient, tripId: st
 }
 
 async function deleteOrphanProject(supabase: SupabaseClient, projectId: string) {
-  // Delete callsheet jobs linked to project (and their files)
-  const { data: jobs, error: jobsFetchError } = await supabase
-    .from("callsheet_jobs")
-    .select("id, storage_path")
-    .eq("project_id", projectId);
-
-  if (jobsFetchError && !isMissingColumnOrSchema(jobsFetchError)) {
-    logger.warn("[cascadeDelete] Error fetching callsheet jobs for orphan project:", jobsFetchError);
-  }
-
-  const jobStoragePaths = uniqStrings((jobs ?? []).map((j: AnyRow) => j.storage_path));
-  if (jobStoragePaths.length > 0) {
-    await bestEffortRemoveFromBucket(supabase, "callsheets", jobStoragePaths);
-  }
-
-  if ((jobs ?? []).length > 0) {
-    const { error: deleteJobsError } = await supabase.from("callsheet_jobs").delete().eq("project_id", projectId);
-    if (deleteJobsError && !isMissingColumnOrSchema(deleteJobsError)) {
-      logger.warn("[cascadeDelete] Error deleting callsheet jobs for orphan project:", deleteJobsError);
-    }
-  }
-
-  // Delete invoice jobs linked to project
-  const { data: invoiceJobs, error: invoiceJobsFetchError } = await supabase
-    .from("invoice_jobs")
-    .select("id")
-    .eq("project_id", projectId);
-
-  if (invoiceJobsFetchError && !isMissingColumnOrSchema(invoiceJobsFetchError)) {
-    logger.warn("[cascadeDelete] Error fetching invoice jobs for orphan project:", invoiceJobsFetchError);
-  }
-
-  for (const job of invoiceJobs ?? []) {
-    try {
-      await cascadeDeleteInvoiceJobById(supabase, (job as AnyRow).id);
-    } catch (e) {
-      logger.warn("[cascadeDelete] Error deleting invoice job for orphan project:", e);
-    }
-  }
-
-  // Delete project documents
-  const { data: projectDocs, error: projectDocsFetchError } = await supabase
-    .from("project_documents")
-    .select("id, storage_path")
-    .eq("project_id", projectId);
-
-  if (projectDocsFetchError && !isMissingColumnOrSchema(projectDocsFetchError)) {
-    logger.warn("[cascadeDelete] Error fetching project documents for orphan project:", projectDocsFetchError);
-  }
-
-  const projectDocPaths = uniqStrings((projectDocs ?? []).map((d: AnyRow) => d.storage_path));
-  if (projectDocPaths.length > 0) {
-    await bestEffortRemoveFromBucket(supabase, "project_documents", projectDocPaths);
-  }
-
-  if ((projectDocs ?? []).length > 0) {
-    const { error: deleteProjectDocsError } = await supabase
-      .from("project_documents")
-      .delete()
-      .eq("project_id", projectId);
-    if (deleteProjectDocsError && !isMissingColumnOrSchema(deleteProjectDocsError)) {
-      logger.warn("[cascadeDelete] Error deleting project documents for orphan project:", deleteProjectDocsError);
-    }
-  }
-
-  // Finally delete the project
-  const { error: deleteProjectError } = await supabase.from("projects").delete().eq("id", projectId);
-  if (deleteProjectError) {
-    logger.warn("[cascadeDelete] Error deleting orphan project:", deleteProjectError);
-  }
+  await deleteCompleteProject(supabase, projectId);
 }
 
 export async function cascadeDeleteCallsheetJobById(supabase: SupabaseClient, jobId: string) {
@@ -432,87 +370,5 @@ export async function cascadeDeleteInvoiceJobById(supabase: SupabaseClient, jobI
 }
 
 export async function cascadeDeleteProjectById(supabase: SupabaseClient, projectId: string) {
-  // 1) Delete trips for this project
-  const { data: tripRows, error: tripsFetchError } = await supabase
-    .from("trips")
-    .select("id")
-    .eq("project_id", projectId);
-
-  if (tripsFetchError) {
-    if (isMissingColumnOrSchema(tripsFetchError)) {
-      logger.warn("[cascadeDelete] trips.project_id missing; skipping trip deletion for project");
-    } else {
-      throw tripsFetchError;
-    }
-  }
-  const tripIds = (tripRows ?? []).map((r: AnyRow) => String(r.id));
-
-  // Delete trips sequentially to keep error handling predictable
-  for (const tripId of tripIds) {
-    await cascadeDeleteTripById(supabase, tripId);
-  }
-
-  // 2) Delete callsheet jobs linked to project (and their files)
-  const { data: jobs, error: jobsFetchError } = await supabase
-    .from("callsheet_jobs")
-    .select("id, storage_path")
-    .eq("project_id", projectId);
-
-  if (jobsFetchError) {
-    if (isMissingColumnOrSchema(jobsFetchError)) {
-      logger.warn("[cascadeDelete] callsheet_jobs.project_id missing; skipping callsheet job cleanup for project");
-    } else {
-      throw jobsFetchError;
-    }
-  }
-
-  const jobStoragePaths = uniqStrings((jobs ?? []).map((j: AnyRow) => j.storage_path));
-  if (jobStoragePaths.length > 0) {
-    await bestEffortRemoveFromBucket(supabase, "callsheets", jobStoragePaths);
-  }
-
-  if ((jobs ?? []).length > 0) {
-    const { error: deleteJobsError } = await supabase.from("callsheet_jobs").delete().eq("project_id", projectId);
-    if (deleteJobsError) {
-      if (isMissingColumnOrSchema(deleteJobsError)) {
-        logger.warn("[cascadeDelete] callsheet_jobs.project_id missing; skipping callsheet job delete for project");
-      } else {
-        throw deleteJobsError;
-      }
-    }
-  }
-
-  // 3) Delete project_documents (and their files)
-  const { data: docs, error: docsFetchError } = await supabase
-    .from("project_documents")
-    .select("id, storage_path")
-    .eq("project_id", projectId);
-
-  if (docsFetchError) {
-    if (isMissingColumnOrSchema(docsFetchError)) {
-      logger.warn("[cascadeDelete] project_documents.project_id missing; skipping project document cleanup");
-    } else {
-      throw docsFetchError;
-    }
-  }
-
-  const projectDocPaths = uniqStrings((docs ?? []).map((d: AnyRow) => d.storage_path));
-  if (projectDocPaths.length > 0) {
-    await bestEffortRemoveFromBucket(supabase, "project_documents", projectDocPaths);
-  }
-
-  if ((docs ?? []).length > 0) {
-    const { error: deleteDocsError } = await supabase.from("project_documents").delete().eq("project_id", projectId);
-    if (deleteDocsError) {
-      if (isMissingColumnOrSchema(deleteDocsError)) {
-        logger.warn("[cascadeDelete] project_documents.project_id missing; skipping project document delete");
-      } else {
-        throw deleteDocsError;
-      }
-    }
-  }
-
-  // 4) Delete project row itself
-  const { error: deleteProjectError } = await supabase.from("projects").delete().eq("id", projectId);
-  if (deleteProjectError) throw deleteProjectError;
+  await deleteCompleteProject(supabase, projectId);
 }

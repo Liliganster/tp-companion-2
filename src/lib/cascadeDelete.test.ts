@@ -22,7 +22,7 @@ function createSupabaseStub(respond: (op: Op) => StubResult) {
       {
         get(_target, prop) {
           if (prop === "then") {
-            const promise = Promise.resolve({ data: null, error: null, count: null, ...respond(op) });
+            const promise = Promise.resolve({ data: [], error: null, count: null, ...respond(op) });
             return promise.then.bind(promise);
           }
           return (...args: unknown[]) => {
@@ -36,6 +36,7 @@ function createSupabaseStub(respond: (op: Op) => StubResult) {
   };
 
   const supabase = {
+    auth: { getUser: async () => ({ data: { user: { id: 'user' } }, error: null }) },
     from,
     storage: {
       from: (bucket: string) => ({
@@ -101,6 +102,7 @@ describe("cascadeDeleteTripById (Fase 5: flujo de borrado de datos)", () => {
 
   it("si el proyecto queda sin viajes, se borra también el proyecto huérfano", async () => {
     const { supabase, called } = createSupabaseStub((op) => {
+      if (op.table === 'projects' && op.methods.some(m => m.name === 'maybeSingle' || m.name === 'single')) return { data: { id: 'proj-1' } };
       if (op.table === "trips" && op.methods.some((m) => m.name === "maybeSingle")) {
         return { data: { documents: [], project_id: "proj-1" } };
       }
