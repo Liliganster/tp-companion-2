@@ -28,6 +28,7 @@ import {
   postProcessLocationsForGeocoding,
 } from "./callsheetLocationHints.js";
 import { classifyLabeledLocations } from "./callsheetLabels.js";
+import { selectDocumentDayLocations } from './callsheetDayScope.js';
 import { parsePdfWithTimeout } from "./pdf-parser.js";
 import { resolveCallsheetDate } from "./callsheetDate.js";
 import {
@@ -199,7 +200,22 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
   // en callsheet_excluded_blocks — base del multi-crew de la v2, decisión de
   // la propietaria 2026-07-19: se CONSERVA). RLS: solo el dueño del job puede
   // leer sus bloques; el insert es best-effort y nunca rompe la extracción.
-  const { filming, dropped } = classifyLabeledLocations(validated.data.locations as any);
+  const resolvedDate = resolveCallsheetDate({
+    date: validated.data.date,
+    dateRaw: validated.data.dateRaw ?? null,
+    dateYearInDocument: validated.data.dateYearInDocument ?? null,
+    referenceIso,
+  });
+  const daySelection = selectDocumentDayLocations(validated.data.locations as any[], resolvedDate, pdfText);
+  if (!daySelection.accepted.length) {
+    log.warn({ jobId, reasons: daySelection.excluded.map(l => l.reason) }, 'callsheet_no_verified_document_day_locations');
+    return { ok: false, kind: 'invalid_extraction', message: 'No se han podido confirmar localizaciones para el día de esta callsheet. Revisa la fecha y los bloques de otros días.' };
+  }
+  // Later normalization, validation and Maps matching cannot borrow other-day text.
+  const daySourceText = daySelection.accepted.map(l => l.dayEvidence).join('\n');
+  const classified = classifyLabeledLocations(daySelection.accepted as any);
+  const filming = classified.filming;
+  const dropped = [...classified.dropped, ...daySelection.excluded];
   if (dropped.length > 0) {
     log.info({ jobId, dropped: dropped.map((d: any) => `${d.label}|${d.reason}`) }, "callsheet_labels_dropped");
     try {
@@ -227,7 +243,7 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
 
   const normalizedAiLocations = normalizeExtractedCallsheetLocations({
     locations: filmingAddresses,
-    pdfText,
+    pdfText: daySourceText,
   });
   // Evidence: etiqueta + dirección literales del documento
   const evidenceLocations = filming.map((f: any) => (f.label ? `${f.label}: ${f.address}` : f.address));
@@ -242,7 +258,7 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
   // en imágenes/PDFs escaneados no hay texto → no descarta nada)
   const verifiedLocations = filterHallucinatedLocations({
     locations: extracted.locations,
-    pdfText,
+    pdfText: daySourceText,
   });
   extracted.locations = verifiedLocations.length > 0 ? verifiedLocations : extracted.locations;
   log.info(
@@ -258,12 +274,6 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
   const geocodingLocations = postProcessLocationsForGeocoding(displayLocations);
 
   // G. Fecha: el año lo decide el CÓDIGO si el documento no lo trae impreso
-  const resolvedDate = resolveCallsheetDate({
-    date: extracted.date,
-    dateRaw: validated.data.dateRaw ?? null,
-    dateYearInDocument: validated.data.dateYearInDocument ?? null,
-    referenceIso,
-  });
   if (resolvedDate !== extracted.date) {
     log.info({ jobId, aiDate: extracted.date, resolvedDate, dateRaw: validated.data.dateRaw }, "callsheet_date_year_resolved");
   }
@@ -284,7 +294,7 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
   // sitio conducible exacto y resolverlos es gratis); si no, geocoding con
   // caché + sesgo AT. Todo en paralelo.
   let geocodingDurationMs: number | null = null;
-  const mapsLinkCandidates = extractMapsLinkCandidates(pdfText);
+  const mapsLinkCandidates = extractMapsLinkCandidates(daySourceText);
   const geoStartTime = Date.now();
   const geoResults = await Promise.all(
     geocodingLocations.map(async (locStr, index) => {

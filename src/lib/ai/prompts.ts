@@ -1,4 +1,4 @@
-import { LOCATION_COLLECTION_RULE, LOCATION_DESTINATION_RULE, LOCATION_LABEL_RULE } from './locationPolicy.js';
+import { LOCATION_COLLECTION_RULE, LOCATION_DESTINATION_RULE, LOCATION_LABEL_RULE, LOCATION_DAY_RULE } from './locationPolicy.js';
 
 export function buildUniversalExtractorPrompt(text: string) {
   return [
@@ -7,6 +7,8 @@ export function buildUniversalExtractorPrompt(text: string) {
     "",
     "── date ──",
     "Main shooting day date from document header. Normalize to YYYY-MM-DD.",
+    LOCATION_DAY_RULE,
+    "Do not take the date from a next-day preview, an earlier schedule, printing timestamp or document revision.",
     "Also return dateRaw: the date EXACTLY as printed (verbatim, including weekday if shown).",
     "Also return dateYearInDocument: true ONLY if a 4-digit year is printed for that date; false otherwise.",
     "If the year is missing, do NOT guess it in dateRaw — the code infers it.",
@@ -34,7 +36,11 @@ export function buildUniversalExtractorPrompt(text: string) {
     "",
     "── locations (CRITICAL) ──",
     LOCATION_COLLECTION_RULE,
-    "Return each block as {label, address}, with addressCorrected only when applicable.",
+    "Return each block with label, address, dayScope, dayDate and dayEvidence; addressCorrected only when applicable.",
+    "dayDate: YYYY-MM-DD only if the block or its governing heading explicitly supplies a complete date with year; otherwise empty string. Do not invent a date.",
+    "dayEvidence: copy the address block together with the heading/column text that establishes its day, verbatim. Include its associated Maps link if present. Never copy a different day's heading as evidence.",
+    "NEXT DAY, TOMORROW, PREVIOUS DAY, YESTERDAY, NÄCHSTER DREHTAG, FOLGETAG, PRÓXIMO DÍA and AYER refer to other days. Never use their addresses as current-day destinations.",
+    "An unlabeled date can be inherited from the main shooting-day context only if no intervening other-day heading or conflicting date applies. Otherwise mark uncertain.",
     LOCATION_LABEL_RULE,
     LOCATION_DESTINATION_RULE,
     "The app separates filming from logistics using the retained labels. Collecting an address does not make it a trip destination.",
@@ -56,7 +62,7 @@ export function buildUniversalExtractorPrompt(text: string) {
     "• NEVER invent, complete, or guess addresses from your knowledge.",
     "• If a venue has no street address, preserve its printed name; include the city only when supplied by the document.",
     "• If only logistics are found, return those labeled blocks; never invent a filming location.",
-    "• If no location block at all is found, return [{\"label\":\"\",\"address\":\"No location found\"}].",
+    "• If no location block at all is found, return [{\"label\":\"\",\"address\":\"No location found\",\"dayScope\":\"uncertain\",\"dayDate\":\"\",\"dayEvidence\":\"\"}].",
     "",
     "addressCorrected (per location, for map lookup):",
     "• The SAME address made geocodable: fix obvious street-name typos",

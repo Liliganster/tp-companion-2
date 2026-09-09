@@ -1,7 +1,10 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ download: vi.fn(), text: vi.fn(), binary: vi.fn() }));
+const mocks = vi.hoisted(() => ({ download: vi.fn(), text: vi.fn(), binary: vi.fn(), insert: vi.fn(async (_table: string, _rows: unknown) => ({ error: null })) }));
 vi.mock('../../src/lib/supabaseServer.js', () => ({ supabaseAdmin: {
-  from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) }),
+  from: (table: string) => ({
+    select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }),
+    insert: (rows: unknown) => mocks.insert(table, rows),
+  }),
   storage: { from: () => ({ download: mocks.download }) },
 } }));
 vi.mock('./storageOwnership.js', () => ({ assertStorageOwnership: async () => {} }));
@@ -33,4 +36,25 @@ it('rejects over 50 MB before reading binary content or reaching the provider', 
   const read = vi.fn(); mocks.download.mockResolvedValue({ data: { size: 50 * 1024 * 1024 + 1, arrayBuffer: read } });
   expect(await run('big.pdf')).toMatchObject({ ok: false, kind: 'file_too_large' });
   expect(read).not.toHaveBeenCalled(); expect(mocks.binary).not.toHaveBeenCalled();
+});
+
+it('saves only the document-day location, not tomorrow, through the actual pipeline', async () => {
+  const today = { label: 'MOTIV', address: 'Example Street 10, City', dayScope: 'document_day', dayDate: '2026-09-10', dayEvidence: 'SHOOT 10.09.2026\nMOTIV: Example Street 10, City' };
+  const tomorrow = { label: 'SET', address: 'Other Street 20, City', dayScope: 'other_day', dayDate: '2026-09-11', dayEvidence: 'NEXT DAY\nSET: Other Street 20, City' };
+  const bytes = new TextEncoder().encode(`${today.dayEvidence}\n${tomorrow.dayEvidence}`);
+  mocks.download.mockResolvedValue({ data: { size: bytes.length, arrayBuffer: async () => bytes.buffer } });
+  mocks.text.mockResolvedValue({ text: JSON.stringify({ date: '2026-09-10', dateRaw: '10.09.2026', dateYearInDocument: true, projectName: 'Test', locations: [today, tomorrow] }), provider: 'mock', model: 'mock', vendor: null });
+  const result = await run('days.txt');
+  expect(result).toMatchObject({ ok: true, locations: ['Example Street 10, City'] });
+  const saved = mocks.insert.mock.calls.find(([table]) => table === 'callsheet_locations')?.[1] as any[];
+  expect(saved).toHaveLength(1); expect(saved[0].address_raw).toBe(today.address);
+});
+
+it('does not save a successful result when the only location belongs to tomorrow', async () => {
+  const source = 'SHOOT 10.09.2026\nNEXT DAY SET: Other Street 20, City';
+  const bytes = new TextEncoder().encode(source);
+  mocks.download.mockResolvedValue({ data: { size: bytes.length, arrayBuffer: async () => bytes.buffer } });
+  mocks.text.mockResolvedValue({ text: JSON.stringify({ date: '2026-09-10', dateRaw: '10.09.2026', dateYearInDocument: true, projectName: 'Test', locations: [{ label: 'SET', address: 'Other Street 20, City', dayScope: 'other_day', dayDate: '2026-09-11', dayEvidence: source }] }), provider: 'mock', model: 'mock' });
+  expect(await run('future.txt')).toMatchObject({ ok: false, kind: 'invalid_extraction' });
+  expect(mocks.insert).not.toHaveBeenCalled();
 });

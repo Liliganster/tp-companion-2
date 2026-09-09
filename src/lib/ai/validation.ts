@@ -6,6 +6,9 @@ const LabeledLocationSchema = z.union([
   z.object({
     label: z.string().trim().max(120).catch("").default(""),
     address: z.string().trim().min(1).max(300),
+    dayScope: z.enum(['document_day', 'other_day', 'uncertain']).catch('uncertain').default('uncertain'),
+    dayDate: z.string().trim().max(10).catch('').default(''),
+    dayEvidence: z.string().trim().max(3000).catch('').default(''),
     // Dirección geocodificable (errata corregida); el address queda como evidencia.
     addressCorrected: z.string().trim().max(300).catch("").default(""),
   }),
@@ -25,4 +28,3 @@ export const CallsheetExtractionResultSchema = z.object({
 });
 
 export type CallsheetExtractionResult = z.infer<typeof CallsheetExtractionResultSchema>;
-

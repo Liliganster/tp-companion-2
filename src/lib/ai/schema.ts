@@ -1,4 +1,4 @@
-import { LOCATION_COLLECTION_RULE, LOCATION_DESTINATION_RULE, LOCATION_LABEL_RULE } from './locationPolicy.js';
+import { LOCATION_COLLECTION_RULE, LOCATION_DESTINATION_RULE, LOCATION_LABEL_RULE, LOCATION_DAY_RULE } from './locationPolicy.js';
 
 export const extractionSchema = {
   type: "object",
@@ -17,6 +17,9 @@ export const extractionSchema = {
       items: {
         type: "object",
         properties: {
+          dayScope: { type: "string", enum: ["document_day", "other_day", "uncertain"], description: LOCATION_DAY_RULE },
+          dayDate: { type: "string", description: "Explicit complete date governing this block, YYYY-MM-DD; empty string if the block/heading does not print a full date with year. Never infer it from upload time." },
+          dayEvidence: { type: "string", description: "Verbatim address block plus its governing day heading/column, including the associated Maps link if printed. Preserve the evidence that relates THIS location to its day." },
           label: {
             type: "string",
             description: LOCATION_LABEL_RULE
@@ -30,7 +33,7 @@ export const extractionSchema = {
             description: "The same address made geocodable: fix ONLY obvious street-name typos and append city/postal code if printed elsewhere in the document. NEVER a different place, NEVER invented house numbers. Empty string if no correction needed."
           }
         },
-        required: ["label", "address"]
+        required: ["label", "address", "dayScope", "dayDate", "dayEvidence"]
       },
       description: `${LOCATION_COLLECTION_RULE} ${LOCATION_DESTINATION_RULE}`
     }
