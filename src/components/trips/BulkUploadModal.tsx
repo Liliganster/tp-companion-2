@@ -34,6 +34,8 @@ import { CALLSHEET_ACCEPT, isSupportedCallsheetFile, resolveCallsheetMime } from
 import { CallsheetUploadHelp } from "@/components/callsheets/CallsheetUploadHelp";
 import { useAiQuota } from "@/hooks/use-ai-quota";
 import { isSupportedUploadFileName } from "@/lib/uploadFileName";
+import { MANUAL_ACCEPT, validateDocumentSize, readSpreadsheetTables, mergeImportTables, parseDelimitedRows, normalizeImportHeader, parseImportDate, parseImportDistance } from '@/lib/importDocuments';
+import { ManualImportPreview, type ImportTable } from './ManualImportPreview';
 
 interface SavedTrip {
   id: string;
@@ -121,7 +123,7 @@ async function openGoogleDrivePicker(params: {
 
   const mimeTypes = Array.isArray(params.mimeTypes) && params.mimeTypes.length > 0
     ? params.mimeTypes
-    : ["text/csv", "application/vnd.google-apps.spreadsheet", "application/vnd.ms-excel"];
+    : ["text/csv", "application/vnd.google-apps.spreadsheet", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"];
 
   const view = new google.picker.DocsView(google.picker.ViewId.DOCS);
   view.setIncludeFolders(false);
@@ -225,7 +227,12 @@ function getGoogleCloudProjectNumber(clientId: string): string {
 export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUploadModalProps) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(defaultOpen);
-  const [csvText, setCsvText] = useState("");
+  const [manualTables, setManualTables] = useState<ImportTable[]>([]);
+  const [pastedCsv, setPastedCsv] = useState('');
+  const csvText = useMemo(() => mergeImportTables(manualTables.map(table => table.text)), [manualTables]);
+  const [aiText, setAiText] = useState('');
+  const savedManualKeysRef = useRef(new Set<string>());
+  const manualIdsRef = useRef(new Map<string, string>());
   const [csvBusy, setCsvBusy] = useState(false);
   const [driveBusy, setDriveBusy] = useState(false);
   const resumeDriveImportRef = useRef(false);
@@ -421,94 +428,6 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     savedByJobIdRef.current = savedByJobId;
   }, [savedByJobId]);
 
-  const normalizeHeaderKey = (raw: string): string =>
-    String(raw ?? "")
-      .trim()
-      .replace(/^\uFEFF/, "")
-      .toLowerCase();
-
-  function detectDelimiter(headerLine: string): "," | ";" {
-    // Count separators outside quotes
-    let inQuotes = false;
-    let commas = 0;
-    let semis = 0;
-    for (let i = 0; i < headerLine.length; i++) {
-      const ch = headerLine[i];
-      if (ch === '"') {
-        if (inQuotes && headerLine[i + 1] === '"') {
-          i += 1;
-        } else {
-          inQuotes = !inQuotes;
-        }
-        continue;
-      }
-      if (inQuotes) continue;
-      if (ch === ",") commas += 1;
-      if (ch === ";") semis += 1;
-    }
-    return semis > commas ? ";" : ",";
-  }
-
-  function parseCsvLine(line: string, delimiter: string): string[] {
-    const out: string[] = [];
-    let cur = "";
-    let inQuotes = false;
-
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') {
-        if (inQuotes && line[i + 1] === '"') {
-          cur += '"';
-          i += 1;
-        } else {
-          inQuotes = !inQuotes;
-        }
-        continue;
-      }
-
-      if (!inQuotes && ch === delimiter) {
-        out.push(cur.trim());
-        cur = "";
-        continue;
-      }
-      cur += ch;
-    }
-
-    out.push(cur.trim());
-    return out;
-  }
-
-  const parseDateToIso = (raw: string): string | null => {
-    const v = String(raw ?? "").trim();
-    if (!v) return null;
-
-    // ISO: YYYY-MM-DD
-    const iso = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(v);
-    if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
-
-    // DD-MM-YYYY or DD/MM/YYYY
-    const dmy = /^([0-9]{1,2})[/-]([0-9]{1,2})[/-]([0-9]{4})$/.exec(v);
-    if (dmy) {
-      const dd = String(Number(dmy[1])).padStart(2, "0");
-      const mm = String(Number(dmy[2])).padStart(2, "0");
-      const yyyy = dmy[3];
-      return `${yyyy}-${mm}-${dd}`;
-    }
-
-    const time = Date.parse(v);
-    if (!Number.isFinite(time)) return null;
-    const dt = new Date(time);
-    const yyyy = dt.getFullYear();
-    const mm = String(dt.getMonth() + 1).padStart(2, "0");
-    const dd = String(dt.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  };
-
-  const readCsvTextFromFile = async (file: File): Promise<string> => {
-    const text = await file.text();
-    // remove BOM if present
-    return text.replace(/^\uFEFF/, "");
-  };
 
   const resolveProjectIdByName = async (
     projectNameRaw: string,
@@ -598,12 +517,10 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     const text = String(rawCsv ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
     if (!text) return { trips: [], errors: ["CSV vacío"] };
 
-    const lines = text.split("\n").filter((l) => l.trim().length > 0);
+    const lines = parseDelimitedRows(text);
     if (lines.length < 2) return { trips: [], errors: ["CSV debe incluir cabecera + al menos una fila"] };
 
-    const headerLine = lines[0];
-    const delimiter = detectDelimiter(headerLine);
-    const headers = parseCsvLine(headerLine, delimiter).map(normalizeHeaderKey);
+    const headers = lines[0].map(normalizeImportHeader);
 
     const idx = (key: string) => headers.findIndex((h) => h === key);
     const iDate = idx("date");
@@ -657,11 +574,10 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     const right = Math.max(iOrigin, iDestination);
 
     for (let rowIdx = 1; rowIdx < lines.length; rowIdx++) {
-      const rowRaw = lines[rowIdx];
-      const cols = parseCsvLine(rowRaw, delimiter);
+      const cols = lines[rowIdx];
       const get = (i: number) => (i >= 0 ? String(cols[i] ?? "").trim() : "");
 
-      const dateIso = parseDateToIso(get(iDate));
+      const dateIso = parseImportDate(get(iDate));
       const projectName = get(iProject);
       const reason = iReason >= 0 ? get(iReason) : "";
 
@@ -684,7 +600,8 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
       }
 
       const stops: string[] = [];
-      for (let i = left + 1; i < right; i++) {
+      for (let i = 0; i < headers.length; i++) {
+        if (!(i > left && i < right) && !/^(stop|parada|zwischenstopp)\d*$/.test(headers[i])) continue;
         if (reserved.has(headers[i])) continue;
         const v = String(cols[i] ?? "").trim();
         if (v) stops.push(v);
@@ -693,12 +610,10 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
       const producer = iProducer >= 0 ? get(iProducer) : "";
       const routeValues = [origin, ...stops, destination].filter((x) => String(x ?? "").trim().length > 0);
 
-      let distanceKm = 0;
-      if (iDistance >= 0) {
-        const raw = get(iDistance).replace(",", ".");
-        const n = Number.parseFloat(raw);
-        if (Number.isFinite(n) && n > 0) distanceKm = n;
-      }
+      const distanceKm = parseImportDistance(get(iDistance));
+      if (distanceKm === null) { errors.push(`Fila ${rowIdx + 1}: kilómetros inválidos`); continue; }
+      const stopsCheck = checkStopsLimit(Math.max(0, routeValues.length - 2));
+      if (!stopsCheck.allowed) { errors.push(stopsCheck.message || `Fila ${rowIdx + 1}: demasiadas paradas`); continue; }
 
       tripsOut.push({
         id: uuidv4(),
@@ -722,10 +637,10 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
 
     setCsvBusy(true);
     try {
-      const token = await getAccessToken();
       const { trips: parsedTrips, errors } = parseCsvTrips(rawCsv);
       if (errors.length > 0) {
         toast.error(errors.slice(0, 3).join("\n"));
+        return;
       }
 
       if (parsedTrips.length === 0) {
@@ -733,13 +648,16 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
         return;
       }
 
-      // Check plan limits for CSV import
+      const existingKeys = new Set(trips.map(trip => buildTripDuplicateKey(trip.date, trip.route)).filter(Boolean));
+      const pendingKeys = new Set(parsedTrips.map(trip => buildTripDuplicateKey(trip.date, trip.route)).filter(key => key && !existingKeys.has(key) && !savedManualKeysRef.current.has(key)));
+      if (!pendingKeys.size) { toast.info(tf('bulk.manualDuplicates', { count: parsedTrips.length })); setManualTables([]); handleOpenChange(false); return; }
+      // Check only new rows, so a partial retry does not count saved rows twice.
       if (!canAddNonAITrip.allowed) {
         toast.error(canAddNonAITrip.message || t("limits.maxTripsReached"));
         return;
       }
 
-      const importLimit = checkCSVImportLimit(parsedTrips.length);
+      const importLimit = checkCSVImportLimit(pendingKeys.size);
       if (!importLimit.allowed) {
         toast.error(importLimit.message || t("limits.csvImportExceedsLimit"));
         return;
@@ -748,24 +666,28 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
       let ok = 0;
       let failed = 0;
       const projectSessionCache = new Map<string, string>();
+      let skipped = 0;
 
       // sequential to avoid rate limits and keep ordering
       for (const trip of parsedTrips) {
         try {
+          const duplicateKey = buildTripDuplicateKey(trip.date, trip.route);
+          if (duplicateKey && (existingKeys.has(duplicateKey) || savedManualKeysRef.current.has(duplicateKey))) { skipped++; continue; }
+          if (duplicateKey) {
+            trip.id = manualIdsRef.current.get(duplicateKey) ?? trip.id;
+            manualIdsRef.current.set(duplicateKey, trip.id);
+          }
           const projectId = await resolveProjectIdByName(trip.project, trip.producer, sourceLabel, projectSessionCache);
 
 
-          let distance = trip.distance;
-          if (!Number.isFinite(distance) || distance <= 0) {
-            const computedKm = await computeDistanceKmIfMissing(trip.route, undefined, token);
-            if (typeof computedKm === "number" && computedKm > 0) distance = computedKm;
-          }
+          const distance = trip.distance;
+          // Manual import uses the client's reviewed distance; it does not call AI or Maps.
 
           // Esperar el guardado: sin await los fallos se contaban como éxito
           // y los inserts salían en paralelo (rompía el "secuencial").
           const saved = await Promise.resolve(onSave({ ...trip, projectId, distance }));
           if (saved === false) failed += 1;
-          else ok += 1;
+          else { ok += 1; if (duplicateKey) savedManualKeysRef.current.add(duplicateKey); }
         } catch (e) {
           logger.warn("Bulk upload error", e);
           failed += 1;
@@ -774,27 +696,41 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
 
       if (ok > 0) toast.success(tf("bulk.toastImportedTrips", { count: ok }));
       if (failed > 0) toast.error(tf("bulk.toastFailedTrips", { count: failed }));
+      if (skipped > 0) toast.info(tf('bulk.manualDuplicates', { count: skipped }));
 
       // keep the text for user inspection; close if everything ok
-      if (failed === 0) handleOpenChange(false);
+      if (failed === 0) { setManualTables([]); handleOpenChange(false); }
     } finally {
       setCsvBusy(false);
     }
   };
 
-  const handleCsvFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const selectManualFiles = async (files: File[]) => {
+    if (csvBusy || !files.length) return;
+    setCsvBusy(true);
     try {
-      const text = await readCsvTextFromFile(file);
-      setCsvText(text);
-      toast.success(t("bulk.toastCsvLoaded"));
+      const loaded: ImportTable[] = [];
+      for (const file of files) {
+        try {
+          if (!/\.(csv|tsv|xlsx|xls)$/i.test(file.name)) throw new Error(`${file.name}: CSV, TSV o Excel (.xlsx, .xls).`);
+          loaded.push(...await readSpreadsheetTables(file));
+        }
+        catch (err) { toast.error(err instanceof Error ? err.message : t('bulk.errorCsvRead')); }
+      }
+      // Validate all headers before exposing the combined table to rendering.
+      mergeImportTables([...manualTables, ...loaded].map(table => table.text));
+      setManualTables(prev => [...prev, ...loaded]);
+      if (loaded.length) toast.success(t("bulk.toastCsvLoaded"));
     } catch (err) {
       logger.warn("Bulk upload error", err);
-      toast.error(t("bulk.errorCsvRead"));
+      toast.error(err instanceof Error ? err.message : t("bulk.errorCsvRead"));
     } finally {
-      e.target.value = "";
+      setCsvBusy(false);
     }
+  };
+  const handleCsvFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []); e.target.value = '';
+    void selectManualFiles(files);
   };
 
   const importFromGoogleDrive = async () => {
@@ -835,10 +771,11 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
         throw new Error(text || t("bulk.errorDriveDownload"));
       }
 
-      const text = await response.text();
-      const cleanText = text.replace(/^\uFEFF/, "");
-      setCsvText(cleanText);
-      await importCsvText(cleanText, "Google Drive");
+      const blob = await response.blob();
+      const file = new File([blob], exportMimeType ? `${picked.name}.csv` : picked.name, { type: exportMimeType || picked.mimeType });
+      const loaded = await readSpreadsheetTables(file);
+      mergeImportTables([...manualTables, ...loaded].map(table => table.text));
+      setManualTables(prev => [...prev, ...loaded]);
     } catch (err: any) {
       if (err?.message?.includes("popup_closed") || err?.message?.includes("access_denied")) {
         // User closed the popup or denied access — don't show error
@@ -872,7 +809,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
         appId,
         oauthToken: driveAccessToken,
         title: t("bulk.drivePickerTitleCallsheets"),
-        mimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"],
+        mimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "text/plain", "text/csv", "text/tab-separated-values", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
         multiselect: true,
       });
       if (picked.length === 0) return;
@@ -1061,7 +998,9 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
   };
 
   const selectAiFiles = (files: File[]) => {
-    const nextFiles = Array.from(files ?? []).filter(Boolean);
+    if (aiLoading || aiStep !== 'upload') return;
+    const nextFiles = [...selectedFiles];
+    for (const file of files) if (!nextFiles.some(f => f.name === file.name && f.size === file.size && f.lastModified === file.lastModified)) nextFiles.push(file);
     if (nextFiles.length === 0) return;
 
     if (nextFiles.length > 20) {
@@ -1071,6 +1010,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     }
 
     for (const file of nextFiles) {
+      try { validateDocumentSize(file); } catch (error) { toast.error((error as Error).message); return; }
       if (!isSupportedUploadFileName(file.name)) {
         toast.error(t("uploads.invalidNameTitle"), {
           description: tf("uploads.invalidNameBody", { name: file.name }),
@@ -1134,7 +1074,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
   };
 
   const startAiProcess = async () => {
-    if (selectedFiles.length === 0) return;
+    if (selectedFiles.length === 0 || aiLoading) return;
     
     setAiLoading(true);
     setAiStep("processing");
@@ -1904,7 +1844,11 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="glass w-[95vw] sm:max-w-5xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+      <DialogContent onDragOver={onDragOver} onDrop={e => {
+        e.preventDefault(); e.stopPropagation(); setIsDragActive(false); dragDepthRef.current = 0;
+        const files = Array.from(e.dataTransfer.files);
+        if (activeTab === 'csv') void selectManualFiles(files); else selectAiFiles(files);
+      }} className="glass w-[95vw] sm:max-w-5xl max-h-[90vh] overflow-y-auto p-0 gap-0">
         <ModalHeaderImage className="h-36 sm:h-40">
           <DialogTitle className="text-2xl font-bold tracking-tight">{t("bulk.title")}</DialogTitle>
           <DialogDescription>{t("bulk.subtitle")}</DialogDescription>
@@ -1934,7 +1878,9 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
               type="file"
               ref={csvFileInputRef}
               className="hidden"
-              accept=".csv,text/csv"
+              accept={MANUAL_ACCEPT}
+              multiple
+              disabled={csvBusy}
               onChange={handleCsvFileSelect}
             />
 
@@ -1942,13 +1888,17 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
             <div className={cn("grid gap-3", driveConfigured && "sm:grid-cols-2")}>
               <button
                 type="button"
+                disabled={csvBusy}
+                onDragEnter={onDragEnter}
+                onDragLeave={onDragLeave}
                 onClick={() => csvFileInputRef.current?.click()}
-                className="group flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-secondary/20 px-6 py-6 text-center transition-all hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={cn("group flex flex-col items-center gap-3 rounded-2xl border border-dashed px-6 py-6 text-center transition-all hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", isDragActive ? 'border-primary bg-primary/10' : 'border-white/10 bg-secondary/20')}
               >
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/15 text-primary ring-1 ring-primary/25 transition-transform duration-200 group-hover:scale-110">
                   <Upload className="h-5 w-5" />
                 </span>
                 <span className="text-sm font-medium">{t("bulk.selectCsvFile")}</span>
+                <span className="text-xs text-muted-foreground">{t('bulk.manualDropHint')}</span>
               </button>
               {driveConfigured && (
                 <button
@@ -1965,28 +1915,28 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
               )}
             </div>
 
-            <div className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
-              <span className="h-px flex-1 bg-white/10" />
-              {t("bulk.or")}
-              <span className="h-px flex-1 bg-white/10" />
-            </div>
-
             <div className="space-y-3">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("bulk.pasteCsv")}</Label>
-              <Textarea
-                placeholder={exampleText}
-                value={csvText}
-                onChange={(e) => setCsvText(e.target.value)}
-                className="min-h-[150px] rounded-xl border-white/10 bg-background/40 font-mono text-xs leading-relaxed placeholder:text-muted-foreground/60"
-              />
+              <Label htmlFor="manual-csv-text">{t('bulk.pasteCsv')}</Label>
+              <Textarea id="manual-csv-text" value={pastedCsv} disabled={csvBusy} onChange={e => setPastedCsv(e.target.value)} placeholder={exampleText} className="min-h-24 font-mono text-xs" />
+              <Button type="button" variant="outline" disabled={!pastedCsv.trim() || csvBusy} onClick={() => {
+                try {
+                  validateDocumentSize({ name: 'CSV', size: new Blob([pastedCsv]).size });
+                  const rows = parseDelimitedRows(pastedCsv);
+                  if (rows.length < 2) throw new Error('CSV: incluye cabeceras y al menos una fila.');
+                  const loaded = { name: `CSV ${manualTables.length + 1}`, text: pastedCsv };
+                  mergeImportTables([...manualTables, loaded].map(table => table.text));
+                  setManualTables(prev => [...prev, loaded]); setPastedCsv('');
+                } catch (error) { toast.error((error as Error).message); }
+              }}>{t('bulk.reviewPastedCsv')}</Button>
+              <ManualImportPreview tables={manualTables} onChange={setManualTables} disabled={csvBusy} />
               <Button
                 className="w-full gap-2"
                 disabled={!csvText.trim() || csvBusy}
                 type="button"
-                onClick={() => void importCsvText(csvText, "pasted")}
+                onClick={() => void importCsvText(csvText, "CSV / Excel")}
               >
                 {csvBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-                {t("bulk.processPasted")}
+                {t("bulk.saveManual")}
               </Button>
             </div>
 
@@ -2030,6 +1980,9 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
               <>
                 <CallsheetUploadHelp maxFiles={Math.min(20, limits.maxCallsheetsPerBatch)} />
                 <div
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputRef.current?.click(); } }}
                   onClick={() => fileInputRef.current?.click()}
                   onDrop={onDropFiles}
                   onDragEnter={onDragEnter}
@@ -2078,6 +2031,22 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                       )}
                     </div>
                   )}
+                </div>
+
+                <div className="space-y-2">
+                  {selectedFiles.map((file, index) => <div key={`${file.name}-${index}`} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="truncate">{file.name} · {(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                    <Button type="button" variant="ghost" aria-label={`${t('bulk.removeFile')} ${file.name}`} onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== index))}>×</Button>
+                  </div>)}
+                  <Label htmlFor="ai-pasted-text">{t('bulk.aiPasteLabel')}</Label>
+                  <Textarea id="ai-pasted-text" value={aiText} onChange={e => setAiText(e.target.value)} placeholder={t('bulk.aiPasteHint')} />
+                  <Button type="button" variant="outline" disabled={!aiText.trim()} onClick={() => {
+                    const file = new File([aiText.trim()], `mensaje-${Date.now()}.txt`, { type: 'text/plain' });
+                    if (selectedFiles.length >= Math.min(20, limits.maxCallsheetsPerBatch)) { toast.error(t('bulk.errorMaxDocuments')); return; }
+                    try { validateDocumentSize(file); } catch (error) { toast.error((error as Error).message); return; }
+                    selectAiFiles([file]); setAiText('');
+                  }}>{t('bulk.aiAddText')}</Button>
+                  <p className="text-xs text-muted-foreground">{t('bulk.aiTextQuotaHint')}</p>
                 </div>
 
                 {driveConfigured && (

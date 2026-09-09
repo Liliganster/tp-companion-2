@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useId } from "react";
 import { usePlan } from "@/contexts/PlanContext";
 import { supabase } from "@/lib/supabaseClient";
 import { formatSupabaseError } from "@/lib/supabaseErrors";
@@ -12,6 +12,8 @@ import { CallsheetUploadHelp } from "./CallsheetUploadHelp";
 import { isSupportedUploadFileName } from "@/lib/uploadFileName";
 import { useI18n } from "@/hooks/use-i18n";
 
+import { validateDocumentSize } from '@/lib/importDocuments';
+
 interface CallsheetUploaderProps {
   onJobCreated?: (jobId: string) => void;
   tripId?: string;
@@ -21,33 +23,33 @@ interface CallsheetUploaderProps {
 
 export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue = true }: CallsheetUploaderProps) {
   const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const inputId = useId();
   const { limits } = usePlan();
   const { t, tf } = useI18n();
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
+  const handleFiles = async (files: File[]) => {
+    if (uploading) return;
     if (files.length === 0) return;
 
     logger.debug("CallsheetUploader: uploading files", { filesCount: files.length, projectId, tripId });
 
     if (files.length > limits.maxCallsheetsPerBatch) {
       toast.error(`Maximo ${limits.maxCallsheetsPerBatch} documentos por vez`);
-      e.target.value = "";
       return;
     }
 
     for (const file of files) {
+      try { validateDocumentSize(file); } catch (error) { toast.error((error as Error).message); return; }
       if (!isSupportedUploadFileName(file.name)) {
         toast.error(t("uploads.invalidNameTitle"), {
           description: tf("uploads.invalidNameBody", { name: file.name }),
           duration: 15000,
         });
-        e.target.value = "";
         return;
       }
       if (!isSupportedCallsheetFile(file)) {
-        toast.error("Solo se permiten PDF o imágenes (JPG, PNG, WebP, HEIC)");
-        e.target.value = "";
+        toast.error(t("bulk.errorOnlyPdf"));
         return;
       }
     }
@@ -155,22 +157,21 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
       toast.error(formatSupabaseError(err, "Error al subir callsheet"));
     } finally {
       setUploading(false);
-      e.target.value = "";
     }
   };
 
   return (
-    <div className="flex flex-col items-start gap-2">
+    <div onDragOver={e => { e.preventDefault(); if (!uploading) setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={e => { e.preventDefault(); e.stopPropagation(); setDragging(false); void handleFiles(Array.from(e.dataTransfer.files)); }} className={`flex flex-col items-start gap-2 rounded-lg border border-dashed p-3 ${dragging ? 'border-primary bg-primary/10' : 'border-transparent'}`}>
       <input
         type="file"
         accept={CALLSHEET_ACCEPT}
-        id="callsheet-upload"
+        id={inputId}
         className="hidden"
         multiple
-        onChange={handleFileChange}
+        onChange={e => { const files = Array.from(e.target.files ?? []); e.target.value = ""; void handleFiles(files); }}
         disabled={uploading}
       />
-      <label htmlFor="callsheet-upload">
+      <label htmlFor={inputId}>
         <Button variant="outline" size="sm" asChild disabled={uploading} className="cursor-pointer">
           <span>
             {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
@@ -178,6 +179,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
           </span>
         </Button>
       </label>
+      <p className="text-xs text-muted-foreground">{t('bulk.aiDropTitle')}</p>
       <CallsheetUploadHelp maxFiles={limits.maxCallsheetsPerBatch} />
     </div>
   );

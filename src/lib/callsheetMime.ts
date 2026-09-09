@@ -15,12 +15,18 @@ const EXTENSION_TO_MIME: Record<string, string> = {
   webp: "image/webp",
   heic: "image/heic",
   heif: "image/heif",
+  txt: "text/plain",
+  csv: "text/csv",
+  tsv: "text/tab-separated-values",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  xls: "application/vnd.ms-excel",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 };
 
 const SUPPORTED_MIMES = new Set(Object.values(EXTENSION_TO_MIME));
 
 /** Valor para el atributo `accept` de los inputs de subida de callsheets. */
-export const CALLSHEET_ACCEPT = "application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif";
+export const CALLSHEET_ACCEPT = Object.keys(EXTENSION_TO_MIME).map(ext => `.${ext}`).join(',');
 
 function extensionOf(name: string): string {
   const match = /\.([a-z0-9]+)$/i.exec(String(name ?? "").trim());
@@ -43,7 +49,7 @@ export function resolveCallsheetMime(storagePath: string, fallbackType?: string 
 /** ¿El archivo elegido es un callsheet procesable (PDF o imagen soportada)? */
 export function isSupportedCallsheetFile(file: { type?: string | null; name?: string | null }): boolean {
   const type = String(file?.type ?? "").trim().toLowerCase();
-  if (type) return SUPPORTED_MIMES.has(type);
+  if (type && type !== 'application/octet-stream') return SUPPORTED_MIMES.has(type);
   // Algunos drag&drop no traen mime: decide la extensión.
   return Boolean(EXTENSION_TO_MIME[extensionOf(String(file?.name ?? ""))]);
 }

@@ -12,20 +12,20 @@ describe("callsheetMime", () => {
 
   it("sin extensión conocida cae al fallback y por último a PDF (jobs antiguos)", () => {
     expect(resolveCallsheetMime("user/job/document", "image/webp")).toBe("image/webp");
-    expect(resolveCallsheetMime("user/job/document", "text/plain")).toBe("application/pdf");
+    expect(resolveCallsheetMime("user/job/document", "text/plain")).toBe("text/plain");
     expect(resolveCallsheetMime("user/job/document")).toBe("application/pdf");
   });
 
   it("acepta PDF e imágenes; rechaza otros tipos", () => {
     expect(isSupportedCallsheetFile({ type: "application/pdf", name: "a.pdf" })).toBe(true);
     expect(isSupportedCallsheetFile({ type: "image/jpeg", name: "a.jpg" })).toBe(true);
-    expect(isSupportedCallsheetFile({ type: "text/csv", name: "a.csv" })).toBe(false);
+    expect(isSupportedCallsheetFile({ type: "text/csv", name: "a.csv" })).toBe(true);
     expect(isSupportedCallsheetFile({ type: "application/zip", name: "a.zip" })).toBe(false);
   });
 
   it("sin mime (algunos drag&drop) decide la extensión del nombre", () => {
     expect(isSupportedCallsheetFile({ type: "", name: "dispo.png" })).toBe(true);
-    expect(isSupportedCallsheetFile({ type: "", name: "dispo.txt" })).toBe(false);
+    expect(isSupportedCallsheetFile({ type: "", name: "dispo.txt" })).toBe(true);
   });
 
   it("distingue imagen de PDF", () => {

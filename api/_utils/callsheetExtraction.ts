@@ -15,7 +15,9 @@
  */
 import { supabaseAdmin } from "../../src/lib/supabaseServer.js";
 import { assertStorageOwnership } from "./storageOwnership.js";
-import { generateContentFromPDF } from "../../src/lib/ai/geminiClient.js";
+import { generateContent, generateContentFromPDF } from "../../src/lib/ai/geminiClient.js";
+import { callsheetDocumentText } from './callsheetDocumentText.js';
+import { MAX_DOCUMENT_BYTES } from '../../src/lib/importDocuments.js';
 import { buildUniversalExtractorPrompt } from "../../src/lib/ai/prompts.js";
 import { extractionSchema } from "../../src/lib/ai/schema.js";
 import { CallsheetExtractionResultSchema } from "../../src/lib/ai/validation.js";
@@ -36,7 +38,7 @@ import {
 import { geocodeAddressCached } from "./googleCache.js";
 import { isImageCallsheetMime, resolveCallsheetMime } from "../../src/lib/callsheetMime.js";
 
-const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024; // 15MB: evita timeouts y latencia de la IA
+const MAX_FILE_SIZE_BYTES = MAX_DOCUMENT_BYTES;
 
 type LogLike = {
   info: (obj: any, msg?: string) => void;
@@ -108,7 +110,7 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
 
   if (fileData.size > MAX_FILE_SIZE_BYTES) {
     const sizeMB = Math.round(fileData.size / 1024 / 1024);
-    return { ok: false, kind: "file_too_large", message: `file_too_large:${sizeMB}MB_exceeds_15MB_limit` };
+    return { ok: false, kind: "file_too_large", message: `El archivo (${sizeMB} MB) supera los 50 MB por archivo.` };
   }
 
   const buffer = Buffer.from(await fileData.arrayBuffer());
@@ -129,9 +131,10 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
   // foto de WhatsApp) y texto nativo del PDF completo (sin OCR/Tesseract).
   const mimeType = resolveCallsheetMime(storagePath);
   const isImageCallsheet = isImageCallsheetMime(mimeType);
+  const documentText = await callsheetDocumentText(buffer, storagePath);
 
-  let pdfText = "";
-  if (!isImageCallsheet) {
+  let pdfText = documentText ?? "";
+  if (!isImageCallsheet && documentText === null) {
     const textStartTime = Date.now();
     try {
       const parsed = await parsePdfWithTimeout(buffer, 10_000);
@@ -150,11 +153,11 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
   const promptSource = pdfHintText
     ? `${attachedTag}\n\nDOCUMENT TEXT EXCERPT (use for projectName/date/company):\n${pdfHintText}`
     : attachedTag;
-  const systemInstruction = buildUniversalExtractorPrompt(promptSource);
+  const systemInstruction = buildUniversalExtractorPrompt(documentText === null ? promptSource : documentText);
 
   // C. IA
   const aiStartTime = Date.now();
-  const aiResult = await generateContentFromPDF(
+  const aiResult = documentText !== null ? await generateContent('gemini-2.5-flash', systemInstruction, extractionSchema, userSettings) : await generateContentFromPDF(
     "gemini-2.5-flash",
     systemInstruction,
     buffer,
