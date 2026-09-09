@@ -1,3 +1,5 @@
+import { LOCATION_COLLECTION_RULE, LOCATION_DESTINATION_RULE, LOCATION_LABEL_RULE } from './locationPolicy.js';
+
 export const extractionSchema = {
   type: "object",
   properties: {
@@ -17,7 +19,7 @@ export const extractionSchema = {
         properties: {
           label: {
             type: "string",
-            description: "Section label EXACTLY as printed next to this address (e.g. 'MOTIV', 'LOCATION 2', 'SET', 'DREHORT'). Empty string if unlabeled."
+            description: LOCATION_LABEL_RULE
           },
           address: {
             type: "string",
@@ -30,7 +32,7 @@ export const extractionSchema = {
         },
         required: ["label", "address"]
       },
-      description: "Every labeled address block: filming (Motiv/Set/Location) AND logistics (Basis/Parken/Catering/Maske/Cast…). The code routes them by label."
+      description: `${LOCATION_COLLECTION_RULE} ${LOCATION_DESTINATION_RULE}`
     }
   },
   required: ["date", "projectName", "productionCompanies", "locations"]
