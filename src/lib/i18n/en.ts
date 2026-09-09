@@ -2,6 +2,10 @@ import type { I18nKey } from "./es";
 
 // Cargado perezosamente por src/lib/i18n.ts (chunk separado del bundle principal).
 export const en: Record<I18nKey, string> = {
+  "uploads.invalidNameTitle": "Rename the file",
+  "uploads.invalidNameBody": "“{name}” cannot be processed with this name. Remove #, %, ?, /, backslashes and leading or trailing spaces. Keep the extension and select the file again.",
+  "uploads.fileNameHint": "File names: avoid #, %, ?, /, backslashes and leading or trailing spaces. Example: CW_Dispo_17_7.8.pdf.",
+  "uploads.ownershipError": "We could not verify that this file belongs to your account. Check its name and upload it again while signed in. If it fails again, contact support.",
   "uploads.callsheetFormats": "PDF, JPG/JPEG, PNG, WebP, HEIC and HEIF.",
   "uploads.callsheetLimits": "Up to {count} files per batch. Storage: up to 50 MB per file. AI extraction: up to 15 MB per file.",
   "uploads.callsheetConversion": "To extract a callsheet from Excel or an email, export it to PDF first. This option does not import spreadsheets or emails directly.",

@@ -2,6 +2,10 @@ import type { I18nKey } from "./es";
 
 // Cargado perezosamente por src/lib/i18n.ts (chunk separado del bundle principal).
 export const de: Record<I18nKey, string> = {
+  "uploads.invalidNameTitle": "Datei umbenennen",
+  "uploads.invalidNameBody": "„{name}“ kann mit diesem Namen nicht verarbeitet werden. Entferne #, %, ?, /, Rückstriche und Leerzeichen am Anfang oder Ende. Behalte die Dateiendung und wähle die Datei erneut aus.",
+  "uploads.fileNameHint": "Dateinamen: Vermeide #, %, ?, /, Rückstriche und Leerzeichen am Anfang oder Ende. Beispiel: CW_Dispo_17_7.8.pdf.",
+  "uploads.ownershipError": "Es konnte nicht bestätigt werden, dass diese Datei deinem Konto gehört. Prüfe ihren Namen und lade sie angemeldet erneut hoch. Falls der Fehler erneut auftritt, kontaktiere den Support.",
   "uploads.callsheetFormats": "PDF, JPG/JPEG, PNG, WebP, HEIC und HEIF.",
   "uploads.callsheetLimits": "Bis zu {count} Dateien pro Stapel. Speicherung: bis zu 50 MB pro Datei. KI-Auswertung: bis zu 15 MB pro Datei.",
   "uploads.callsheetConversion": "Exportiere Callsheets aus Excel oder E-Mails zuerst als PDF für die Auswertung. Diese Option importiert Tabellen und E-Mails nicht direkt.",

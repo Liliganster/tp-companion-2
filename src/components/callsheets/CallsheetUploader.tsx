@@ -9,6 +9,8 @@ import { Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 import { CallsheetUploadHelp } from "./CallsheetUploadHelp";
+import { isSupportedUploadFileName } from "@/lib/uploadFileName";
+import { useI18n } from "@/hooks/use-i18n";
 
 interface CallsheetUploaderProps {
   onJobCreated?: (jobId: string) => void;
@@ -20,6 +22,7 @@ interface CallsheetUploaderProps {
 export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue = true }: CallsheetUploaderProps) {
   const [uploading, setUploading] = useState(false);
   const { limits } = usePlan();
+  const { t, tf } = useI18n();
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -34,6 +37,14 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
     }
 
     for (const file of files) {
+      if (!isSupportedUploadFileName(file.name)) {
+        toast.error(t("uploads.invalidNameTitle"), {
+          description: tf("uploads.invalidNameBody", { name: file.name }),
+          duration: 15000,
+        });
+        e.target.value = "";
+        return;
+      }
       if (!isSupportedCallsheetFile(file)) {
         toast.error("Solo se permiten PDF o imágenes (JPG, PNG, WebP, HEIC)");
         e.target.value = "";

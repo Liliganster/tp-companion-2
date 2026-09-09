@@ -7,6 +7,7 @@ export function CallsheetUploadHelp({ maxFiles }: { maxFiles: number }) {
       <p>{t("uploads.callsheetFormats")}</p>
       <p>{tf("uploads.callsheetLimits", { count: maxFiles })}</p>
       <p>{t("uploads.callsheetConversion")}</p>
+      <p>{t("uploads.fileNameHint")}</p>
     </div>
   );
 }

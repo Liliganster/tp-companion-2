@@ -33,6 +33,7 @@ import { buildTripDuplicateKey } from "@/lib/trip-warnings";
 import { CALLSHEET_ACCEPT, isSupportedCallsheetFile, resolveCallsheetMime } from "@/lib/callsheetMime";
 import { CallsheetUploadHelp } from "@/components/callsheets/CallsheetUploadHelp";
 import { useAiQuota } from "@/hooks/use-ai-quota";
+import { isSupportedUploadFileName } from "@/lib/uploadFileName";
 
 interface SavedTrip {
   id: string;
@@ -1070,6 +1071,14 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     }
 
     for (const file of nextFiles) {
+      if (!isSupportedUploadFileName(file.name)) {
+        toast.error(t("uploads.invalidNameTitle"), {
+          description: tf("uploads.invalidNameBody", { name: file.name }),
+          duration: 15000,
+        });
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
       if (!isSupportedCallsheetFile(file)) {
         toast.error(t("bulk.errorOnlyPdf"));
         if (fileInputRef.current) fileInputRef.current.value = "";
@@ -1571,7 +1580,9 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
             });
           } else {
             toast.error(t("bulk.errorProcessOneDoc"), {
-              description: String(j.needs_review_reason ?? "").trim() || undefined,
+              description: String(j.needs_review_reason ?? "").includes("storage_ownership_not_verified")
+                ? t("uploads.ownershipError")
+                : String(j.needs_review_reason ?? "").trim() || undefined,
             });
           }
         }
@@ -1635,13 +1646,17 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
           status: state?.status ?? "queued",
           totalJobs: jobIds.length,
         }) as JobStatus,
-        reason: state?.needsReviewReason ?? null,
+        reason: state?.needsReviewReason?.includes("storage_ownership_not_verified")
+          ? (meta?.fileName && !isSupportedUploadFileName(meta.fileName)
+            ? tf("uploads.invalidNameBody", { name: meta.fileName })
+            : t("uploads.ownershipError"))
+          : state?.needsReviewReason ?? null,
         review,
         saving,
         saved,
       };
     });
-  }, [jobIds, jobMetaById, jobStateById, reviewByJobId, savingByJobId, savedByJobId]);
+  }, [jobIds, jobMetaById, jobStateById, reviewByJobId, savingByJobId, savedByJobId, t, tf]);
 
   const jobStats = useMemo(() => {
     const total = jobsForUi.length;

@@ -1,6 +1,10 @@
 // Idioma base de Fahrtenbuch Pro. Las claves tipadas (I18nKey) derivan de este objeto.
 // ES se queda: es el idioma de la propietaria (decisión registrada en PLAN.md).
 export const es = {
+  "uploads.invalidNameTitle": "Cambia el nombre del archivo",
+  "uploads.invalidNameBody": "No se puede procesar «{name}» con ese nombre. Quita #, %, ?, /, barras invertidas y espacios al principio o al final. Conserva la extensión y vuelve a seleccionar el archivo.",
+  "uploads.fileNameHint": "Nombres de archivo: evita #, %, ?, /, barras invertidas y espacios al principio o al final. Ejemplo: CW_Dispo_17_7.8.pdf.",
+  "uploads.ownershipError": "No se pudo verificar que este archivo pertenece a tu cuenta. Comprueba su nombre y vuelve a subirlo desde tu sesión. Si vuelve a fallar, contacta con soporte.",
   "uploads.callsheetFormats": "PDF, JPG/JPEG, PNG, WebP, HEIC y HEIF.",
   "uploads.callsheetLimits": "Hasta {count} archivos por lote. Almacenamiento: hasta 50 MB por archivo. Extracción por IA: hasta 15 MB por archivo.",
   "uploads.callsheetConversion": "Para extraer un callsheet de Excel o de un correo, expórtalo primero a PDF. Esta opción no importa hojas de cálculo ni correos directamente.",
