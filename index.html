@@ -22,6 +22,100 @@
 
   <body>
     <div id="root"></div>
+    <aside id="app-recovery" hidden role="alert" style="position:fixed;z-index:2147483647;bottom:20px;left:20px;right:20px;max-width:640px;margin:auto;padding:24px;border:1px solid #64748b;border-radius:16px;background:#111827;color:#f8fafc;font:16px/1.5 system-ui;box-shadow:0 8px 40px #0008">
+      <strong id="app-recovery-title">No se ha podido cargar la aplicación</strong>
+      <p id="app-recovery-message">Comprueba tu conexión y vuelve a intentarlo. Si había una versión antigua guardada, recuperaremos la versión actual.</p>
+      <button id="app-recovery-retry" type="button" style="padding:10px 16px;border:0;border-radius:8px;background:#2563eb;color:white;cursor:pointer">Recuperar aplicación</button>
+      <button id="app-recovery-close" type="button" style="padding:10px 16px;border:0;background:transparent;color:white;cursor:pointer">Cerrar aviso</button>
+    </aside>
+    <!-- Kept inline: this must work even when the entry bundle itself is missing. -->
+    <script id="app-recovery-bootstrap">
+      (function () {
+        var panel = document.getElementById("app-recovery");
+        var message = document.getElementById("app-recovery-message");
+        var retry = document.getElementById("app-recovery-retry");
+        var root = document.getElementById("root");
+        var recovering = false;
+        var mounted = false;
+        var language = (navigator.language || "es").slice(0, 2);
+        var copy = {
+          es: ["No se ha podido cargar la aplicación", "Comprueba tu conexión y vuelve a intentarlo. Si había una versión antigua guardada, recuperaremos la versión actual.", "Recuperar aplicación", "Cerrar aviso", "Sin conexión. Conéctate a Internet y vuelve a intentarlo.", "Se recargará esta pestaña. Los cambios sin guardar se perderán. ¿Continuar?", "No se pudo recuperar la aplicación. Comprueba tu conexión y vuelve a intentarlo."],
+          en: ["The application could not load", "Check your connection and try again. If an old version was stored, we will recover the current version.", "Recover application", "Dismiss", "You are offline. Connect to the Internet and try again.", "This tab will reload. Unsaved changes will be lost. Continue?", "The application could not be recovered. Check your connection and try again."],
+          de: ["Die Anwendung konnte nicht geladen werden", "Prüfe deine Verbindung und versuche es erneut. Falls eine alte Version gespeichert war, laden wir die aktuelle Version.", "Anwendung wiederherstellen", "Hinweis schließen", "Du bist offline. Stelle eine Internetverbindung her und versuche es erneut.", "Dieser Tab wird neu geladen. Ungespeicherte Änderungen gehen verloren. Fortfahren?", "Die Anwendung konnte nicht wiederhergestellt werden. Prüfe deine Verbindung und versuche es erneut."]
+        };
+        var text = copy[language] || copy.es;
+        document.getElementById("app-recovery-title").textContent = text[0];
+        message.textContent = text[1];
+        retry.textContent = text[2];
+        document.getElementById("app-recovery-close").textContent = text[3];
+        function show() { panel.hidden = false; }
+        async function recover() {
+          if (recovering) return;
+          if (!navigator.onLine) { message.textContent = text[4]; show(); return; }
+          if (root.childElementCount && !window.confirm(text[5])) return;
+          recovering = true;
+          retry.disabled = true;
+          try {
+            // Unregister only this app's worker. Never clear user data or other caches.
+            if ("serviceWorker" in navigator) {
+              var timer;
+              try {
+                await Promise.race([
+                  (async function () {
+                    var registration = await navigator.serviceWorker.getRegistration(location.href);
+                    var worker = registration && (registration.active || registration.waiting);
+                    if (worker && new URL(worker.scriptURL).origin === location.origin &&
+                        new URL(worker.scriptURL).pathname === "/sw.js") {
+                      var removed = await registration.unregister();
+                      if (!removed) throw new Error("worker_unregister_failed");
+                    }
+                  })(),
+                  new Promise(function (_, reject) {
+                    timer = setTimeout(function () { reject(new Error("recovery_timeout")); }, 10000);
+                  })
+                ]);
+              } finally { clearTimeout(timer); }
+            }
+            var url = new URL(location.href);
+            url.searchParams.set("__app_recover", String(Date.now()));
+            location.replace(url.href);
+          } catch (_) {
+            recovering = false;
+            retry.disabled = false;
+            message.textContent = text[6];
+            show();
+          }
+        }
+        var bootTimer = setTimeout(function () {
+          if (!mounted && !root.childElementCount) show();
+        }, 20000);
+        window.__appRecovery = {
+          show: show,
+          recover: recover,
+          ready: function () {
+            mounted = true;
+            clearTimeout(bootTimer);
+            panel.hidden = true;
+            var url = new URL(location.href);
+            if (url.searchParams.has("__app_recover")) {
+              url.searchParams.delete("__app_recover");
+              history.replaceState(history.state, "", url.href);
+            }
+          }
+        };
+        retry.addEventListener("click", recover);
+        document.getElementById("app-recovery-close").addEventListener("click", function () { panel.hidden = true; });
+        window.addEventListener("error", function (event) {
+          var target = event.target;
+          if ((!mounted && !root.childElementCount) ||
+              (target && target.tagName === "SCRIPT" && target.type === "module")) show();
+        }, true);
+        window.addEventListener("unhandledrejection", function (event) {
+          if (/dynamically imported module|module script|Loading chunk/i.test(String(event.reason))) show();
+        });
+        window.addEventListener("vite:preloadError", show);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

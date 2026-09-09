@@ -1,4 +1,5 @@
 import { createRoot } from "react-dom/client";
+import { useEffect } from "react";
 import App from "./App.tsx";
 import "./index.css";
 import { initSentryClient } from "@/lib/sentryClient";
@@ -10,8 +11,9 @@ assertClientEnv();
 initSentryClient();
 initAnalytics();
 
-createRoot(document.getElementById("root")!).render(
-  <AppErrorBoundary>
-    <App />
-  </AppErrorBoundary>,
-);
+function Root() {
+  useEffect(() => { window.__appRecovery?.ready(); }, []);
+  return <AppErrorBoundary><App /></AppErrorBoundary>;
+}
+
+createRoot(document.getElementById("root")!).render(<Root />);

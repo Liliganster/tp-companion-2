@@ -2,6 +2,12 @@ import type { I18nKey } from "./es";
 
 // Cargado perezosamente por src/lib/i18n.ts (chunk separado del bundle principal).
 export const de: Record<I18nKey, string> = {
+  "updates.available": "Neue Version verfügbar",
+  "updates.description": "Aktualisiere, nachdem du deine Arbeit gespeichert hast. Andere Tabs bleiben geöffnet.",
+  "updates.action": "Aktualisieren",
+  "updates.closeEditor": "Speichere oder schließe das offene Formular vor dem Aktualisieren.",
+  "updates.confirm": "Dieser Tab wird neu geladen. Ungespeicherte Änderungen gehen verloren. Fortfahren?",
+  "updates.failed": "Das Update konnte nicht aktiviert werden. Dein Tab bleibt geöffnet; versuche es erneut.",
   "expenseScan.deleteConfirm": "Dieser Beleg wird endgültig gelöscht",
   "expenseScan.deleteRecoveryError": "Das Löschen konnte nicht abgeschlossen und die Belegverknüpfung nicht wiederhergestellt werden. Die Löschung wurde nicht bestätigt. Lade die Fahrt oder das Projekt neu und kontaktiere den Support, falls der Beleg weiterhin fehlt.",
   "uploads.invalidNameTitle": "Datei umbenennen",

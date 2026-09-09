@@ -2,6 +2,12 @@ import type { I18nKey } from "./es";
 
 // Cargado perezosamente por src/lib/i18n.ts (chunk separado del bundle principal).
 export const en: Record<I18nKey, string> = {
+  "updates.available": "New version available",
+  "updates.description": "Update once you have saved your work. Other tabs will stay open.",
+  "updates.action": "Update",
+  "updates.closeEditor": "Save or close the open form before updating.",
+  "updates.confirm": "This tab will reload. Unsaved changes will be lost. Continue?",
+  "updates.failed": "The update could not be activated. Your tab is still open; try again.",
   "expenseScan.deleteConfirm": "This receipt will be permanently deleted",
   "expenseScan.deleteRecoveryError": "The deletion could not be completed and the receipt link could not be restored. Deletion has not been confirmed. Reload the trip or project and contact support if the receipt is still missing.",
   "uploads.invalidNameTitle": "Rename the file",

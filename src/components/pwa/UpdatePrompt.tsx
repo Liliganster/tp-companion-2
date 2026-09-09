@@ -1,160 +1,105 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
-
-type WorkboxInstance = import("workbox-window").Workbox;
+import { useI18n } from "@/hooks/use-i18n";
+import { activateUpdate } from "@/lib/activateUpdate";
 
 export function UpdatePrompt() {
+  const { t } = useI18n();
   const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null);
   const [needRefresh, setNeedRefresh] = useState(false);
-  const wbRef = useRef<WorkboxInstance | null>(null);
-  const registeredRef = useRef(false);
-  const promptShownRef = useRef(false);
+  const updating = useRef(false);
+  const reloading = useRef(false);
 
   useEffect(() => {
-    if (import.meta.env.PROD) return;
-    if (!("serviceWorker" in navigator)) return;
-    try {
-      const registrationsPromise = navigator.serviceWorker.getRegistrations?.();
-      if (!registrationsPromise) return;
-      registrationsPromise
-        .then((registrations) => Promise.all(registrations.map((r) => r.unregister())))
-        .catch(() => {});
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!import.meta.env.PROD) return;
-    if (!("serviceWorker" in navigator)) return;
-    if (registeredRef.current) return;
-    registeredRef.current = true;
-
+    if (!import.meta.env.PROD || !("serviceWorker" in navigator)) return;
     let cancelled = false;
-
-    (async () => {
+    let dispose = () => {};
+    void (async () => {
       try {
         const { Workbox } = await import("workbox-window");
-        const baseUrl = import.meta.env.BASE_URL || "/";
-        const swUrl = `${baseUrl}sw.js`;
-        const wb = new Workbox(swUrl, { scope: baseUrl });
-
-        wbRef.current = wb;
-
-        // Show update prompt when a new SW is installed (isUpdate=true means not first install)
-        wb.addEventListener("installed", (event: any) => {
-          if (cancelled) return;
-          if (event?.isUpdate) {
-            logger.debug("[SW] New version installed");
-            setNeedRefresh(true);
-          }
-        });
-
-        // Show update prompt when a new SW is waiting to activate
-        wb.addEventListener("waiting", () => {
-          if (cancelled) return;
-          logger.debug("[SW] New version waiting");
-          setNeedRefresh(true);
-        });
-
-        // Note: we do NOT auto-reload on "controlling" to avoid reloading other open tabs.
-        // Only the tab that explicitly clicks "Actualizar" reloads (handled in the toast onClick).
-
-        const swRegistration = await wb.register();
         if (cancelled) return;
-        if (swRegistration) setRegistration(swRegistration);
-
-        // If a SW is already waiting (downloaded in a previous session),
-        // show the toast immediately so the user can decide when to update.
-        if (swRegistration?.waiting) {
-          logger.debug("[SW] Found waiting SW on load");
-          setNeedRefresh(true);
-        }
+        const base = import.meta.env.BASE_URL || "/";
+        const wb = new Workbox(`${base}sw.js`, { scope: base, updateViaCache: "none" });
+        const onWaiting = () => { if (!cancelled) setNeedRefresh(true); };
+        wb.addEventListener("waiting", onWaiting);
+        dispose = () => wb.removeEventListener("waiting", onWaiting);
+        const result = await wb.register();
+        if (cancelled) return;
+        if (result) setRegistration(result);
+        if (result?.waiting) setNeedRefresh(true);
       } catch (error) {
         logger.warn("SW registration error", error);
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; dispose(); };
   }, []);
 
   useEffect(() => {
-    if (!import.meta.env.PROD) return;
     if (!registration) return;
-
-    const updateNow = () => {
-      if (document.visibilityState !== "visible") return;
-      if (!navigator.onLine) return;
-      registration.update().catch(() => {});
-    };
-
-    // Check for updates immediately, then every 10 seconds while visible
-    updateNow();
-    const interval = window.setInterval(updateNow, 10_000);
-
-    const onFocus = () => {
-      updateNow();
-    };
-
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        updateNow();
+    const check = () => {
+      if (document.visibilityState === "visible" && navigator.onLine) {
+        void registration.update().catch(() => {});
       }
     };
-
-    const onOnline = () => updateNow();
-
-    window.addEventListener("focus", onFocus);
-    window.addEventListener("online", onOnline);
-    document.addEventListener("visibilitychange", onVisibilityChange);
-
+    check();
+    const timer = window.setInterval(check, 60_000);
+    window.addEventListener("focus", check);
+    window.addEventListener("online", check);
+    document.addEventListener("visibilitychange", check);
     return () => {
-      window.clearInterval(interval);
-      window.removeEventListener("focus", onFocus);
-      window.removeEventListener("online", onOnline);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
+      clearInterval(timer);
+      window.removeEventListener("focus", check);
+      window.removeEventListener("online", check);
+      document.removeEventListener("visibilitychange", check);
     };
   }, [registration]);
 
   useEffect(() => {
-    if (!import.meta.env.PROD) return;
-    if (!needRefresh) return;
-    if (promptShownRef.current) return;
-    promptShownRef.current = true;
-
-    logger.debug("[SW] Showing update toast");
-
-    toast("Nueva versión disponible", {
-      description: "Haz clic en Actualizar para recargar la página con la nueva versión.",
-      action: {
-        label: "Actualizar",
-        onClick: () => {
-          wbRef.current?.messageSkipWaiting();
-          // Give the SW a moment to activate, then reload
-          window.setTimeout(() => window.location.reload(), 300);
+    if (!needRefresh || !registration) return;
+    let disposed = false;
+    const show = () => {
+      if (disposed || reloading.current) return;
+      toast(t("updates.available"), {
+        id: "app-update",
+        description: t("updates.description"),
+        duration: Infinity,
+        action: {
+          label: t("updates.action"),
+          onClick: async () => {
+            if (updating.current || reloading.current) return;
+            // Open editors must be saved or closed using their own controls.
+            if (document.querySelector('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]')) {
+              toast.info(t("updates.closeEditor"));
+              setTimeout(show, 0);
+              return;
+            }
+            updating.current = true;
+            try {
+              if (registration.waiting) await activateUpdate(registration.waiting);
+              if (disposed) return;
+              // Ask immediately before navigation, including edits made while waiting.
+              if (!window.confirm(t("updates.confirm"))) {
+                setTimeout(show, 0);
+                return;
+              }
+              reloading.current = true;
+              window.location.reload();
+            } catch (error) {
+              logger.warn("SW update failed", error);
+              toast.error(t("updates.failed"));
+              setTimeout(show, 0);
+            } finally {
+              updating.current = false;
+            }
+          },
         },
-      },
-      duration: Infinity,
-    });
-  }, [needRefresh]);
-
-  // Fallback: detect controller change (new SW activated by another tab or by the browser)
-  useEffect(() => {
-    if (!import.meta.env.PROD) return;
-    if (!("serviceWorker" in navigator)) return;
-
-    const onControllerChange = () => {
-      // Another tab activated the new SW — reload to pick up new assets
-      logger.debug("[SW] Controller changed, reloading");
-      window.location.reload();
+      });
     };
+    show();
+    return () => { disposed = true; toast.dismiss("app-update"); };
+  }, [needRefresh, registration, t]);
 
-    navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
-    return () => navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
-  }, []);
-
+  // Other tabs never navigate in response to controllerchange or activation.
   return null;
 }

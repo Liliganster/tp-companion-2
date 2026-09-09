@@ -1,6 +1,12 @@
 // Idioma base de Fahrtenbuch Pro. Las claves tipadas (I18nKey) derivan de este objeto.
 // ES se queda: es el idioma de la propietaria (decisión registrada en PLAN.md).
 export const es = {
+  "updates.available": "Nueva versión disponible",
+  "updates.description": "Actualiza cuando hayas guardado tu trabajo. Las otras pestañas seguirán abiertas.",
+  "updates.action": "Actualizar",
+  "updates.closeEditor": "Guarda o cierra el formulario abierto antes de actualizar.",
+  "updates.confirm": "Se recargará esta pestaña. Los cambios sin guardar se perderán. ¿Continuar?",
+  "updates.failed": "No se pudo activar la actualización. Tu pestaña sigue abierta; vuelve a intentarlo.",
   "expenseScan.deleteConfirm": "Este recibo se eliminará definitivamente",
   "expenseScan.deleteRecoveryError": "No se pudo completar el borrado ni restablecer el vínculo del recibo. No se ha confirmado su eliminación. Recarga el viaje o proyecto y contacta con soporte si sigue faltando.",
   "uploads.invalidNameTitle": "Cambia el nombre del archivo",

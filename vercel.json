@@ -1,4 +1,10 @@
 {
+  "headers": [
+    {
+      "source": "/((?!api/|assets/).*)",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate" }]
+    }
+  ],
   "functions": {
     "api/**/*.ts": {
       "maxDuration": 60,

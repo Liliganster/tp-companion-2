@@ -22,23 +22,16 @@ export class AppErrorBoundary extends React.Component<Props, State> {
   componentDidCatch(error: unknown, info: unknown) {
     logger.error("[AppErrorBoundary] React render error", error, { react: true, info });
 
-    // Handle chunk loading errors (new deployment)
-    const msg = error instanceof Error ? error.message : String(error);
-    if (msg.includes("Failed to fetch dynamically imported module") || msg.includes("Importing a module script failed")) {
-      const storageKey = "chunk_load_error_reload";
-      const lastReload = sessionStorage.getItem(storageKey);
-      const now = Date.now();
-
-      // Only reload if we haven't reloaded in the last 10 seconds
-      if (!lastReload || now - Number(lastReload) > 10000) {
-        sessionStorage.setItem(storageKey, String(now));
-        window.location.reload();
-      }
+    // Recovery is always explicit: a loading failure must not reload other work.
+    const message = error instanceof Error ? error.message : String(error);
+    if (/dynamically imported module|module script|Loading chunk/i.test(message)) {
+      window.__appRecovery?.show();
     }
   }
 
   private handleReload = () => {
-    window.location.reload();
+    if (window.__appRecovery) void window.__appRecovery.recover();
+    else if (window.confirm("Se recargará esta pestaña. Los cambios sin guardar se perderán. ¿Continuar?")) window.location.reload();
   };
 
   private handleReset = () => {
@@ -69,7 +62,7 @@ export class AppErrorBoundary extends React.Component<Props, State> {
             </Button>
           </div>
           <p className="mt-4 text-xs text-muted-foreground">
-            Si el problema persiste, revisa tu conexión y configuración (Supabase / API keys) o contacta soporte.
+            Si el problema persiste, revisa tu conexión o contacta con soporte.
           </p>
         </div>
       </div>
