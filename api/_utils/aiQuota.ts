@@ -1,158 +1,50 @@
+import { randomUUID } from "node:crypto";
 import { supabaseAdmin } from "../../src/lib/supabaseServer.js";
-import { getPlanLimits, DEFAULT_PLAN, type PlanTier } from "./plans.js";
+import { getPlanLimits, type PlanTier } from "./plans.js";
 import { getServerPlanTier } from "./entitlements.js";
-import { getFreeAiUsage, incrementFreeAiUsage } from "./freeUsage.js";
+import { getFreeIdentityHash } from "./freeUsage.js";
+import { assertStorageOwnership } from "./storageOwnership.js";
 
-// Get AI monthly limit from plan (default to basic plan)
-function getAIMonthlyLimit(planTier?: PlanTier | string | null): number {
-  return getPlanLimits(planTier ?? DEFAULT_PLAN).aiJobsPerMonth;
+export type QuotaDecision = { allowed: boolean; limit: number; used: number; remaining: number; reserved?: number; reason?: string };
+export type AiReservation = { allowed: boolean; completed?: boolean; busy?: boolean; reason?: string; requestId?: string; storagePath?: string; userId: string; jobId: string; attemptId: string };
+export class AiQuotaUnavailableError extends Error {
+  constructor() { super("ai_quota_unavailable"); }
 }
 
-export type QuotaDecision = {
-  allowed: boolean;
-  limit: number;
-  used: number;
-  remaining: number;
-  reason?: string;
-};
-
-function envTruthy(name: string): boolean {
-  if (process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production") return false;
-  const v = process.env[name];
-  if (!v) return false;
-  const s = String(v).trim().toLowerCase();
-  return s === "1" || s === "true" || s === "yes" || s === "on";
+async function quotaContext(userId: string, plan?: PlanTier | string | null) {
+  const tier = plan ?? await getServerPlanTier(userId);
+  const identity = tier === "pro" ? null : await getFreeIdentityHash(userId);
+  if (tier !== "pro" && !identity) throw new AiQuotaUnavailableError();
+  return { p_user_id: userId, p_limit: getPlanLimits(tier).aiJobsPerMonth, p_identity_hash: identity };
 }
 
-function startOfCurrentMonthUtcIso(): string {
-  const now = new Date();
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
-  return start.toISOString();
+export async function checkAiMonthlyQuota(userId: string, plan?: PlanTier | string | null): Promise<QuotaDecision> {
+  const { data, error } = await supabaseAdmin.rpc("ai_quota_snapshot", await quotaContext(userId, plan));
+  if (error || !data || typeof data.remaining !== "number") throw new AiQuotaUnavailableError();
+  return data as QuotaDecision;
 }
 
-function isMissingRelation(err: any): boolean {
-  const code = String(err?.code ?? "");
-  const msg = String(err?.message ?? "").toLowerCase();
-  return (
-    code === "PGRST205" ||
-    code === "42P01" ||
-    msg.includes("could not find the relation") ||
-    msg.includes("schema cache")
-  );
+export async function reserveAiQuota(userId: string, jobId: string, plan?: PlanTier | string | null, newRequestId?: string): Promise<AiReservation> {
+  const { data: job, error: jobError } = await supabaseAdmin.from("callsheet_jobs")
+    .select("storage_path").eq("id", jobId).eq("user_id", userId).single();
+  if (jobError || !job) throw new Error("job_not_found");
+  // A quota reservation or reprocess must never authorize an arbitrary file.
+  await assertStorageOwnership(userId, "callsheets", job.storage_path);
+  const attemptId = randomUUID();
+  const { data, error } = await supabaseAdmin.rpc("reserve_ai_quota", {
+    ...await quotaContext(userId, plan), p_job_id: jobId, p_attempt_id: attemptId,
+    p_new_request_id: newRequestId ?? null,
+  });
+  if (error || !data || typeof data.allowed !== "boolean") throw new AiQuotaUnavailableError();
+  return { ...data, userId, jobId, attemptId } as AiReservation;
 }
 
-function processingCutoffIso(minutes: number): string {
-  const now = Date.now();
-  return new Date(now - minutes * 60_000).toISOString();
-}
-
-async function countExtractionsThisMonth(
-  userId: string,
-  sinceIso: string,
-): Promise<{ done: number; processing: number }> {
-  const cutoffIso = processingCutoffIso(30);
-
-  const countDoneFromUsage = async (): Promise<number | null> => {
-    const { count, error } = await supabaseAdmin
-      .from("ai_usage_events")
-      .select("id", { count: "exact" })
-      .range(0, 0)
-      .eq("user_id", userId)
-      .eq("kind", "callsheet")
-      .eq("status", "done")
-      .gte("run_at", sinceIso);
-
-    if (error) {
-      if (isMissingRelation(error)) return null;
-      // Best-effort: fall back to job tables if something went wrong.
-      return null;
-    }
-
-    return typeof count === "number" ? count : 0;
-  };
-
-  const countTable = async (table: "callsheet_jobs", status: "done" | "processing") => {
-    let q = supabaseAdmin
-      .from(table)
-      // Avoid HEAD requests: some networks/proxies can fail them and return a wrong count.
-      .select("id", { count: "exact" })
-      // Use GET + small range to still get `count` without HEAD.
-      .range(0, 0)
-      .eq("user_id", userId)
-      .eq("status", status);
-
-    // done counts since month start; processing is "reserved" only while recent to avoid blocking forever.
-    q = q.gte("processed_at", status === "done" ? sinceIso : cutoffIso);
-
-    const { count, error } = await q;
-    if (error) return 0;
-    return typeof count === "number" ? count : 0;
-  };
-
-  const [doneFromUsage, callsheetDone, callsheetProcessing] = await Promise.all([
-    countDoneFromUsage(),
-    countTable("callsheet_jobs", "done"),
-    countTable("callsheet_jobs", "processing"),
-  ]);
-
-  return {
-    done: typeof doneFromUsage === "number" ? doneFromUsage : callsheetDone,
-    processing: callsheetProcessing,
-  };
-}
-
-export async function checkAiMonthlyQuota(userId: string, planTierParams?: PlanTier | string | null): Promise<QuotaDecision> {
-  let planTier = planTierParams;
-  if (!planTier) {
-    planTier = await getServerPlanTier(userId);
-  }
-  const limit = getAIMonthlyLimit(planTier);
-  const sinceIso = startOfCurrentMonthUtcIso();
-  const counts = await countExtractionsThisMonth(userId, sinceIso);
-  if (String(planTier).toLowerCase() !== "pro") {
-    const identityUsage = await getFreeAiUsage(userId);
-    if (typeof identityUsage === "number") counts.done = Math.max(counts.done, identityUsage);
-  }
-  const reserved = counts.done + counts.processing;
-
-  // When bypass is enabled, always allow but still count usage for monitoring
-  if (envTruthy("BYPASS_AI_LIMITS")) {
-    return { allowed: true, limit, used: counts.done, remaining: Infinity };
-  }
-
-  // Only "done" is billed/visible as usage, but we also reserve slots while jobs are processing
-  // to avoid spawning more Gemini calls than the limit allows.
-  if (counts.done >= limit || reserved > limit) {
-    return {
-      allowed: false,
-      limit,
-      // If we are denying, consider the user at their limit (even if some slots are reserved by in-flight jobs).
-      used: limit,
-      remaining: 0,
-      reason: `monthly_quota_exceeded:${limit}/${limit}:reserved=${reserved}:done=${counts.done}:processing=${counts.processing}`,
-    };
-  }
-
-  return { allowed: true, limit, used: counts.done, remaining: limit - counts.done };
-}
-
-/**
- * Record AI usage for quota tracking
- */
-export async function recordAiUsage(userId: string, kind: string, jobId: string): Promise<void> {
-  try {
-    const planTier = await getServerPlanTier(userId);
-    const { error } = await supabaseAdmin.from("ai_usage_events").insert({
-      user_id: userId,
-      kind,
-      job_id: jobId,
-      run_at: new Date().toISOString(),
-      status: "done",
-    });
-    if (error) throw error;
-    if (planTier !== "pro" && kind === "callsheet") await incrementFreeAiUsage(userId);
-  } catch (err) {
-    // Best-effort - don't fail the request if recording fails
-    console.warn("Failed to record AI usage:", err);
-  }
+export async function finishAiQuota(reservation: AiReservation, success: boolean): Promise<boolean> {
+  if (!reservation.allowed || !reservation.requestId) return false;
+  const { data, error } = await supabaseAdmin.rpc("finish_ai_quota", {
+    p_user_id: reservation.userId, p_job_id: reservation.jobId,
+    p_request_id: reservation.requestId, p_attempt_id: reservation.attemptId, p_success: success,
+  });
+  if (error || typeof data !== "boolean") throw new AiQuotaUnavailableError();
+  return data;
 }

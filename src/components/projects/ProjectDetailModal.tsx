@@ -241,7 +241,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const normalizeProjectName = useCallback((value: string) => value.trim().toLowerCase(), []);
 
   const materializeTripFromJob = useCallback(
-    async (job: { id: string; storage_path?: string | null; status?: string | null }, autoSave: boolean = false) => {
+    async (job: { id: string; storage_path?: string | null; status?: string | null }, autoSave: boolean = false, replacementTrip?: Trip) => {
       if (!project) return null;
       if (!job?.id) return null;
       if (processedJobsRef.current.has(job.id)) return null;
@@ -254,7 +254,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       }
 
       // Avoid duplicates if the trip already exists
-      if (hasTripForJob(job.id, storagePath)) {
+      if (!replacementTrip && hasTripForJob(job.id, storagePath)) {
         if (DEBUG) logger.debug("[Materialize] Trip already exists for job:", job.id);
         processedJobsRef.current.add(job.id);
         return null;
@@ -416,6 +416,15 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           ],
         };
 
+        if (replacementTrip) {
+          const ok = await updateTrip(replacementTrip.id, {
+            date: nextTrip.date, route: nextTrip.route, distance: nextTrip.distance,
+            co2: nextTrip.co2, purpose: nextTrip.purpose,
+          });
+          if (!ok) throw new Error("No se pudo actualizar el viaje. Se conserva el anterior.");
+          processedJobsRef.current.add(job.id);
+          return null;
+        }
         if (autoSave) {
           const ok = await addTrip(nextTrip);
           if (ok) {
@@ -433,7 +442,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
       } catch (e: any) {
         logger.warn("ProjectDetailModal error", e);
-        if (autoSave) {
+        if (autoSave || replacementTrip) {
           toast.error(tf("projectDetail.toastTripCreatedFromAiError", { message: e?.message ?? String(e) }));
         }
         return null;
@@ -443,7 +452,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     },
     // `trips` explícito: el check de duplicados lo usa directamente (nota de
     // Fase 5 — antes solo llegaba fresco de forma transitiva vía hasTripForJob).
-    [addTrip, calculateCO2, getAccessToken, hasTripForJob, normalizeProjectName, profile, project, trips]
+    [addTrip, updateTrip, calculateCO2, getAccessToken, hasTripForJob, normalizeProjectName, profile, project, trips]
   );
 
   useEffect(() => {
@@ -886,7 +895,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       return;
     }
 
-    activeExtractionCountRef.current += 1;
+    // Increment only after early-return checks and confirmation.
 
     logger.warn("[handleExtract] Starting extraction", { docId: doc.id, docStatus: doc.status, name: doc.name, isReprocess });
 
@@ -896,26 +905,20 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       return;
     }
 
-    if (doc.status === 'done' && !isReprocess) {
+    const previouslyProcessed = doc.status === 'done' || doc.status === 'needs_review';
+    if (previouslyProcessed && !isReprocess) {
       logger.warn("[handleExtract] Document is done, asking confirmation", { docId: doc.id });
-      if (!confirm("Este documento ya fue procesado. ¿Quieres volver a procesarlo? Se borrarán los datos anteriores y se hará una nueva extracción con IA.")) {
+      if (!confirm("Este documento ya fue procesado. ¿Quieres volver a procesarlo? Consumirá otra extracción de tu cuota.")) {
         logger.warn("[handleExtract] EARLY RETURN: user cancelled reprocess", { docId: doc.id });
         return;
       }
     }
 
+    activeExtractionCountRef.current += 1;
     try {
       logger.warn("[handleExtract] Processing started - will set UI to processing", { docId: doc.id });
-      // Limpiar datos anteriores si es re-procesamiento
-      if (doc.status === 'done') {
-        const tripToDelete = trips.find(t => t.callsheet_job_id === doc.id);
-        if (tripToDelete) {
-          await supabase.from("trips").delete().eq("id", tripToDelete.id);
-        }
-        await supabase.from("callsheet_results").delete().eq("job_id", doc.id);
-        await supabase.from("callsheet_locations").delete().eq("job_id", doc.id);
-        processedJobsRef.current.delete(doc.id);
-      }
+      // The server reserves quota before clearing previous extraction results.
+      const newRequestId = previouslyProcessed ? uuidv4() : undefined;
 
       // Actualizar project_id si hace falta
       if (project?.id) {
@@ -941,7 +944,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       const { data: { session } } = await supabase.auth.getSession();
       const accessToken = session?.access_token;
       logger.warn("[handleExtract] Calling API", { docId: doc.id, hasToken: !!accessToken });
-      const response = await fetch(`/api/callsheets/process?jobId=${encodeURIComponent(doc.id)}`, {
+      const response = await fetch(`/api/callsheets/process?jobId=${encodeURIComponent(doc.id)}${newRequestId ? `&requestId=${encodeURIComponent(newRequestId)}` : ""}`, {
         method: "POST",
         headers: {
           Authorization: accessToken ? `Bearer ${accessToken}` : "",
@@ -967,14 +970,22 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           return;
         }
         if (response.status === 402 || (errData as any)?.error === "quota_exceeded") {
-          logger.warn("[handleExtract] quota_exceeded -> removing document from UI", { docId: doc.id });
+          logger.warn("[handleExtract] quota_exceeded -> preserving document", { docId: doc.id });
           localStatusOverridesRef.current.delete(doc.id);
           cancelCallsheetJobIdsRef.current.delete(doc.id);
-          setRealCallSheets((prev) => prev.filter((p) => p.id !== doc.id));
-          toast.error("Límite mensual alcanzado: este documento no se guardó");
+          setRealCallSheets((prev) => prev.map((p) => p.id === doc.id ? { ...p, status: doc.status } : p));
+          toast.error("No queda cuota disponible. Se conservan el documento y los resultados anteriores.");
           return;
         }
+        if (errData.error === "ai_quota_unavailable") {
+          throw new Error("No se pudo comprobar tu cuota. El documento se conserva; inténtalo de nuevo más tarde.");
+        }
         throw new Error((errData as any).message ?? `Error ${response.status}`);
+      }
+
+      if (previouslyProcessed) {
+        // Update the existing trip only after validating the replacement result.
+        processedJobsRef.current.delete(doc.id);
       }
 
       // Exito: actualizar UI y materializar el viaje directamente
@@ -984,7 +995,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       logger.warn("[handleExtract] Removing from cancelCallsheetJobIdsRef", { docId: doc.id, sizeBefore: cancelCallsheetJobIdsRef.current.size });
       cancelCallsheetJobIdsRef.current.delete(doc.id);
       logger.warn("[handleExtract] Removed from cancelCallsheetJobIdsRef", { docId: doc.id, sizeAfter: cancelCallsheetJobIdsRef.current.size });
-      await materializeTripFromJob({ id: doc.id, storage_path: doc.storage_path, status: 'done' });
+      await materializeTripFromJob({ id: doc.id, storage_path: doc.storage_path, status: 'done' }, false,
+        previouslyProcessed ? trips.find(trip => trip.callsheet_job_id === doc.id) : undefined);
 
     } catch (e: any) {
       logger.warn("[handleExtract] Caught error", { docId: doc.id, errorName: e?.name, errorMessage: e?.message });
@@ -997,7 +1009,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       logger.warn("[handleExtract] Non-abort error - removing from cancelRef and marking failed", { docId: doc.id });
       cancelCallsheetJobIdsRef.current.delete(doc.id);
       localStatusOverridesRef.current.delete(doc.id);
-      setRealCallSheets(prev => prev.filter(p => p.id !== doc.id));
+      setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: previouslyProcessed ? doc.status : 'failed' } : p));
       toast.error(tf("projectDetail.toastExtractionStartError", { message: e.message }));
     } finally {
       activeExtractionCountRef.current = Math.max(0, activeExtractionCountRef.current - 1);

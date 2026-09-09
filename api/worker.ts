@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "../src/lib/supabaseServer.js";
 import { captureServerException, withApiObservability } from "./_utils/observability.js";
 import { enforceRateLimit } from "./_utils/rateLimit.js";
-import { checkAiMonthlyQuota } from "./_utils/aiQuota.js";
+import { reserveAiQuota, finishAiQuota, type AiReservation } from "./_utils/aiQuota.js";
 import { getServerPlanTier } from "./_utils/entitlements.js";
 import { calculateNextRetry, DEFAULT_RETRY_STRATEGY } from "./_utils/retry.js";
 import { extractCallsheet } from "./_utils/callsheetExtraction.js";
@@ -87,35 +87,6 @@ export default withApiObservability(async function handler(req: any, res: any, {
   if (!cronAllowed) return;
 
   try {
-    const recordUsage = async (params: { userId: string; jobId: string; runAt?: string | null }) => {
-      const userId = String(params.userId ?? "").trim();
-      const jobId = String(params.jobId ?? "").trim();
-      if (!userId || !jobId) return;
-
-      try {
-        const runAt = params.runAt ? String(params.runAt) : new Date().toISOString();
-        const { error } = await supabaseAdmin
-          .from("ai_usage_events")
-          .upsert(
-            {
-              user_id: userId,
-              kind: "callsheet",
-              job_id: jobId,
-              run_at: runAt,
-              status: "done",
-            } as any,
-            { onConflict: "kind,job_id,run_at", ignoreDuplicates: true } as any,
-          );
-
-        if (error) {
-          // Best-effort only. Avoid breaking extractions if migrations weren't applied yet.
-          log.warn({ jobId, err: error }, "callsheet_usage_event_failed");
-        }
-      } catch (err) {
-        log.warn({ jobId, err }, "callsheet_usage_event_exception");
-      }
-    };
-
     // 1. Detect and reset stuck jobs.
     // Skip for targeted manual single-job runs: the job was just queued so it can't be stuck,
     // and running this check adds unnecessary latency for the user pressing "Procesar".
@@ -251,56 +222,23 @@ export default withApiObservability(async function handler(req: any, res: any, {
       const jobId = job.id;
       const currentRetry = job.retry_count || 0;
 
-      let claimed: any;
-      if (preClaimed && jobId === manualJobId) {
-        // Job was already claimed to "processing" by trigger-worker. Just fetch its data.
-        const { data: existing, error: fetchErr } = await supabaseAdmin
-          .from("callsheet_jobs")
-          .select("id, storage_path, user_id, retry_count, processed_at")
-          .eq("id", jobId)
-          .eq("status", "processing")
-          .maybeSingle();
-        if (fetchErr || !existing) {
-          log.warn({ jobId }, "callsheet_preclaimed_job_not_found");
+      let reservation: AiReservation | undefined;
+      try {
+        const userId = String(job.user_id ?? "").trim();
+        reservation = await reserveAiQuota(userId, jobId, planTierByUserId.get(userId));
+        if (reservation.completed) {
+          processedResults.push({ id: jobId, status: "done", cached: true });
           return;
         }
-        claimed = existing;
-      } else {
-        // Atomically claim the job so concurrent workers don't double-process.
-        const { data: claimedData, error: claimError } = await supabaseAdmin
-          .from("callsheet_jobs")
-          .update({
-            status: "processing",
-            processed_at: new Date().toISOString(),
-            processing_started_at: new Date().toISOString(),
-            retry_count: currentRetry,
-          })
-          .eq("id", jobId)
-          .in("status", ["queued", "failed"])
-          .select("id, storage_path, user_id, retry_count, processed_at")
-          .maybeSingle();
-        if (claimError || !claimedData) return; // already taken or not claimable
-        claimed = claimedData;
-      }
-
-      try {
-        log.info({ jobId, retryCount: currentRetry }, "callsheet_job_start");
-
-        // Monthly quota (counts only when jobs reach `done`).
-        const userId = String((claimed as any).user_id ?? (job as any).user_id ?? "").trim();
-        if (userId) {
-          const quota = await checkAiMonthlyQuota(userId);
-          if (!quota.allowed) {
-            const reason = quota.reason ?? "monthly_quota_exceeded";
-            await supabaseAdmin
-              .from("callsheet_jobs")
-              .update({ status: "out_of_quota", needs_review_reason: reason })
-              .eq("id", job.id)
-              .eq("status", "processing");
-            processedResults.push({ id: job.id, status: "out_of_quota", error: reason });
-            return;
-          }
+        if (reservation.busy) return;
+        if (!reservation.allowed) {
+          await supabaseAdmin.from("callsheet_jobs").update({ status: "out_of_quota", needs_review_reason: "monthly_quota_exceeded" })
+            .eq("id", jobId).eq("user_id", userId).in("status", ["queued", "failed", "processing"]);
+          processedResults.push({ id: jobId, status: "out_of_quota", error: "monthly_quota_exceeded" });
+          return;
         }
+        const claimed = { user_id: userId, storage_path: reservation.storagePath, processed_at: new Date().toISOString() };
+        log.info({ jobId, retryCount: currentRetry }, "callsheet_job_start");
 
         // Fetch AI user settings — reuse the profile cached during plan-limit checks (no extra DB query).
         // OpenRouter propio = SOLO plan Pro (el servidor no se fía del perfil a secas).
@@ -360,26 +298,12 @@ export default withApiObservability(async function handler(req: any, res: any, {
           return;
         }
 
-        if (outcome.cached === true) {
-          await supabaseAdmin.from("callsheet_jobs").update({ status: "done" }).eq("id", jobId).eq("status", "processing");
-          processedResults.push({ id: jobId, status: "done", cached: true });
+        if (!await finishAiQuota(reservation, true)) {
+          processedResults.push({ id: jobId, status: "cancelled" });
           return;
         }
-
-        // Done atómico (cancel-safe): si el usuario canceló durante la IA,
-        // el update no encuentra "processing" y no se marca done.
-        const { data: doneRow, error: doneError } = await supabaseAdmin
-          .from("callsheet_jobs")
-          .update({ status: "done", retry_count: currentRetry })
-          .eq("id", jobId)
-          .eq("status", "processing")
-          .select("id")
-          .maybeSingle();
-
-        if (doneError) throw doneError;
-        if (!doneRow) {
-          log.info({ jobId }, "callsheet_job_cancelled_before_done");
-          processedResults.push({ id: jobId, status: "cancelled" });
+        if (outcome.cached === true) {
+          processedResults.push({ id: jobId, status: "done", cached: true });
           return;
         }
 
@@ -402,16 +326,14 @@ export default withApiObservability(async function handler(req: any, res: any, {
           log.warn({ jobId, err }, "failed_to_log_extraction_metrics");
         }
 
-        if (outcome.aiProvider !== "openrouter") {
-          await recordUsage({
-            userId: String((claimed as any).user_id ?? (job as any).user_id ?? ""),
-            jobId,
-            runAt: (claimed as any).processed_at ?? null,
-          });
-        }
         log.info({ jobId, retryCount: currentRetry }, "callsheet_job_done");
         processedResults.push({ id: jobId, status: "success", retries: currentRetry });
       } catch (jobErr: any) {
+        if (!reservation?.allowed) {
+          log.error({ jobId, err: jobErr }, "quota_reservation_failed");
+          processedResults.push({ id: jobId, status: "failed", error: "ai_quota_unavailable" });
+          return;
+        }
         log.error({ jobId, err: jobErr, retryCount: currentRetry }, "callsheet_job_failed");
         const errorMessage = jobErr?.message || String(jobErr);
         captureServerException(jobErr, { requestId, jobId, kind: "callsheet" });
@@ -455,6 +377,11 @@ export default withApiObservability(async function handler(req: any, res: any, {
             retries: nextRetry, 
             nextRetryAt 
           });
+        }
+      } finally {
+        if (reservation?.allowed) {
+          try { await finishAiQuota(reservation, false); }
+          catch (error) { log.warn({ jobId, error }, "quota_release_pending_expiry"); }
         }
       }
     }

@@ -7,50 +7,11 @@ import { supabaseAdmin } from "../src/lib/supabaseServer.js";
 import { withApiObservability } from "./_utils/observability.js";
 import { getBearerToken, requireSupabaseUser, sendJson } from "./_utils/supabase.js";
 import { enforceRateLimit } from "./_utils/rateLimit.js";
-import { checkAiMonthlyQuota, recordAiUsage } from "./_utils/aiQuota.js";
+import { reserveAiQuota, finishAiQuota, AiQuotaUnavailableError, type AiReservation } from "./_utils/aiQuota.js";
 import { getServerPlanTier } from "./_utils/entitlements.js";
 import { extractCallsheet } from "./_utils/callsheetExtraction.js";
 import { z } from "zod";
 import { assertStorageOwnership, isSafeStoragePath, StorageOwnershipError } from "./_utils/storageOwnership.js";
-
-const NON_DONE_CALLSHEET_STATUSES = ["created", "queued", "processing", "failed", "cancelled", "out_of_quota"] as const;
-const CALLSHEET_PROCESS_STALE_MS = 90_000;
-
-async function deleteUnprocessedCallsheetJob(args: { userId: string; jobId: string }) {
-  const { userId, jobId } = args;
-
-  const { data: existingJob } = await supabaseAdmin
-    .from("callsheet_jobs")
-    .select("id, storage_path")
-    .eq("id", jobId)
-    .eq("user_id", userId)
-    .in("status", [...NON_DONE_CALLSHEET_STATUSES])
-    .maybeSingle();
-
-  const storagePath = String((existingJob as any)?.storage_path ?? "");
-  if (storagePath && storagePath !== "pending") {
-    await assertStorageOwnership(userId, "callsheets", storagePath);
-    try {
-      await supabaseAdmin.storage.from("callsheets").remove([storagePath]);
-    } catch {
-      // ignore cleanup failure
-    }
-  }
-
-  await supabaseAdmin
-    .from("callsheet_jobs")
-    .delete()
-    .eq("id", jobId)
-    .eq("user_id", userId)
-    .in("status", [...NON_DONE_CALLSHEET_STATUSES]);
-}
-
-function isCallsheetProcessingStale(timestamp: unknown, staleMs = CALLSHEET_PROCESS_STALE_MS) {
-  if (typeof timestamp !== "string" || !timestamp.trim()) return true;
-  const parsed = Date.parse(timestamp);
-  if (!Number.isFinite(parsed)) return true;
-  return Date.now() - parsed >= staleMs;
-}
 
 // ─── /api/callsheets/process ────────────────────────────────────────────────
 // Direct synchronous extraction: claim job → download PDF → call Gemini → save results → done.
@@ -67,6 +28,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
   const jobId = typeof req.query?.jobId === "string" ? req.query.jobId.trim() : null;
   if (!jobId) return sendJson(res, 400, { error: "missing_jobId" });
 
+  let reservation: AiReservation | undefined;
   try {
     // 1. Fetch user profile to get AI plan tier
     const [{ data: profile }, planTier] = await Promise.all([
@@ -74,56 +36,15 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
       getServerPlanTier(user.id),
     ]);
 
-    // 2. Check monthly quota
-    const quota = await checkAiMonthlyQuota(user.id, planTier);
-    if (!quota.allowed) {
-      await deleteUnprocessedCallsheetJob({ userId: user.id, jobId });
-
-      return sendJson(res, 402, { error: "quota_exceeded", reason: quota.reason });
+    const newRequestId = req.query?.requestId;
+    if (newRequestId !== undefined && !z.string().uuid().safeParse(newRequestId).success) {
+      return sendJson(res, 400, { error: "invalid_request_id" });
     }
-
-    // 3. Atomically claim the job (created/queued/failed/cancelled -> processing)
-    const now = new Date().toISOString();
-    const { data: claimedJob, error: claimError } = await supabaseAdmin
-      .from("callsheet_jobs")
-      .update({ status: "processing", processing_started_at: now, processed_at: now })
-      .eq("id", jobId)
-      .eq("user_id", user.id)
-      .in("status", ["created", "queued", "failed", "cancelled", "out_of_quota"])
-      .select("id, storage_path, user_id")
-      .maybeSingle();
-    let job = claimedJob;
-
-    if (claimError) return sendJson(res, 500, { error: "claim_failed", message: claimError.message });
-    if (!job) {
-      const { data: existing } = await supabaseAdmin
-        .from("callsheet_jobs")
-        .select("status, processing_started_at, processed_at, user_id, storage_path")
-        .eq("id", jobId)
-        .eq("user_id", user.id)
-        .maybeSingle();
-      const s = String((existing as any)?.status ?? "");
-      const processingStartedAt = String((existing as any)?.processing_started_at ?? (existing as any)?.processed_at ?? "");
-      if (s === "processing" && isCallsheetProcessingStale(processingStartedAt)) {
-        const { data: reclaimed, error: reclaimError } = await supabaseAdmin
-          .from("callsheet_jobs")
-          .update({ status: "processing", processing_started_at: now, processed_at: now })
-          .eq("id", jobId)
-          .eq("user_id", user.id)
-          .eq("status", "processing")
-          .select("id, storage_path, user_id")
-          .maybeSingle();
-        if (reclaimError) return sendJson(res, 500, { error: "reclaim_failed", message: reclaimError.message });
-        if (reclaimed) job = reclaimed as any;
-      }
-    }
-    if (!job) {
-      const { data: existing } = await supabaseAdmin.from("callsheet_jobs").select("status").eq("id", jobId).eq("user_id", user.id).maybeSingle();
-      const s = String((existing as any)?.status ?? "");
-      // If already processing or done, return ok so the client can poll/refresh
-      if (s === "done") return sendJson(res, 200, { ok: true, alreadyDone: true });
-      return sendJson(res, 409, { error: "not_claimable", status: s });
-    }
+    reservation = await reserveAiQuota(user.id, jobId, planTier, newRequestId);
+    if (reservation.completed) return sendJson(res, 200, { ok: true, jobId, alreadyDone: true });
+    if (reservation.busy) return sendJson(res, 409, { error: "not_claimable", status: "processing" });
+    if (!reservation.allowed) return sendJson(res, 402, { error: "quota_exceeded", reason: reservation.reason });
+    const job = { storage_path: reservation.storagePath };
 
     // 3. Load user AI settings (OpenRouter override if configured).
     // OpenRouter propio = SOLO plan Pro (regla de la propietaria 2026-07-10):
@@ -146,7 +67,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
     });
 
     if (outcome.ok === false) {
-      await deleteUnprocessedCallsheetJob({ userId: user.id, jobId });
+      await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", needs_review_reason: outcome.message }).eq("id", jobId).eq("user_id", user.id).eq("status", "processing");
       if (outcome.kind === "download_failed") {
         return sendJson(res, 500, { error: "download_failed", message: outcome.message });
       }
@@ -156,24 +77,18 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
       return sendJson(res, 422, { error: "extraction_invalid", reason: outcome.message });
     }
 
-    // 5. Mark done
-    await supabaseAdmin.from("callsheet_jobs").update({ status: "done" }).eq("id", jobId).eq("status", "processing");
-
-    // Resultados ya existentes (job interrumpido tras guardar): done sin
-    // gastar otra llamada de IA ni contar uso de nuevo.
-    if (outcome.cached === true) {
-      log.info({ jobId }, "callsheet_process_done");
-      return sendJson(res, 200, { ok: true, jobId, cached: true });
+    // Completion and charging are one transaction, even after an internal cached retry.
+    if (!await finishAiQuota(reservation, true)) {
+      return sendJson(res, 409, { error: "cancelled" });
     }
-
-    // 6. Record AI usage for quota tracking
-    await recordAiUsage(user.id, "callsheet", jobId);
-
     log.info({ jobId }, "callsheet_process_done");
+
+    if (outcome.cached === true) return sendJson(res, 200, { ok: true, jobId, cached: true });
 
     return sendJson(res, 200, { ok: true, jobId, date: outcome.date, projectName: outcome.projectName, locations: outcome.locations });
   } catch (err: any) {
     log.error({ err, jobId }, "callsheet_process_error");
+    if (err instanceof AiQuotaUnavailableError) return sendJson(res, 503, { error: "ai_quota_unavailable" });
     if (err instanceof StorageOwnershipError) {
       await supabaseAdmin.from("callsheet_jobs")
         .update({ status: "failed", needs_review_reason: err.message })
@@ -181,11 +96,16 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
       return sendJson(res, 403, { error: err.message });
     }
     try {
-      await deleteUnprocessedCallsheetJob({ userId: user.id, jobId });
+      if (reservation?.allowed) await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", needs_review_reason: "processing_failed" }).eq("id", jobId).eq("user_id", user.id).eq("status", "processing");
     } catch (updateErr) {
       // ignore
     }
     return sendJson(res, 500, { error: "process_failed", message: err?.message ?? "Extraction failed" });
+  } finally {
+    if (reservation?.allowed) {
+      try { await finishAiQuota(reservation, false); }
+      catch (error) { log.warn({ error, jobId }, "quota_release_pending_expiry"); }
+    }
   }
 }, { name: "callsheets/process" });
 
