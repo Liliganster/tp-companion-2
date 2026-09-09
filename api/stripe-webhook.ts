@@ -1,4 +1,5 @@
 import type Stripe from "stripe";
+import { isAccountDeleting } from './_utils/accountLifecycle.js';
 import { getAllowedStripePriceIds, getStripeClient, getStripeWebhookSecret } from "./_utils/stripeClient.js";
 import { findUserIdByStripeIds, saveStripeSubscription } from "./_utils/entitlements.js";
 import {
@@ -18,6 +19,7 @@ async function findUserId(subscription: Stripe.Subscription): Promise<string | n
 async function syncSubscription(subscription: Stripe.Subscription, eventCreated: number) {
   const userId = await findUserId(subscription);
   if (!userId) throw new Error(`No user mapping for Stripe subscription ${subscription.id}`);
+  if (await isAccountDeleting(userId)) return;
 
   await saveStripeSubscription({
     userId,

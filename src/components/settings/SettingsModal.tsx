@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { continueAccountDeletion } from '@/lib/deleteAccount';
 import {
   Dialog,
   DialogContent,
@@ -218,9 +219,16 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     }
   };
 
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const deletionControllerRef = useRef<AbortController | null>(null);
+  useEffect(() => () => deletionControllerRef.current?.abort(), []);
   const deleteAccount = async () => {
+    if (deletionControllerRef.current) return;
     const ok = window.confirm(t("settings.deleteAccountBody"));
     if (!ok) return;
+    const controller = new AbortController();
+    deletionControllerRef.current = controller;
+    setDeletingAccount(true);
 
     try {
       const token = await getAccessToken();
@@ -229,23 +237,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
         return;
       }
 
-      const response = await fetch("/api/user/delete-account", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      const data: any = await response.json().catch(() => null);
-      if (!response.ok) {
-        toast({
-          title: t("settings.deleteAccountTitle"),
-          description: data?.message ?? t("settings.deleteAccountFailed"),
-          variant: "destructive",
-        });
-        return;
-      }
+      await continueAccountDeletion(getAccessToken, controller.signal);
 
       toast({ title: t("settings.deleteAccountTitle"), description: t("settings.accountDeleted") });
       await signOut();
@@ -253,9 +245,12 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     } catch (e: any) {
       toast({
         title: t("settings.deleteAccountTitle"),
-        description: e?.message ?? t("settings.deleteAccountFailed"),
+        description: t("settings.deleteAccountIncomplete"),
         variant: "destructive",
       });
+    } finally {
+      deletionControllerRef.current = null;
+      setDeletingAccount(false);
     }
   };
 
@@ -706,7 +701,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         <p className="text-sm text-muted-foreground mt-1 mb-4">
                           {t("settings.deleteAccountBody")}
                         </p>
-                        <Button variant="destructive" size="sm" onClick={deleteAccount}>
+                        {deletingAccount && <p role="status" className="text-sm mb-3">{t('settings.deletingAccount')}</p>}
+                        <Button variant="destructive" size="sm" disabled={deletingAccount} onClick={deleteAccount}>
                           <Trash2 className="w-4 h-4 mr-2" />
                           {t("settings.deleteAccountButton")}
                         </Button>

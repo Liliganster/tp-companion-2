@@ -1,70 +1,87 @@
-import { beforeEach, expect, it, vi } from "vitest";
-const { rpc, remove, deleteUser, deleteRows, from } = vi.hoisted(() => ({
-  rpc: vi.fn(), remove: vi.fn(), deleteUser: vi.fn(), deleteRows: vi.fn(), from: vi.fn(),
-}));
-vi.mock("../../src/lib/supabaseServer.js", () => ({
-  supabaseAdmin: { rpc, from, storage: { from: () => ({ remove }) }, auth: { admin: { deleteUser } } },
-}));
-vi.mock("./supabase.js", () => ({
-  requireSupabaseUser: async () => ({ id: "user-a" }),
-  sendJson: (res: any, code: number, body: unknown) => { res.statusCode = code; res.body = body; },
-}));
-vi.mock("./rateLimit.js", () => ({ enforceRateLimit: async () => true }));
-import handler from "../user.js";
+import { beforeEach, expect, it, vi } from 'vitest';
+vi.mock('../../src/lib/supabaseServer.js', () => ({ supabaseAdmin: {} }));
+vi.mock('./stripeClient.js', () => ({ getStripeClient: vi.fn() }));
+import { runAccountDeletion, type DeletionDependencies } from './accountDeletion';
 
-beforeEach(() => vi.clearAllMocks());
+function fixture(phase = 'storage') {
+  const deps: DeletionDependencies = {
+    rpc: vi.fn(async (name) => name === 'account_deletion_claim'
+      ? { phase, notBefore: new Date(0).toISOString() }
+      : name === 'account_deletion_files' ? [] : true),
+    cancelBilling: vi.fn(async () => true), removeFiles: vi.fn(async () => {}),
+    deleteAuth: vi.fn(async () => {}), now: () => Date.now(),
+  };
+  return deps;
+}
+beforeEach(() => { vi.spyOn(console, 'error').mockImplementation(() => {}); });
 
-it("verifies trip receipts in their actual bucket before deleting the account", async () => {
-  from.mockImplementation((table: string) => ({
-    select: () => ({ eq: async () => ({
-      data: table === "trips" ? [{ documents: [
-        { storagePath: "user-a/receipt.jpg", bucketId: "project_documents" },
-      ] }] : [], error: null,
-    }) }),
-    delete: () => ({ eq: deleteRows }),
-  }));
-  rpc.mockImplementation((_name: string, args: { p_bucket: string; p_path: string }) =>
-    Promise.resolve({ data: args.p_bucket === "project_documents" && args.p_path === "user-a/receipt.jpg", error: null }));
-  remove.mockResolvedValue({ error: null });
-  deleteRows.mockResolvedValue({ error: null });
-  deleteUser.mockResolvedValue({ error: null });
-  const res: any = {};
-  await handler({ method: "POST", url: "/api/user/delete-account" }, res);
-  expect(res.statusCode).toBe(200);
-  expect(remove).toHaveBeenCalledWith(["user-a/receipt.jpg"]);
-  expect(deleteUser).toHaveBeenCalledWith("user-a");
-});
-
-it("does not delete anything if the inventory cannot be read", async () => {
-  vi.spyOn(console, "error").mockImplementation(() => {});
-  from.mockReturnValue({
-    select: () => ({ eq: async () => ({ data: null, error: new Error("inventory unavailable") }) }),
-    delete: deleteRows,
+it('uses actual buckets and rereads remaining files after a partial failure', async () => {
+  const deps = fixture();
+  const files = [{ bucket: 'project_documents', path: 'user-a/receipt.jpg' }, { bucket: 'callsheets', path: 'legacy/document.pdf' }];
+  vi.mocked(deps.rpc).mockImplementation(async name => name === 'account_deletion_claim'
+    ? { phase: 'storage', notBefore: new Date(0).toISOString() } : name === 'account_deletion_files' ? [...files] : true);
+  vi.mocked(deps.removeFiles).mockImplementation(async bucket => {
+    if (bucket === 'callsheets') throw new Error('temporary storage failure');
+    files.splice(0, 1);
   });
-  const res: any = {};
-  await handler({ method: "POST", url: "/api/user/delete-account" }, res);
-  expect(res.statusCode).toBe(500);
-  expect(remove).not.toHaveBeenCalled();
-  expect(deleteRows).not.toHaveBeenCalled();
-  expect(deleteUser).not.toHaveBeenCalled();
+  expect((await runAccountDeletion('user-a', deps)).status).toBe(503);
+  expect(deps.deleteAuth).not.toHaveBeenCalled();
+  vi.mocked(deps.removeFiles).mockResolvedValue(undefined);
+  expect((await runAccountDeletion('user-a', deps)).status).toBe(202);
+  expect(deps.removeFiles).toHaveBeenLastCalledWith('callsheets', ['legacy/document.pdf']);
 });
 
-it("aborts account deletion before any removal if a document references another user's file", async () => {
-  vi.spyOn(console, "error").mockImplementation(() => {});
-  from.mockImplementation((table: string) => ({
-    select: () => ({ eq: async () => ({
-      data: table === "callsheet_jobs" ? [{ storage_path: "user-a/good.pdf" }]
-        : table === "project_documents" ? [{ storage_path: "user-b/private.pdf" }] : [],
-      error: null,
-    }) }),
-    delete: deleteRows,
-  }));
-  rpc.mockImplementation((_name: string, args: { p_path: string }) =>
-    Promise.resolve({ data: args.p_path === "user-a/good.pdf", error: null }));
-  const res: any = {};
-  await handler({ method: "POST", url: "/api/user/delete-account" }, res);
-  expect(res.statusCode).toBe(500);
-  expect(remove).not.toHaveBeenCalled();
-  expect(deleteRows).not.toHaveBeenCalled();
-  expect(deleteUser).not.toHaveBeenCalled();
+it.each(['inventory unavailable', 'storage_owner_conflict'])('stops before deleting on %s', async message => {
+  const deps = fixture();
+  vi.mocked(deps.rpc).mockImplementation(async name => {
+    if (name === 'account_deletion_claim') return { phase: 'storage', notBefore: new Date(0).toISOString() };
+    if (name === 'account_deletion_files') throw new Error(message);
+    return true;
+  });
+  expect((await runAccountDeletion('user-a', deps)).status).toBe(503);
+  expect(deps.removeFiles).not.toHaveBeenCalled();
+  expect(deps.deleteAuth).not.toHaveBeenCalled();
+});
+
+it('waits for prior requests to drain before billing or file removal', async () => {
+  const deps = fixture('billing');
+  vi.mocked(deps.rpc).mockResolvedValue({ phase: 'billing', notBefore: new Date(Date.now() + 120000).toISOString() });
+  expect((await runAccountDeletion('user-a', deps)).status).toBe(202);
+  expect(deps.cancelBilling).not.toHaveBeenCalled();
+});
+
+it('does not run another worker while a lease is active', async () => {
+  const deps = fixture(); vi.mocked(deps.rpc).mockResolvedValue({ busy: true });
+  expect((await runAccountDeletion('user-a', deps)).status).toBe(202);
+  expect(deps.rpc).toHaveBeenCalledTimes(1);
+  expect(deps.removeFiles).not.toHaveBeenCalled();
+});
+
+it('does not advance past incomplete subscription cancellation', async () => {
+  const deps = fixture('billing'); vi.mocked(deps.cancelBilling).mockResolvedValue(false);
+  expect((await runAccountDeletion('user-a', deps)).status).toBe(202);
+  expect(vi.mocked(deps.rpc).mock.calls.some(([name, args]) => name === 'account_deletion_checkpoint' && args.p_phase)).toBe(false);
+});
+
+it('keeps the login if transactional data removal fails', async () => {
+  const deps = fixture('data');
+  vi.mocked(deps.rpc).mockImplementation(async name => {
+    if (name === 'account_deletion_claim') return { phase: 'data', notBefore: new Date(0).toISOString() };
+    if (name === 'account_deletion_purge') throw new Error('database unavailable');
+    return true;
+  });
+  expect((await runAccountDeletion('user-a', deps)).status).toBe(503);
+  expect(deps.deleteAuth).not.toHaveBeenCalled();
+});
+
+it('does not report success if auth deletion fails', async () => {
+  const deps = fixture('auth'); vi.mocked(deps.deleteAuth).mockRejectedValue(new Error('auth unavailable'));
+  expect((await runAccountDeletion('user-a', deps)).status).toBe(503);
+});
+
+it('acknowledges completion only after removing auth and persisting completion', async () => {
+  const deps = fixture('auth');
+  expect(await runAccountDeletion('user-a', deps)).toEqual({ status: 200, body: { ok: true } });
+  expect(deps.deleteAuth).toHaveBeenCalledWith('user-a');
+  expect(deps.rpc).toHaveBeenLastCalledWith('account_deletion_checkpoint', expect.objectContaining({ p_phase: 'complete' }));
 });

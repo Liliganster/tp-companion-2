@@ -1,3 +1,4 @@
+import { isAccountDeleting } from './accountLifecycle.js';
 // Prefer server-only SUPABASE_URL; fall back to VITE_SUPABASE_URL to avoid misconfig mismatches
 // (Vercel env vars are shared across build/runtime, so VITE_* may exist server-side too).
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -60,6 +61,13 @@ export function getBearerToken(req: any) {
 }
 
 export async function requireSupabaseUser(req: any, res: any): Promise<SupabaseUser | null> {
+  const checkLifecycle = async (user: SupabaseUser): Promise<SupabaseUser | null> => {
+    if (req.method === 'POST' && (req.url || '').split('?')[0].replace(/\/$/, '') === '/api/user/delete-account') return user;
+    try {
+      if (await isAccountDeleting(user.id)) { json(res, 409, { error: 'account_deletion_in_progress' }); return null; }
+    } catch { json(res, 503, { error: 'account_status_unavailable' }); return null; }
+    return user;
+  };
   if (!SUPABASE_URL || !SERVICE_ROLE) {
     json(res, 500, { error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY" });
     return null;
@@ -73,7 +81,7 @@ export async function requireSupabaseUser(req: any, res: any): Promise<SupabaseU
 
   const cached = USER_CACHE.get(token);
   if (cached && Date.now() < cached.expiresAt) {
-    return cached.user;
+    return checkLifecycle(cached.user);
   }
 
   const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
@@ -96,7 +104,7 @@ export async function requireSupabaseUser(req: any, res: any): Promise<SupabaseU
 
   const user = { id: String(data.id), email: data.email ? String(data.email) : undefined };
   cacheUser(token, user);
-  return user;
+  return checkLifecycle(user);
 }
 
 export async function supabaseUpsertGoogleConnection(params: {

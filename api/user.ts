@@ -4,11 +4,12 @@
  */
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { runAccountDeletion } from './_utils/accountDeletion.js';
+import { createDeletionReceipt, verifyDeletionReceipt } from './_utils/deletionReceipt.js';
 import { OAuth2Client } from "google-auth-library";
 import { z } from "zod";
 import { requireSupabaseUser, sendJson } from "./_utils/supabase.js";
 import { supabaseAdmin } from "../src/lib/supabaseServer.js";
-import { assertStorageOwnership } from "./_utils/storageOwnership.js";
 import { checkAiMonthlyQuota } from "./_utils/aiQuota.js";
 import { enforceRateLimit } from "./_utils/rateLimit.js";
 import { getPlanLimits, DEFAULT_PLAN, PLAN_LIMITS, type PlanTier } from "./_utils/plans.js";
@@ -182,103 +183,32 @@ async function handleSubscription(req: VercelRequest, res: VercelResponse) {
 }
 
 // ─── /api/user/delete-account ────────────────────────────────────────────────
+async function handleDeleteAccount(req: any, res: any) {
+  if (req.method !== "POST") { res.statusCode = 405; res.setHeader("Allow", "POST"); res.end(); return; }
+  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  const receiptUser = verifyDeletionReceipt(req.headers?.['x-deletion-receipt'], secret);
+  if (receiptUser) {
+    const { data, error } = await supabaseAdmin.from('account_deletion_requests').select('phase').eq('user_id', receiptUser).maybeSingle();
+    if (error) return sendJson(res, 503, { error: 'account_deletion_incomplete' });
+    // A receipt cannot initiate deletion or skip cancellation, files or data.
+    if (data?.phase === 'auth' || data?.phase === 'complete') {
+      const result = await runAccountDeletion(receiptUser);
+      return sendJson(res, result.status, result.body);
+    }
+  }
+  const user = await requireSupabaseUser(req, res);
+  if (!user) return;
+  const result = await runAccountDeletion(user.id);
+  return sendJson(res, result.status, { ...result.body, receipt: createDeletionReceipt(user.id, secret) });
+}
+
+// ─── /api/user/cleanup-duplicate-trips ───────────────────────────────────────
 function _chunk<T>(items: T[], size: number) {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
   return out;
 }
 
-function _uniqueStrings(values: Array<unknown>): string[] {
-  const set = new Set<string>();
-  for (const v of values) { if (typeof v === "string" && v.trim()) set.add(v); }
-  return Array.from(set);
-}
-
-function _extractStoragePaths(raw: unknown, bucket: string): string[] {
-  const paths: string[] = [];
-  if (!raw) return paths;
-  if (Array.isArray(raw)) {
-    for (const doc of raw) {
-      if (doc && typeof doc === "object") {
-        const d: any = doc;
-        if (typeof d.storagePath === "string" && (d.bucketId ?? "callsheets") === bucket) {
-          paths.push(d.storagePath);
-        }
-      }
-    }
-    return paths;
-  }
-  if (typeof raw === "string") { try { return _extractStoragePaths(JSON.parse(raw), bucket); } catch { return paths; } }
-  return paths;
-}
-
-async function _deleteStoragePaths(userId: string, bucket: string, paths: string[]) {
-  const uniq = _uniqueStrings(paths);
-  if (uniq.length === 0) return;
-  for (const batch of _chunk(uniq, 100)) {
-    for (const path of batch) await assertStorageOwnership(userId, bucket, path);
-    const { error } = await supabaseAdmin.storage.from(bucket).remove(batch);
-    if (error) console.error(`[delete-account] storage remove failed (${bucket}):`, error);
-  }
-}
-
-async function handleDeleteAccount(req: any, res: any) {
-  if (req.method !== "POST") { res.statusCode = 405; res.setHeader("Allow", "POST"); res.end(); return; }
-  const user = await requireSupabaseUser(req, res);
-  if (!user) return;
-  try {
-    const callsheetsPaths: string[] = [];
-    const projectDocsPaths: string[] = [];
-
-    const { data: jobs, error: jobsErr } = await supabaseAdmin.from("callsheet_jobs").select("storage_path").eq("user_id", user.id);
-    if (jobsErr) throw jobsErr;
-    for (const row of jobs ?? []) callsheetsPaths.push((row as any).storage_path);
-
-    const { data: trips, error: tripsErr } = await supabaseAdmin.from("trips").select("documents").eq("user_id", user.id);
-    if (tripsErr) throw tripsErr;
-    for (const row of trips ?? []) {
-      callsheetsPaths.push(..._extractStoragePaths((row as any).documents, "callsheets"));
-      projectDocsPaths.push(..._extractStoragePaths((row as any).documents, "project_documents"));
-    }
-
-    const { data: projectDocs, error: projectDocsErr } = await supabaseAdmin.from("project_documents").select("storage_path").eq("user_id", user.id);
-    if (projectDocsErr) throw projectDocsErr;
-    for (const row of projectDocs ?? []) projectDocsPaths.push((row as any).storage_path);
-
-    // Verify the full inventory before any destructive operation.
-    const callsheetFiles = _uniqueStrings(callsheetsPaths).filter(path => path !== "pending");
-    const projectFiles = _uniqueStrings(projectDocsPaths);
-    for (const path of callsheetFiles) await assertStorageOwnership(user.id, "callsheets", path);
-    for (const path of projectFiles) await assertStorageOwnership(user.id, "project_documents", path);
-    await _deleteStoragePaths(user.id, "callsheets", callsheetFiles);
-    await _deleteStoragePaths(user.id, "project_documents", projectFiles);
-
-    const deletes: Array<PromiseLike<any>> = [
-      supabaseAdmin.from("project_documents").delete().eq("user_id", user.id),
-      supabaseAdmin.from("reports").delete().eq("user_id", user.id),
-      supabaseAdmin.from("route_templates").delete().eq("user_id", user.id),
-      supabaseAdmin.from("producer_mappings").delete().eq("user_id", user.id),
-      supabaseAdmin.from("callsheet_jobs").delete().eq("user_id", user.id),
-      supabaseAdmin.from("trips").delete().eq("user_id", user.id),
-      supabaseAdmin.from("projects").delete().eq("user_id", user.id),
-      supabaseAdmin.from("google_connections").delete().eq("user_id", user.id),
-    ];
-    const results = await Promise.allSettled(deletes);
-    for (const r of results) {
-      if (r.status === "rejected") console.error("[delete-account] delete failed:", r.reason);
-      else { const value: any = r.value; if (value?.error) console.error("[delete-account] delete error:", value.error); }
-    }
-
-    const { error: authDelErr } = await supabaseAdmin.auth.admin.deleteUser(user.id);
-    if (authDelErr) { console.error("[delete-account] auth delete failed:", authDelErr); return sendJson(res, 500, { error: "auth_delete_failed", message: authDelErr.message }); }
-    return sendJson(res, 200, { ok: true });
-  } catch (e: any) {
-    console.error("[delete-account] unexpected error:", e);
-    return sendJson(res, 500, { error: "delete_failed", message: e?.message ?? "Delete failed" });
-  }
-}
-
-// ─── /api/user/cleanup-duplicate-trips ───────────────────────────────────────
 async function handleCleanupDuplicateTrips(req: any, res: any) {
   if (req.method !== "POST") { res.statusCode = 405; res.setHeader("Allow", "POST"); res.end(); return; }
   const user = await requireSupabaseUser(req, res);
@@ -330,7 +260,7 @@ const USER_ROUTE_LIMITS: Record<string, { name: string; limit: number; windowMs:
   "/api/user/ai-quota": { name: "user_ai_quota", limit: 60, windowMs: 60_000 },
   "/api/user/profile": { name: "user_profile", limit: 30, windowMs: 60_000 },
   "/api/user/subscription": { name: "user_subscription", limit: 60, windowMs: 60_000 },
-  "/api/user/delete-account": { name: "user_delete_account", limit: 3, windowMs: 60_000 },
+  "/api/user/delete-account": { name: "user_delete_account", limit: 20, windowMs: 60_000 },
   "/api/user/cleanup-duplicate-trips": { name: "user_cleanup_trips", limit: 5, windowMs: 60_000 },
 };
 
