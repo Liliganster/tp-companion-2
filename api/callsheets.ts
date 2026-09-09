@@ -11,6 +11,7 @@ import { checkAiMonthlyQuota, recordAiUsage } from "./_utils/aiQuota.js";
 import { getServerPlanTier } from "./_utils/entitlements.js";
 import { extractCallsheet } from "./_utils/callsheetExtraction.js";
 import { z } from "zod";
+import { assertStorageOwnership, isSafeStoragePath, StorageOwnershipError } from "./_utils/storageOwnership.js";
 
 const NON_DONE_CALLSHEET_STATUSES = ["created", "queued", "processing", "failed", "cancelled", "out_of_quota"] as const;
 const CALLSHEET_PROCESS_STALE_MS = 90_000;
@@ -26,8 +27,9 @@ async function deleteUnprocessedCallsheetJob(args: { userId: string; jobId: stri
     .in("status", [...NON_DONE_CALLSHEET_STATUSES])
     .maybeSingle();
 
-  const storagePath = String((existingJob as any)?.storage_path ?? "").trim();
+  const storagePath = String((existingJob as any)?.storage_path ?? "");
   if (storagePath && storagePath !== "pending") {
+    await assertStorageOwnership(userId, "callsheets", storagePath);
     try {
       await supabaseAdmin.storage.from("callsheets").remove([storagePath]);
     } catch {
@@ -116,7 +118,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
       }
     }
     if (!job) {
-      const { data: existing } = await supabaseAdmin.from("callsheet_jobs").select("status").eq("id", jobId).maybeSingle();
+      const { data: existing } = await supabaseAdmin.from("callsheet_jobs").select("status").eq("id", jobId).eq("user_id", user.id).maybeSingle();
       const s = String((existing as any)?.status ?? "");
       // If already processing or done, return ok so the client can poll/refresh
       if (s === "done") return sendJson(res, 200, { ok: true, alreadyDone: true });
@@ -135,6 +137,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
     // en api/_utils/callsheetExtraction.ts). Aquí solo queda la traducción
     // del resultado a respuestas HTTP.
     const outcome = await extractCallsheet({
+      userId: user.id,
       jobId,
       storagePath: String(job.storage_path ?? ""),
       userSettings,
@@ -171,6 +174,12 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
     return sendJson(res, 200, { ok: true, jobId, date: outcome.date, projectName: outcome.projectName, locations: outcome.locations });
   } catch (err: any) {
     log.error({ err, jobId }, "callsheet_process_error");
+    if (err instanceof StorageOwnershipError) {
+      await supabaseAdmin.from("callsheet_jobs")
+        .update({ status: "failed", needs_review_reason: err.message })
+        .eq("id", jobId).eq("user_id", user.id).eq("status", "processing");
+      return sendJson(res, 403, { error: err.message });
+    }
     try {
       await deleteUnprocessedCallsheetJob({ userId: user.id, jobId });
     } catch (updateErr) {
@@ -201,6 +210,9 @@ const handleCreateUpload = withApiObservability(async function handler(req: any,
 
   try {
     const { filename } = parsed.data;
+    if (filename && (!isSafeStoragePath(filename) || filename.includes("/"))) {
+      return sendJson(res, 400, { error: "invalid_filename" });
+    }
     const { data: job, error: jobError } = await supabaseAdmin.from("callsheet_jobs").insert({ user_id: user.id, storage_path: "pending", status: "created" }).select("id").single();
     if (jobError || !job?.id) { log.error({ jobError }, "[callsheets/create-upload] job insert failed"); return sendJson(res, 500, { error: "job_insert_failed", message: jobError?.message }); }
 
@@ -334,6 +346,7 @@ const handleTriggerWorker = withApiObservability(async function handler(req: any
           .from("callsheet_jobs")
           .select("status")
           .eq("id", normalizedJobId)
+          .eq("user_id", user.id)
           .maybeSingle();
         const existingStatus = String((existing as any)?.status ?? "");
         if (existingStatus === "done") return sendJson(res, 200, { ok: true, triggered: false, message: "already_done" });

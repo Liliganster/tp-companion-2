@@ -331,6 +331,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
         // unificados en api/_utils/callsheetExtraction.ts). Aquí solo queda
         // la traducción del resultado a estados del job.
         const outcome = await extractCallsheet({
+          userId: String(claimed.user_id ?? ""),
           jobId,
           storagePath: String(claimed.storage_path ?? ""),
           userSettings,

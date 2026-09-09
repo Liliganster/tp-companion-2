@@ -8,6 +8,7 @@ import { OAuth2Client } from "google-auth-library";
 import { z } from "zod";
 import { requireSupabaseUser, sendJson } from "./_utils/supabase.js";
 import { supabaseAdmin } from "../src/lib/supabaseServer.js";
+import { assertStorageOwnership } from "./_utils/storageOwnership.js";
 import { checkAiMonthlyQuota } from "./_utils/aiQuota.js";
 import { enforceRateLimit } from "./_utils/rateLimit.js";
 import { getPlanLimits, DEFAULT_PLAN, PLAN_LIMITS, type PlanTier } from "./_utils/plans.js";
@@ -193,21 +194,29 @@ function _uniqueStrings(values: Array<unknown>): string[] {
   return Array.from(set);
 }
 
-function _extractStoragePaths(raw: unknown): string[] {
+function _extractStoragePaths(raw: unknown, bucket: string): string[] {
   const paths: string[] = [];
   if (!raw) return paths;
   if (Array.isArray(raw)) {
-    for (const doc of raw) { if (doc && typeof doc === "object") { const d: any = doc; if (typeof d.storagePath === "string") paths.push(d.storagePath); } }
+    for (const doc of raw) {
+      if (doc && typeof doc === "object") {
+        const d: any = doc;
+        if (typeof d.storagePath === "string" && (d.bucketId ?? "callsheets") === bucket) {
+          paths.push(d.storagePath);
+        }
+      }
+    }
     return paths;
   }
-  if (typeof raw === "string") { try { return _extractStoragePaths(JSON.parse(raw)); } catch { return paths; } }
+  if (typeof raw === "string") { try { return _extractStoragePaths(JSON.parse(raw), bucket); } catch { return paths; } }
   return paths;
 }
 
-async function _deleteStoragePaths(bucket: string, paths: string[]) {
+async function _deleteStoragePaths(userId: string, bucket: string, paths: string[]) {
   const uniq = _uniqueStrings(paths);
   if (uniq.length === 0) return;
   for (const batch of _chunk(uniq, 100)) {
+    for (const path of batch) await assertStorageOwnership(userId, bucket, path);
     const { error } = await supabaseAdmin.storage.from(bucket).remove(batch);
     if (error) console.error(`[delete-account] storage remove failed (${bucket}):`, error);
   }
@@ -222,19 +231,27 @@ async function handleDeleteAccount(req: any, res: any) {
     const projectDocsPaths: string[] = [];
 
     const { data: jobs, error: jobsErr } = await supabaseAdmin.from("callsheet_jobs").select("storage_path").eq("user_id", user.id);
-    if (jobsErr) console.error("[delete-account] callsheet_jobs select failed:", jobsErr);
+    if (jobsErr) throw jobsErr;
     for (const row of jobs ?? []) callsheetsPaths.push((row as any).storage_path);
 
     const { data: trips, error: tripsErr } = await supabaseAdmin.from("trips").select("documents").eq("user_id", user.id);
-    if (tripsErr) console.error("[delete-account] trips select failed:", tripsErr);
-    for (const row of trips ?? []) callsheetsPaths.push(..._extractStoragePaths((row as any).documents));
+    if (tripsErr) throw tripsErr;
+    for (const row of trips ?? []) {
+      callsheetsPaths.push(..._extractStoragePaths((row as any).documents, "callsheets"));
+      projectDocsPaths.push(..._extractStoragePaths((row as any).documents, "project_documents"));
+    }
 
     const { data: projectDocs, error: projectDocsErr } = await supabaseAdmin.from("project_documents").select("storage_path").eq("user_id", user.id);
-    if (projectDocsErr) console.error("[delete-account] project_documents select failed:", projectDocsErr);
+    if (projectDocsErr) throw projectDocsErr;
     for (const row of projectDocs ?? []) projectDocsPaths.push((row as any).storage_path);
 
-    await _deleteStoragePaths("callsheets", callsheetsPaths);
-    await _deleteStoragePaths("project_documents", projectDocsPaths);
+    // Verify the full inventory before any destructive operation.
+    const callsheetFiles = _uniqueStrings(callsheetsPaths).filter(path => path !== "pending");
+    const projectFiles = _uniqueStrings(projectDocsPaths);
+    for (const path of callsheetFiles) await assertStorageOwnership(user.id, "callsheets", path);
+    for (const path of projectFiles) await assertStorageOwnership(user.id, "project_documents", path);
+    await _deleteStoragePaths(user.id, "callsheets", callsheetFiles);
+    await _deleteStoragePaths(user.id, "project_documents", projectFiles);
 
     const deletes: Array<PromiseLike<any>> = [
       supabaseAdmin.from("project_documents").delete().eq("user_id", user.id),

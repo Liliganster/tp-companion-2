@@ -14,6 +14,7 @@
  * marcado done/failed, contabilidad de uso y las respuestas HTTP.
  */
 import { supabaseAdmin } from "../../src/lib/supabaseServer.js";
+import { assertStorageOwnership } from "./storageOwnership.js";
 import { generateContentFromPDF } from "../../src/lib/ai/geminiClient.js";
 import { buildUniversalExtractorPrompt } from "../../src/lib/ai/prompts.js";
 import { extractionSchema } from "../../src/lib/ai/schema.js";
@@ -44,6 +45,7 @@ type LogLike = {
 };
 
 export type ExtractCallsheetArgs = {
+  userId: string;
   jobId: string;
   storagePath: string;
   /** Configuración OpenRouter del usuario (undefined → Gemini directo). */
@@ -76,6 +78,8 @@ export type ExtractCallsheetOutcome =
 
 export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<ExtractCallsheetOutcome> {
   const { jobId, storagePath, userSettings, referenceIso, skipGeocode = false, checkCancellation = false, log } = args;
+
+  await assertStorageOwnership(args.userId, "callsheets", storagePath);
 
   // Caché: si ya hay resultados de este job, no gastar otra llamada de IA.
   // (También protege al /process de reintentar un job interrumpido tras
