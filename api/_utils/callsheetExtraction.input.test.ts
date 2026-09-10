@@ -1,6 +1,14 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ rejectLocations: false, download: vi.fn(), text: vi.fn(), binary: vi.fn(), insert: vi.fn(async (_table: string, _rows: unknown) => ({ error: null })) }));
+const mocks = vi.hoisted(() => ({ rejectLocations: false, rpc: vi.fn(), download: vi.fn(), text: vi.fn(), binary: vi.fn(), insert: vi.fn(async (_table: string, _rows: unknown) => ({ error: null })) }));
 vi.mock('../../src/lib/supabaseServer.js', () => ({ supabaseAdmin: {
+  rpc: async (name: string, args: any) => {
+    const response = await mocks.rpc(name, args);
+    if (response?.error) return response;
+    await mocks.insert('callsheet_results', args.p_result);
+    if (args.p_locations.length) await mocks.insert('callsheet_locations', args.p_locations);
+    if (args.p_excluded.length) await mocks.insert('callsheet_excluded_blocks', args.p_excluded.map((l: any) => ({ ...l, evidence_text: l.address })));
+    return { data: true, error: null };
+  },
   from: (table: string) => ({
     select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }),
     insert: (rows: unknown) => mocks.insert(table, rows),
@@ -16,7 +24,7 @@ vi.mock('../../src/lib/ai/geminiClient.js', () => ({ generateContent: mocks.text
 vi.mock('./pdf-parser.js', () => ({ parsePdfWithTimeout: async () => ({ text: 'Film' }) }));
 import { extractCallsheet } from './callsheetExtraction';
 import { getReviewCallsheetDrafts } from '../../src/lib/callsheetReview';
-const run = (name: string) => extractCallsheet({ userId: 'user', jobId: 'job', storagePath: `user/job/${name}`, referenceIso: '2026-09-09', skipGeocode: true, log: { info: () => {}, warn: () => {}, error: () => {} } });
+const run = (name: string) => extractCallsheet({ userId: 'user', requestId: 'request', attemptId: 'attempt', jobId: 'job', storagePath: `user/job/${name}`, referenceIso: '2026-09-09', skipGeocode: true, log: { info: () => {}, warn: () => {}, error: () => {} } });
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.rejectLocations = false;
@@ -61,7 +69,7 @@ it('does not save a successful result when the only location belongs to tomorrow
   const bytes = new TextEncoder().encode(source);
   mocks.download.mockResolvedValue({ data: { size: bytes.length, arrayBuffer: async () => bytes.buffer } });
   mocks.text.mockResolvedValue({ text: JSON.stringify({ date: '2026-09-10', dateRaw: '10.09.2026', dateYearInDocument: true, projectName: 'Test', locations: [{ label: 'SET', address: 'Other Street 20, City', dayScope: 'other_day', dayDate: '2026-09-11', dayEvidence: source }] }), provider: 'mock', model: 'mock' });
-  expect(await run('future.txt')).toMatchObject({ ok: false, kind: 'invalid_extraction' });
+  expect(await run('future.txt')).toMatchObject({ ok: true, status: 'needs_review' });
   expect(mocks.insert).not.toHaveBeenCalledWith('callsheet_locations', expect.anything());
 });
 
@@ -80,7 +88,7 @@ it('carries partial extraction through stored results into the editable review d
     { label: 'SET', address: 'Future Road 2', dayScope: 'other_day' },
     { label: 'SET', address: 'Second Road 3', unitScope: 'other_unit' },
   ], 'Staatsoper\nStadtpark\nCatering Road 1\nFuture Road 2\nSecond Road 3');
-  expect(result).toMatchObject({ ok: false, kind: 'invalid_extraction' });
+  expect(result).toMatchObject({ ok: true, status: 'needs_review' });
   const stored = mocks.insert.mock.calls.find(([table]) => table === 'callsheet_results')?.[1];
   const locations = mocks.insert.mock.calls.find(([table]) => table === 'callsheet_locations')?.[1];
   const [draft] = getReviewCallsheetDrafts([{ id: 'job', status: 'needs_review', storage_path: 'user/job/source.pdf', created_at: '2026-09-10', callsheet_results: stored as any, callsheet_locations: locations as any }], [], []);
@@ -105,13 +113,13 @@ it('does not replace the original street with a model correction retaining the s
   expect(mocks.insert).toHaveBeenCalledWith('callsheet_locations', [expect.objectContaining({ address_raw: 'Example Street 10, City' })]);
 });
 
-it('routes a partially unsupported extraction to review instead of silently saving only one location', async () => {
+it('preserves a visually read set when native PDF text does not contain its address', async () => {
   const evidence = 'SHOOT 10.09.2026 MOTIV: Example Street 10, City';
   const result = await extractMockLocations([
     { label: 'MOTIV', address: 'Example Street 10, City', dayScope: 'document_day', dayDate: '2026-09-10', dayEvidence: evidence },
     { label: 'SET', address: 'Invented Street 20, City', dayScope: 'document_day', dayDate: '2026-09-10', dayEvidence: 'SET: Invented Street 20, City' },
   ], evidence);
-  expect(result).toMatchObject({ ok: false, kind: 'invalid_extraction' });
+  expect(result).toMatchObject({ ok: true, status: 'done' });
   expect(mocks.insert).toHaveBeenCalledWith('callsheet_locations', expect.arrayContaining([expect.objectContaining({ address_raw: 'Example Street 10, City' }), expect.objectContaining({ address_raw: 'Invented Street 20, City' })]));
 });
 
@@ -134,6 +142,26 @@ it('excludes second-unit locations before persistence and keeps multiple main lo
 it('sends a second-unit-only document to manual review without persisting a route', async () => {
   const evidence = 'SEGUNDA UNIDAD\nSET: Other Street 20, City';
   const result = await extractMockLocations([{ label: 'SET', address: 'Other Street 20, City', dayScope: 'document_day', dayDate: '2026-09-10', dayEvidence: evidence, unitScope: 'other_unit', unitEvidence: evidence }], evidence);
-  expect(result).toMatchObject({ ok: false, kind: 'invalid_extraction' });
+  expect(result).toMatchObject({ ok: true, status: 'needs_review' });
   expect(mocks.insert).not.toHaveBeenCalledWith('callsheet_locations', expect.anything());
+});
+
+it('sends result, ordered candidates, exclusions and the reservation to one atomic RPC', async () => {
+  const result = await extractMockLocations([
+    {label:'SET A',address:'Opera',role:'filming'},
+    {label:'PARKING',address:'Parking',role:'logistics'},
+    {label:'SET B',address:'Park',role:'filming',unitScope:'uncertain'},
+  ],'Opera Park Parking');
+  expect(result).toMatchObject({ok:true,status:'needs_review'});
+  expect(mocks.rpc).toHaveBeenCalledOnce();
+  expect(mocks.rpc).toHaveBeenCalledWith('save_callsheet_extraction',expect.objectContaining({
+    p_request_id:'request',p_attempt_id:'attempt',
+    p_result:expect.objectContaining({extraction_state:'needs_review',model_output:expect.any(Object)}),
+    p_locations:[expect.objectContaining({position:0,selection_state:'confirmed'}),expect.objectContaining({position:2,selection_state:'candidate'})],
+  }));
+});
+it('does not report completion or create a draft after an atomic save error', async () => {
+  mocks.rpc.mockResolvedValueOnce({error:{message:'reservation_lost'}});
+  await expect(extractMockLocations([{label:'SET',address:'Opera'}],'Opera')).rejects.toThrow('reservation_lost');
+  expect(mocks.insert).not.toHaveBeenCalled();
 });

@@ -265,6 +265,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     producer: string;
     rawLocations: string[];
     locations: string[];
+    locationDetails?: { label_source?: string; selection_state?: string; review_reason?: string; address_raw?: string }[];
     distance: string;
     distanceDirty: boolean;
     optimizing: boolean;
@@ -993,7 +994,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
       if (!normalizedId) return false;
       if (scheduledProcessJobIdsRef.current.has(normalizedId)) return false;
       const localStatus = String(jobStateById[normalizedId]?.status ?? "").trim();
-      return localStatus !== "failed" && localStatus !== "done" && localStatus !== "out_of_quota";
+      return ["created", "queued"].includes(localStatus);
     });
   };
 
@@ -1374,7 +1375,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
             ...prev,
             [jobId]: {
               ...cur,
-              locations: Array.isArray(normalizedLocs) ? normalizedLocs : cur.locations,
+              locations: cur.locations, // Never overwrite edits with a late optimization response.
               distance: nextDistance,
               optimizing: false,
             },
@@ -1402,7 +1403,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     try {
       const [{ data: result, error: resultError }, { data: locs, error: locsError }] = await Promise.all([
         supabase.from("callsheet_results").select("*").eq("job_id", jobId).maybeSingle(),
-        supabase.from("callsheet_locations").select("*").eq("job_id", jobId),
+        supabase.from("callsheet_locations").select("*").eq("job_id", jobId).order("position").order("id"),
       ]);
       if (isAiCancelled(signal)) return;
 
@@ -1424,6 +1425,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
             project: String((result as any).project_value ?? ""),
             producer: String((result as any).producer_value ?? ""),
             rawLocations,
+            locationDetails: (locs ?? []).filter((l: any) => String(l.address_raw ?? l.name_raw ?? "").trim()),
             locations: rawLocations,
             distance: "0",
             distanceDirty: false,
@@ -2298,12 +2300,16 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                                       <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[10px] font-semibold text-primary ring-1 ring-primary/25">
                                         {idx + 1}
                                       </span>
+                                      <div className="min-w-0 flex-1">
+                                      <p className="text-xs text-muted-foreground">{review.locationDetails?.[idx]?.label_source} · {review.locationDetails?.[idx]?.selection_state === 'candidate' ? t('bulk.statusNeedsReview') : t('bulk.statusReady')}</p>
+                                      <p className="text-xs text-muted-foreground">{review.locationDetails?.[idx]?.review_reason}</p>
                                       <Input
                                         aria-label={tf("bulk.locationsRouteLabel", { count: idx + 1 })}
                                         value={loc}
                                         onChange={(event) => updateReview(job.id, { locations: review.locations.map((value, position) => position === idx ? event.target.value : value), distance: "0", distanceDirty: true })}
                                         className="min-w-0"
                                       />
+                                      </div>
                                     </div>
                                   ))}
                                   {review.locations.length === 0 && (

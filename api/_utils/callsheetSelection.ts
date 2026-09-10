@@ -1,38 +1,35 @@
 import type { CallsheetExtractionResult } from '../../src/lib/ai/validation.js';
-import { classifyLabeledLocations } from './callsheetLabels.js';
-import { containsEvidence } from './callsheetEvidence.js';
+import { classifyLocationRole } from './callsheetLabels.js';
 
-/** One selection decision per block. Evidence supports review, never an
- * all-or-nothing gate requiring the date, unit and address in one quote. */
-export function selectCallsheetLocations(data: CallsheetExtractionResult, date: string, source: string) {
+/** One contextual decision per block. Text matching is not a gate: PDF text
+ * order and OCR omissions cannot establish that a visually read set is wrong. */
+export function selectCallsheetLocations(data: CallsheetExtractionResult, date: string, _source: string) {
   const excluded: Array<{ label: string; address: string; reason: string }> = [];
-  const candidates: CallsheetExtractionResult['locations'] = [];
+  const filming: Array<{ label: string; address: string; position: number; selection_state: 'confirmed' | 'candidate'; review_reason: string | null }> = [];
   const reviewReasons: string[] = [];
-  if (!date) reviewReasons.push('Falta confirmar la fecha de rodaje.');
-  for (const location of data.locations) {
+  if (!date) reviewReasons.push('Confirma la fecha completa de rodaje de la primera página; falta o es inválida, incluido el año.');
+  data.locations.forEach((location, position) => {
     const label = location.label ?? '';
     const address = location.address ?? '';
-    const dayScope = 'dayScope' in location ? location.dayScope : undefined;
+    const day = 'dayScope' in location ? location.dayScope : undefined;
+    const unit = 'unitScope' in location ? location.unitScope : undefined;
     const dayDate = 'dayDate' in location ? location.dayDate : undefined;
-    const unitScope = 'unitScope' in location ? location.unitScope : undefined;
-    let reason = '';
-    if (dayScope === 'other_day' || (date && dayDate && dayDate !== date)) reason = 'other_shooting_day';
-    else if (data.documentUnit === 'other_unit' || unitScope === 'other_unit') reason = 'other_filming_unit';
-    const classified = classifyLabeledLocations([{ ...location, label, address }]);
-    if (!reason && classified.dropped.length) reason = classified.dropped[0].reason;
-    if (reason) { excluded.push({ label, address, reason }); continue; }
-    if (!address) { reviewReasons.push('Una locación no tiene dirección o nombre; comprueba el original.'); continue; }
-    candidates.push(location);
-    if (dayScope === 'uncertain' || unitScope === 'uncertain' || data.documentUnit === 'uncertain' ||
-        (data.documentUnit === 'mixed' && (!unitScope || unitScope === 'unspecified'))) {
-      reviewReasons.push(`Confirma el día o la unidad de: ${address}`);
-    }
-    // PDF text can be incomplete or ordered differently from the visual page.
-    // Preserve a candidate instead of treating imperfect text matching as failure.
-    if (source.trim() && !containsEvidence(source, address)) reviewReasons.push(`Contrasta con el original: ${address}`);
-  }
-  const classified = classifyLabeledLocations(candidates.map(location => ({ ...location, label: location.label ?? '', address: location.address ?? '' })));
-  excluded.push(...classified.dropped);
-  if (!classified.filming.length) reviewReasons.push('No se identificaron locaciones de filmación; completa los datos desde el original.');
-  return { filming: classified.filming, excluded, reviewReasons: [...new Set(reviewReasons)], candidates };
+    const role = classifyLocationRole({ ...location, label, address });
+    let excludedReason = '';
+    if (day === 'other_day' || (date && dayDate && date !== dayDate)) excludedReason = 'other_shooting_day';
+    else if (data.documentUnit === 'other_unit' || unit === 'other_unit') excludedReason = 'other_filming_unit';
+    else if (role === 'logistics' || role === 'other') excludedReason = `${role}_block`;
+    if (excludedReason) { excluded.push({ label, address, reason: excludedReason }); return; }
+    const reasons: string[] = [];
+    if (role === 'uncertain') reasons.push(('reviewReason' in location && location.reviewReason) || 'Confirma si el bloque identifica un set físico de filmación.');
+    if (!address.trim()) reasons.push('Falta el nombre o dirección del set.');
+    if (!date) reasons.push('Falta confirmar la fecha completa de rodaje.');
+    if (day === 'uncertain') reasons.push('Confirma a qué día de rodaje pertenece el set.');
+    if (unit === 'uncertain' || data.documentUnit === 'uncertain' || (data.documentUnit === 'mixed' && (!unit || unit === 'unspecified'))) reasons.push('Confirma a qué unidad pertenece el set.');
+    const reason = reasons.length ? `${label || 'Bloque'} ${address}: ${reasons.join(' ')}` : null;
+    if (reason) reviewReasons.push(reason);
+    filming.push({ label, address, position, selection_state: reason ? 'candidate' : 'confirmed', review_reason: reason });
+  });
+  if (!filming.length) reviewReasons.push('No hay sets físicos de la fecha y unidad seleccionadas; comprueba el original.');
+  return { filming, excluded, reviewReasons: [...new Set(reviewReasons)], candidates: filming };
 }

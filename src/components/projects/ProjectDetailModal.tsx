@@ -1,3 +1,5 @@
+import { canMaterializeCallsheet, getReviewCallsheetDrafts } from '@/lib/callsheetReview';
+import { AddTripModal } from '@/components/trips/AddTripModal';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { ModalHeaderImage } from "@/components/ui/modal-header-image";
@@ -67,6 +69,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [triggeringWorker, setTriggeringWorker] = useState(false);
   const [pendingTrips, setPendingTrips] = useState<Trip[]>([]);
+  const [reviewTrip, setReviewTrip] = useState<Trip | null>(null);
   const [showPendingTrips, setShowPendingTrips] = useState(false);
   const [savingPendingTrips, setSavingPendingTrips] = useState(false);
   const realCallSheetsRef = useRef<ProjectDocument[]>([]);
@@ -266,7 +269,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       try {
         const [{ data: result, error: resultError }, { data: locs, error: locsError }] = await Promise.all([
           supabase.from("callsheet_results").select("*").eq("job_id", job.id).maybeSingle(),
-          supabase.from("callsheet_locations").select("*").eq("job_id", job.id),
+          supabase.from("callsheet_locations").select("*").eq("job_id", job.id).order("position").order("id"),
         ]);
 
         if (resultError) {
@@ -292,6 +295,10 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             processedJobsRef.current.add(job.id);
             return;
         }
+
+        // A 200 response can represent a completed extraction needing review.
+        // Never turn candidates into a trip, including when replacing an old trip.
+        if (!canMaterializeCallsheet(job.status, result.extraction_state, locs ?? [])) return null;
 
         if (DEBUG) logger.debug("[Materialize] Extracted result:", result);
 
@@ -321,7 +328,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         }
 
         const rawLocations = (locs ?? [])
-          .map((l: any) => (l?.name_raw || l?.address_raw || l?.formatted_address || "").toString())
+          .map((l: any) => (l?.address_raw || l?.name_raw || "").toString())
           .map((s: string) => s.trim())
           .filter(Boolean);
 
@@ -950,7 +957,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           Authorization: accessToken ? `Bearer ${accessToken}` : "",
           "Content-Type": "application/json",
         },
-        signal: docAc.signal,
+        signal: AbortSignal.any([docAc.signal, AbortSignal.timeout(65_000)]),
       });
       logger.warn("[handleExtract] API response", { docId: doc.id, status: response.status, ok: response.ok });
 
@@ -983,6 +990,15 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         throw new Error((errData as any).message ?? `Error ${response.status}`);
       }
 
+      const completion = await response.json();
+      if (completion.status === 'needs_review') {
+        localStatusOverridesRef.current.delete(doc.id);
+        cancelCallsheetJobIdsRef.current.delete(doc.id);
+        setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'needs_review', needs_review_reason: completion.reviewReason } : p));
+        toast.warning(t('bulk.statusNeedsReview'), { description: completion.reviewReason });
+        return;
+      }
+
       if (previouslyProcessed) {
         // Update the existing trip only after validating the replacement result.
         processedJobsRef.current.delete(doc.id);
@@ -1009,7 +1025,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       logger.warn("[handleExtract] Non-abort error - removing from cancelRef and marking failed", { docId: doc.id });
       cancelCallsheetJobIdsRef.current.delete(doc.id);
       localStatusOverridesRef.current.delete(doc.id);
-      setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: previouslyProcessed ? doc.status : 'failed' } : p));
+      setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'failed' } : p));
       toast.error(tf("projectDetail.toastExtractionStartError", { message: e.message }));
     } finally {
       activeExtractionCountRef.current = Math.max(0, activeExtractionCountRef.current - 1);
@@ -1163,12 +1179,39 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     setShowPendingTrips(false);
   };
 
+  const openCallsheetReview = async (doc: ProjectDocument) => {
+    if (!project || !doc.storage_path) return;
+    try {
+      const [{ data: result, error: resultError }, { data: locations, error: locationsError }] = await Promise.all([
+        supabase.from('callsheet_results').select('*').eq('job_id', doc.id).maybeSingle(),
+        supabase.from('callsheet_locations').select('*').eq('job_id', doc.id).order('position').order('id'),
+      ]);
+      if (resultError || locationsError) throw resultError || locationsError;
+      const [draft] = getReviewCallsheetDrafts([{ ...doc, storage_path: doc.storage_path,
+        created_at: doc.created_at ?? '', status: doc.status ?? 'needs_review', project_id: project.id,
+        callsheet_results: result, callsheet_locations: locations ?? [],
+      }], [], [project]);
+      if (!draft) return;
+      const existing = trips.find(trip => trip.callsheet_job_id === doc.id);
+      setReviewTrip({ ...existing, ...draft.trip, id: existing?.id ?? uuidv4(),
+        documents: existing?.documents ?? draft.trip.documents,
+        purpose: existing?.purpose ?? '', passengers: existing?.passengers ?? 0,
+      });
+    } catch (error) { toast.error(String((error as Error)?.message ?? error)); }
+  };
+
   const handleRemovePendingTrip = (tripId: string) => {
     setPendingTrips(prev => prev.filter(t => t.id !== tripId));
   };
 
   return (
     <>
+      <AddTripModal trip={reviewTrip} open={Boolean(reviewTrip)} onOpenChange={value => { if (!value) setReviewTrip(null); }} onSave={async data => {
+        const next = { ...reviewTrip, ...data, co2: calculateCO2({ distance: data.distance }) } as Trip;
+        const ok = trips.some(trip => trip.id === next.id) ? await updateTrip(next.id, next) : await addTrip(next);
+        if (ok) { setReviewTrip(null); refreshProjects(); }
+        return ok;
+      }} />
       {/* Pending Trips Review Dialog */}
       <Dialog open={showPendingTrips} onOpenChange={setShowPendingTrips}>
         <DialogContent className="glass sm:max-w-4xl max-h-[90vh] p-0 gap-0 overflow-hidden z-[70] flex flex-col">
@@ -1370,7 +1413,8 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                         ) : null}
                       </div>
                       
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1 opacity-100 transition-opacity">
+                        {['needs_review', 'failed', 'out_of_quota'].includes(sheet.status ?? '') && <Button variant="outline" size="sm" onClick={() => void openCallsheetReview(sheet)}>{t('callsheetReview.edit')}</Button>}
                         {sheet.status !== 'processing' && (
                           <Button 
                             variant="ghost" 

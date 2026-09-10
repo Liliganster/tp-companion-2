@@ -12,40 +12,22 @@ export type ClassifiedLocations = {
   dropped: Array<LabeledLocation & { reason: string }>;
 };
 
+export function classifyLocationRole(item: LabeledLocation): 'filming' | 'logistics' | 'other' | 'uncertain' {
+  if (item.role) return item.role;
+  const label = item.label.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  // Compatibility for older provider responses. Unknown labels need context,
+  // never automatic admission. A logistics heading containing "set" is not a set.
+  if (/^(motiv|set|locations?|loc\.?|drehorte?|filming\s+location|locacion|rodaje)\b/i.test(label.trim())) return 'filming';
+  return LOGISTICS_LABEL_RE.test(label) ? 'logistics' : 'uncertain';
+}
+
 export function classifyLabeledLocations(items: LabeledLocation[]): ClassifiedLocations {
   const filming: LabeledLocation[] = [];
   const dropped: Array<LabeledLocation & { reason: string }> = [];
-  const seenAddresses = new Set<string>();
-
   for (const item of items ?? []) {
-    const label = String(item?.label ?? "").trim();
-    const address = String(item?.address ?? "").trim();
-    if (!address) continue;
-
-    // Normalizado sin diacríticos: el  de JS no entiende Ö/Ü (p. ej. "ÖFFIS").
-    const labelAscii = label.normalize("NFD").replace(/[̀-ͯ]/g, "");
-    const filmingLabel = /\b(motiv|set|location|drehor(?:t|te)|film(?:ing)?\s*location|locaci[oó]n|rodaje)\b/i.test(labelAscii);
-    if (!filmingLabel && LOGISTICS_LABEL_RE.test(labelAscii)) {
-      dropped.push({ label, address, reason: `logistics_label:${label}` });
-      continue;
-    }
-
-    const key = address
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
-      .replace(/[^a-z0-9]+/g, " ")
-      .trim();
-    if (seenAddresses.has(key)) {
-      dropped.push({ label, address, reason: "duplicate_address" });
-      continue;
-    }
-    seenAddresses.add(key);
-    // addressCorrected (errata corregida por el modelo) viaja con la entrada;
-    // la guarda de aceptación vive en el pipeline (callsheetExtraction.ts).
-    const addressCorrected = String((item as any)?.addressCorrected ?? "").trim();
-    filming.push(addressCorrected ? { label, address, addressCorrected } : { label, address });
+    const role = classifyLocationRole(item);
+    if (role === 'filming') filming.push(item);
+    else dropped.push({ ...item, reason: role === 'logistics' ? `logistics_label:${item.label}` : `${role}_block` });
   }
-
   return { filming, dropped };
 }

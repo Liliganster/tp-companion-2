@@ -273,7 +273,9 @@ export default withApiObservability(async function handler(req: any, res: any, {
           jobId,
           storagePath: String(claimed.storage_path ?? ""),
           userSettings,
-          referenceIso: String((job as any).created_at ?? new Date().toISOString()),
+          requestId: reservation.requestId!,
+      attemptId: reservation.attemptId,
+      referenceIso: String((job as any).created_at ?? new Date().toISOString()),
           skipGeocode,
           checkCancellation: true,
           log,
@@ -291,10 +293,10 @@ export default withApiObservability(async function handler(req: any, res: any, {
           // file_too_large | invalid_extraction → fallo definitivo revisable
           await supabaseAdmin
             .from("callsheet_jobs")
-            .update({ status: outcome.kind === "invalid_extraction" ? "needs_review" : "failed", needs_review_reason: outcome.message })
+            .update({ status: "failed", needs_review_reason: outcome.message })
             .eq("id", jobId)
             .eq("status", "processing");
-          processedResults.push({ id: jobId, status: outcome.kind === "invalid_extraction" ? "needs_review" : "failed", error: outcome.message });
+          processedResults.push({ id: jobId, status: "failed", error: outcome.message });
           return;
         }
 
@@ -303,7 +305,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
           return;
         }
         if (outcome.cached === true) {
-          processedResults.push({ id: jobId, status: "done", cached: true });
+          processedResults.push({ id: jobId, status: outcome.status, cached: true });
           return;
         }
 
@@ -327,7 +329,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
         }
 
         log.info({ jobId, retryCount: currentRetry }, "callsheet_job_done");
-        processedResults.push({ id: jobId, status: "success", retries: currentRetry });
+        processedResults.push({ id: jobId, status: outcome.status, retries: currentRetry });
       } catch (jobErr: any) {
         if (!reservation?.allowed) {
           log.error({ jobId, err: jobErr }, "quota_reservation_failed");

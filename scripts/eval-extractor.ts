@@ -18,6 +18,11 @@ import { resolve, join, basename } from "path";
 import { readFileSync, readdirSync, existsSync, mkdirSync, writeFileSync } from "fs";
 import { parse as parseYaml } from "yaml";
 
+if (!process.argv.includes('--allow-paid-ai')) {
+  console.error('Evaluation calls live AI and may incur costs. Requires explicit user authorization and --allow-paid-ai.');
+  process.exit(2);
+}
+
 dotenv.config({ path: resolve(process.cwd(), ".env.local") });
 // El eval no debe consumir la cuota mensual de la usuaria ni bloquearse por ella.
 process.env.BYPASS_AI_LIMITS = "1";
@@ -41,6 +46,8 @@ const ONLY = (() => {
 type Annotation = {
   archivo: string;
   fecha?: string;
+  contractVersion?: number;
+  expectedStatus?: string;
   proyecto?: string;
   productora?: string;
   localizaciones?: Array<{ etiqueta?: string; direccion?: string; enlace_maps?: string }>;
@@ -48,7 +55,7 @@ type Annotation = {
   notas?: string;
 };
 
-type PredictedLocation = { name_raw: string | null; address_raw: string | null; formatted_address: string | null };
+type PredictedLocation = { label_source?: string | null; selection_state?: string | null; name_raw: string | null; address_raw: string | null; formatted_address: string | null };
 
 // ── Normalización y matching ─────────────────────────────────────────────────
 
@@ -77,14 +84,10 @@ function overlap(a: string | null | undefined, b: string | null | undefined): nu
 }
 
 function locationMatches(pred: PredictedLocation, expected: { etiqueta?: string; direccion?: string }): boolean {
-  const predTexts = [pred.address_raw, pred.name_raw, pred.formatted_address];
-  const expTexts = [expected.direccion, expected.etiqueta];
-  for (const p of predTexts) {
-    for (const e of expTexts) {
-      if (p && e && overlap(p, e) >= 0.5) return true;
-    }
-  }
-  return false;
+  const exact = (value: string | null | undefined) => String(value ?? '').normalize('NFC').replace(/\s+/g,' ').trim();
+  return Boolean(expected.direccion && exact(pred.address_raw || pred.name_raw) === exact(expected.direccion)
+    && (!expected.etiqueta || exact(pred.label_source) === exact(expected.etiqueta)));
+
 }
 
 // ── Worker real con req/res simulados ────────────────────────────────────────
@@ -209,14 +212,14 @@ async function main() {
     const ms = Date.now() - t0;
 
     const { data: jobRow } = await admin.from("callsheet_jobs").select("status, error, needs_review_reason").eq("id", job.id).single();
-    const { data: result } = await admin.from("callsheet_results").select("date_value, project_value, producer_value").eq("job_id", job.id).maybeSingle();
-    const { data: locs } = await admin.from("callsheet_locations").select("name_raw, address_raw, formatted_address").eq("job_id", job.id);
+    const { data: result } = await admin.from("callsheet_results").select("date_value, project_value, producer_value, model_output, extraction_state").eq("job_id", job.id).maybeSingle();
+    const { data: locs } = await admin.from("callsheet_locations").select("name_raw, address_raw, formatted_address, label_source, selection_state, position").eq("job_id", job.id).order("position").order("id");
 
     // 4. Puntuación
     const expectedLocs = (c.ann.localizaciones ?? []).filter((l) => l.etiqueta || l.direccion);
     const predicted: PredictedLocation[] = (locs ?? []) as any[];
 
-    const dateOk = c.ann.fecha ? String(result?.date_value ?? "") === String(c.ann.fecha) : null;
+    const dateOk = c.ann.fecha !== undefined ? String(result?.date_value ?? "") === String(c.ann.fecha) : null;
     const projectOk = c.ann.proyecto ? overlap(result?.project_value, c.ann.proyecto) >= 0.5 : null;
 
     const matchedExpected = expectedLocs.filter((e) => predicted.some((p) => locationMatches(p, e)));
@@ -227,7 +230,12 @@ async function main() {
       .filter(Boolean)
       .filter((x) => predicted.some((p) => locationMatches(p, { etiqueta: x, direccion: x })));
 
+    const correct = c.ann.contractVersion === 2 && dateOk === true
+      && jobRow?.status === (c.ann.expectedStatus ?? 'done')
+      && expectedLocs.length === predicted.length
+      && expectedLocs.every((expected, index) => locationMatches(predicted[index], expected));
     perCase.push({
+      correct, modelOutput: result?.model_output ?? null, savedLocations: predicted,
       archivo: c.ann.archivo,
       status: jobRow?.status ?? "?",
       error: jobRow?.error ?? null,
@@ -264,6 +272,8 @@ async function main() {
     geocode: GEOCODE,
     cases: perCase.length,
     completed: scored.length,
+    correctDocuments: perCase.filter(r => r.correct).length,
+    documentAccuracy: perCase.length ? perCase.filter(r => r.correct).length / perCase.length : null,
     fechaAcierto: avg(scored.map((r) => (r.fecha.ok == null ? null : r.fecha.ok ? 1 : 0))),
     proyectoAcierto: avg(scored.map((r) => (r.proyecto.ok == null ? null : r.proyecto.ok ? 1 : 0))),
     locRecall: avg(scored.map((r) => r.localizaciones.recall)),
@@ -272,6 +282,7 @@ async function main() {
 
   const pct = (v: number | null) => (v == null ? "–" : `${Math.round(v * 100)}%`);
   console.log("\n─────────────────────────────────────────────");
+  console.log(`Documentos correctos (contrato v2): ${summary.correctDocuments}/${summary.cases}; exactitud ${pct(summary.documentAccuracy)}`);
   console.log(`Resumen: ${summary.completed}/${summary.cases} completados`);
   console.log(`  Fecha:        ${pct(summary.fechaAcierto)}`);
   console.log(`  Proyecto:     ${pct(summary.proyectoAcierto)}`);

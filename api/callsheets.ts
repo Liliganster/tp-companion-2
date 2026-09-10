@@ -10,6 +10,7 @@ import { enforceRateLimit } from "./_utils/rateLimit.js";
 import { reserveAiQuota, finishAiQuota, AiQuotaUnavailableError, type AiReservation } from "./_utils/aiQuota.js";
 import { getServerPlanTier } from "./_utils/entitlements.js";
 import { extractCallsheet } from "./_utils/callsheetExtraction.js";
+import { MAX_DOCUMENT_BYTES } from "../src/lib/importDocuments.js";
 import { z } from "zod";
 import { assertStorageOwnership, isSafeStoragePath, StorageOwnershipError } from "./_utils/storageOwnership.js";
 
@@ -41,7 +42,13 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
       return sendJson(res, 400, { error: "invalid_request_id" });
     }
     reservation = await reserveAiQuota(user.id, jobId, planTier, newRequestId);
-    if (reservation.completed) return sendJson(res, 200, { ok: true, jobId, alreadyDone: true });
+    if (reservation.completed) {
+      const { data: completedJob, error } = await supabaseAdmin.from('callsheet_jobs')
+        .select('status, needs_review_reason').eq('id', jobId).eq('user_id', user.id).maybeSingle();
+      if (error) throw error;
+      return sendJson(res, 200, { ok: true, jobId, alreadyDone: true,
+        status: completedJob?.status, reviewReason: completedJob?.needs_review_reason });
+    }
     if (reservation.busy) return sendJson(res, 409, { error: "not_claimable", status: "processing" });
     if (!reservation.allowed) return sendJson(res, 402, { error: "quota_exceeded", reason: reservation.reason });
     const job = { storage_path: reservation.storagePath };
@@ -62,12 +69,14 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
       jobId,
       storagePath: String(job.storage_path ?? ""),
       userSettings,
+      requestId: reservation.requestId!,
+      attemptId: reservation.attemptId,
       referenceIso: new Date().toISOString(),
       log,
     });
 
     if (outcome.ok === false) {
-      await supabaseAdmin.from("callsheet_jobs").update({ status: outcome.kind === "invalid_extraction" ? "needs_review" : "failed", needs_review_reason: outcome.message }).eq("id", jobId).eq("user_id", user.id).eq("status", "processing");
+      await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", needs_review_reason: outcome.message }).eq("id", jobId).eq("user_id", user.id).eq("status", "processing");
       if (outcome.kind === "download_failed") {
         return sendJson(res, 500, { error: "download_failed", message: outcome.message });
       }
@@ -83,9 +92,9 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
     }
     log.info({ jobId }, "callsheet_process_done");
 
-    if (outcome.cached === true) return sendJson(res, 200, { ok: true, jobId, cached: true });
+    if (outcome.cached === true) return sendJson(res, 200, { ok: true, jobId, cached: true, status: outcome.status });
 
-    return sendJson(res, 200, { ok: true, jobId, date: outcome.date, projectName: outcome.projectName, locations: outcome.locations });
+    return sendJson(res, 200, { ok: true, jobId, status: outcome.status, reviewReason: outcome.reviewReason, date: outcome.date, projectName: outcome.projectName, locations: outcome.locations });
   } catch (err: any) {
     log.error({ err, jobId }, "callsheet_process_error");
     if (err instanceof AiQuotaUnavailableError) return sendJson(res, 503, { error: "ai_quota_unavailable" });
@@ -98,7 +107,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
     const timedOut = /timeout|timed out|aborted/i.test(String(err?.message ?? ""));
     const failureReason = timedOut ? "La extracción superó el tiempo de espera. El documento se conserva para revisión manual." : "processing_failed";
     try {
-      if (reservation?.allowed) await supabaseAdmin.from("callsheet_jobs").update({ status: timedOut ? "needs_review" : "failed", needs_review_reason: failureReason }).eq("id", jobId).eq("user_id", user.id).eq("status", "processing");
+      if (reservation?.allowed) await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", needs_review_reason: failureReason }).eq("id", jobId).eq("user_id", user.id).eq("status", "processing");
     } catch (updateErr) {
       // ignore
     }
@@ -115,7 +124,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
 const CreateUploadBodySchema = z.object({
   filename: z.string().max(180).optional(),
   contentType: z.string().max(120).optional(),
-  size: z.number().int().min(0).max(25_000_000).optional(),
+  size: z.number().int().min(0).max(MAX_DOCUMENT_BYTES).optional(),
 });
 
 const handleCreateUpload = withApiObservability(async function handler(req: any, res: any, { log, requestId }) {
@@ -205,7 +214,7 @@ const handleStatus = withApiObservability(async function handler(req: any, res: 
     if (job.status === "done" || job.status === "needs_review") {
       const { data: resData } = await supabaseAdmin.from("callsheet_results").select("*").eq("job_id", jobId).maybeSingle();
       results = resData ?? null;
-      const { data: locData } = await supabaseAdmin.from("callsheet_locations").select("*").eq("job_id", jobId);
+      const { data: locData } = await supabaseAdmin.from("callsheet_locations").select("*").eq("job_id", jobId).order("position").order("id");
       locations = (locData ?? []) as any[];
     }
     return sendJson(res, 200, { job, results, locations });

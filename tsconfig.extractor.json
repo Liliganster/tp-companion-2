@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": { "target": "ES2022", "lib": ["ES2023", "DOM"], "noEmit": true },
+  "include": ["api/_utils/callsheetExtraction.ts", "api/callsheets.ts", "api/worker.ts", "scripts/eval-extractor.ts", "src/vite-env.d.ts"]
+}

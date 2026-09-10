@@ -8,11 +8,11 @@ import { selectCallsheetLocations } from './callsheetSelection.js';
  * quitarlo del worker). Este módulo es la ÚNICA implementación del núcleo:
  *
  *   descarga → mime real → texto nativo del PDF → IA → validación →
- *   clasificador de etiquetas → filtros → fecha por código →
- *   callsheet_results → enlaces Maps/geocoding → callsheet_locations
+ *   fecha documentada → selección contextual única → guardado atómico de
+ *   resultado, bloques, orden, estado y consumo de la reserva de cuota.
  *
- * Lo que NO entra aquí (es de cada caller): claim del job, cuota, reintentos,
- * marcado done/failed, contabilidad de uso y las respuestas HTTP.
+ * Cada caller adquiere la reserva y maneja fallos técnicos y respuestas HTTP.
+ * El cálculo opcional de distancia ocurre después, sin alterar las locaciones.
  */
 import { supabaseAdmin } from "../../src/lib/supabaseServer.js";
 import { assertStorageOwnership } from "./storageOwnership.js";
@@ -22,18 +22,9 @@ import { MAX_DOCUMENT_BYTES } from '../../src/lib/importDocuments.js';
 import { buildUniversalExtractorPrompt } from "../../src/lib/ai/prompts.js";
 import { extractionSchema } from "../../src/lib/ai/schema.js";
 import { CallsheetExtractionResultSchema, describeCallsheetValidationError } from "../../src/lib/ai/validation.js";
-import {
-  buildCallsheetPdfHintText,
-  postProcessLocationsForGeocoding,
-} from "./callsheetLocationHints.js";
-import { parsePdfWithTimeout } from "./pdf-parser.js";
-import { resolveCallsheetDate } from "./callsheetDate.js";
-import {
-  extractMapsLinkCandidates,
-  matchMapsLinkToLocation,
-  resolveMapsLink,
-} from "./callsheetMapsLinks.js";
-import { geocodeAddressCached } from "./googleCache.js";
+import { buildCallsheetPdfHintText } from './callsheetLocationHints.js';
+import { parsePdfWithTimeout } from './pdf-parser.js';
+import { resolveCallsheetDate } from './callsheetDate.js';
 import { isImageCallsheetMime, resolveCallsheetMime } from "../../src/lib/callsheetMime.js";
 
 const MAX_FILE_SIZE_BYTES = MAX_DOCUMENT_BYTES;
@@ -46,13 +37,15 @@ type LogLike = {
 
 export type ExtractCallsheetArgs = {
   userId: string;
+  requestId: string;
+  attemptId: string;
   jobId: string;
   storagePath: string;
   /** Configuración OpenRouter del usuario (undefined → Gemini directo). */
   userSettings?: { openrouterEnabled?: boolean; openrouterApiKey?: string; openrouterModel?: string };
-  /** Fecha de referencia para resolver el año (subida del documento). */
+  /** Legacy caller compatibility; never used to determine the shooting date. */
   referenceIso: string;
-  /** Eval local: no llamar a Google (los enlaces Maps sí se resuelven, son gratis). */
+  /** Legacy eval compatibility; extraction never calls geocoding. */
   skipGeocode?: boolean;
   /** Worker asíncrono: comprobar cancelación antes de gastar la llamada de IA. */
   checkCancellation?: boolean;
@@ -60,10 +53,12 @@ export type ExtractCallsheetArgs = {
 };
 
 export type ExtractCallsheetOutcome =
-  | { ok: true; cached: true }
+  | { ok: true; cached: true; status: 'done' | 'needs_review' }
   | {
       ok: true;
       cached?: false;
+      status: 'done' | 'needs_review';
+      reviewReason: string | null;
       date: string;
       projectName: string;
       locations: string[];
@@ -77,29 +72,15 @@ export type ExtractCallsheetOutcome =
   | { ok: false; kind: "download_failed" | "file_too_large" | "cancelled" | "invalid_extraction"; message: string };
 
 export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<ExtractCallsheetOutcome> {
-  const { jobId, storagePath, userSettings, referenceIso, skipGeocode = false, checkCancellation = false, log } = args;
+  const { jobId, storagePath, userSettings, checkCancellation = false, log } = args;
 
   await assertStorageOwnership(args.userId, "callsheets", storagePath);
 
-  // Caché: si ya hay resultados de este job, no gastar otra llamada de IA.
-  // (También protege al /process de reintentar un job interrumpido tras
-  // guardar resultados: antes el insert duplicado lo hacía fallar.)
-  const { data: existingResult, error: existingError } = await supabaseAdmin
-    .from("callsheet_results")
-    .select("job_id")
-    .eq("job_id", jobId)
-    .maybeSingle();
-  if (existingError) {
-    log.warn({ jobId, existingError }, "callsheet_existing_result_check_failed");
-  } else if (existingResult?.job_id) {
-    const { data: cachedJob, error: cachedJobError } = await supabaseAdmin.from('callsheet_jobs')
-      .select('status, needs_review_reason').eq('id', jobId).maybeSingle();
-    if (cachedJobError || cachedJob?.status !== 'done') {
-      return { ok: false, kind: 'invalid_extraction', message: cachedJob?.needs_review_reason || 'Hay un resultado pendiente de revisión. Comprueba los datos conservados junto al original.' };
-    }
-    log.info({ jobId }, "callsheet_job_cached_done");
-    return { ok: true, cached: true };
-  }
+  // Only a versioned, atomically saved result is a complete cache entry.
+  const { data: cached, error: cacheError } = await supabaseAdmin.from('callsheet_results')
+    .select('extraction_state, extraction_request_id').eq('job_id', jobId).maybeSingle();
+  if (cacheError) throw new Error(`Cannot inspect extraction cache: ${cacheError.message}`);
+  if (cached?.extraction_state && cached.extraction_request_id === args.requestId) return { ok: true, cached: true, status: cached.extraction_state };
 
   // A. Descargar el documento
   const { data: fileData, error: downloadError } = await supabaseAdmin.storage
@@ -197,136 +178,42 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
     return { ok: false, kind: "invalid_extraction", message };
   }
 
-  // E. Contrato híbrido: el modelo devuelve {label, address}; el clasificador
-  // separa rodaje (visible) de logística/descriptores (invisible, auditado
-  // en callsheet_excluded_blocks — base del multi-crew de la v2, decisión de
-  // la propietaria 2026-07-19: se CONSERVA). RLS: solo el dueño del job puede
-  // leer sus bloques; el insert es best-effort y nunca rompe la extracción.
   const resolvedDate = resolveCallsheetDate({
-    date: validated.data.date,
-    dateRaw: validated.data.dateRaw ?? null,
-    dateYearInDocument: validated.data.dateYearInDocument ?? null,
-    referenceIso,
+    date: validated.data.date, dateRaw: validated.data.dateRaw,
+    dateYearInDocument: validated.data.dateYearInDocument,
   });
   const selection = selectCallsheetLocations(validated.data, resolvedDate, pdfText);
-  const daySourceText = selection.candidates.map(l => `${l.address}\n${'dayEvidence' in l ? l.dayEvidence : ''}`).join('\n');
-  const filming = selection.filming;
-  const dropped = selection.excluded;
-  if (dropped.length > 0) {
-    log.info({ jobId, dropped: dropped.map((d: any) => `${d.label}|${d.reason}`) }, "callsheet_labels_dropped");
-    try {
-      await supabaseAdmin.from("callsheet_excluded_blocks").insert(
-        dropped.map((d: any) => ({ job_id: jobId, label: d.label || null, evidence_text: d.address, reason: d.reason })),
-      );
-    } catch {
-      /* auditoría best-effort */
-    }
-  }
-  const filmingAddresses = filming.map((f: any) => f.address);
-
-  // Evidence: etiqueta + dirección literales del documento
-  const evidenceLocations = filming.map((f: any) => (f.label ? `${f.label}: ${f.address}` : f.address));
-  const locationLabels = filming.map((f: any) => f.label);
-  const extracted = {
-    ...validated.data,
-    locations: filmingAddresses,
-  };
-  log.info({ jobId, collected: validated.data.locations.length, retained: filming.length,
-    excluded: dropped.length, reviewCount: selection.reviewReasons.length }, 'callsheet_selection_complete');
-
-  // Preserve the documented text; never substitute a guessed street or city.
-  const displayLocations = extracted.locations;
-
-  // Normalización por código para geocodificar (Bezirk, abreviaturas)
-  const geocodingLocations = postProcessLocationsForGeocoding(displayLocations);
-
-  // G. Fecha: el año lo decide el CÓDIGO si el documento no lo trae impreso
-  if (resolvedDate !== extracted.date) {
-    log.info({ jobId, aiDate: extracted.date, resolvedDate, dateRaw: validated.data.dateRaw }, "callsheet_date_year_resolved");
-  }
-
-  const { error: resultInsertError } = await supabaseAdmin.from("callsheet_results").insert({
-    job_id: jobId,
-    date_value: resolvedDate || null,
-    project_value: extracted.projectName,
-    producer_value: extracted.productionCompanies?.[0],
-    date_evidence: validated.data.dateRaw ?? null,
+  const status = selection.reviewReasons.length ? 'needs_review' : 'done';
+  const reviewReason = selection.reviewReasons.join(' ') || null;
+  const locs = selection.filming.map(location => ({
+    address_raw: location.address, name_raw: null,
+    label_source: location.label, position: location.position,
+    selection_state: location.selection_state, review_reason: location.review_reason,
+    evidence_text: `${location.label}: ${location.address}`,
+  }));
+  // Geocoding is optional route enrichment in the client. It cannot delay,
+  // replace, or invalidate the extraction, nor cross-associate Maps blocks.
+  // The RPC checks the active request/attempt and commits result + ordered
+  // locations + audit + quota + terminal state as one transaction.
+  const { error: saveError, data: saved } = await supabaseAdmin.rpc('save_callsheet_extraction', {
+    p_user_id: args.userId, p_job_id: jobId,
+    p_request_id: args.requestId, p_attempt_id: args.attemptId,
+    p_result: {
+      date_value: resolvedDate || null, date_evidence: validated.data.dateRaw ?? null,
+      project_value: validated.data.projectName,
+      producer_value: validated.data.productionCompanies[0] ?? null,
+      extraction_state: status, review_reason: reviewReason,
+      model_output: extractedJson,
+    },
+    p_locations: locs, p_excluded: selection.excluded,
   });
-  if (resultInsertError) {
-    log.error({ jobId, resultInsertError }, "callsheet_result_insert_failed");
-    throw new Error(`Failed to insert result: ${resultInsertError.message}`);
-  }
-
-  // H. Enlaces de Google Maps del documento = fuente primaria (apuntan al
-  // sitio conducible exacto y resolverlos es gratis); si no, geocoding con
-  // caché + sesgo AT. Todo en paralelo.
-  let geocodingDurationMs: number | null = null;
-  const mapsLinkCandidates = extractMapsLinkCandidates(daySourceText);
-  const geoStartTime = Date.now();
-  const geoResults = await Promise.all(
-    geocodingLocations.map(async (locStr, index) => {
-      if (skipGeocode || selection.reviewReasons.length) return null;
-      const linkUrl = matchMapsLinkToLocation(extracted.locations[index] ?? locStr, mapsLinkCandidates, {
-        totalLocations: extracted.locations.length,
-      });
-      if (linkUrl) {
-        const resolved = await resolveMapsLink(linkUrl);
-        if (resolved) {
-          log.info({ jobId, locStr, linkUrl, label: resolved.label }, "callsheet_maps_link_resolved");
-          return {
-            formatted_address: resolved.label ?? locStr,
-            lat: resolved.lat,
-            lng: resolved.lng,
-            place_id: null as string | null,
-            quality: "maps_link",
-          };
-        }
-      }
-      return skipGeocode || selection.reviewReasons.length ? null : geocodeAddressCached(locStr);
-    }),
-  );
-  geocodingDurationMs = Date.now() - geoStartTime;
-  log.info({ jobId, locations: extracted.locations.length, durationMs: geocodingDurationMs }, "geocoding_completed");
-
-  const locs = displayLocations.map((locStr, index) => {
-    const geo = geoResults[index];
-    return {
-      job_id: jobId,
-      name_raw: /\d/.test(locStr) ? null : locStr,
-      address_raw: locStr,
-      label_source: locationLabels[index] || "EXTRACTED",
-      evidence_text: evidenceLocations[index] ?? extracted.locations[index] ?? locStr,
-      formatted_address: geo?.formatted_address ?? null,
-      lat: geo?.lat ?? null,
-      lng: geo?.lng ?? null,
-      place_id: geo?.place_id ?? null,
-      geocode_quality: geo?.quality ?? null,
-    };
-  });
-
-  if (locs.length > 0) {
-    const { error: locsInsertError } = await supabaseAdmin.from("callsheet_locations").insert(locs);
-    if (locsInsertError) {
-      log.error({ jobId, locsInsertError }, "callsheet_locations_insert_failed");
-      throw new Error(`Failed to insert locations: ${locsInsertError.message}`);
-    }
-    log.info({ jobId, locations: locs.length }, "callsheet_locations_saved");
-  }
-
-  if (selection.reviewReasons.length) {
-    return { ok: false, kind: 'invalid_extraction', message: `Se conservaron ${filming.length} locaciones para revisión. ${selection.reviewReasons.join(' ')}` };
-  }
-
+  if (saveError) throw new Error(`Atomic extraction save failed: ${saveError.message}`);
+  if (saved !== true) throw new Error('Atomic extraction save was not confirmed');
+  log.info({ jobId, status, retained: locs.length, excluded: selection.excluded.length }, 'callsheet_committed');
   return {
-    ok: true,
-    date: resolvedDate,
-    projectName: extracted.projectName,
-    locations: displayLocations,
-    aiProvider: aiResult.provider,
-    aiModel: aiResult.model,
-    aiVendor: aiResult.vendor,
-    aiDurationMs,
-    geocodingDurationMs,
-    locationsCount: extracted.locations.length,
+    ok: true, status, reviewReason, date: resolvedDate,
+    projectName: validated.data.projectName, locations: locs.map(l => l.address_raw),
+    aiProvider: aiResult.provider, aiModel: aiResult.model, aiVendor: aiResult.vendor,
+    aiDurationMs, geocodingDurationMs: null, locationsCount: locs.length,
   };
 }

@@ -6,6 +6,8 @@ const LabeledLocationSchema = z.union([
   z.object({
     label: z.string().trim().max(120).catch("").default(""),
     address: z.string().trim().max(300),
+    role: z.enum(['filming', 'logistics', 'other', 'uncertain']).optional(),
+    reviewReason: z.string().trim().max(1000).catch('').default(''),
     unitScope: z.enum(['main_unit', 'other_unit', 'unspecified', 'uncertain']).catch('uncertain').default('unspecified'),
     unitEvidence: z.string().trim().max(3000).catch('').default(''),
     dayScope: z.enum(['document_day', 'other_day', 'uncertain']).catch('uncertain').default('document_day'),
@@ -18,7 +20,7 @@ const LabeledLocationSchema = z.union([
   z.string().trim().min(1).max(300).transform((address) => ({ label: "", address, addressCorrected: "" })),
 ]);
 
-export type LabeledLocation = { label: string; address: string; addressCorrected?: string };
+export type LabeledLocation = { label: string; address: string; addressCorrected?: string; role?: 'filming' | 'logistics' | 'other' | 'uncertain'; reviewReason?: string };
 
 export const CallsheetExtractionResultSchema = z.object({
   documentUnit: z.enum(['main_unit', 'other_unit', 'mixed', 'unspecified', 'uncertain']).catch('uncertain').default('unspecified'),

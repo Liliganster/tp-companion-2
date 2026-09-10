@@ -1,6 +1,10 @@
 import type { Trip } from '@/contexts/TripsContext';
 import { resolveCallsheetMime } from './callsheetMime';
 
+export function canMaterializeCallsheet(status: string | null | undefined, resultState: string | null | undefined, locations: { selection_state?: string | null }[]) {
+  return status === 'done' && resultState !== 'needs_review' && locations.every(location => location.selection_state !== 'candidate');
+}
+
 export type ReviewCallsheetJob = {
   id: string;
   storage_path: string;
@@ -9,7 +13,7 @@ export type ReviewCallsheetJob = {
   status: string;
   needs_review_reason?: string | null;
   callsheet_results?: { date_value?: string | null; project_value?: string | null } | null;
-  callsheet_locations?: { address_raw?: string | null; name_raw?: string | null; page?: number | null }[];
+  callsheet_locations?: { address_raw?: string | null; name_raw?: string | null; page?: number | null; position?: number | null; label_source?: string | null; selection_state?: string | null; review_reason?: string | null }[];
 };
 
 // These drafts are already persisted as jobs. They are not confirmed trips and
@@ -21,7 +25,7 @@ export function getReviewCallsheetDrafts(jobs: ReviewCallsheetJob[], trips: Pick
       const name = job.storage_path.split('/').pop() || job.id;
       const trip: Trip = {
         id: job.id, callsheet_job_id: job.id, date: job.callsheet_results?.date_value ?? '',
-        route: [...(job.callsheet_locations ?? [])].sort((a, b) => (a.page ?? 0) - (b.page ?? 0))
+        route: [...(job.callsheet_locations ?? [])].sort((a, b) => (a.position ?? a.page ?? 0) - (b.position ?? b.page ?? 0))
           .map(location => location.address_raw || location.name_raw || '').filter(Boolean),
         project: projects.find(p => p.id === job.project_id)?.name ?? job.callsheet_results?.project_value ?? '',
         projectId: job.project_id, purpose: '', passengers: 0, distance: 0, co2: 0,

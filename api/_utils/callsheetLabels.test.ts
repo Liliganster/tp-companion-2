@@ -24,14 +24,14 @@ describe("classifyLabeledLocations (híbrido: red de seguridad)", () => {
     expect(r.dropped).toHaveLength(2);
   });
 
-  it("recall manda: etiqueta desconocida o vacía se conserva (y Essen no confunde)", () => {
+  it("etiqueta desconocida necesita contexto; Essen no confunde", () => {
     const r = classifyLabeledLocations([
       { label: "DREHORT", address: "Rüttenscheider Str. 2, 45128 Essen" },
       { label: "", address: "Opernring 2, 1010 Wien" },
       { label: "Etiqueta rara", address: "Goethegasse 1, 1010 Wien" },
     ]);
-    expect(r.filming).toHaveLength(3);
-    expect(r.dropped).toHaveLength(0);
+    expect(r.filming).toHaveLength(1);
+    expect(r.dropped).toHaveLength(2);
   });
 
   it("conserva lugares sin calle ni numero cuando se identifican como sets", () => {
@@ -52,18 +52,17 @@ describe("classifyLabeledLocations (híbrido: red de seguridad)", () => {
     expect(r.dropped).toHaveLength(1);
   });
 
-  it("catering/maske/office fuera; deduplica direcciones repetidas", () => {
+  it("catering/maske/office fuera; conserva etiquetas de sets distintos en la misma dirección", () => {
     const r = classifyLabeledLocations([
       { label: "LOCATION 2", address: "Josefsgasse 12, 1080 Wien" },
       { label: "Catering", address: "Zelt am Set" },
       { label: "Maske / Garderobe", address: "Bus 1" },
       { label: "SET", address: "Josefsgasse 12, 1080 Wien" },
     ]);
-    expect(r.filming.map((f) => f.label)).toEqual(["LOCATION 2"]);
+    expect(r.filming.map((f) => f.label)).toEqual(["LOCATION 2", "SET"]);
     expect(r.dropped.map((d) => d.reason)).toEqual([
       "logistics_label:Catering",
       "logistics_label:Maske / Garderobe",
-      "duplicate_address",
     ]);
   });
 });

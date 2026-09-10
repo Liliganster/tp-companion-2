@@ -30,12 +30,12 @@ beforeEach(() => {
   mocks.extract.mockResolvedValue({ ok: true, cached: true });
 });
 describe("direct extraction quota gate", () => {
-  it('records provider timeouts for review and releases the reservation without charging', async () => {
+  it('records provider timeouts as technical failures and releases the reservation without charging', async () => {
     mocks.extract.mockRejectedValue(new Error('Request aborted'));
     const response = await run();
     expect(response.statusCode).toBe(504);
     expect(response.body).toMatchObject({ error: 'processing_timeout' });
-    expect(mocks.from().update).toHaveBeenCalledWith(expect.objectContaining({ status: 'needs_review' }));
+    expect(mocks.from().update).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed' }));
     expect(mocks.finish).toHaveBeenCalledWith(expect.anything(), false);
     expect(mocks.finish).not.toHaveBeenCalledWith(expect.anything(), true);
     expect(mocks.extract).toHaveBeenCalledOnce();
@@ -66,4 +66,13 @@ describe("direct extraction quota gate", () => {
     expect((await run()).statusCode).toBe(500);
     expect(mocks.finish).toHaveBeenCalledWith(expect.objectContaining({ requestId: "request" }), false);
   });
+});
+
+it('treats a completed review extraction as billable success, never a technical failure', async () => {
+  mocks.extract.mockResolvedValue({ok:true,status:'needs_review',reviewReason:'Confirm year',locations:['Opera'],date:'',projectName:'Film'});
+  const response=await run();
+  expect(response.statusCode).toBe(200);
+  expect(response.body).toMatchObject({status:'needs_review',reviewReason:'Confirm year'});
+  expect(mocks.finish).toHaveBeenCalledWith(expect.anything(),true);
+  expect(mocks.from().update).not.toHaveBeenCalled();
 });

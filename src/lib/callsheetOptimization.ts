@@ -37,7 +37,6 @@ export async function optimizeCallsheetLocationsAndDistance(args: {
   directionsTimeoutMs?: number;
 }): Promise<{ locations: string[]; distanceKm: number | null }> {
   const { profile, rawLocations, accessToken, signal } = args;
-  const geocodeTimeoutMs = typeof args.geocodeTimeoutMs === "number" && args.geocodeTimeoutMs > 0 ? args.geocodeTimeoutMs : 10_000;
   const directionsTimeoutMs =
     typeof args.directionsTimeoutMs === "number" && args.directionsTimeoutMs > 0 ? args.directionsTimeoutMs : 15_000;
 
@@ -62,7 +61,6 @@ export async function optimizeCallsheetLocationsAndDistance(args: {
   }
 
   const baseAddress = buildBaseRouteAddress(profile);
-  const city = (profile.city ?? "").trim();
   const country = (profile.country ?? "").trim();
 
   const currentLocs = rawLocations.map((l) => (l ?? "").trim()).filter(Boolean);
@@ -72,92 +70,7 @@ export async function optimizeCallsheetLocationsAndDistance(args: {
 
   const region = getCountryCode(country);
 
-  function looksLikeVenueQuery(value: string) {
-    const normalized = String(value ?? "").trim().toLowerCase();
-    if (!normalized) return false;
-    if (normalized.startsWith("@")) return true;
-    if (/\b(hotel|studio|cafe|café|bar|restaurant|club|palace|museum|kino|theater|theatre|meridien)\b/i.test(normalized)) {
-      return true;
-    }
-    return !/\d/.test(normalized);
-  }
-
-  async function tryResolveVenueWithPlaces(query: string) {
-    const components = region ? `country:${region}` : undefined;
-    const { res: autoRes, data: autoData } = await fetchJsonWithTimeout(
-      "/api/google/places-autocomplete",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ input: query, region, components, types: "establishment" }),
-      },
-      geocodeTimeoutMs,
-    );
-
-    const firstPrediction = Array.isArray((autoData as any)?.predictions) ? (autoData as any).predictions[0] : null;
-    const placeId = String(firstPrediction?.placeId ?? "").trim();
-    if (!autoRes.ok || !placeId) return null;
-
-    const { res: detailsRes, data: detailsData } = await fetchJsonWithTimeout(
-      "/api/google/place-details",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ placeId, region }),
-      },
-      geocodeTimeoutMs,
-    );
-
-    if (detailsRes.ok && typeof (detailsData as any)?.formattedAddress === "string" && (detailsData as any).formattedAddress.trim()) {
-      return String((detailsData as any).formattedAddress).trim();
-    }
-
-    return null;
-  }
-
-  const normalizedLocs: string[] = [];
-  for (const locStr of currentLocs) {
-    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-    let query = locStr;
-
-    const lower = locStr.toLowerCase();
-    const hasCity = city && lower.includes(city.toLowerCase());
-    const hasCountry = country && lower.includes(country.toLowerCase());
-    const hasContext = Boolean(hasCity || hasCountry);
-
-    if (!hasContext && city && country) {
-      query = `${locStr}, ${city}, ${country}`;
-    }
-
-    try {
-      if (looksLikeVenueQuery(query)) {
-        const venueAddress = await tryResolveVenueWithPlaces(query);
-        if (venueAddress) {
-          normalizedLocs.push(venueAddress);
-          continue;
-        }
-      }
-
-      const { res, data } = await fetchJsonWithTimeout(
-        "/api/google/geocode",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-          body: JSON.stringify({ address: query, region }),
-        },
-        geocodeTimeoutMs,
-      );
-
-      if (res.ok && (data as any)?.formattedAddress) {
-        normalizedLocs.push(data.formattedAddress);
-      } else {
-        normalizedLocs.push(locStr);
-      }
-    } catch {
-      if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-      normalizedLocs.push(locStr);
-    }
-  }
+  const normalizedLocs = currentLocs;
 
   let distanceKm: number | null = null;
 

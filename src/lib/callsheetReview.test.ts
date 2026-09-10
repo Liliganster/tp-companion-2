@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { getReviewCallsheetDrafts, type ReviewCallsheetJob } from './callsheetReview';
+import { canMaterializeCallsheet, getReviewCallsheetDrafts, type ReviewCallsheetJob } from './callsheetReview';
 
 const job: ReviewCallsheetJob = { id: 'job-1', status: 'needs_review', storage_path: 'user/job-1/Dispo #17.pdf', created_at: '2026-09-10T08:00:00Z', project_id: 'project-1' };
+
+it.each([
+  ['needs_review', 'needs_review', 'candidate', false],
+  ['done', 'needs_review', 'confirmed', false],
+  ['done', 'done', 'candidate', false],
+  ['failed', 'done', 'confirmed', false],
+  ['done', 'done', 'confirmed', true],
+])('project materialization respects stored state even with stale UI: %s/%s/%s', (status, result, selection_state, allowed) => {
+  expect(canMaterializeCallsheet(String(status), String(result), [{ selection_state: String(selection_state) }])).toBe(allowed);
+});
 describe('persisted callsheet review drafts', () => {
   it('restores extracted candidates and date beside the original without making a confirmed trip', () => {
     const [draft] = getReviewCallsheetDrafts([{ ...job, callsheet_results: { date_value: '2025-08-07', project_value: 'Film' }, callsheet_locations: [{ address_raw: 'Staatsoper' }, { address_raw: 'Stadtpark' }] }], [], []);

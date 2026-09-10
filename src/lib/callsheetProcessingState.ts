@@ -5,5 +5,5 @@ export function resolveCallsheetProcessingState<T extends { status: string; proc
   if (Number.isFinite(started) && now - started < CALLSHEET_STALE_MS) return job;
   // A killed server cannot persist a terminal status. Do not launch AI again
   // automatically: expose the interruption and keep polling for a late result.
-  return { ...job, status: 'needs_review', needs_review_reason: 'La extracción no terminó dentro del tiempo de espera. El documento se conserva; puedes revisarlo manualmente.' };
+  return { ...job, status: 'failed', needs_review_reason: 'La extracción no terminó dentro del tiempo de espera. El documento se conserva; puedes revisarlo manualmente.' };
 }

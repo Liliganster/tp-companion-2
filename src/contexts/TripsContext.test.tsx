@@ -142,3 +142,18 @@ describe("TripsContext", () => {
     expect(out.current!.trips[0]?.id).toBe("trip-1");
   });
 });
+
+it('persists user-edited route/date/distance and exposes the same values to table and report consumers',async()=>{
+  const out: {current:ReturnType<typeof useTrips>|null}={current:null};
+  const queryClient=new QueryClient({defaultOptions:{queries:{retry:false}}});
+  mocks.orderTrips.mockImplementation(()=>({data:[{id:'trip-1',trip_date:'2025-01-01',route:['A','B'],distance_km:10,passengers:0,purpose:'Film',projects:null}],error:null}));
+  mocks.updateEq.mockReturnValue({error:null,data:null});
+  render(<QueryClientProvider client={queryClient}><TripsProvider><CaptureTrips out={out}/></TripsProvider></QueryClientProvider>);
+  await waitFor(()=>expect(out.current?.trips.length).toBe(1));
+  const patch={date:'2025-02-02',route:['User origin','User set','User return'],distance:25};
+  expect(await out.current!.updateTrip('trip-1',patch)).toBe(true);
+  const dbPatch=mocks.from.mock.results.flatMap(result=>result.value.update.mock.calls.map((call:any[])=>call[0])).find((value:any)=>value.trip_date===patch.date);
+  expect(dbPatch).toMatchObject({trip_date:patch.date,distance_km:25,route:patch.route});
+
+  await waitFor(()=>expect(out.current!.trips[0]).toMatchObject(patch));
+});

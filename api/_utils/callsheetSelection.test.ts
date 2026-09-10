@@ -27,6 +27,26 @@ it('preserves all candidate locations for review when one attribution or textual
 });
 it('does not lose other locations when one address is empty', () => {
   const result = select([{ label: 'SET', address: '' }, { label: 'MOTIV', address: 'Opera' }]);
-  expect(result.filming.map(l => l.address)).toEqual(['Opera']);
+  expect(result.filming.map(l => l.address)).toEqual(['', 'Opera']);
+  expect(result.filming[0].selection_state).toBe('candidate');
   expect(result.reviewReasons.length).toBeGreaterThan(0);
+});
+
+it('uses physical filming context even for hospitals, and excludes SET contact lists', () => {
+  const result = select([
+    {label:'MOTIV Krankenhaus',address:'Hospital Central',role:'filming'},
+    {label:'SET',address:'Director Name, phone 123',role:'other'},
+    {label:'Catering at SET',address:'Food Road',role:'logistics'},
+    {label:'',address:'Parque Sur',role:'filming'},
+    {label:'Unknown',address:'Unknown Road',role:'uncertain',reviewReason:'Two columns conflict about filming use'},
+  ]);
+  expect(result.filming.map(l=>[l.address,l.selection_state])).toEqual([
+    ['Hospital Central','confirmed'],['Parque Sur','confirmed'],['Unknown Road','candidate'],
+  ]);
+  expect(result.excluded).toHaveLength(2);
+  expect(result.reviewReasons.join(' ')).toContain('Two columns conflict');
+});
+it('keeps label/address relations and source order for separate sets sharing an address', () => {
+  const result = select([{label:'SET A',address:'Shared Place'}, {label:'SET B',address:'Shared Place'}]);
+  expect(result.filming.map(l=>[l.label,l.position])).toEqual([['SET A',0],['SET B',1]]);
 });

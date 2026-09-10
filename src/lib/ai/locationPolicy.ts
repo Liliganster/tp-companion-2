@@ -1,3 +1,5 @@
+export const LOCATION_ROLE_RULE = 'Classify each block by its governing context: filming for an explicitly physical filming set (including equivalent context without a printed label), logistics for support addresses, other for contacts or non-destinations, uncertain only when there is a concrete conflict about filming use. Explain an uncertain role in reviewReason. A place name such as Hospital does not override an explicit filming context. Never infer filming merely because an address exists.';
+
 // Shared by the prompt and structured-output schema: collection is not route selection.
 export const LOCATION_COLLECTION_RULE =
   'Return every location block within the document sections in scope, including filming AND logistics. Keep each block with its own original label and address; never merge different blocks.';
