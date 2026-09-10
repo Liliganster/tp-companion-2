@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { CallsheetExtractionResultSchema, describeCallsheetValidationError } from './validation';
+import { CallsheetExtractionResultSchema } from './validation';
 const valid = { date: '2026-09-10', projectName: 'Film', locations: [{ label: 'MOTIV', address: 'Example Street 10' }] };
 it.each(['', '   ', null, undefined])('does not discard locations for empty descriptive metadata: %s', value => {
   const result = CallsheetExtractionResultSchema.parse({ ...valid, projectName: value, productionCompanies: [null, '', ' ', 'Studio'] });
@@ -17,9 +17,9 @@ it('preserves an empty address for contextual review without rejecting valid loc
   const result = CallsheetExtractionResultSchema.parse({ ...valid, locations: [...valid.locations, { label: 'SET', address: '' }] });
   expect(result.locations).toHaveLength(2);
 });
-it('keeps a missing date empty instead of inventing one, and explains malformed dates', () => {
+it('preserves all locations even when the date needs separate interpretation', () => {
   expect(CallsheetExtractionResultSchema.parse({ ...valid, date: '' }).date).toBe('');
   const result = CallsheetExtractionResultSchema.safeParse({ ...valid, date: 'not a date' });
-  expect(result.success).toBe(false);
-  if (!result.success) expect(describeCallsheetValidationError(result.error)).toContain('fecha de rodaje');
+  expect(result.success).toBe(true);
+  if (result.success) expect(result.data.locations).toHaveLength(1);
 });

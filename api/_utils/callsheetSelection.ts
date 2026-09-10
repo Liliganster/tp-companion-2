@@ -1,6 +1,7 @@
 import type { CallsheetExtractionResult } from '../../src/lib/ai/validation.js';
 import { classifyLocationRole } from './callsheetLabels.js';
 import { callsheetAddressKey } from '../../src/lib/callsheetAddress.js';
+import { resolveCallsheetDate } from './callsheetDate.js';
 
 /** One contextual decision per block. Text matching is not a gate: PDF text
  * order and OCR omissions cannot establish that a visually read set is wrong. */
@@ -15,7 +16,8 @@ export function selectCallsheetLocations(data: CallsheetExtractionResult, date: 
     const normalizedAddress = 'normalizedAddress' in location ? location.normalizedAddress : undefined;
     const day = 'dayScope' in location ? location.dayScope : undefined;
     const unit = 'unitScope' in location ? location.unitScope : undefined;
-    const dayDate = 'dayDate' in location ? location.dayDate : undefined;
+    const dayDateRaw = 'dayDate' in location ? location.dayDate : undefined;
+    const dayDate = dayDateRaw ? resolveCallsheetDate({date:dayDateRaw,dateRaw:dayDateRaw,dateYearInDocument:true}) : '';
     const role = classifyLocationRole({ ...location, label, address });
     let excludedReason = '';
     if (day === 'other_day' || (date && dayDate && date !== dayDate)) excludedReason = 'other_shooting_day';
@@ -28,6 +30,7 @@ export function selectCallsheetLocations(data: CallsheetExtractionResult, date: 
     if (normalizedAddress === '') reasons.push('Falta resolver la dirección postal del lugar; confirma la calle y el número.');
     if (!date) reasons.push('Falta confirmar la fecha completa de rodaje.');
     if (day === 'uncertain') reasons.push('Confirma a qué día de rodaje pertenece el set.');
+    if (dayDateRaw && !dayDate) reasons.push('Confirma la fecha indicada para este set.');
     if (unit === 'uncertain' || data.documentUnit === 'uncertain' || (data.documentUnit === 'mixed' && (!unit || unit === 'unspecified'))) reasons.push('Confirma a qué unidad pertenece el set.');
     const reason = reasons.length ? `${label || 'Bloque'} ${address}: ${reasons.join(' ')}` : null;
     const duplicate = address.trim() && filming.find(item =>

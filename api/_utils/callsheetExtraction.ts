@@ -8,7 +8,7 @@ import { normalizeCallsheetAddress } from '../../src/lib/callsheetAddress.js';
  * inconsistencias reales (el /process se quedó con OCR semanas después de
  * quitarlo del worker). Este módulo es la ÚNICA implementación del núcleo:
  *
- *   descarga → mime real → texto nativo del PDF → IA → validación →
+ *   descarga → mime real → PDF completo a IA → validación tolerante →
  *   fecha documentada → selección contextual única → guardado atómico de
  *   resultado, bloques, orden, estado y consumo de la reserva de cuota.
  *
@@ -23,8 +23,6 @@ import { MAX_DOCUMENT_BYTES } from '../../src/lib/importDocuments.js';
 import { buildUniversalExtractorPrompt } from "../../src/lib/ai/prompts.js";
 import { extractionSchema } from "../../src/lib/ai/schema.js";
 import { CallsheetExtractionResultSchema, describeCallsheetValidationError } from "../../src/lib/ai/validation.js";
-import { buildCallsheetPdfHintText } from './callsheetLocationHints.js';
-import { parsePdfWithTimeout } from './pdf-parser.js';
 import { resolveCallsheetDate } from './callsheetDate.js';
 import { isImageCallsheetMime, resolveCallsheetMime } from "../../src/lib/callsheetMime.js";
 
@@ -112,32 +110,16 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
     }
   }
 
-  // B. Mime real por la extensión de storage (las dispos también llegan como
-  // foto de WhatsApp) y texto nativo del PDF completo (sin OCR/Tesseract).
+  // B. Text formats are decoded locally; PDFs and photos go intact to vision.
   const mimeType = resolveCallsheetMime(storagePath);
   const isImageCallsheet = isImageCallsheetMime(mimeType);
   const documentText = await callsheetDocumentText(buffer, storagePath);
 
-  let pdfText = documentText ?? "";
-  if (!isImageCallsheet && documentText === null) {
-    const textStartTime = Date.now();
-    try {
-      const parsed = await parsePdfWithTimeout(buffer, 10_000);
-      pdfText = String(parsed?.text ?? "");
-    } catch (textErr) {
-      log.warn({ jobId, err: textErr }, "callsheet_pdf_text_unavailable");
-    }
-    log.info(
-      { jobId, textChars: pdfText.length, textDurationMs: Date.now() - textStartTime },
-      "callsheet_pdf_text_extracted",
-    );
-  }
-
-  const pdfHintText = buildCallsheetPdfHintText(pdfText);
+  const pdfText = documentText ?? "";
+  // The multimodal provider reads every page. A second sequential PDF parse
+  // added up to 10 seconds, and its excerpt could lose first-page context.
   const attachedTag = isImageCallsheet ? "[IMAGE ATTACHED]" : "[PDF ATTACHED]";
-  const promptSource = pdfHintText
-    ? `${attachedTag}\n\nDOCUMENT TEXT EXCERPT (use for projectName/date/company):\n${pdfHintText}`
-    : attachedTag;
+  const promptSource = attachedTag;
   const systemInstruction = buildUniversalExtractorPrompt(documentText === null ? promptSource : documentText);
 
   // C. IA

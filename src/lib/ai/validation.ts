@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-const dateIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-
 const LabeledLocationSchema = z.union([
   z.object({
     label: z.string().trim().max(120).catch("").default(""),
@@ -12,7 +10,7 @@ const LabeledLocationSchema = z.union([
     unitScope: z.enum(['main_unit', 'other_unit', 'unspecified', 'uncertain']).catch('uncertain').default('unspecified'),
     unitEvidence: z.string().trim().max(3000).catch('').default(''),
     dayScope: z.enum(['document_day', 'other_day', 'uncertain']).catch('uncertain').default('document_day'),
-    dayDate: z.string().trim().max(10).catch('').default(''),
+    dayDate: z.string().trim().max(160).catch('').default(''),
     dayEvidence: z.string().trim().max(3000).catch('').default(''),
     // Dirección geocodificable (errata corregida); el address queda como evidencia.
     addressCorrected: z.string().trim().max(300).catch("").default(""),
@@ -25,9 +23,10 @@ export type LabeledLocation = { label: string; address: string; addressCorrected
 
 export const CallsheetExtractionResultSchema = z.object({
   documentUnit: z.enum(['main_unit', 'other_unit', 'mixed', 'unspecified', 'uncertain']).catch('uncertain').default('unspecified'),
-  date: dateIso.or(z.literal('')).nullish().transform(value => value ?? ''),
-  dateRaw: z.string().trim().max(120).nullable().optional(),
-  dateYearInDocument: z.boolean().nullable().optional(),
+  // A readable non-ISO date must not discard locations or the whole document.
+  date: z.string().trim().max(160).nullish().catch('').transform(value => value ?? ''),
+  dateRaw: z.string().trim().max(300).nullable().optional().catch(''),
+  dateYearInDocument: z.boolean().nullable().optional().catch(null),
   // Descriptive metadata must not discard otherwise supported locations.
   // Keep the same explicit fallback requested by the extraction prompt.
   projectName: z.string().trim().max(160).nullish().transform(value => value || 'Untitled Project'),

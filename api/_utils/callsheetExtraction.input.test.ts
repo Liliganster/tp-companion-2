@@ -21,7 +21,7 @@ vi.mock('./callsheetLocationHints.js', async (importOriginal) => {
 });
 vi.mock('./storageOwnership.js', () => ({ assertStorageOwnership: async () => {} }));
 vi.mock('../../src/lib/ai/geminiClient.js', () => ({ generateContent: mocks.text, generateContentFromPDF: mocks.binary }));
-vi.mock('./pdf-parser.js', () => ({ parsePdfWithTimeout: async () => ({ text: 'Film' }) }));
+vi.mock('./pdf-parser.js', () => ({ parsePdfWithTimeout: vi.fn(async () => ({ text: 'Film' })) }));
 import { extractCallsheet } from './callsheetExtraction';
 import { getReviewCallsheetDrafts } from '../../src/lib/callsheetReview';
 const run = (name: string) => extractCallsheet({ userId: 'user', requestId: 'request', attemptId: 'attempt', jobId: 'job', storagePath: `user/job/${name}`, referenceIso: '2026-09-09', skipGeocode: true, log: { info: () => {}, warn: () => {}, error: () => {} } });
@@ -182,4 +182,18 @@ it('keeps an unresolved venue as evidence, not as a street destination',async()=
  expect(await run('venue.txt')).toMatchObject({ok:true,status:'needs_review',locations:[]});
  const rows=mocks.insert.mock.calls.find(([table])=>table==='callsheet_locations')?.[1] as any[];
  expect(rows[0]).toMatchObject({address_raw:'Unspecified Theatre',formatted_address:'',selection_state:'candidate'});
+});
+
+it.each([
+ ['19 novembre 2024','2024-11-19','done'],
+ ['fecha ilegible','','needs_review'],
+])('preserves PDF data while interpreting date %s, without a sequential local parse',async(date,dateValue,status)=>{
+ const bytes=new TextEncoder().encode('%PDF-1.7 test all pages');
+ mocks.download.mockResolvedValue({data:{size:bytes.length,arrayBuffer:async()=>bytes.buffer}});
+ mocks.binary.mockResolvedValue({text:JSON.stringify({date,dateRaw:date,projectName:'Film',locations:[{label:'SET',address:'Printed Street 1',normalizedAddress:'Printed Street 1',role:'filming'}]}),provider:'mock',model:'mock'});
+ expect(await run('multilingual.pdf')).toMatchObject({ok:true,date:dateValue,status,locations:['Printed Street 1']});
+ expect(mocks.binary).toHaveBeenCalledOnce();
+ expect(mocks.binary.mock.calls[0][2]).toEqual(Buffer.from(bytes));
+ const {parsePdfWithTimeout}=await import('./pdf-parser.js');
+ expect(parsePdfWithTimeout).not.toHaveBeenCalled();
 });
