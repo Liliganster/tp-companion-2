@@ -1,4 +1,5 @@
 import { getCountryCode } from "@/lib/country-mapping";
+import { callsheetAddressKey, normalizeCallsheetAddress } from './callsheetAddress';
 
 type UserProfileLike = {
   baseAddress?: string | null;
@@ -63,14 +64,51 @@ export async function optimizeCallsheetLocationsAndDistance(args: {
   const baseAddress = buildBaseRouteAddress(profile);
   const country = (profile.country ?? "").trim();
 
-  const currentLocs = rawLocations.map((l) => (l ?? "").trim()).filter(Boolean);
+  const seen = new Set<string>();
+  const currentLocs = rawLocations.map(normalizeCallsheetAddress).filter(l => {
+    const key = callsheetAddressKey(l);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   if (currentLocs.length === 0) return { locations: [], distanceKm: null };
 
   if (!accessToken) return { locations: currentLocs, distanceKm: null };
 
   const region = getCountryCode(country);
 
-  const normalizedLocs = currentLocs;
+  const normalizedLocs: string[] = [];
+  const waypoints: string[] = [];
+  const places = new Set<string>();
+  for (const address of currentLocs) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    let display = address;
+    let waypoint = address;
+    let identity = callsheetAddressKey(address);
+    // Coordinates and Maps links already identify a destination; do not geocode them as prose.
+    if (!/^https?:\/\//i.test(address) && !/^-?\d+\.\d+\s*,\s*-?\d+\.\d+$/.test(address)) {
+      try {
+        const { res, data } = await fetchJsonWithTimeout('/api/google/geocode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ address, region }),
+        }, args.geocodeTimeoutMs ?? 8_000);
+        if (res.ok && data?.resultCount === 1 && data?.partialMatch === false &&
+            data?.placeId && data?.formattedAddress &&
+            ['street_address', 'premise', 'subpremise', 'point_of_interest', 'establishment', 'park', 'intersection'].some(t => data.types?.includes(t))) {
+          display = data.formattedAddress;
+          waypoint = `place_id:${data.placeId}`;
+          identity = waypoint;
+        }
+      } catch {
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      }
+    }
+    if (places.has(identity)) continue;
+    places.add(identity);
+    normalizedLocs.push(display);
+    waypoints.push(waypoint);
+  }
 
   let distanceKm: number | null = null;
 
@@ -84,7 +122,7 @@ export async function optimizeCallsheetLocationsAndDistance(args: {
           body: JSON.stringify({
             origin: baseAddress,
             destination: baseAddress,
-            waypoints: normalizedLocs,
+            waypoints,
             region,
           }),
         },

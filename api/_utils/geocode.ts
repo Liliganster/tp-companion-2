@@ -56,6 +56,7 @@ export function buildDirectionsCacheKey(args: {
   region?: string;
 }): string {
   const region = String(args.region ?? "").trim().toLowerCase();
-  const waypoints = (args.waypoints ?? []).map(normalizeKeyPart).join(">");
+  const routeKey = (value: string) => value.trim().startsWith('place_id:') ? encodeURIComponent(value.trim()) : normalizeKeyPart(value);
+  const waypoints = (args.waypoints ?? []).map(routeKey).join(">");
   return `directions:${region}:${normalizeKeyPart(args.origin)}|${waypoints}|${normalizeKeyPart(args.destination)}`;
 }

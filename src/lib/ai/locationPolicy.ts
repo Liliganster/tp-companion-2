@@ -2,7 +2,7 @@ export const LOCATION_ROLE_RULE = 'Classify each block by its governing context:
 
 // Shared by the prompt and structured-output schema: collection is not route selection.
 export const LOCATION_COLLECTION_RULE =
-  'Return every location block within the document sections in scope, including filming AND logistics. Keep each block with its own original label and address; never merge different blocks.';
+  'Return every distinct physical location block within the document sections in scope, including filming AND logistics. Keep each block with its own original label and address. Repeated mentions of the SAME set in the header, scene schedule and directions are one location, not new destinations. Return one address per set; never generate permutations combining venue, street, postcode, access notes or Maps link. Preserve genuinely different sets and different street numbers. Do not merge logistics with filming.';
 
 export const LOCATION_LABEL_RULE =
   'Copy the section label exactly as printed (MOTIV, SET, LOCATION, DREHORT, BASIS, PARKEN, CATERING, etc.). Leave it empty if no label is printed. Never relabel logistics as filming.';

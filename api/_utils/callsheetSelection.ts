@@ -1,5 +1,6 @@
 import type { CallsheetExtractionResult } from '../../src/lib/ai/validation.js';
 import { classifyLocationRole } from './callsheetLabels.js';
+import { callsheetAddressKey } from '../../src/lib/callsheetAddress.js';
 
 /** One contextual decision per block. Text matching is not a gate: PDF text
  * order and OCR omissions cannot establish that a visually read set is wrong. */
@@ -27,6 +28,14 @@ export function selectCallsheetLocations(data: CallsheetExtractionResult, date: 
     if (day === 'uncertain') reasons.push('Confirma a qué día de rodaje pertenece el set.');
     if (unit === 'uncertain' || data.documentUnit === 'uncertain' || (data.documentUnit === 'mixed' && (!unit || unit === 'unspecified'))) reasons.push('Confirma a qué unidad pertenece el set.');
     const reason = reasons.length ? `${label || 'Bloque'} ${address}: ${reasons.join(' ')}` : null;
+    const duplicate = address.trim() && filming.find(item =>
+      item.label.trim().toLowerCase() === label.trim().toLowerCase() &&
+      callsheetAddressKey(item.address) === callsheetAddressKey(address) &&
+      item.selection_state === (reason ? 'candidate' : 'confirmed'));
+    if (duplicate) {
+      excluded.push({ label, address, reason: 'duplicate_filming_destination' });
+      return;
+    }
     if (reason) reviewReasons.push(reason);
     filming.push({ label, address, position, selection_state: reason ? 'candidate' : 'confirmed', review_reason: reason });
   });

@@ -28,10 +28,19 @@ type RoutesRequestInput = {
 };
 
 export function buildRoutesApiRequest(input: RoutesRequestInput) {
+  const waypoint = (raw: string) => {
+    const value = raw.trim();
+    if (value.startsWith('place_id:')) return { placeId: value.slice(9) };
+    const coordinates = value.match(/^(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)$/);
+    if (coordinates && Math.abs(Number(coordinates[1])) <= 90 && Math.abs(Number(coordinates[2])) <= 180) {
+      return { location: { latLng: { latitude: Number(coordinates[1]), longitude: Number(coordinates[2]) } } };
+    }
+    return { address: value };
+  };
   return {
-    origin: { address: input.origin.trim() },
-    destination: { address: input.destination.trim() },
-    intermediates: input.waypoints.map((address) => ({ address: address.trim() })),
+    origin: waypoint(input.origin),
+    destination: waypoint(input.destination),
+    intermediates: input.waypoints.map(waypoint),
     travelMode: "DRIVE",
     routingPreference: "TRAFFIC_AWARE",
     computeAlternativeRoutes: false,

@@ -50,3 +50,9 @@ it('keeps label/address relations and source order for separate sets sharing an 
   const result = select([{label:'SET A',address:'Shared Place'}, {label:'SET B',address:'Shared Place'}]);
   expect(result.filming.map(l=>[l.label,l.position])).toEqual([['SET A',0],['SET B',1]]);
 });
+
+it('removes repeated variants of the same set without merging different street numbers', () => {
+ const result=select([{label:'SET',address:'1080 Wien, Josefsagasse12'}, {label:'SET',address:'Josefsagasse 12, 1080 Wien'}, {label:'SET',address:'Josefsagasse 14, 1080 Wien'}]);
+ expect(result.filming.map(l=>l.address)).toEqual(['1080 Wien, Josefsagasse12','Josefsagasse 14, 1080 Wien']);
+ expect(result.excluded[0].reason).toBe('duplicate_filming_destination');
+});

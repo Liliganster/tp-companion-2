@@ -1366,6 +1366,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
         setReviewByJobId((prev) => {
           const cur = prev[jobId];
           if (!cur) return prev;
+          const locationsUnchanged = JSON.stringify(cur.locations) === JSON.stringify(rawLocations);
           const nextDistance = cur.distanceDirty
             ? cur.distance
             : typeof distanceKm === "number"
@@ -1375,8 +1376,8 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
             ...prev,
             [jobId]: {
               ...cur,
-              locations: cur.locations, // Never overwrite edits with a late optimization response.
-              distance: nextDistance,
+              locations: locationsUnchanged ? normalizedLocs : cur.locations,
+              distance: locationsUnchanged ? nextDistance : cur.distance,
               optimizing: false,
             },
           };

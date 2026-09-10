@@ -9,6 +9,11 @@ import {
 } from "./googleMapsNew";
 
 describe("Google Maps new API adapters", () => {
+  it('sends resolved place IDs and coordinates in their Routes API fields', () => {
+    expect(buildRoutesApiRequest({origin:'Base',destination:'Base',waypoints:['place_id:ChIJtest','48.2082, 16.3738']} ).intermediates).toEqual([
+      {placeId:'ChIJtest'}, {location:{latLng:{latitude:48.2082,longitude:16.3738}}},
+    ]);
+  });
   it("builds an address-based Routes API request", () => {
     expect(buildRoutesApiRequest({
       origin: " Wien ",
