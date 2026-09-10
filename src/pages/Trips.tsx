@@ -1,3 +1,4 @@
+import { deleteReviewCallsheet, deleteSelectedTripRows } from "@/lib/deleteReviewCallsheet";
 import { useCallsheetReview } from "@/hooks/use-callsheet-review";
 import { getReviewCallsheetDrafts } from "@/lib/callsheetReview";
 import { useEffect, useMemo, useState } from "react";
@@ -91,8 +92,9 @@ export default function Trips() {
   const { projects } = useProjects();
   const { trips, addTrip, updateTrip, deleteTrip } = useTrips();
 
+  const [removedReviewIds, setRemovedReviewIds] = useState<Set<string>>(new Set());
   const reviewQuery = useCallsheetReview();
-  const reviewDrafts = useMemo(() => getReviewCallsheetDrafts(reviewQuery.data ?? [], trips, projects), [reviewQuery.data, trips, projects]);
+  const reviewDrafts = useMemo(() => getReviewCallsheetDrafts(reviewQuery.data ?? [], trips, projects).filter(draft => !removedReviewIds.has(draft.trip.id)), [reviewQuery.data, trips, projects, removedReviewIds]);
 
   const uniqueProjects = useMemo(() => {
     const fromTrips = new Set(trips.map((t) => t.project).filter(Boolean));
@@ -103,6 +105,7 @@ export default function Trips() {
   }, [trips, projects]);
   // removed setProjects
   const [dateSort, setDateSort] = useState<"desc" | "asc">("asc");
+  const [deletingSelected, setDeletingSelected] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -466,11 +469,12 @@ export default function Trips() {
     setVisibleTripsCount(TRIPS_PER_PAGE);
   }, [selectedProject, selectedYear, dateSort]);
 
+  const selectableIds = [...reviewDrafts.map(draft => draft.trip.id), ...visibleTrips.map(trip => trip.id)];
   const toggleSelectAll = () => {
-    if (selectedIds.size === visibleTrips.length) {
+    if (selectableIds.every(id => selectedIds.has(id))) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(visibleTrips.map(t => t.id)));
+      setSelectedIds(new Set(selectableIds));
     }
   };
   const toggleSelect = (id: string) => {
@@ -483,27 +487,25 @@ export default function Trips() {
     setSelectedIds(newSelected);
   };
   const handleDeleteSelected = async () => {
-    const ids = Array.from(selectedIds);
-    const results = await Promise.allSettled(ids.map((id) => deleteTrip(id)));
-    const ok = results.filter((r) => r.status === "fulfilled").length;
-    const failed = results.length - ok;
-
-    if (failed === 0) {
-      toast({
-        title: t("trips.toastTripsDeletedTitle"),
-        description: tf("trips.toastTripsDeletedBody", { count: ids.length }),
+    if (deletingSelected) return;
+    setDeletingSelected(true);
+    try {
+      const { deleted, failed } = await deleteSelectedTripRows(
+        Array.from(selectedIds), new Set(reviewDrafts.map(draft => draft.trip.id)), deleteTrip,
+        id => deleteReviewCallsheet(supabase, id),
+      );
+      setRemovedReviewIds(prev => new Set([...prev, ...deleted]));
+      setSelectedIds(new Set(failed));
+      if (selectedTrip && deleted.includes(selectedTrip.id)) { setDetailModalOpen(false); setSelectedTrip(null); }
+      if (tripToEdit && deleted.includes(tripToEdit.id)) { setEditModalOpen(false); setTripToEdit(null); }
+      void reviewQuery.refetch();
+      toast({ title: t("trips.toastTripsDeletedTitle"),
+        description: failed.length ? tf("callsheetReview.deletePartial", { deleted: deleted.length, failed: failed.length }) : tf("trips.toastTripsDeletedBody", { count: deleted.length }),
+        variant: failed.length ? "destructive" : "default",
       });
-      setSelectedIds(new Set());
-      return;
-    }
-
-    toast({
-      title: t("trips.toastTripsDeletedTitle"),
-      description: `Se borraron ${ok}/${ids.length}. ${failed} fallaron (no se borró todo lo asociado).`,
-      variant: "destructive",
-    });
+    } finally { setDeletingSelected(false); }
   };
-  const isAllSelected = visibleTrips.length > 0 && selectedIds.size === visibleTrips.length;
+  const isAllSelected = selectableIds.length > 0 && selectableIds.every(id => selectedIds.has(id));
   const isSomeSelected = selectedIds.size > 0;
 
   // Filtros estilo Unity: distribuidos a lo ancho desde la izquierda. En
@@ -555,7 +557,7 @@ export default function Trips() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {isSomeSelected && <Button variant="destructive" onClick={handleDeleteSelected}>
+          {isSomeSelected && <Button variant="destructive" disabled={deletingSelected} onClick={handleDeleteSelected}>
             <Trash2 className="w-4 h-4" />
             <span className="hidden sm:inline">{t("trips.delete")} ({selectedIds.size})</span>
           </Button>}
@@ -588,7 +590,7 @@ export default function Trips() {
       {/* Mobile & Tablet Cards View */}
       <div className="lg:hidden space-y-3 animate-fade-in animation-delay-200">
         {reviewDrafts.map(({ trip, name }) => <div key={trip.id} className="glass-card p-4 border border-warning/40">
-          <Badge variant="outline" className="text-warning">{t("callsheetReview.title")}</Badge>
+          <div className="flex items-center gap-2"><Checkbox disabled={deletingSelected} checked={selectedIds.has(trip.id)} onCheckedChange={() => toggleSelect(trip.id)} aria-label={tf("trips.selectTrip", { id: name })} /><Badge variant="outline" className="text-warning">{t("callsheetReview.title")}</Badge></div>
           <p className="my-2 break-all">{name}</p>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => { setSelectedTrip(trip); setDetailModalOpen(true); }}>{t("callsheetReview.open")}</Button>
@@ -602,7 +604,8 @@ export default function Trips() {
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0">
               <Checkbox
-                checked={selectedIds.has(trip.id)}
+                disabled={deletingSelected}
+                    checked={selectedIds.has(trip.id)}
                 onCheckedChange={() => toggleSelect(trip.id)}
                 aria-label={tf("trips.selectTrip", { id: trip.id })}
                 className="mt-0.5 shrink-0"
@@ -761,7 +764,7 @@ export default function Trips() {
             <TableHeader className="sticky top-0 z-10">
               <TableRow className="hover:bg-transparent border-border/50">
                 <TableHead className="w-10">
-                  <Checkbox checked={isAllSelected} onCheckedChange={toggleSelectAll} aria-label={t("projects.selectAll")} />
+                  <Checkbox disabled={deletingSelected} checked={isAllSelected} onCheckedChange={toggleSelectAll} aria-label={t("projects.selectAll")} />
                 </TableHead>
                 <TableHead className="whitespace-nowrap">
                   <button
@@ -793,7 +796,7 @@ export default function Trips() {
             </TableHeader>
             <TableBody>
               {reviewDrafts.map(({ trip, name }) => <TableRow key={trip.id} className="bg-warning/5">
-                <TableCell />
+                <TableCell><Checkbox disabled={deletingSelected} checked={selectedIds.has(trip.id)} onCheckedChange={() => toggleSelect(trip.id)} aria-label={tf("trips.selectTrip", { id: name })} /></TableCell>
                 <TableCell><Badge variant="outline" className="text-warning">{t("callsheetReview.title")}</Badge></TableCell>
                 <TableCell colSpan={2}><span className="break-all">{name}</span></TableCell>
                 <TableCell colSpan={7}>
@@ -821,6 +824,7 @@ export default function Trips() {
               >
                 <TableCell>
                   <Checkbox
+                    disabled={deletingSelected}
                     checked={selectedIds.has(trip.id)}
                     onCheckedChange={() => toggleSelect(trip.id)}
                     aria-label={tf("trips.selectTrip", { id: trip.id })}
