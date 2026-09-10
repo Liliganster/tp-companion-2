@@ -2,6 +2,7 @@ import type { I18nKey } from "./es";
 
 // Cargado perezosamente por src/lib/i18n.ts (chunk separado del bundle principal).
 export const en: Record<I18nKey, string> = {
+  "tripDetail.editInvalid": "Check the date, complete every address, and enter valid distances and amounts.",
   "callsheetReview.title": "Review",
   "callsheetReview.description": "The extraction could not be confirmed. Open the original document and complete the data manually. It will not enter reports or calculations until you save the trip.",
   "callsheetReview.open": "View document",

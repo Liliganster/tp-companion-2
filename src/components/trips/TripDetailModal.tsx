@@ -1,3 +1,4 @@
+import { TripDetailEditor } from "./TripDetailEditor";
 import { useMemo, useRef, useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { ModalHeaderImage } from "@/components/ui/modal-header-image";
@@ -20,14 +21,18 @@ interface TripDetailModalProps {
   trip: Trip | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSave: (trip: Trip) => Promise<boolean>;
 }
 
-export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalProps) {
+export function TripDetailModal({ trip, open, onOpenChange, onSave }: TripDetailModalProps) {
   const { t, tf, locale } = useI18n();
   const { profile } = useUserProfile();
   const { trips } = useTrips();
   const { getAccessToken } = useAuth();
   const { toast } = useToast();
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { setEditing(false); }, [open, trip?.id]);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewDocName, setPreviewDocName] = useState<string>("");
 
@@ -124,7 +129,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={next => { if (!saving) onOpenChange(next); }}>
       {/* Casi pantalla completa: el visor de documentos necesita sitio para
           que un callsheet A4 se lea sin lupa (queja de la propietaria).
           Cabecera de imagen BAJA (h-16) por lo mismo: estilo unificado sin
@@ -136,7 +141,9 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
         </ModalHeaderImage>
 
         <div className="flex flex-col md:flex-row flex-1 min-h-0">
-          <div className="w-full md:w-80 max-h-[45%] md:max-h-none p-4 space-y-4 overflow-y-auto border-b md:border-b-0 md:border-r border-border/50 bg-secondary/20 min-h-0">
+          <div className="w-full md:w-96 md:shrink-0 max-h-[45%] md:max-h-none p-4 space-y-4 overflow-y-auto border-b md:border-b-0 md:border-r border-border/50 bg-secondary/20 min-h-0">
+            {editing ? <TripDetailEditor key={liveTrip.id} trip={liveTrip} onSave={onSave} onCancel={() => setEditing(false)} onSaved={() => setEditing(false)} onSaving={setSaving} /> : <>
+            <Button type="button" variant="outline" onClick={() => setEditing(true)}>{t("trips.edit")}</Button>
             <div>
               <Label className="text-xs uppercase tracking-wide text-muted-foreground">{t("tripDetail.date")}</Label>
               <p className="font-semibold">{formattedDate}</p>
@@ -249,6 +256,7 @@ export function TripDetailModal({ trip, open, onOpenChange }: TripDetailModalPro
                 </div>
               </>
             )}
+            </>}
           </div>
 
           <div className="flex-1 flex flex-col min-h-0">

@@ -340,7 +340,7 @@ export default function Trips() {
     date: string;
     route: string[];
     project: string;
-    projectId?: string; // Added
+    projectId?: string | null; // Added
     purpose: string;
     passengers: number;
     invoice?: string;
@@ -981,7 +981,7 @@ export default function Trips() {
       />
 
       {/* Trip Detail Modal */}
-      <TripDetailModal trip={selectedTrip} open={detailModalOpen} onOpenChange={setDetailModalOpen} />
+      <TripDetailModal trip={selectedTrip} open={detailModalOpen} onOpenChange={setDetailModalOpen} onSave={handleSaveTrip} />
 
       {/* Edit Trip Modal */}
       <AddTripModal

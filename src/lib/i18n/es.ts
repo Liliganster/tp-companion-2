@@ -1,6 +1,7 @@
 // Idioma base de Fahrtenbuch Pro. Las claves tipadas (I18nKey) derivan de este objeto.
 // ES se queda: es el idioma de la propietaria (decisión registrada en PLAN.md).
 export const es = {
+  "tripDetail.editInvalid": "Comprueba la fecha, completa todas las direcciones e introduce distancias e importes válidos.",
   "callsheetReview.title": "Revisar",
   "callsheetReview.description": "No se pudo confirmar la extracción. Abre el documento original y completa los datos manualmente. Hasta que guardes el viaje, no se incluirá en informes ni cálculos.",
   "callsheetReview.open": "Ver documento",
