@@ -15,7 +15,7 @@ import { assertStorageOwnership, isSafeStoragePath, StorageOwnershipError } from
 
 // ─── /api/callsheets/process ────────────────────────────────────────────────
 // Direct synchronous extraction: claim job → download PDF → call Gemini → save results → done.
-// No worker, no fire-and-forget, no polling needed. maxDuration=60s covers Gemini (15-30s).
+// Provider deadlines must leave time to persist failures and release quota before 60s.
 const handleProcess = withApiObservability(async function handler(req: any, res: any, { log, requestId }) {
   if (req.method !== "POST") { res.statusCode = 405; res.setHeader("Allow", "POST"); res.end(); return; }
 
@@ -95,12 +95,14 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
         .eq("id", jobId).eq("user_id", user.id).eq("status", "processing");
       return sendJson(res, 403, { error: err.message });
     }
+    const timedOut = /timeout|timed out|aborted/i.test(String(err?.message ?? ""));
+    const failureReason = timedOut ? "La extracción superó el tiempo de espera. El documento se conserva para revisión manual." : "processing_failed";
     try {
-      if (reservation?.allowed) await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", needs_review_reason: "processing_failed" }).eq("id", jobId).eq("user_id", user.id).eq("status", "processing");
+      if (reservation?.allowed) await supabaseAdmin.from("callsheet_jobs").update({ status: timedOut ? "needs_review" : "failed", needs_review_reason: failureReason }).eq("id", jobId).eq("user_id", user.id).eq("status", "processing");
     } catch (updateErr) {
       // ignore
     }
-    return sendJson(res, 500, { error: "process_failed", message: err?.message ?? "Extraction failed" });
+    return sendJson(res, timedOut ? 504 : 500, { error: timedOut ? "processing_timeout" : "process_failed", message: timedOut ? failureReason : err?.message ?? "Extraction failed" });
   } finally {
     if (reservation?.allowed) {
       try { await finishAiQuota(reservation, false); }

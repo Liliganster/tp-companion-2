@@ -1,3 +1,4 @@
+import { resolveCallsheetProcessingState } from '@/lib/callsheetProcessingState';
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -64,7 +65,6 @@ interface BulkUploadModalProps {
 let googleApiJsPromise: Promise<void> | null = null;
 let googlePickerApiPromise: Promise<void> | null = null;
 const BULK_CALLSHEET_PROCESS_CONCURRENCY = 2;
-const BULK_CALLSHEET_STALE_PROCESSING_MS = 90_000;
 const BULK_DRIVE_IMPORT_QUERY_PARAM = "bulkDriveImport";
 
 async function loadGoogleApiJs() {
@@ -1447,13 +1447,14 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     const checkStatus = async () => {
       try {
         if (isAiCancelled(aiSignal)) return;
-        const { data: jobs, error: jobsError } = await supabase
+        const { data: fetchedJobs, error: jobsError } = await supabase
           .from("callsheet_jobs")
           .select("id, status, needs_review_reason, processing_started_at, processed_at")
           .in("id", jobIds);
         if (isAiCancelled(aiSignal)) return;
 
-        if (jobsError || !jobs) return;
+        if (jobsError || !fetchedJobs) return;
+        const jobs = fetchedJobs.map(job => resolveCallsheetProcessingState(job, scheduledProcessJobIdsRef.current.has(String(job.id))));
 
         const doneIds = jobs.filter((j: any) => j.status === "done").map((j: any) => String(j.id));
         const queuedIds = jobs
@@ -1464,16 +1465,6 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
           .map((j: any) => String(j.id));
         const processingIds = jobs
           .filter((j: any) => String(j?.status ?? "") === "processing")
-          .map((j: any) => String(j.id));
-        const staleProcessingIds = jobs
-          .filter((j: any) => {
-            const status = String(j?.status ?? "");
-            if (status !== "processing") return false;
-            const startedAt = String(j?.processing_started_at ?? j?.processed_at ?? "").trim();
-            const parsed = Date.parse(startedAt);
-            if (!Number.isFinite(parsed)) return true;
-            return Date.now() - parsed >= BULK_CALLSHEET_STALE_PROCESSING_MS;
-          })
           .map((j: any) => String(j.id));
         const failedJobs = jobs.filter(
           (j: any) => j.status === "failed" || j.status === "needs_review" || j.status === "out_of_quota",
@@ -1530,15 +1521,9 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
         if (isAiCancelled(aiSignal)) return;
 
         const queuedIdsNeedingProcessing = getQueuedJobsNeedingProcessing(queuedIds);
-        const staleProcessingIdsNeedingRetry = staleProcessingIds.filter(
-          (id) => !scheduledProcessJobIdsRef.current.has(id) && !savedByJobIdRef.current[id],
-        );
         const shouldKickQueuedJobs =
           queuedIdsNeedingProcessing.length > 0 &&
           processingIds.length === 0 &&
-          Date.now() - lastTriggerWorkerKickAtRef.current >= 5000;
-        const shouldRetryStaleProcessing =
-          staleProcessingIdsNeedingRetry.length > 0 &&
           Date.now() - lastTriggerWorkerKickAtRef.current >= 5000;
         if (shouldKickQueuedJobs) {
           logger.warn("[BulkUploadModal] queued jobs detected without an active process request; retrying", {
@@ -1546,13 +1531,6 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
           });
           void triggerBulkProcessing(queuedIdsNeedingProcessing, aiSignal, "queued_safety_net");
         }
-        if (shouldRetryStaleProcessing) {
-          logger.warn("[BulkUploadModal] stale processing jobs detected; retrying direct process", {
-            staleProcessingIds: staleProcessingIdsNeedingRetry,
-          });
-          void triggerBulkProcessing(staleProcessingIdsNeedingRetry, aiSignal, "stale_processing_retry");
-        }
-
         // Move to review as soon as there are no pending jobs.
         if (aiStep === "processing" && (!hasPending || doneIds.length > 0)) setAiStep("review");
       } catch (e) {

@@ -147,7 +147,7 @@ async function callOpenRouter(
 
   const doRequest = async (body: Record<string, unknown>): Promise<Response> => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 40000); // Leave time for job state and quota cleanup before the server limit
     try {
       return await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
@@ -225,14 +225,7 @@ export async function generateContent(
     } : undefined
   });
 
-  const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Gemini API call timeout (30s)")), 30000)
-  );
-
-  const result = await Promise.race([
-    model.generateContent(prompt),
-    timeoutPromise
-  ]) as { response: { text: () => string } };
+  const result = await model.generateContent(prompt, { timeout: 30000 });
 
   return {
     text: result.response.text(),
@@ -293,12 +286,7 @@ export async function generateContentFromPDF(
         } : undefined
     });
 
-    const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Gemini API call timeout (60s)")), 60000)
-    );
-
-    const result = await Promise.race([
-        model.generateContent([
+    const result = await model.generateContent([
             {
                 inlineData: {
                     data: pdfData.toString("base64"),
@@ -306,9 +294,7 @@ export async function generateContentFromPDF(
                 },
             },
             prompt,
-        ]),
-        timeoutPromise
-    ]) as { response: { text: () => string } };
+        ], { timeout: 40000 });
 
     return {
       text: result.response.text(),
@@ -360,10 +346,6 @@ export async function generateContentFromImages(
         } : undefined
     });
 
-    const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Gemini Vision timeout (60s)")), 60000)
-    );
-
     // Build parts array: all images + prompt
     const parts: any[] = images.map(img => ({
       inlineData: {
@@ -373,10 +355,7 @@ export async function generateContentFromImages(
     }));
     parts.push(prompt);
 
-    const result = await Promise.race([
-        model.generateContent(parts),
-        timeoutPromise
-    ]) as { response: { text: () => string } };
+    const result = await model.generateContent(parts, { timeout: 40000 });
 
     return {
       text: result.response.text(),

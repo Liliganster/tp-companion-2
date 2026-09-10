@@ -30,6 +30,16 @@ beforeEach(() => {
   mocks.extract.mockResolvedValue({ ok: true, cached: true });
 });
 describe("direct extraction quota gate", () => {
+  it('records provider timeouts for review and releases the reservation without charging', async () => {
+    mocks.extract.mockRejectedValue(new Error('Request aborted'));
+    const response = await run();
+    expect(response.statusCode).toBe(504);
+    expect(response.body).toMatchObject({ error: 'processing_timeout' });
+    expect(mocks.from().update).toHaveBeenCalledWith(expect.objectContaining({ status: 'needs_review' }));
+    expect(mocks.finish).toHaveBeenCalledWith(expect.anything(), false);
+    expect(mocks.finish).not.toHaveBeenCalledWith(expect.anything(), true);
+    expect(mocks.extract).toHaveBeenCalledOnce();
+  });
   it("does not call AI or delete documents when quota is exhausted", async () => {
     mocks.reserve.mockResolvedValue({ allowed: false, reason: "monthly_quota_exceeded" });
     expect((await run()).statusCode).toBe(402);
