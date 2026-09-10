@@ -1,4 +1,4 @@
-import { LOCATION_COLLECTION_RULE, LOCATION_DESTINATION_RULE, LOCATION_LABEL_RULE, LOCATION_DAY_RULE } from './locationPolicy.js';
+import { LOCATION_COLLECTION_RULE, LOCATION_DESTINATION_RULE, LOCATION_LABEL_RULE, LOCATION_DAY_RULE, LOCATION_UNIT_RULE } from './locationPolicy.js';
 
 export function buildUniversalExtractorPrompt(text: string) {
   return [
@@ -34,9 +34,16 @@ export function buildUniversalExtractorPrompt(text: string) {
     "  • Also check the DOCUMENT TEXT EXCERPT section below for company names.",
     "Empty array [] if none found. This field is optional — never guess.",
     "",
+    "── filming unit ──",
+    LOCATION_UNIT_RULE,
+    "Recognize SECOND UNIT, 2ND UNIT, UNIT 2, B UNIT, SEGUNDA UNIDAD, ZWEITE DREHEINHEIT and 2. EINHEIT; MAIN UNIT, FIRST UNIT, A UNIT, UNIDAD PRINCIPAL and HAUPTEINHEIT indicate the main crew. These must identify a filming unit, not a camera, scene number, building unit or Unit Base.",
+    "An exclusively second-unit callsheet must have documentUnit=other_unit even if its location blocks do not repeat the unit heading. A crew-directory mention of a second-unit director does not make this a second-unit callsheet.",
+    "In mixed documents classify every block separately. Never borrow a main-unit heading across an intervening second-unit heading or across table columns. If attribution is ambiguous, use uncertain.",
+    "unitEvidence: copy the governing unit heading/column AND this address block verbatim. Use an empty string only when no unit is named. Preserve this evidence for images and scanned PDFs as well as text.",
+    "Collect and label second-unit blocks for exclusion by the app; never silently relabel or merge them with main-unit locations.",
     "── locations (CRITICAL) ──",
     LOCATION_COLLECTION_RULE,
-    "Return each block with label, address, dayScope, dayDate and dayEvidence; addressCorrected only when applicable.",
+    "Return each block with label, address, dayScope, dayDate, dayEvidence, unitScope and unitEvidence; addressCorrected only when applicable.",
     "dayDate: YYYY-MM-DD only if the block or its governing heading explicitly supplies a complete date with year; otherwise empty string. Do not invent a date.",
     "dayEvidence: copy the address block together with the heading/column text that establishes its day, verbatim. Include its associated Maps link if present. Never copy a different day's heading as evidence.",
     "NEXT DAY, TOMORROW, PREVIOUS DAY, YESTERDAY, NÄCHSTER DREHTAG, FOLGETAG, PRÓXIMO DÍA and AYER refer to other days. Never use their addresses as current-day destinations.",
@@ -62,7 +69,7 @@ export function buildUniversalExtractorPrompt(text: string) {
     "• NEVER invent, complete, or guess addresses from your knowledge.",
     "• If a venue has no street address, preserve its printed name; include the city only when supplied by the document.",
     "• If only logistics are found, return those labeled blocks; never invent a filming location.",
-    "• If no location block at all is found, return [{\"label\":\"\",\"address\":\"No location found\",\"dayScope\":\"uncertain\",\"dayDate\":\"\",\"dayEvidence\":\"\"}].",
+    "• If no location block at all is found, return [{\"label\":\"\",\"address\":\"No location found\",\"dayScope\":\"uncertain\",\"dayDate\":\"\",\"dayEvidence\":\"\",\"unitScope\":\"unspecified\",\"unitEvidence\":\"\"}].",
     "",
     "addressCorrected (per location, for map lookup):",
     "• The SAME address made geocodable: fix obvious street-name typos",
@@ -85,7 +92,7 @@ export function buildUniversalExtractorPrompt(text: string) {
     "Never use those excluded sections as evidence for date, projectName, productionCompanies,",
     "locations, or addressCorrected. Names, postal addresses, emails and phone numbers in a",
     "contact/directory entry are not filming locations.",
-    "Only today's main unit is in scope. Collect filming and logistics blocks belonging to that",
+    "Only today's main unit is eligible for routes. Collect labeled filming and logistics blocks belonging to that",
     "shooting day outside the excluded sections; only the filming blocks are eligible trip destinations.",
     "",
     "CONTENT TO ANALYZE:",

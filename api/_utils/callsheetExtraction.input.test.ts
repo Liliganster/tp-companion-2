@@ -96,3 +96,20 @@ it('does not restore an address rejected by the hallucination filter', async () 
   expect(mocks.insert).not.toHaveBeenCalledWith('callsheet_results', expect.anything());
   expect(mocks.insert).not.toHaveBeenCalledWith('callsheet_locations', expect.anything());
 });
+
+it('excludes second-unit locations before persistence and keeps multiple main locations', async () => {
+  const block = (heading: string, address: string, unitScope: string) => ({ label: 'SET', address, dayScope: 'document_day', dayDate: '2026-09-10', dayEvidence: `${heading}\nSET: ${address}`, unitScope, unitEvidence: `${heading}\nSET: ${address}` });
+  const first = block('MAIN UNIT', 'Main Street 10, City', 'main_unit');
+  const second = block('2ND UNIT', 'Other Street 20, City', 'other_unit');
+  const third = block('MAIN UNIT', 'Third Street 30, City', 'main_unit');
+  const result = await extractMockLocations([first, second, third], [first, second, third].map(l => l.dayEvidence).join('\n'));
+  expect(result).toMatchObject({ ok: true, locations: [first.address, third.address] });
+  expect(mocks.insert).toHaveBeenCalledWith('callsheet_excluded_blocks', expect.arrayContaining([expect.objectContaining({ evidence_text: second.address, reason: 'other_filming_unit' })]));
+});
+
+it('sends a second-unit-only document to manual review without persisting a route', async () => {
+  const evidence = 'SEGUNDA UNIDAD\nSET: Other Street 20, City';
+  const result = await extractMockLocations([{ label: 'SET', address: 'Other Street 20, City', dayScope: 'document_day', dayDate: '2026-09-10', dayEvidence: evidence, unitScope: 'other_unit', unitEvidence: evidence }], evidence);
+  expect(result).toMatchObject({ ok: false, kind: 'invalid_extraction', message: expect.stringContaining('segunda unidad') });
+  expect(mocks.insert).not.toHaveBeenCalled();
+});

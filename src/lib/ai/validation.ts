@@ -6,6 +6,8 @@ const LabeledLocationSchema = z.union([
   z.object({
     label: z.string().trim().max(120).catch("").default(""),
     address: z.string().trim().min(1).max(300),
+    unitScope: z.enum(['main_unit', 'other_unit', 'unspecified', 'uncertain']).catch('uncertain').default('unspecified'),
+    unitEvidence: z.string().trim().max(3000).catch('').default(''),
     dayScope: z.enum(['document_day', 'other_day', 'uncertain']).catch('uncertain').default('uncertain'),
     dayDate: z.string().trim().max(10).catch('').default(''),
     dayEvidence: z.string().trim().max(3000).catch('').default(''),
@@ -19,6 +21,7 @@ const LabeledLocationSchema = z.union([
 export type LabeledLocation = { label: string; address: string; addressCorrected?: string };
 
 export const CallsheetExtractionResultSchema = z.object({
+  documentUnit: z.enum(['main_unit', 'other_unit', 'mixed', 'unspecified', 'uncertain']).catch('uncertain').default('unspecified'),
   date: dateIso,
   dateRaw: z.string().trim().max(120).nullable().optional(),
   dateYearInDocument: z.boolean().nullable().optional(),

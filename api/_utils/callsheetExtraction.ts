@@ -1,3 +1,4 @@
+import { selectMainUnitLocations } from "./callsheetUnitScope.js";
 /**
  * Pipeline de extracción de callsheets — módulo COMPARTIDO (Fase 2).
  *
@@ -211,11 +212,16 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
     log.warn({ jobId, reasons: daySelection.excluded.map(l => l.reason) }, 'callsheet_no_verified_document_day_locations');
     return { ok: false, kind: 'invalid_extraction', message: 'No se han podido confirmar localizaciones para el día de esta callsheet. Revisa la fecha y los bloques de otros días.' };
   }
-  // Later normalization, validation and Maps matching cannot borrow other-day text.
-  const daySourceText = daySelection.accepted.map(l => l.dayEvidence).join('\n');
-  const classified = classifyLabeledLocations(daySelection.accepted as any);
+  const unitSelection = selectMainUnitLocations(daySelection.accepted, validated.data.documentUnit, pdfText);
+  if (!unitSelection.accepted.length || unitSelection.excluded.some(l => l.reason !== 'other_filming_unit')) {
+    log.warn({ jobId, reasons: unitSelection.excluded.map(l => l.reason) }, 'callsheet_no_verified_main_unit_locations');
+    return { ok: false, kind: 'invalid_extraction', message: 'Este documento pertenece a segunda unidad o no permite separar las unidades con seguridad. Revisa el original y completa el viaje manualmente.' };
+  }
+  // Only eligible day AND unit text may influence downstream Maps matching.
+  const daySourceText = unitSelection.accepted.map(l => l.dayEvidence).join('\n');
+  const classified = classifyLabeledLocations(unitSelection.accepted as any);
   const filming = classified.filming;
-  const dropped = [...classified.dropped, ...daySelection.excluded];
+  const dropped = [...classified.dropped, ...daySelection.excluded, ...unitSelection.excluded];
   if (dropped.length > 0) {
     log.info({ jobId, dropped: dropped.map((d: any) => `${d.label}|${d.reason}`) }, "callsheet_labels_dropped");
     try {

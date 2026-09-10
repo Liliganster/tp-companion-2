@@ -10,3 +10,6 @@ export const LOCATION_DESTINATION_RULE =
 
 export const LOCATION_DAY_RULE =
   'First identify the shooting date of this callsheet, not its upload, issue or revision date. For each location, determine the day from its own block, enclosing heading, table column and cross-references. dayScope is document_day only with clear evidence that it belongs to that shooting day; other_day for previous/future days; uncertain when ambiguous. Never inherit the main date across an explicit other-day heading. Include all filming locations for the document day, not just the first.';
+
+export const LOCATION_UNIT_RULE =
+  'Determine the filming unit from the governing document header, section, column and cross-references, not from an address or crew contact. documentUnit is main_unit, other_unit, mixed, unspecified or uncertain. For each location unitScope is main_unit, other_unit, unspecified (no unit is named) or uncertain. Do not mix second-unit locations with the main crew. A document without unit labels remains eligible; absence of a unit label is not a reason to reject it.';

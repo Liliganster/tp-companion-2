@@ -45,3 +45,10 @@ describe("buildUniversalExtractorPrompt", () => {
     expect(prompt).not.toContain("Only analyze the FIRST 2 PAGES");
   });
 });
+
+it('shares the filming-unit contract between prompt and schema', () => {
+  expect(buildUniversalExtractorPrompt('')).toContain(extractionSchema.properties.documentUnit.description);
+  expect(extractionSchema.properties.locations.items.required).toContain('unitScope');
+  expect(extractionSchema.properties.locations.items.required).toContain('unitEvidence');
+  expect(buildUniversalExtractorPrompt('')).toContain('absence of a unit label is not a reason to reject it');
+});
