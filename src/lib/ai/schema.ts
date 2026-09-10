@@ -47,9 +47,13 @@ export const extractionSchema = {
           addressCorrected: {
             type: "string",
             description: "Deprecated: return an empty string. Preserve the original address without corrections or additions."
+          },
+          normalizedAddress: {
+            type: 'string',
+            description: 'Postal street address only, normalized from this block and its governing context: street and house number, postal code and city, country when printed. Reorder arbitrary layouts, join broken lines, separate street and number, expand unambiguous abbreviations. Exclude venue/set names, labels, access instructions, floors, contacts and notes. Never invent missing streets, house numbers, cities or postal codes. Do not turn a venue name into an address from memory. Return empty string when no street address is supplied; preserve the original venue/coordinates/link in address for review.'
           }
         },
-        required: ["label", "address", "role", "dayScope", "unitScope"]
+        required: ["label", "address", "normalizedAddress", "role", "dayScope", "unitScope"]
       },
       description: `${LOCATION_COLLECTION_RULE} ${LOCATION_DESTINATION_RULE}`
     }

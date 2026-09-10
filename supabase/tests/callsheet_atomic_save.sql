@@ -18,8 +18,11 @@ BEGIN
       jsonb_build_object('date_value','2026-09-10','project_value','Other Production',
         'extraction_state',CASE WHEN mode='needs_review' THEN 'needs_review' ELSE 'done' END,
         'review_reason',CASE WHEN mode='needs_review' THEN 'test review' ELSE NULL END,'model_output','{}'::jsonb),
-      '[{"address_raw":"Test Street 1","position":0,"selection_state":"confirmed"}]'::jsonb,'[]'::jsonb)
+      '[{"address_raw":"Studio - Test Street 1","formatted_address":"Test Street 1","position":0,"selection_state":"confirmed"}]'::jsonb,'[]'::jsonb)
     THEN RAISE EXCEPTION 'save_failed'; END IF;
+    IF NOT EXISTS (SELECT 1 FROM public.callsheet_locations WHERE job_id=job
+      AND formatted_address='Test Street 1' AND address_raw='Studio - Test Street 1')
+    THEN RAISE EXCEPTION 'normalized_address_not_persisted'; END IF;
     IF (SELECT status::text FROM public.callsheet_jobs WHERE id=job) IS DISTINCT FROM expected
     THEN RAISE EXCEPTION 'wrong_final_status %',mode; END IF;
     IF NOT public.finish_ai_quota(u,job,req,attempt,true) THEN RAISE EXCEPTION 'idempotency_failed'; END IF;

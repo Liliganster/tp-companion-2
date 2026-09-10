@@ -7,6 +7,7 @@ export function buildUniversalExtractorPrompt(text: string) {
     'date: the main shooting date printed on the FIRST PAGE, never the upload, creation, print or revision date. Return YYYY-MM-DD and dateRaw exactly as printed; dateYearInDocument says whether its year is printed. If the date or its year is missing, return an empty string instead of inventing it.',
     'projectName: the show or film title; use Untitled Project if absent. productionCompanies: named producers, or []. Empty metadata must not prevent collecting locations.',
     LOCATION_COLLECTION_RULE,
+    'For each location return address as the original evidence and normalizedAddress as the postal street address to use in the trip. Interpret the layout and context; there is no fixed source format. In normalizedAddress omit the venue name, scene name, floor, contact and access notes. Normalize only supported address components, never invent missing ones. For a venue without a printed street address return normalizedAddress empty, not the venue name.',
     LOCATION_ROLE_RULE,
     LOCATION_LABEL_RULE,
     LOCATION_DESTINATION_RULE,

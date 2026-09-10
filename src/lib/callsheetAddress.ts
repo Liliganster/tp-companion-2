@@ -20,3 +20,13 @@ export function callsheetAddressKey(raw: string): string {
   return normalizeCallsheetAddress(raw).toLocaleLowerCase('de')
     .replace(/ß/g, 'ss').replace(/[.,]/g, '').replace(/\s+/g, ' ').trim();
 }
+
+/** Postal components only; the establishment name is evidence, not a route address. */
+export function googlePostalAddress(components: { long_name: string; types: string[] }[] = []): string {
+  const component = (type: string) => components.find(c => c.types.includes(type))?.long_name ?? '';
+  const street = component('route');
+  if (!street) return '';
+  const city = component('locality') || component('postal_town') || component('administrative_area_level_3');
+  return [[street, component('street_number')].filter(Boolean).join(' '),
+    [component('postal_code'), city].filter(Boolean).join(' '), component('country')].filter(Boolean).join(', ');
+}

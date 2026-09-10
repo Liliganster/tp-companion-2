@@ -4,6 +4,7 @@
  */
 
 import { requireSupabaseUser, sendJson, supabaseGetGoogleConnection, supabaseUpsertGoogleConnection, supabaseDeleteGoogleConnection } from "./_utils/supabase.js";
+import { googlePostalAddress } from '../src/lib/callsheetAddress.js';
 import { enforceRateLimit } from "./_utils/rateLimit.js";
 import { buildGoogleAuthUrl, buildSignedState, verifySignedState, exchangeCodeForTokens, getGoogleAccountEmail, refreshAccessToken } from "./_utils/googleOAuth.js";
 import { cacheGet, cacheSet } from "./_utils/googleCache.js";
@@ -133,7 +134,7 @@ async function handleGeocode(req: any, res: any) {
   // Caché en Supabase (Fase 2): los rodajes repiten localizaciones semanas.
   const cacheKey = buildApiGeocodeCacheKey({ address, region, components });
   const cached = await cacheGet(cacheKey, GEOCODE_CACHE_TTL_MS);
-  if (cached && typeof cached.resultCount === 'number' && typeof cached.partialMatch === 'boolean') {
+  if (cached && typeof cached.postalAddress === 'string' && typeof cached.resultCount === 'number' && typeof cached.partialMatch === 'boolean') {
     res.statusCode = 200; res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify(cached)); return;
   }
@@ -157,7 +158,7 @@ async function handleGeocode(req: any, res: any) {
     res.end(JSON.stringify({ error: data.status ?? "UNKNOWN", message: data.error_message })); return;
   }
   const result = data.results[0];
-  const payload = { location: result?.geometry?.location ?? null, formattedAddress: result?.formatted_address ?? "", placeId: result?.place_id ?? "", partialMatch: result?.partial_match === true, resultCount: data.results.length, types: result?.types ?? [] };
+  const payload = { location: result?.geometry?.location ?? null, formattedAddress: result?.formatted_address ?? "", postalAddress: googlePostalAddress(result?.address_components), placeId: result?.place_id ?? "", partialMatch: result?.partial_match === true, resultCount: data.results.length, types: result?.types ?? [] };
   await cacheSet(cacheKey, "geocode_api", payload);
   res.statusCode = 200; res.setHeader("Content-Type", "application/json");
   res.end(JSON.stringify(payload));

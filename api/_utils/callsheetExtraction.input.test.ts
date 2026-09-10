@@ -165,3 +165,21 @@ it('does not report completion or create a draft after an atomic save error', as
   await expect(extractMockLocations([{label:'SET',address:'Opera'}],'Opera')).rejects.toThrow('reservation_lost');
   expect(mocks.insert).not.toHaveBeenCalled();
 });
+
+it('saves the interpreted postal address separately and returns it as the destination', async () => {
+ const bytes=new TextEncoder().encode('WAC Prater - 1020 Wien / Rustenschacherallee 9 - Eingang beim Tor');
+ mocks.download.mockResolvedValue({data:{size:bytes.length,arrayBuffer:async()=>bytes.buffer}});
+ mocks.text.mockResolvedValue({text:JSON.stringify({date:'2026-09-10',dateRaw:'10.09.2026',dateYearInDocument:true,projectName:'Test',locations:[{label:'SET',role:'filming',address:'WAC Prater - 1020 Wien / Rustenschacherallee 9 - Eingang beim Tor',normalizedAddress:'Rustenschacherallee 9, 1020 Wien'}]}),provider:'mock',model:'mock'});
+ const result=await run('normalized.txt');
+ expect(result).toMatchObject({ok:true,locations:['Rustenschacherallee 9, 1020 Wien']});
+ const rows=mocks.insert.mock.calls.find(([table])=>table==='callsheet_locations')?.[1] as any[];
+ expect(rows[0]).toMatchObject({address_raw:'WAC Prater - 1020 Wien / Rustenschacherallee 9 - Eingang beim Tor',formatted_address:'Rustenschacherallee 9, 1020 Wien'});
+});
+it('keeps an unresolved venue as evidence, not as a street destination',async()=>{
+ const bytes=new TextEncoder().encode('SET: Unspecified Theatre');
+ mocks.download.mockResolvedValue({data:{size:bytes.length,arrayBuffer:async()=>bytes.buffer}});
+ mocks.text.mockResolvedValue({text:JSON.stringify({date:'2026-09-10',dateRaw:'10.09.2026',dateYearInDocument:true,projectName:'Test',locations:[{label:'SET',role:'filming',address:'Unspecified Theatre',normalizedAddress:''}]}),provider:'mock',model:'mock'});
+ expect(await run('venue.txt')).toMatchObject({ok:true,status:'needs_review',locations:[]});
+ const rows=mocks.insert.mock.calls.find(([table])=>table==='callsheet_locations')?.[1] as any[];
+ expect(rows[0]).toMatchObject({address_raw:'Unspecified Theatre',formatted_address:'',selection_state:'candidate'});
+});

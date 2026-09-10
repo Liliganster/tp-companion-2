@@ -13,7 +13,7 @@ it('normalizes printed formats without inventing missing city or postcode',()=>{
 });
 it('deduplicates spelling variants before geocoding and uses a single resolved place for routing',async()=>{
  const request=vi.fn(async(url:unknown,init:RequestInit)=>{
-  if(url==='/api/google/geocode') return new Response(JSON.stringify({resultCount:1,partialMatch:false,placeId:'place-12',formattedAddress:'Josefsagasse 12, 1080 Wien, Austria',types:['street_address']}));
+  if(url==='/api/google/geocode') return new Response(JSON.stringify({resultCount:1,partialMatch:false,placeId:'place-12',postalAddress:'Josefsagasse 12, 1080 Wien, Austria',types:['street_address']}));
   expect(JSON.parse(String(init.body)).waypoints).toEqual(['place_id:place-12','48.2082, 16.3738']);
   return new Response(JSON.stringify({totalDistanceMeters:12300}));
  });
@@ -33,4 +33,17 @@ it('preserves different street numbers and original order without network access
 it('preserves useful locations when distance calculation fails',async()=>{
  vi.stubGlobal('fetch',vi.fn(async()=>{throw new Error('offline')}));
  expect(await optimizeCallsheetLocationsAndDistance({profile:{baseAddress:'Base 1'},rawLocations:['Opera'],accessToken:'mock'})).toEqual({locations:['Opera'],distanceKm:null});
+});
+
+it('builds a postal address without the establishment name',async()=>{
+ const {googlePostalAddress}=await import('./callsheetAddress');
+ expect(googlePostalAddress([
+  {long_name:'WAC Prater',types:['establishment']},
+  {long_name:'Rustenschacherallee',types:['route']},
+  {long_name:'9',types:['street_number']},
+  {long_name:'1020',types:['postal_code']},
+  {long_name:'Wien',types:['locality']},
+  {long_name:'Austria',types:['country']}
+ ])).toBe('Rustenschacherallee 9, 1020 Wien, Austria');
+ expect(googlePostalAddress([{long_name:'Theatre',types:['establishment']}])).toBe('');
 });

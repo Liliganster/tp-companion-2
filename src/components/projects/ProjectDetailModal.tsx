@@ -328,7 +328,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
         }
 
         const rawLocations = (locs ?? [])
-          .map((l: any) => (l?.address_raw || l?.name_raw || "").toString())
+          .map((l: any) => (l?.formatted_address ?? l?.address_raw ?? "").toString())
           .map((s: string) => s.trim())
           .filter(Boolean);
 

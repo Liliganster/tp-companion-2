@@ -593,7 +593,7 @@ export default function Trips() {
           <div className="flex items-center gap-2"><Checkbox disabled={deletingSelected} checked={selectedIds.has(trip.id)} onCheckedChange={() => toggleSelect(trip.id)} aria-label={tf("trips.selectTrip", { id: name })} /><Badge variant="outline" className="text-warning">{job.status === "needs_review" ? t("callsheetReview.title") : t("bulk.statusFailed")}</Badge></div>
           <p className="my-2 break-all">{name}</p>
           <p className="text-sm text-muted-foreground">{job.needs_review_reason}</p>
-          {(job.callsheet_locations ?? []).slice().sort((a,b) => (a.position ?? 0)-(b.position ?? 0)).map((location,index) => <p key={index} className="text-sm">{location.label_source}: {location.address_raw} — {location.selection_state === 'candidate' ? t('callsheetReview.title') : t('bulk.statusReady')}{location.review_reason ? `: ${location.review_reason}` : ''}</p>)}
+          {(job.callsheet_locations ?? []).slice().sort((a,b) => (a.position ?? 0)-(b.position ?? 0)).map((location,index) => <p key={index} className="text-sm">{location.label_source}: {location.formatted_address ?? location.address_raw} — {location.selection_state === 'candidate' ? t('callsheetReview.title') : t('bulk.statusReady')}{location.review_reason ? `: ${location.review_reason}` : ''}</p>)}
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => { setSelectedTrip(trip); setDetailModalOpen(true); }}>{t("callsheetReview.open")}</Button>
             <Button variant="outline" onClick={() => handleEditTrip(trip)}>{t("callsheetReview.edit")}</Button>
@@ -801,7 +801,7 @@ export default function Trips() {
                 <TableCell><Checkbox disabled={deletingSelected} checked={selectedIds.has(trip.id)} onCheckedChange={() => toggleSelect(trip.id)} aria-label={tf("trips.selectTrip", { id: name })} /></TableCell>
                 <TableCell><Badge variant="outline" className="text-warning">{job.status === "needs_review" ? t("callsheetReview.title") : t("bulk.statusFailed")}</Badge></TableCell>
                 <TableCell colSpan={2}><span className="break-all">{name}</span><p className="text-sm text-muted-foreground">{job.needs_review_reason}</p>
-                  {(job.callsheet_locations ?? []).slice().sort((a,b) => (a.position ?? 0)-(b.position ?? 0)).map((location,index) => <p key={index} className="text-sm">{location.label_source}: {location.address_raw} — {location.selection_state === 'candidate' ? t('callsheetReview.title') : t('bulk.statusReady')}{location.review_reason ? `: ${location.review_reason}` : ''}</p>)}</TableCell>
+                  {(job.callsheet_locations ?? []).slice().sort((a,b) => (a.position ?? 0)-(b.position ?? 0)).map((location,index) => <p key={index} className="text-sm">{location.label_source}: {location.formatted_address ?? location.address_raw} — {location.selection_state === 'candidate' ? t('callsheetReview.title') : t('bulk.statusReady')}{location.review_reason ? `: ${location.review_reason}` : ''}</p>)}</TableCell>
                 <TableCell colSpan={7}>
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={() => { setSelectedTrip(trip); setDetailModalOpen(true); }}>{t("callsheetReview.open")}</Button>

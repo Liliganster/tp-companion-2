@@ -1,4 +1,5 @@
 import { selectCallsheetLocations } from './callsheetSelection.js';
+import { normalizeCallsheetAddress } from '../../src/lib/callsheetAddress.js';
 /**
  * Pipeline de extracción de callsheets — módulo COMPARTIDO (Fase 2).
  *
@@ -187,6 +188,7 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
   const reviewReason = selection.reviewReasons.join(' ') || null;
   const locs = selection.filming.map(location => ({
     address_raw: location.address, name_raw: null,
+    formatted_address: normalizeCallsheetAddress(location.normalizedAddress ?? location.address),
     label_source: location.label, position: location.position,
     selection_state: location.selection_state, review_reason: location.review_reason,
     evidence_text: `${location.label}: ${location.address}`,
@@ -212,7 +214,7 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
   log.info({ jobId, status, retained: locs.length, excluded: selection.excluded.length }, 'callsheet_committed');
   return {
     ok: true, status, reviewReason, date: resolvedDate,
-    projectName: validated.data.projectName, locations: locs.map(l => l.address_raw),
+    projectName: validated.data.projectName, locations: locs.map(l => l.formatted_address).filter(Boolean),
     aiProvider: aiResult.provider, aiModel: aiResult.model, aiVendor: aiResult.vendor,
     aiDurationMs, geocodingDurationMs: null, locationsCount: locs.length,
   };

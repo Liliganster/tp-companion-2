@@ -6,6 +6,7 @@ const LabeledLocationSchema = z.union([
   z.object({
     label: z.string().trim().max(120).catch("").default(""),
     address: z.string().trim().max(300),
+    normalizedAddress: z.string().trim().max(300).optional().catch(''),
     role: z.enum(['filming', 'logistics', 'other', 'uncertain']).optional(),
     reviewReason: z.string().trim().max(1000).catch('').default(''),
     unitScope: z.enum(['main_unit', 'other_unit', 'unspecified', 'uncertain']).catch('uncertain').default('unspecified'),

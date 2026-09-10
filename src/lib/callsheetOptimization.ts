@@ -94,9 +94,9 @@ export async function optimizeCallsheetLocationsAndDistance(args: {
           body: JSON.stringify({ address, region }),
         }, args.geocodeTimeoutMs ?? 8_000);
         if (res.ok && data?.resultCount === 1 && data?.partialMatch === false &&
-            data?.placeId && data?.formattedAddress &&
+            data?.placeId && data?.postalAddress &&
             ['street_address', 'premise', 'subpremise', 'point_of_interest', 'establishment', 'park', 'intersection'].some(t => data.types?.includes(t))) {
-          display = data.formattedAddress;
+          display = data.postalAddress;
           waypoint = `place_id:${data.placeId}`;
           identity = waypoint;
         }

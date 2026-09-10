@@ -1412,8 +1412,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
 
       const rawLocations = (locs ?? [])
         .map((l: any) => {
-          // Show the document text, not a Maps search result.
-          return String(l?.name_raw || l?.address_raw || "").trim();
+          return String(l?.formatted_address ?? l?.address_raw ?? "").trim();
         })
         .filter(Boolean);
 
