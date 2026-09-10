@@ -6,6 +6,14 @@ import { CallsheetExtractionResultSchema } from './validation';
 import { classifyLabeledLocations } from '../../../api/_utils/callsheetLabels';
 
 describe("buildUniversalExtractorPrompt", () => {
+  it('anchors every location to the first-page shooting date while reading all pages', () => {
+    const prompt = buildUniversalExtractorPrompt('');
+    expect(prompt).toContain('main shooting date printed on the FIRST PAGE');
+    expect(prompt).toContain('Search ALL pages');
+    expect(prompt).toContain('A location need not repeat that date');
+    expect(extractionSchema.properties.date.description).toContain('FIRST PAGE');
+    expect(extractionSchema.properties.locations.items.properties.dayScope.description).toContain('FIRST PAGE');
+  });
   it('collects logistics without the previous instruction to skip their addresses', () => {
     const prompt = buildUniversalExtractorPrompt('[PDF ATTACHED]');
     expect(prompt).toContain('including filming AND logistics');

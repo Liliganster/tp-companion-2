@@ -1,5 +1,5 @@
+import { containsEvidence, hasDocumentEvidence } from './callsheetEvidence.js';
 type Candidate = { label?: string; address?: string; dayEvidence?: string; unitScope?: string; unitEvidence?: string };
-const normalize = (s: string) => s.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
 const OTHER_UNIT = /\b(?:(?:second|2nd|2\.?|ii|b)[\s-]+unit|unit[\s-]+(?:2|ii|b)|segunda[\s-]+unidad|(?:zweite|2\.?)[\s-]+(?:dreh)?einheit)\b/i;
 const MAIN_UNIT = /\b(?:(?:main|first|1st|1\.?|a)[\s-]+unit|unit[\s-]+(?:1|a)|(?:primera|principal)[\s-]+unidad|unidad[\s-]+principal|(?:erste|1\.?)[\s-]+(?:dreh)?einheit|haupt(?:dreh)?einheit)\b/i;
 const unitContext = (location: Candidate) => {
@@ -25,7 +25,7 @@ export function selectMainUnitLocations<T extends Candidate>(locations: T[], doc
     if (documentUnit === 'other_unit' || scope === 'other_unit' || OTHER_UNIT.test(context)) reason = 'other_filming_unit';
     else if (documentUnit === 'uncertain' || scope === 'uncertain') reason = 'filming_unit_uncertain';
     else if (scope === 'main_unit') {
-      if (!MAIN_UNIT.test(evidence) || !normalize(evidence).includes(normalize(location.address ?? '')) || (sourceText.trim() && !normalize(sourceText).includes(normalize(evidence)))) reason = 'filming_unit_evidence_invalid';
+      if (!MAIN_UNIT.test(evidence) || !containsEvidence(evidence, location.address ?? '') || (sourceText.trim() && !hasDocumentEvidence(sourceText, evidence, location.address ?? ''))) reason = 'filming_unit_evidence_invalid';
     } else if (scope !== 'unspecified' || mixed) reason = 'filming_unit_uncertain';
     if (reason) excluded.push({ ...location, reason });
     else accepted.push(location);

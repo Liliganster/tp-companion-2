@@ -71,6 +71,14 @@ const extractMockLocations = async (locations: object[], source: string) => {
   return run('review.txt');
 };
 
+it('uses the printed shooting date rather than upload date and accepts a later-page location without a repeated date', async () => {
+  const address = 'Example Street 10, City';
+  const source = `PAGE 1\nSHOOT 10.09.2026\nCrew call 06:00\nPAGE 2\nScene list\nPAGE 3\nMOTIV: ${address}`;
+  const result = await extractMockLocations([{ label: 'MOTIV', address, dayScope: 'document_day', dayDate: '', dayEvidence: `SHOOT 10.09.2026\nMOTIV: ${address}` }], source);
+  expect(result).toMatchObject({ ok: true, locations: [address] });
+  expect(mocks.insert).toHaveBeenCalledWith('callsheet_results', expect.objectContaining({ date_value: '2026-09-10' }));
+});
+
 it('does not replace the original street with a model correction retaining the same number', async () => {
   const evidence = 'SHOOT 10.09.2026 MOTIV: Example Street 10, City';
   const result = await extractMockLocations([{ label: 'MOTIV', address: 'Example Street 10, City', addressCorrected: 'Invented Avenue 10, Elsewhere', dayScope: 'document_day', dayDate: '2026-09-10', dayEvidence: evidence }], evidence);
