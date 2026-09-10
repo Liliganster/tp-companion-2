@@ -23,7 +23,6 @@ import { extractionSchema } from "../../src/lib/ai/schema.js";
 import { CallsheetExtractionResultSchema } from "../../src/lib/ai/validation.js";
 import {
   buildCallsheetPdfHintText,
-  normalizeExtractedCallsheetLocations,
   filterHallucinatedLocations,
   postProcessLocationsForGeocoding,
 } from "./callsheetLocationHints.js";
@@ -207,7 +206,8 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
     referenceIso,
   });
   const daySelection = selectDocumentDayLocations(validated.data.locations as any[], resolvedDate, pdfText);
-  if (!daySelection.accepted.length) {
+  const uncertainCandidates = daySelection.excluded.filter(l => !['other_shooting_day', 'different_shooting_date'].includes(l.reason));
+  if (!daySelection.accepted.length || uncertainCandidates.length > 0) {
     log.warn({ jobId, reasons: daySelection.excluded.map(l => l.reason) }, 'callsheet_no_verified_document_day_locations');
     return { ok: false, kind: 'invalid_extraction', message: 'No se han podido confirmar localizaciones para el día de esta callsheet. Revisa la fecha y los bloques de otros días.' };
   }
@@ -228,29 +228,12 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
   }
   const filmingAddresses = filming.map((f: any) => f.address);
 
-  // Dirección corregida (Fase 2): el verbatim es la EVIDENCIA (evidence_text);
-  // para geocodificar y mostrar se usa la corrección de erratas del modelo
-  // ('Matiellistrasse' impreso → calle real), con guarda determinista: la
-  // corrección debe conservar todos los números del verbatim (no puede
-  // cambiar de sitio ni inventar portales).
-  const correctedByAddress = new Map<string, string>();
-  for (const f of filming as any[]) {
-    const corrected = String(f?.addressCorrected ?? "").trim();
-    if (!corrected || corrected === f.address) continue;
-    const digits = String(f.address).match(/\d+/g) ?? [];
-    if (digits.every((d) => corrected.includes(d))) correctedByAddress.set(f.address, corrected);
-  }
-
-  const normalizedAiLocations = normalizeExtractedCallsheetLocations({
-    locations: filmingAddresses,
-    pdfText: daySourceText,
-  });
   // Evidence: etiqueta + dirección literales del documento
   const evidenceLocations = filming.map((f: any) => (f.label ? `${f.label}: ${f.address}` : f.address));
   const locationLabels = filming.map((f: any) => f.label);
   const extracted = {
     ...validated.data,
-    locations: normalizedAiLocations.length > 0 ? normalizedAiLocations : filmingAddresses,
+    locations: filmingAddresses,
   };
   if (extracted.locations.length === 0) extracted.locations = ["No location found"];
 
@@ -260,15 +243,17 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
     locations: extracted.locations,
     pdfText: daySourceText,
   });
-  extracted.locations = verifiedLocations.length > 0 ? verifiedLocations : extracted.locations;
+  if (!filming.length || verifiedLocations.length !== extracted.locations.length) {
+    return { ok: false, kind: 'invalid_extraction', message: 'Hay localizaciones sin respaldo suficiente en el documento. Revisa el original y completa los datos manualmente.' };
+  }
+  extracted.locations = verifiedLocations;
   log.info(
     { jobId, aiLocs: validated.data.locations.length, verified: verifiedLocations.length, final: extracted.locations.length },
     "callsheet_hallucination_filter",
   );
 
-  // La versión de trabajo de cada localización: corregida si el modelo dio
-  // una corrección válida; el verbatim queda en evidence_text.
-  const displayLocations = extracted.locations.map((locStr) => correctedByAddress.get(locStr) ?? locStr);
+  // Preserve the documented text; never substitute a guessed street or city.
+  const displayLocations = extracted.locations;
 
   // Normalización por código para geocodificar (Bezirk, abreviaturas)
   const geocodingLocations = postProcessLocationsForGeocoding(displayLocations);

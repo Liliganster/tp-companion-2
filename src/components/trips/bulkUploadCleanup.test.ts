@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { getBulkDuplicateCleanupIds, getBulkSessionCleanupIds } from "./bulkUploadCleanup";
 
 describe("bulkUploadCleanup", () => {
-  it("cleans stale duplicate jobs that were never persisted", () => {
+  it("preserves review documents even when a new upload has the same name", () => {
     const cleanupIds = getBulkDuplicateCleanupIds({
       existingJobs: [
         { id: "job-done-unsaved", status: "done" },
@@ -18,10 +18,6 @@ describe("bulkUploadCleanup", () => {
     });
 
     expect(cleanupIds).toEqual([
-      "job-done-unsaved",
-      "job-out-of-quota",
-      "job-failed",
-      "job-needs-review",
       "job-cancelled",
     ]);
   });

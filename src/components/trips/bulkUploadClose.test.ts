@@ -22,7 +22,7 @@ describe("getBulkCloseCancellation", () => {
     expect(result.shouldShowBackgroundToast).toBe(true);
   });
 
-  it("cancels non-terminal queued/failed jobs when closing from review", () => {
+  it("preserves failed jobs for manual review when closing", () => {
     const result = getBulkCloseCancellation({
       activeJobIds: ["job-1", "job-2"],
       aiLoading: false,
@@ -36,7 +36,7 @@ describe("getBulkCloseCancellation", () => {
       },
     });
 
-    expect(result.jobsToCancel).toEqual(["job-4", "job-2"]);
+    expect(result.jobsToCancel).toEqual(["job-2"]);
     // processing sigue vivo también al cerrar desde revisión.
     expect(result.backgroundJobIds).toEqual(["job-3"]);
     expect(result.shouldShowCancellationToast).toBe(true);

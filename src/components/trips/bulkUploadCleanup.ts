@@ -5,9 +5,6 @@ export type BulkExistingCallsheetJob = {
 
 const TERMINAL_BULK_DUPLICATE_STATUSES = new Set([
   "cancelled",
-  "failed",
-  "needs_review",
-  "out_of_quota",
 ]);
 
 function uniqueIds(ids: Array<string | null | undefined>) {
@@ -32,7 +29,6 @@ export function getBulkDuplicateCleanupIds(args: {
       const status = String(job.status ?? "").trim();
       if (!id || persistedJobIds.has(id)) return [];
       if (TERMINAL_BULK_DUPLICATE_STATUSES.has(status)) return [id];
-      if (status === "done") return [id];
       return [];
     }),
   );

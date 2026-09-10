@@ -2,6 +2,13 @@ import type { I18nKey } from "./es";
 
 // Cargado perezosamente por src/lib/i18n.ts (chunk separado del bundle principal).
 export const en: Record<I18nKey, string> = {
+  "callsheetReview.title": "Review",
+  "callsheetReview.description": "The extraction could not be confirmed. Open the original document and complete the data manually. It will not enter reports or calculations until you save the trip.",
+  "callsheetReview.open": "View document",
+  "callsheetReview.edit": "Complete trip",
+  "callsheetReview.loadError": "Documents awaiting review could not be loaded. Please try again.",
+  "callsheetReview.retry": "Retry",
+
   "updates.available": "New version available",
   "updates.description": "Update once you have saved your work. Other tabs will stay open.",
   "updates.action": "Update",

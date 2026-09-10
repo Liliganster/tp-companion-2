@@ -16,7 +16,7 @@ type GetBulkCloseCancellationArgs = {
  * Qué hacer con los jobs de la sesión cuando se cierra el modal.
  *
  * Regla: cerrar el modal NUNCA destruye trabajo de IA ya en marcha o terminado.
- * - `created`/`queued` (aún no consumen IA) y `failed` → se cancelan y limpian.
+ * - `created`/`queued` (aún no consumen IA) → se cancelan y limpian.
  * - `processing`/`done` → siguen su curso en el servidor; al reabrir el modal
  *   se recuperan para revisión (resurrección).
  */
@@ -30,7 +30,7 @@ export function getBulkCloseCancellation(args: GetBulkCloseCancellationArgs) {
     // Sin estado conocido: solo es seguro cancelarlo mientras se está subiendo
     // (jobs "created" de esta sesión que aún no llegaron a la cola).
     if (!status) return aiLoading;
-    return status === "created" || status === "queued" || status === "failed";
+    return status === "created" || status === "queued";
   });
 
   const backgroundJobIds = sessionJobIds.filter((id) => {

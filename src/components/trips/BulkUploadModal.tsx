@@ -1295,7 +1295,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
       aiAbortControllerRef.current = null;
       scheduledProcessJobIdsRef.current.clear();
       optimizeChainRef.current = Promise.resolve();
-      // Solo se cancelan/limpian jobs que aún no consumen IA (created/queued/failed).
+      // Solo se cancelan/limpian jobs que aún no consumen IA (created/queued).
       // Los processing/done siguen en el servidor y se recuperan al reabrir.
       void cancelCallsheetJobs(jobsToCancel);
       void cleanupTransientCallsheetJobs(jobsToCancel);
@@ -1410,12 +1410,8 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
 
       const rawLocations = (locs ?? [])
         .map((l: any) => {
-          // El enlace de Maps del propio documento es la verdad: si el worker
-          // lo resolvió (geocode_quality = maps_link), su nombre/direción gana
-          // al texto crudo de la callsheet.
-          const linkResolved =
-            String(l?.geocode_quality ?? "") === "maps_link" ? String(l?.formatted_address ?? "").trim() : "";
-          return (linkResolved || String(l?.name_raw || l?.address_raw || l?.formatted_address || "")).trim();
+          // Show the document text, not a Maps search result.
+          return String(l?.name_raw || l?.address_raw || "").trim();
         })
         .filter(Boolean);
 

@@ -67,7 +67,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
     });
 
     if (outcome.ok === false) {
-      await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", needs_review_reason: outcome.message }).eq("id", jobId).eq("user_id", user.id).eq("status", "processing");
+      await supabaseAdmin.from("callsheet_jobs").update({ status: outcome.kind === "invalid_extraction" ? "needs_review" : "failed", needs_review_reason: outcome.message }).eq("id", jobId).eq("user_id", user.id).eq("status", "processing");
       if (outcome.kind === "download_failed") {
         return sendJson(res, 500, { error: "download_failed", message: outcome.message });
       }

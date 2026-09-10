@@ -173,6 +173,7 @@ interface TripData {
   otherExpenses?: number | null;
   fuelAmount?: number | null;
   documents?: Trip["documents"];
+  callsheet_job_id?: string;
 }
 
 interface AddTripModalProps {
@@ -182,10 +183,11 @@ interface AddTripModalProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   previousDestination?: string;
-  onSave?: (trip: Required<Pick<TripData, "id" | "date" | "route" | "project" | "purpose" | "passengers" | "distance">> & Pick<TripData, "fuelLiters" | "evKwhUsed" | "ratePerKmOverride" | "specialOrigin" | "projectId" | "tollAmount" | "parkingAmount" | "otherExpenses" | "fuelAmount" | "documents">) => void;
+  onViewDocument?: () => void;
+  onSave?: (trip: Required<Pick<TripData, "id" | "date" | "route" | "project" | "purpose" | "passengers" | "distance">> & Pick<TripData, "fuelLiters" | "evKwhUsed" | "ratePerKmOverride" | "specialOrigin" | "projectId" | "tollAmount" | "parkingAmount" | "otherExpenses" | "fuelAmount" | "documents" | "callsheet_job_id">) => void | boolean | Promise<void | boolean>;
 }
 
-export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previousDestination, onSave }: AddTripModalProps) {
+export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previousDestination, onSave, onViewDocument }: AddTripModalProps) {
   const { profile } = useUserProfile();
   const { user, getAccessToken } = useAuth();
   const { limits } = usePlan();
@@ -193,6 +195,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
   const { trips } = useTrips();
   const { t, tf, locale } = useI18n();
   const isEditing = Boolean(trip);
+  const [savingTrip, setSavingTrip] = useState(false);
   const seedTrip = trip ?? prefill ?? null;
   const [projectOpen, setProjectOpen] = useState(false);
   const settingsRateLabel = useMemo(() => profile.ratePerKm, [profile.ratePerKm]);
@@ -852,6 +855,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
 
         <div className="px-6 pb-6">
 
+        {onViewDocument && (trip?.documents?.length ?? 0) > 0 && <Button type="button" variant="outline" className="mb-4" onClick={onViewDocument}>{t("callsheetReview.open")}</Button>}
         <div className="grid gap-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
@@ -1367,8 +1371,12 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
               <Button
                 variant="save"
                 className="flex-1"
-                disabled={deletingReceipt}
+                disabled={deletingReceipt || savingTrip}
               onClick={async (event) => {
+                event.preventDefault();
+                if (savingTrip) return;
+                setSavingTrip(true);
+                try {
                 const distanceValue = parseLocaleNumber(distance) ?? 0;
                 const passengersValue = parseLocaleNumber(passengers) ?? 0;
                 const rateOverride = parseLocaleNumber(tripRate);
@@ -1441,7 +1449,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                 // 3. Save Trip
                 const fuelValue = parseLocaleNumber(fuelAmount);
                 
-                onSave?.({
+                const saved = await onSave?.({
                   id,
                   date,
                   route: routeValues,
@@ -1458,7 +1466,15 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                   otherExpenses: otherValue == null ? null : Math.max(0, otherValue),
                   fuelAmount: fuelValue == null ? null : Math.max(0, fuelValue),
                   documents: existingDocuments,
+                  callsheet_job_id: trip?.callsheet_job_id,
                 });
+                if (saved !== false) setIsOpen(false);
+                } catch (error) {
+                  logger.warn("Trip save failed", error);
+                  toast.error(t("trips.toastTripSaveFailedBody"));
+                } finally {
+                  setSavingTrip(false);
+                }
               }}
             >
               {isEditing ? t("tripModal.update") : t("tripModal.save")}

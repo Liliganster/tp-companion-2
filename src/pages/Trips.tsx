@@ -1,3 +1,5 @@
+import { useCallsheetReview } from "@/hooks/use-callsheet-review";
+import { getReviewCallsheetDrafts } from "@/lib/callsheetReview";
 import { useEffect, useMemo, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
@@ -88,6 +90,9 @@ export default function Trips() {
   // ... imports
   const { projects } = useProjects();
   const { trips, addTrip, updateTrip, deleteTrip } = useTrips();
+
+  const reviewQuery = useCallsheetReview();
+  const reviewDrafts = useMemo(() => getReviewCallsheetDrafts(reviewQuery.data ?? [], trips, projects), [reviewQuery.data, trips, projects]);
 
   const uniqueProjects = useMemo(() => {
     const fromTrips = new Set(trips.map((t) => t.project).filter(Boolean));
@@ -574,8 +579,23 @@ export default function Trips() {
         {tripsFilters}
       </div>
 
+      {reviewQuery.isError && <div role="alert" className="glass-card p-4 text-warning">
+        {t("callsheetReview.loadError")}
+        <Button variant="outline" onClick={() => void reviewQuery.refetch()}>{t("callsheetReview.retry")}</Button>
+      </div>}
+      {reviewDrafts.length > 0 && <p className="text-sm text-muted-foreground">{t("callsheetReview.description")}</p>}
+
       {/* Mobile & Tablet Cards View */}
       <div className="lg:hidden space-y-3 animate-fade-in animation-delay-200">
+        {reviewDrafts.map(({ trip, name }) => <div key={trip.id} className="glass-card p-4 border border-warning/40">
+          <Badge variant="outline" className="text-warning">{t("callsheetReview.title")}</Badge>
+          <p className="my-2 break-all">{name}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => { setSelectedTrip(trip); setDetailModalOpen(true); }}>{t("callsheetReview.open")}</Button>
+            <Button variant="outline" onClick={() => handleEditTrip(trip)}>{t("callsheetReview.edit")}</Button>
+          </div>
+        </div>)}
+
         {visibleTrips.map((trip, index) => <div key={trip.id} className={`glass-card p-3 sm:p-4 animate-slide-up ${selectedIds.has(trip.id) ? 'ring-2 ring-primary' : ''}`} style={{
           animationDelay: `${index * 50}ms`
         }}>
@@ -772,6 +792,17 @@ export default function Trips() {
               </TableRow>
             </TableHeader>
             <TableBody>
+              {reviewDrafts.map(({ trip, name }) => <TableRow key={trip.id} className="bg-warning/5">
+                <TableCell />
+                <TableCell><Badge variant="outline" className="text-warning">{t("callsheetReview.title")}</Badge></TableCell>
+                <TableCell colSpan={2}><span className="break-all">{name}</span></TableCell>
+                <TableCell colSpan={7}>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => { setSelectedTrip(trip); setDetailModalOpen(true); }}>{t("callsheetReview.open")}</Button>
+                    <Button variant="outline" onClick={() => handleEditTrip(trip)}>{t("callsheetReview.edit")}</Button>
+                  </div>
+                </TableCell>
+              </TableRow>)}
               {visibleTrips.map((trip, index) => <TableRow
                 key={trip.id}
                 className={`animate-slide-up cursor-pointer [&>td:nth-child(9)]:text-success ${selectedIds.has(trip.id) ? 'bg-primary/10' : ''}`}
@@ -955,6 +986,7 @@ export default function Trips() {
       {/* Edit Trip Modal */}
       <AddTripModal
         trip={tripToEdit}
+        onViewDocument={() => { setSelectedTrip(tripToEdit); setDetailModalOpen(true); }}
         open={editModalOpen}
         onOpenChange={setEditModalOpen}
         onSave={handleSaveTrip}
