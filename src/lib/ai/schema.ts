@@ -1,5 +1,16 @@
 import { LOCATION_COLLECTION_RULE, LOCATION_DESTINATION_RULE, LOCATION_LABEL_RULE, LOCATION_DAY_RULE, LOCATION_UNIT_RULE } from './locationPolicy.js';
 
+// Strict schema keywords: policy constants belong in descriptions, never as
+// extra API fields. This catches malformed nested schemas during typecheck.
+type ExtractionSchemaNode = {
+  type: 'object' | 'array' | 'string' | 'boolean';
+  description?: string;
+  enum?: string[];
+  properties?: Record<string, ExtractionSchemaNode>;
+  items?: ExtractionSchemaNode;
+  required?: string[];
+};
+
 export const extractionSchema = {
   type: "object",
   properties: {
@@ -20,7 +31,7 @@ export const extractionSchema = {
         properties: {
           unitScope: { type: "string", enum: ["main_unit", "other_unit", "unspecified", "uncertain"], description: LOCATION_UNIT_RULE },
           unitEvidence: { type: "string", description: "Verbatim governing unit heading or table column together with THIS address block. Empty string only if no unit is named. Never borrow the heading of a different unit." },
-          dayScope: { type: "string", enum: ["document_day", "other_day", "uncertain"], description: LOCATION_DAY_RULE, LOCATION_UNIT_RULE },
+          dayScope: { type: "string", enum: ["document_day", "other_day", "uncertain"], description: LOCATION_DAY_RULE },
           dayDate: { type: "string", description: "Explicit complete date governing this block, YYYY-MM-DD; empty string if the block/heading does not print a full date with year. Never infer it from upload time." },
           dayEvidence: { type: "string", description: "Verbatim address block plus its governing day heading/column, including the associated Maps link if printed. Preserve the evidence that relates THIS location to its day." },
           label: {
@@ -42,4 +53,4 @@ export const extractionSchema = {
     }
   },
   required: ["documentUnit", "date", "projectName", "productionCompanies", "locations"]
-};
+} satisfies ExtractionSchemaNode;
