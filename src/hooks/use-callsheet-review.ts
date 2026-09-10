@@ -15,11 +15,11 @@ export function useCallsheetReview() {
       // Supabase caps a response: paginate so large batches are never omitted.
       for (let offset = 0; ; offset += 500) {
         const { data, error } = await supabase.from('callsheet_jobs')
-          .select('id, storage_path, created_at, project_id, status, needs_review_reason')
+          .select('id, storage_path, created_at, project_id, status, needs_review_reason, callsheet_results(date_value, project_value), callsheet_locations(address_raw, name_raw, page)')
           .eq('user_id', user!.id).in('status', ['failed', 'needs_review', 'out_of_quota'])
           .order('created_at').order('id').range(offset, offset + 499);
         if (error) throw error;
-        jobs.push(...(data ?? []));
+        jobs.push(...(data ?? []).map(job => ({ ...job, callsheet_results: Array.isArray(job.callsheet_results) ? job.callsheet_results[0] ?? null : job.callsheet_results })));
         if ((data?.length ?? 0) < 500) return jobs;
       }
     },

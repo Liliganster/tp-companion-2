@@ -9,7 +9,7 @@ describe("buildUniversalExtractorPrompt", () => {
   it('anchors every location to the first-page shooting date while reading all pages', () => {
     const prompt = buildUniversalExtractorPrompt('');
     expect(prompt).toContain('main shooting date printed on the FIRST PAGE');
-    expect(prompt).toContain('Search ALL pages');
+    expect(prompt).toContain('Read ALL pages');
     expect(prompt).toContain('A location need not repeat that date');
     expect(extractionSchema.properties.date.description).toContain('FIRST PAGE');
     expect(extractionSchema.properties.locations.items.properties.dayScope.description).toContain('FIRST PAGE');
@@ -45,11 +45,10 @@ describe("buildUniversalExtractorPrompt", () => {
   it("analyzes the full document while excluding future-day, appendix and contact sections", () => {
     const prompt = buildUniversalExtractorPrompt("[PDF ATTACHED]");
 
-    expect(prompt).toContain("Analyze the full document");
+    expect(prompt).toContain("Read ALL pages");
     expect(prompt).toContain("NÄCHSTER DREHTAG");
-    expect(prompt).toContain("APPENDIX");
-    expect(prompt).toContain("CONTACT LIST");
-    expect(prompt).toContain("Never use those excluded sections as evidence");
+    expect(prompt).toContain("Contacts, hospitals");
+    expect(prompt).toContain("govern their own blocks");
     expect(prompt).not.toContain("Only analyze the FIRST 2 PAGES");
   });
 });
@@ -57,6 +56,6 @@ describe("buildUniversalExtractorPrompt", () => {
 it('shares the filming-unit contract between prompt and schema', () => {
   expect(buildUniversalExtractorPrompt('')).toContain(extractionSchema.properties.documentUnit.description);
   expect(extractionSchema.properties.locations.items.required).toContain('unitScope');
-  expect(extractionSchema.properties.locations.items.required).toContain('unitEvidence');
+  expect(extractionSchema.properties.locations.items.required).not.toContain('unitEvidence');
   expect(buildUniversalExtractorPrompt('')).toContain('absence of a unit label is not a reason to reject it');
 });

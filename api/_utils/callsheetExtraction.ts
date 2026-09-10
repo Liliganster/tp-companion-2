@@ -1,4 +1,4 @@
-import { selectMainUnitLocations } from "./callsheetUnitScope.js";
+import { selectCallsheetLocations } from './callsheetSelection.js';
 /**
  * Pipeline de extracción de callsheets — módulo COMPARTIDO (Fase 2).
  *
@@ -21,14 +21,11 @@ import { callsheetDocumentText } from './callsheetDocumentText.js';
 import { MAX_DOCUMENT_BYTES } from '../../src/lib/importDocuments.js';
 import { buildUniversalExtractorPrompt } from "../../src/lib/ai/prompts.js";
 import { extractionSchema } from "../../src/lib/ai/schema.js";
-import { CallsheetExtractionResultSchema } from "../../src/lib/ai/validation.js";
+import { CallsheetExtractionResultSchema, describeCallsheetValidationError } from "../../src/lib/ai/validation.js";
 import {
   buildCallsheetPdfHintText,
-  filterHallucinatedLocations,
   postProcessLocationsForGeocoding,
 } from "./callsheetLocationHints.js";
-import { classifyLabeledLocations } from "./callsheetLabels.js";
-import { selectDocumentDayLocations } from './callsheetDayScope.js';
 import { parsePdfWithTimeout } from "./pdf-parser.js";
 import { resolveCallsheetDate } from "./callsheetDate.js";
 import {
@@ -95,6 +92,11 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
   if (existingError) {
     log.warn({ jobId, existingError }, "callsheet_existing_result_check_failed");
   } else if (existingResult?.job_id) {
+    const { data: cachedJob, error: cachedJobError } = await supabaseAdmin.from('callsheet_jobs')
+      .select('status, needs_review_reason').eq('id', jobId).maybeSingle();
+    if (cachedJobError || cachedJob?.status !== 'done') {
+      return { ok: false, kind: 'invalid_extraction', message: cachedJob?.needs_review_reason || 'Hay un resultado pendiente de revisión. Comprueba los datos conservados junto al original.' };
+    }
     log.info({ jobId }, "callsheet_job_cached_done");
     return { ok: true, cached: true };
   }
@@ -190,8 +192,8 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
 
   const validated = CallsheetExtractionResultSchema.safeParse(extractedJson);
   if (!validated.success) {
-    const message = `invalid_callsheet_extraction:${validated.error.issues.map((i) => i.message).join("; ")}`;
-    log.warn({ jobId, reason: message }, "callsheet_extraction_invalid");
+    const message = describeCallsheetValidationError(validated.error);
+    log.warn({ jobId, issues: validated.error.issues.map(issue => ({ path: issue.path.join('.'), code: issue.code, message: issue.message })) }, "callsheet_extraction_invalid");
     return { ok: false, kind: "invalid_extraction", message };
   }
 
@@ -206,22 +208,10 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
     dateYearInDocument: validated.data.dateYearInDocument ?? null,
     referenceIso,
   });
-  const daySelection = selectDocumentDayLocations(validated.data.locations as any[], resolvedDate, pdfText);
-  const uncertainCandidates = daySelection.excluded.filter(l => !['other_shooting_day', 'different_shooting_date'].includes(l.reason));
-  if (!daySelection.accepted.length || uncertainCandidates.length > 0) {
-    log.warn({ jobId, reasons: daySelection.excluded.map(l => l.reason) }, 'callsheet_no_verified_document_day_locations');
-    return { ok: false, kind: 'invalid_extraction', message: 'No se han podido confirmar localizaciones para el día de esta callsheet. Revisa la fecha y los bloques de otros días.' };
-  }
-  const unitSelection = selectMainUnitLocations(daySelection.accepted, validated.data.documentUnit, pdfText);
-  if (!unitSelection.accepted.length || unitSelection.excluded.some(l => l.reason !== 'other_filming_unit')) {
-    log.warn({ jobId, reasons: unitSelection.excluded.map(l => l.reason) }, 'callsheet_no_verified_main_unit_locations');
-    return { ok: false, kind: 'invalid_extraction', message: 'Este documento pertenece a segunda unidad o no permite separar las unidades con seguridad. Revisa el original y completa el viaje manualmente.' };
-  }
-  // Only eligible day AND unit text may influence downstream Maps matching.
-  const daySourceText = unitSelection.accepted.map(l => l.dayEvidence).join('\n');
-  const classified = classifyLabeledLocations(unitSelection.accepted as any);
-  const filming = classified.filming;
-  const dropped = [...classified.dropped, ...daySelection.excluded, ...unitSelection.excluded];
+  const selection = selectCallsheetLocations(validated.data, resolvedDate, pdfText);
+  const daySourceText = selection.candidates.map(l => `${l.address}\n${'dayEvidence' in l ? l.dayEvidence : ''}`).join('\n');
+  const filming = selection.filming;
+  const dropped = selection.excluded;
   if (dropped.length > 0) {
     log.info({ jobId, dropped: dropped.map((d: any) => `${d.label}|${d.reason}`) }, "callsheet_labels_dropped");
     try {
@@ -241,22 +231,8 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
     ...validated.data,
     locations: filmingAddresses,
   };
-  if (extracted.locations.length === 0) extracted.locations = ["No location found"];
-
-  // F. Filtro de alucinaciones (valida contra el MISMO texto que vio la IA;
-  // en imágenes/PDFs escaneados no hay texto → no descarta nada)
-  const verifiedLocations = filterHallucinatedLocations({
-    locations: extracted.locations,
-    pdfText: daySourceText,
-  });
-  if (!filming.length || verifiedLocations.length !== extracted.locations.length) {
-    return { ok: false, kind: 'invalid_extraction', message: 'Hay localizaciones sin respaldo suficiente en el documento. Revisa el original y completa los datos manualmente.' };
-  }
-  extracted.locations = verifiedLocations;
-  log.info(
-    { jobId, aiLocs: validated.data.locations.length, verified: verifiedLocations.length, final: extracted.locations.length },
-    "callsheet_hallucination_filter",
-  );
+  log.info({ jobId, collected: validated.data.locations.length, retained: filming.length,
+    excluded: dropped.length, reviewCount: selection.reviewReasons.length }, 'callsheet_selection_complete');
 
   // Preserve the documented text; never substitute a guessed street or city.
   const displayLocations = extracted.locations;
@@ -271,7 +247,7 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
 
   const { error: resultInsertError } = await supabaseAdmin.from("callsheet_results").insert({
     job_id: jobId,
-    date_value: resolvedDate,
+    date_value: resolvedDate || null,
     project_value: extracted.projectName,
     producer_value: extracted.productionCompanies?.[0],
     date_evidence: validated.data.dateRaw ?? null,
@@ -289,6 +265,7 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
   const geoStartTime = Date.now();
   const geoResults = await Promise.all(
     geocodingLocations.map(async (locStr, index) => {
+      if (skipGeocode || selection.reviewReasons.length) return null;
       const linkUrl = matchMapsLinkToLocation(extracted.locations[index] ?? locStr, mapsLinkCandidates, {
         totalLocations: extracted.locations.length,
       });
@@ -305,7 +282,7 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
           };
         }
       }
-      return skipGeocode ? null : geocodeAddressCached(locStr);
+      return skipGeocode || selection.reviewReasons.length ? null : geocodeAddressCached(locStr);
     }),
   );
   geocodingDurationMs = Date.now() - geoStartTime;
@@ -334,6 +311,10 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
       throw new Error(`Failed to insert locations: ${locsInsertError.message}`);
     }
     log.info({ jobId, locations: locs.length }, "callsheet_locations_saved");
+  }
+
+  if (selection.reviewReasons.length) {
+    return { ok: false, kind: 'invalid_extraction', message: `Se conservaron ${filming.length} locaciones para revisión. ${selection.reviewReasons.join(' ')}` };
   }
 
   return {

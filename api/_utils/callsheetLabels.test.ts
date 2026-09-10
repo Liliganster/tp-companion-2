@@ -34,23 +34,11 @@ describe("classifyLabeledLocations (híbrido: red de seguridad)", () => {
     expect(r.dropped).toHaveLength(0);
   });
 
-  it("nombres de escena sin dirección (sin dígitos ni comas) se descartan", () => {
-    const r = classifyLabeledLocations([
-      { label: "MOTIV", address: "WEINBERGE - NÄHE HAUS MAX" },
-      { label: "MOTIV 2", address: "Tennisplatz" },
-      { label: "SET", address: "Schloss Schönbrunn, Wien" }, // coma → se conserva
-      { label: "LOC 1", address: "Opernring 2" },            // dígito → se conserva
-      { label: "LOC 4", address: "Lichtenfelsgasse Ecke Rathausplatz" }, // esquina real → se conserva
-    ]);
-    expect(r.filming.map((f) => f.address)).toEqual([
-      "Schloss Schönbrunn, Wien",
-      "Opernring 2",
-      "Lichtenfelsgasse Ecke Rathausplatz",
-    ]);
-    expect(r.dropped.map((d) => d.reason)).toEqual([
-      "scene_descriptor_no_address",
-      "scene_descriptor_no_address",
-    ]);
+  it("conserva lugares sin calle ni numero cuando se identifican como sets", () => {
+    const addresses = ['Staatsoper', 'Stadtpark', 'Nationalbibliothek', 'Lichtenfelsgasse Ecke Rathausplatz'];
+    const result = classifyLabeledLocations(addresses.map(address => ({ label: 'MOTIV', address })));
+    expect(result.filming.map(l => l.address)).toEqual(addresses);
+    expect(result.dropped).toEqual([]);
   });
 
   it("addressCorrected viaja con la localización de rodaje (errata corregida)", () => {

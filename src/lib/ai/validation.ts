@@ -5,10 +5,10 @@ const dateIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const LabeledLocationSchema = z.union([
   z.object({
     label: z.string().trim().max(120).catch("").default(""),
-    address: z.string().trim().min(1).max(300),
+    address: z.string().trim().max(300),
     unitScope: z.enum(['main_unit', 'other_unit', 'unspecified', 'uncertain']).catch('uncertain').default('unspecified'),
     unitEvidence: z.string().trim().max(3000).catch('').default(''),
-    dayScope: z.enum(['document_day', 'other_day', 'uncertain']).catch('uncertain').default('uncertain'),
+    dayScope: z.enum(['document_day', 'other_day', 'uncertain']).catch('uncertain').default('document_day'),
     dayDate: z.string().trim().max(10).catch('').default(''),
     dayEvidence: z.string().trim().max(3000).catch('').default(''),
     // Dirección geocodificable (errata corregida); el address queda como evidencia.
@@ -22,12 +22,27 @@ export type LabeledLocation = { label: string; address: string; addressCorrected
 
 export const CallsheetExtractionResultSchema = z.object({
   documentUnit: z.enum(['main_unit', 'other_unit', 'mixed', 'unspecified', 'uncertain']).catch('uncertain').default('unspecified'),
-  date: dateIso,
+  date: dateIso.or(z.literal('')).nullish().transform(value => value ?? ''),
   dateRaw: z.string().trim().max(120).nullable().optional(),
   dateYearInDocument: z.boolean().nullable().optional(),
-  projectName: z.string().trim().min(1).max(160),
-  productionCompanies: z.array(z.string().trim().min(1).max(160)).default([]),
-  locations: z.array(LabeledLocationSchema).min(1),
+  // Descriptive metadata must not discard otherwise supported locations.
+  // Keep the same explicit fallback requested by the extraction prompt.
+  projectName: z.string().trim().max(160).nullish().transform(value => value || 'Untitled Project'),
+  productionCompanies: z.array(z.string().trim().max(160).nullable())
+    .nullish().transform(values => (values ?? []).filter((value): value is string => Boolean(value))),
+  locations: z.array(LabeledLocationSchema),
 });
 
 export type CallsheetExtractionResult = z.infer<typeof CallsheetExtractionResultSchema>;
+
+export function describeCallsheetValidationError(error: z.ZodError): string {
+  const fields = error.issues.map(issue => {
+    const [field, index] = issue.path;
+    if (field === 'date') return 'fecha de rodaje';
+    if (field === 'locations') return typeof index === 'number' ? `locación ${index + 1} (dirección o datos incompletos)` : 'locaciones';
+    if (field === 'projectName') return 'nombre del proyecto';
+    if (field === 'productionCompanies') return 'productora';
+    return 'datos del documento';
+  });
+  return `La IA devolvió datos vacíos o con un formato no válido: ${[...new Set(fields)].join(', ')}. Revisa el documento original y completa o corrige esos datos manualmente.`;
+}

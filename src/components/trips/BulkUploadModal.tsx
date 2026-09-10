@@ -1392,7 +1392,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
       });
   };
 
-  const loadJobResult = async (jobId: string, signal?: AbortSignal | null) => {
+  const loadJobResult = async (jobId: string, signal?: AbortSignal | null, needsReview = false) => {
     if (isAiCancelled(signal)) return;
     if (jobResultsLoadingRef.current.has(jobId)) return;
     if (reviewByJobIdRef.current[jobId]) return;
@@ -1432,7 +1432,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
         };
       });
 
-      if (rawLocations.length > 0) enqueueOptimization(jobId, rawLocations, signal);
+      if (!needsReview && rawLocations.length > 0) enqueueOptimization(jobId, rawLocations, signal);
     } finally {
       jobResultsLoadingRef.current.delete(jobId);
     }
@@ -1514,9 +1514,10 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
           }
         }
 
-        const pendingLoads = doneIds.filter((id) => !reviewByJobIdRef.current[id] && !savedByJobIdRef.current[id]);
+        const reviewIds = jobs.filter(j => j.status === "needs_review").map(j => String(j.id));
+        const pendingLoads = [...doneIds, ...reviewIds].filter((id) => !reviewByJobIdRef.current[id] && !savedByJobIdRef.current[id]);
         if (pendingLoads.length > 0) {
-          await Promise.allSettled(pendingLoads.map((id) => loadJobResult(id, aiSignal)));
+          await Promise.allSettled(pendingLoads.map((id) => loadJobResult(id, aiSignal, reviewIds.includes(id))));
         }
         if (isAiCancelled(aiSignal)) return;
 
@@ -1575,7 +1576,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
   const jobStats = useMemo(() => {
     const total = jobsForUi.length;
     const done = jobsForUi.filter((j) => j.status === "done").length;
-    const ready = jobsForUi.filter((j) => Boolean(j.review) && !j.saved && !j.review?.optimizing).length;
+    const ready = jobsForUi.filter((j) => j.status === "done" && Boolean(j.review) && !j.saved && !j.review?.optimizing).length;
     const saved = jobsForUi.filter((j) => j.saved).length;
     const failed = jobsForUi.filter((j) => j.status === "failed" || j.status === "needs_review" || j.status === "out_of_quota").length;
     const pending = total - done - failed;
@@ -1665,6 +1666,10 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     const meta = jobMetaById[jobId];
     const review = reviewByJobId[jobId];
     if (!meta || !review) return false;
+    if (!review.date || !review.locations.some(location => location.trim())) {
+      toast.error(t("bulk.errorSaveTrip"));
+      return false;
+    }
     if (savingByJobId[jobId] || savedByJobId[jobId]) return true;
 
     setSavingByJobId((prev) => ({ ...prev, [jobId]: true }));
@@ -1731,7 +1736,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
 
   const saveAllReadyTrips = async () => {
     const readyIds = Object.keys(reviewByJobId).filter((id) => {
-      if (savedByJobId[id]) return false;
+      if (savedByJobId[id] || jobStateById[id]?.status !== "done") return false;
       const review = reviewByJobId[id];
       return Boolean(review) && !review.optimizing;
     });
@@ -2221,7 +2226,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                           </div>
                         </div>
 
-                        {review && job.status === "done" && (
+                        {review && (job.status === "done" || job.status === "needs_review") && (
                           <>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                               <div className="space-y-1.5">
@@ -2293,7 +2298,12 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                                       <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[10px] font-semibold text-primary ring-1 ring-primary/25">
                                         {idx + 1}
                                       </span>
-                                      <span className="min-w-0 break-words">{loc}</span>
+                                      <Input
+                                        aria-label={tf("bulk.locationsRouteLabel", { count: idx + 1 })}
+                                        value={loc}
+                                        onChange={(event) => updateReview(job.id, { locations: review.locations.map((value, position) => position === idx ? event.target.value : value), distance: "0", distanceDirty: true })}
+                                        className="min-w-0"
+                                      />
                                     </div>
                                   ))}
                                   {review.locations.length === 0 && (

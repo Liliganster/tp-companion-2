@@ -1,17 +1,5 @@
-/**
- * Red de seguridad por etiquetas — Fase 2 del PLAN.md (versión HÍBRIDA).
- *
- * El prompt sigue pidiendo SOLO lugares de rodaje (encuadre que funciona:
- * R100/P92 medido), pero ahora cada localización llega con su etiqueta
- * literal. Este módulo descarta las fugas evidentes de logística (BASIS,
- * PARKEN, CATERING… que a veces se cuelan, p. ej. en la dispo de REX) y
- * deduplica. Ante etiqueta desconocida o vacía se CONSERVA: el recall manda
- * y el usuario revisa en la UI.
- *
- * Regla de la propietaria (2026-07-09): meeting point/Parkplatz son logística.
- * Nota v2: las etiquetas descartadas quedan auditadas — en el futuro pueden
- * usarse para ofrecer parking/catering como datos adicionales del viaje.
- */
+/** Separate explicit logistics and deduplicate without imposing an address
+ * format. Physical venue names are valid; context is supplied by the model. */
 import type { LabeledLocation } from "../../src/lib/ai/validation.js";
 
 const LOGISTICS_LABEL_RE =
@@ -36,18 +24,9 @@ export function classifyLabeledLocations(items: LabeledLocation[]): ClassifiedLo
 
     // Normalizado sin diacríticos: el  de JS no entiende Ö/Ü (p. ej. "ÖFFIS").
     const labelAscii = label.normalize("NFD").replace(/[̀-ͯ]/g, "");
-    if (LOGISTICS_LABEL_RE.test(labelAscii)) {
+    const filmingLabel = /\b(motiv|set|location|drehor(?:t|te)|film(?:ing)?\s*location|locaci[oó]n|rodaje)\b/i.test(labelAscii);
+    if (!filmingLabel && LOGISTICS_LABEL_RE.test(labelAscii)) {
       dropped.push({ label, address, reason: `logistics_label:${label}` });
-      continue;
-    }
-
-    // Nombre de escena sin dirección: sin dígitos, sin comas y sin palabras
-    // de calle ("WEINBERGE - NÄHE HAUS MAX", "Tennisplatz"). Una esquina real
-    // como "Lichtenfelsgasse Ecke Rathausplatz" se conserva por gasse/Ecke.
-    const addressAscii = address.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-    const STREETISH_RE = /(gasse|stra(?:ss|ß)e|\bstr\b|\bstr\.|allee|ring\b|\bweg\b|ecke|markt|ufer|kai|zeile|l(?:ae|a)nde|chaussee|damm|promenade)/;
-    if (!/\d/.test(address) && !address.includes(",") && !STREETISH_RE.test(addressAscii)) {
-      dropped.push({ label, address, reason: "scene_descriptor_no_address" });
       continue;
     }
 

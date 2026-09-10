@@ -8,6 +8,8 @@ export type ReviewCallsheetJob = {
   project_id?: string | null;
   status: string;
   needs_review_reason?: string | null;
+  callsheet_results?: { date_value?: string | null; project_value?: string | null } | null;
+  callsheet_locations?: { address_raw?: string | null; name_raw?: string | null; page?: number | null }[];
 };
 
 // These drafts are already persisted as jobs. They are not confirmed trips and
@@ -18,8 +20,10 @@ export function getReviewCallsheetDrafts(jobs: ReviewCallsheetJob[], trips: Pick
     .map(job => {
       const name = job.storage_path.split('/').pop() || job.id;
       const trip: Trip = {
-        id: job.id, callsheet_job_id: job.id, date: '', route: [],
-        project: projects.find(p => p.id === job.project_id)?.name ?? '',
+        id: job.id, callsheet_job_id: job.id, date: job.callsheet_results?.date_value ?? '',
+        route: [...(job.callsheet_locations ?? [])].sort((a, b) => (a.page ?? 0) - (b.page ?? 0))
+          .map(location => location.address_raw || location.name_raw || '').filter(Boolean),
+        project: projects.find(p => p.id === job.project_id)?.name ?? job.callsheet_results?.project_value ?? '',
         projectId: job.project_id, purpose: '', passengers: 0, distance: 0, co2: 0,
         documents: [{ id: job.id, name, storagePath: job.storage_path, bucketId: 'callsheets',
           mimeType: resolveCallsheetMime(job.storage_path), kind: 'document', createdAt: job.created_at }],

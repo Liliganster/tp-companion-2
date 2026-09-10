@@ -3,6 +3,12 @@ import { getReviewCallsheetDrafts, type ReviewCallsheetJob } from './callsheetRe
 
 const job: ReviewCallsheetJob = { id: 'job-1', status: 'needs_review', storage_path: 'user/job-1/Dispo #17.pdf', created_at: '2026-09-10T08:00:00Z', project_id: 'project-1' };
 describe('persisted callsheet review drafts', () => {
+  it('restores extracted candidates and date beside the original without making a confirmed trip', () => {
+    const [draft] = getReviewCallsheetDrafts([{ ...job, callsheet_results: { date_value: '2025-08-07', project_value: 'Film' }, callsheet_locations: [{ address_raw: 'Staatsoper' }, { address_raw: 'Stadtpark' }] }], [], []);
+    expect(draft.trip).toMatchObject({ date: '2025-08-07', route: ['Staatsoper', 'Stadtpark'], distance: 0 });
+    expect(draft.job.status).toBe('needs_review');
+    expect(draft.trip.documents?.[0].storagePath).toBe(job.storage_path);
+  });
   it('recovers the original viewer attachment after a reload without inventing a date or route', () => {
     const [draft] = getReviewCallsheetDrafts(JSON.parse(JSON.stringify([job])), [], [{ id: 'project-1', name: 'Film' }]);
     expect(draft.trip).toMatchObject({ callsheet_job_id: job.id, date: '', route: [], distance: 0, project: 'Film' });
