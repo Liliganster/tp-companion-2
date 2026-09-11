@@ -71,10 +71,10 @@ describe('bulk import user flow', () => {
     open();
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'bulk.tabAi' }), { button: 0, ctrlKey: false });
     await screen.findByLabelText('bulk.aiPasteLabel');
-    fireEvent.drop(screen.getByRole('dialog'), { dataTransfer: { files: [file('one.pdf', '%PDF', 'application/pdf'), file('two.pdf', '%PDF', 'application/pdf')] } });
-    expect(screen.getByRole('button', { name: 'bulk.removeFile one.pdf' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'bulk.removeFile one.pdf' }));
-    expect(screen.queryByRole('button', { name: 'bulk.removeFile one.pdf' })).toBeNull();
+    fireEvent.drop(screen.getByRole('dialog'), { dataTransfer: { files: [file('Dispo #25.pdf', '%PDF', 'application/pdf'), file('two.pdf', '%PDF', 'application/pdf')] } });
+    expect(screen.getByRole('button', { name: 'bulk.removeFile Dispo #25.pdf' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'bulk.removeFile Dispo #25.pdf' }));
+    expect(screen.queryByRole('button', { name: 'bulk.removeFile Dispo #25.pdf' })).toBeNull();
     fireEvent.change(screen.getByLabelText('bulk.aiPasteLabel'), { target: { value: 'Rodaje mañana a las 8 en Viena' } });
     fireEvent.click(screen.getByText('bulk.aiAddText'));
     expect(screen.getByRole('button', { name: /bulk.removeFile mensaje-/ })).toBeInTheDocument();

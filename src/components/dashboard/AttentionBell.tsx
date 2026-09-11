@@ -1,3 +1,4 @@
+import { getUploadedFileName } from "@/lib/uploadFileName";
 /**
  * Campana "Necesita tu atención" — vive en la cabecera del dashboard, a la
  * derecha del contador de IA (estilo Unity: campana con globo naranja).
@@ -51,7 +52,7 @@ export function AttentionBell() {
         if (error || cancelled) return;
         setJobItems(
           (data ?? []).map((job: any) => {
-            const fileName = String(job.storage_path ?? "").split("/").pop() || "callsheet";
+            const fileName = getUploadedFileName(String(job.storage_path ?? "")) || "callsheet";
             const failed = String(job.status) === "failed";
             return {
               id: `job:${job.id}`,

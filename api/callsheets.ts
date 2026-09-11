@@ -12,7 +12,8 @@ import { getServerPlanTier } from "./_utils/entitlements.js";
 import { extractCallsheet } from "./_utils/callsheetExtraction.js";
 import { MAX_DOCUMENT_BYTES } from "../src/lib/importDocuments.js";
 import { z } from "zod";
-import { assertStorageOwnership, isSafeStoragePath, StorageOwnershipError } from "./_utils/storageOwnership.js";
+import { assertStorageOwnership, StorageOwnershipError } from "./_utils/storageOwnership.js";
+import { isSupportedUploadFileName, toStorageFileName } from "../src/lib/uploadFileName.js";
 
 // ─── /api/callsheets/process ────────────────────────────────────────────────
 // Direct synchronous extraction: claim job → download PDF → call Gemini → save results → done.
@@ -141,13 +142,13 @@ const handleCreateUpload = withApiObservability(async function handler(req: any,
 
   try {
     const { filename } = parsed.data;
-    if (filename && (!isSafeStoragePath(filename) || filename.includes("/"))) {
+    if (filename && !isSupportedUploadFileName(filename)) {
       return sendJson(res, 400, { error: "invalid_filename" });
     }
     const { data: job, error: jobError } = await supabaseAdmin.from("callsheet_jobs").insert({ user_id: user.id, storage_path: "pending", status: "created" }).select("id").single();
     if (jobError || !job?.id) { log.error({ jobError }, "[callsheets/create-upload] job insert failed"); return sendJson(res, 500, { error: "job_insert_failed", message: jobError?.message }); }
 
-    const filePath = `${user.id}/${job.id}/${filename || "document.pdf"}`;
+    const filePath = `${user.id}/${job.id}/${toStorageFileName(filename || "document.pdf")}`;
     const { data: uploadData, error: uploadError } = await supabaseAdmin.storage.from("callsheets").createSignedUploadUrl(filePath);
     if (uploadError || !uploadData?.signedUrl) { log.error({ uploadError }, "[callsheets/create-upload] createSignedUploadUrl failed"); return sendJson(res, 500, { error: "signed_upload_failed", message: uploadError?.message }); }
 

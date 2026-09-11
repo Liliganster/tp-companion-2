@@ -9,7 +9,7 @@ import { Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 import { CallsheetUploadHelp } from "./CallsheetUploadHelp";
-import { isSupportedUploadFileName } from "@/lib/uploadFileName";
+import { isSupportedUploadFileName, toStorageFileName } from "@/lib/uploadFileName";
 import { useI18n } from "@/hooks/use-i18n";
 
 import { validateDocumentSize } from '@/lib/importDocuments';
@@ -83,8 +83,8 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
           if (jobError) throw jobError;
           createdJobId = job.id;
 
-          const filePath = `${user.id}/${job.id}/${file.name}`;
-          const { error: uploadError } = await supabase.storage.from("callsheets").upload(filePath, file);
+          const filePath = `${user.id}/${job.id}/${toStorageFileName(file.name)}`;
+          const { error: uploadError } = await supabase.storage.from("callsheets").upload(filePath, file, { metadata: { originalName: file.name } });
           if (uploadError) throw uploadError;
 
           const { error: updateError } = await supabase

@@ -1,3 +1,4 @@
+import { getUploadedFileName } from "@/lib/uploadFileName";
 import { useMemo, useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -364,7 +365,7 @@ export default function Projects() {
       for (const p of projectCallsheetPathsByKey[key] ?? []) {
         const trimmed = (p ?? "").toString().trim();
         if (!trimmed || trimmed === "pending") continue;
-        const fileName = trimmed.split("/").pop() || trimmed;
+        const fileName = getUploadedFileName(trimmed) || trimmed;
         uniqueDocuments.add(fileName.toLowerCase());
       }
 

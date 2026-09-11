@@ -2,6 +2,7 @@ import { selectCallsheetLocations } from './callsheetSelection.js';
 import { normalizeCallsheetAddress } from '../../src/lib/callsheetAddress.js';
 import { createHash } from 'node:crypto';
 import { CALLSHEET_PROFILE_VERSION, CALLSHEET_MODEL, CALLSHEET_GENERATION_OPTIONS } from '../../src/lib/ai/callsheetProfile.js';
+import { callsheetVisualDetail } from './callsheetVisualDetail.js';
 /**
  * Pipeline de extracción de callsheets — módulo COMPARTIDO (Fase 2).
  *
@@ -123,7 +124,15 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
   // added up to 10 seconds, and its excerpt could lose first-page context.
   const attachedTag = isImageCallsheet ? "[IMAGE ATTACHED]" : "[PDF ATTACHED]";
   const promptSource = attachedTag;
-  const systemInstruction = buildUniversalExtractorPrompt(documentText === null ? promptSource : documentText);
+  let visualDetail: Buffer | undefined;
+  const visualStart = Date.now();
+  if (mimeType === 'application/pdf') {
+    try { visualDetail = await callsheetVisualDetail(buffer); }
+    catch { log.warn({ jobId }, 'callsheet_visual_detail_unavailable'); }
+  }
+  const visualDurationMs = Date.now() - visualStart;
+  const systemInstruction = buildUniversalExtractorPrompt(documentText === null ? promptSource : documentText) +
+    (visualDetail ? '\nThe extra image is an enlarged view of the first-page header of this same PDF. Inspect its small logos with the full document to identify the companies and their roles. It is not another document or another set of locations.' : '');
 
   // C. IA
   const aiStartTime = Date.now();
@@ -131,6 +140,7 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
   const diagnostics = {
     profile: CALLSHEET_PROFILE_VERSION, fileHash: createHash('sha256').update(buffer).digest('hex'),
     bytes: buffer.length, mimeType, inputMode: documentText === null ? 'multimodal' : 'text',
+    visualDetail: Boolean(visualDetail), visualDurationMs,
     promptChars: systemInstruction.length, schemaChars: JSON.stringify(extractionSchema).length,
     limits: options, provider: userSettings?.openrouterEnabled ? 'openrouter' : 'gemini',
   };
@@ -143,6 +153,7 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
     extractionSchema,
     userSettings,
     options,
+    visualDetail,
   )).catch(error => {
     log.error({ jobId, ...diagnostics, durationMs: Date.now() - aiStartTime, error: error instanceof Error ? error.message : String(error) }, 'callsheet_ai_failed');
     throw error;

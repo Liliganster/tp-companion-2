@@ -2,6 +2,7 @@ import { expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { uploadCallsheetFile } from './callsheetUpload';
 import { getReviewCallsheetDrafts } from './callsheetReview';
+import { getUploadedFileName } from './uploadFileName';
 
 function backend() {
   const jobs = new Map<string, any>();
@@ -55,6 +56,18 @@ it('keeps a named failure in the current batch even if the job insert fails', as
   const client = { from: () => ({ insert: () => ({ select: () => ({ single: async () => ({ error: { message: 'Database unavailable' } }) }) }) }) } as unknown as SupabaseClient;
   const result = await uploadCallsheetFile(client, 'user', new File(['PDF'], 'Dispo.pdf'), 'id');
   expect(result).toMatchObject({ id: 'id', storagePath: 'user/id/Dispo.pdf', status: 'failed', persisted: false, uploaded: false });
+});
+
+it('uploads a callsheet with # and recovers its original name after reload', async () => {
+  const db = backend();
+  const result = await uploadCallsheetFile(db.client, 'user', new File(['PDF'], 'Callsheet #25.pdf'), 'hash-name');
+  expect(result.status).toBe('queued');
+  expect(db.files.has(result.storagePath)).toBe(true);
+  expect(result.storagePath).not.toContain('#');
+  expect(getUploadedFileName(result.storagePath)).toBe('Callsheet #25.pdf');
+  const [draft] = getReviewCallsheetDrafts(JSON.parse(JSON.stringify([...db.jobs.values()])), [], []);
+  expect(draft.name).toBe('Callsheet #25.pdf');
+  expect(draft.trip.documents?.[0]).toMatchObject({ name: 'Callsheet #25.pdf', storagePath: result.storagePath });
 });
 
 it('retains a registered file when the user closes while its upload completes', async () => {

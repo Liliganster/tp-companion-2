@@ -283,6 +283,7 @@ export async function generateContentFromPDF(
   schema?: JsonSchema,
   userSettings?: AiUserSettings,
   options?: GenerationOptions,
+  visualDetail?: Buffer,
 ): Promise<AiGenerationResult> {
     if (userSettings?.openrouterEnabled && userSettings?.openrouterApiKey) {
         const orModel = userSettings.openrouterModel || "google/gemini-2.5-flash";
@@ -308,6 +309,10 @@ export async function generateContentFromPDF(
                 },
               ];
 
+        if (visualDetail) content.push({
+          type: 'image_url',
+          image_url: { url: `data:image/png;base64,${visualDetail.toString('base64')}` },
+        } as any);
         const messages = [
             {
                 role: "user",
@@ -335,6 +340,7 @@ export async function generateContentFromPDF(
                     mimeType,
                 },
             },
+            ...(visualDetail ? [{ inlineData: { data: visualDetail.toString('base64'), mimeType: 'image/png' } }] : []),
             prompt,
         ], { timeout: options?.timeoutMs ?? 40000 });
 

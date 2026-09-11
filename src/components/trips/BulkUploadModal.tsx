@@ -35,7 +35,7 @@ import { buildTripDuplicateKey } from "@/lib/trip-warnings";
 import { CALLSHEET_ACCEPT, isSupportedCallsheetFile, resolveCallsheetMime } from "@/lib/callsheetMime";
 import { CallsheetUploadHelp } from "@/components/callsheets/CallsheetUploadHelp";
 import { useAiQuota } from "@/hooks/use-ai-quota";
-import { isSupportedUploadFileName } from "@/lib/uploadFileName";
+import { isSupportedUploadFileName, getUploadedFileName } from "@/lib/uploadFileName";
 import { MANUAL_ACCEPT, validateDocumentSize, readSpreadsheetTables, mergeImportTables, parseDelimitedRows, normalizeImportHeader, parseImportDate, parseImportDistance } from '@/lib/importDocuments';
 import { ManualImportPreview, type ImportTable } from './ManualImportPreview';
 
@@ -355,7 +355,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
         Object.fromEntries(
           rows.map((r) => {
             const path = String(r.storage_path ?? "");
-            const fileName = path.split("/").pop() || "callsheet.pdf";
+            const fileName = getUploadedFileName(path) || "callsheet.pdf";
             return [String(r.id), { fileName, mimeType: resolveCallsheetMime(path), storagePath: path }];
           }),
         ),
