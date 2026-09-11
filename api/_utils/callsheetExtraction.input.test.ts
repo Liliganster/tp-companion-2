@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ rejectLocations: false, persisted: null as any, persistedOverride: null as any, rpc: vi.fn(), download: vi.fn(), text: vi.fn(), binary: vi.fn(), insert: vi.fn(async (_table: string, _rows: unknown) => ({ error: null })) }));
+const mocks = vi.hoisted(() => ({ rejectLocations: false, persisted: null as any, persistedOverride: null as any, rpc: vi.fn(), download: vi.fn(), visual: vi.fn(), text: vi.fn(), binary: vi.fn(), insert: vi.fn(async (_table: string, _rows: unknown) => ({ error: null })) }));
 vi.mock('../../src/lib/supabaseServer.js', () => ({ supabaseAdmin: {
   rpc: async (name: string, args: any) => {
     const response = await mocks.rpc(name, args);
@@ -21,6 +21,7 @@ vi.mock('./callsheetLocationHints.js', async (importOriginal) => {
   return { ...actual, filterHallucinatedLocations: (args: Parameters<typeof actual.filterHallucinatedLocations>[0]) => mocks.rejectLocations ? [] : actual.filterHallucinatedLocations(args) };
 });
 vi.mock('./storageOwnership.js', () => ({ assertStorageOwnership: async () => {} }));
+vi.mock('./callsheetVisualDetail.js', () => ({ callsheetVisualDetail: mocks.visual }));
 vi.mock('../../src/lib/ai/geminiClient.js', () => ({ generateContent: mocks.text, generateContentFromPDF: mocks.binary }));
 vi.mock('./pdf-parser.js', () => ({ parsePdfWithTimeout: vi.fn(async () => ({ text: 'Film' })) }));
 import { extractCallsheet } from './callsheetExtraction';
@@ -29,6 +30,7 @@ const run = (name: string) => extractCallsheet({ userId: 'user', requestId: 'req
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.rejectLocations = false;
+  mocks.visual.mockResolvedValue(Buffer.from('header-image'));
   mocks.persisted = null; mocks.persistedOverride = null;
   mocks.text.mockRejectedValue(new Error('MOCK_PROVIDER_REACHED'));
   mocks.binary.mockRejectedValue(new Error('MOCK_PROVIDER_REACHED'));
@@ -52,6 +54,18 @@ it('rejects over 50 MB before reading binary content or reaching the provider', 
   const read = vi.fn(); mocks.download.mockResolvedValue({ data: { size: 50 * 1024 * 1024 + 1, arrayBuffer: read } });
   expect(await run('big.pdf')).toMatchObject({ ok: false, kind: 'file_too_large' });
   expect(read).not.toHaveBeenCalled(); expect(mocks.binary).not.toHaveBeenCalled();
+});
+
+it.each([false, true])('keeps the complete PDF and one provider request when visual detail fails: %s', async (detailFails) => {
+  const bytes = Buffer.from('%PDF-complete-original');
+  mocks.download.mockResolvedValue({ data: { size: bytes.length, arrayBuffer: async () => Uint8Array.from(bytes).buffer } });
+  if (detailFails) mocks.visual.mockRejectedValue(new Error('visual_detail_timeout'));
+  mocks.binary.mockResolvedValue({ text: JSON.stringify({ date: '2024-06-24', dateRaw: '24/06/24', projectName: 'Client Brand', clientName: 'Client Brand', productionCompanies: ['Independent Studio'], agencyNames: ['Agency'], companyEvidence: 'Page 1: client logo; page 2: production credit.', locations: [] }), provider: 'mock', model: 'mock' });
+  await run('visual.pdf');
+  expect(mocks.binary).toHaveBeenCalledOnce();
+  expect(mocks.binary.mock.calls[0][2]).toEqual(bytes);
+  expect(mocks.binary.mock.calls[0][7]).toEqual(detailFails ? undefined : Buffer.from('header-image'));
+  expect(mocks.persisted).toMatchObject({ project_value: 'Client Brand', producer_value: 'Independent Studio', model_output: { clientName: 'Client Brand', agencyNames: ['Agency'], _diagnostics: { visualDetail: !detailFails } } });
 });
 
 it('saves only the document-day location, not tomorrow, through the actual pipeline', async () => {
@@ -213,7 +227,7 @@ it('uses the persisted trigger-adjusted state and records request diagnostics al
  const result=await extractMockLocations([{label:'SET',address:'Main Road 1',normalizedAddress:'Main Road 1',role:'filming'}],'SET Main Road 1');
  expect(result).toMatchObject({ok:true,status:'needs_review',reviewReason:'Project does not match'});
  const stored=mocks.insert.mock.calls.find(([table])=>table==='callsheet_results')?.[1] as any;
- expect(stored.model_output._diagnostics).toMatchObject({profile:'callsheet-2026-09-11-v5-partial-date',inputMode:'text',limits:{allowSchemaRetry:false,maxOutputTokens:8192}});
+ expect(stored.model_output._diagnostics).toMatchObject({profile:'callsheet-2026-09-11-v6-visual-roles',inputMode:'text',limits:{allowSchemaRetry:false,maxOutputTokens:8192}});
  expect(stored.model_output._diagnostics.fileHash).toMatch(/^[a-f0-9]{64}$/);
 });
 it('rejects even syntactically valid but truncated provider output before atomic saving',async()=>{
@@ -234,7 +248,7 @@ it('carries whole-document understanding through the actual PDF pipeline and ato
   date:'2026-09-10',dateRaw:'10 septembre 2026',dateYearInDocument:true,projectName:'Across the River',
   documentReviewReason:'The final exterior has no established relation to the listed sites.',
   locations:[
-   {label:'Décor A / Maison',address:'River Road 12',normalizedAddress:'River Road 12',role:'filming',locationKind:'physical_destination',addressRelation:'set_address',siteEvidence:'Header names Décor A; page 3 links the house scenes to River Road 12.'},
+   {label:'DÃ©cor A / Maison',address:'River Road 12',normalizedAddress:'River Road 12',role:'filming',locationKind:'physical_destination',addressRelation:'set_address',siteEvidence:'Header names DÃ©cor A; page 3 links the house scenes to River Road 12.'},
    {label:'Jardins',address:'Sculpture garden; loading at River Road 20-28',normalizedAddress:'River Road 20-28',role:'filming',locationKind:'physical_destination',addressRelation:'access_only',siteEvidence:'Page 2: garden filming; page 4: street marked loading only.',reviewReason:'No filming entrance is specified.'},
    {label:'CAR',address:'The character drives home',normalizedAddress:'',role:'filming',locationKind:'mobile_scene',addressRelation:'unresolved',reviewReason:''},
   ],
@@ -248,7 +262,7 @@ it('carries whole-document understanding through the actual PDF pipeline and ato
  expect(payload.p_result.review_reason).toContain(data.documentReviewReason);
  expect(payload.p_result.model_output.locations[1].normalizedAddress).toBe('River Road 20-28');
  expect(payload.p_locations).toHaveLength(2);
- expect(payload.p_locations[0]).toMatchObject({label_source:'Décor A / Maison',formatted_address:'River Road 12',selection_state:'confirmed'});
+ expect(payload.p_locations[0]).toMatchObject({label_source:'DÃ©cor A / Maison',formatted_address:'River Road 12',selection_state:'confirmed'});
  expect(payload.p_locations[0].evidence_text).toContain(data.locations[0].siteEvidence);
  expect(payload.p_locations[1]).toMatchObject({formatted_address:'',selection_state:'candidate'});
  expect(payload.p_excluded).toEqual([expect.objectContaining({label:'CAR',reason:'mobile_scene_without_destination'})]);

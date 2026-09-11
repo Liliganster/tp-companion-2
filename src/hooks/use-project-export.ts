@@ -1,3 +1,4 @@
+import { getUploadedFileName } from "@/lib/uploadFileName";
 import { supabase } from "@/lib/supabaseClient";
 import type { Trip } from "@/contexts/TripsContext";
 
@@ -82,7 +83,7 @@ async function collectDocs(
         const sp = String(job?.storage_path ?? "").trim();
         if (sp && sp !== "pending" && !seen.has(sp)) {
           seen.add(sp);
-          const fileName = sp.split("/").pop() || "callsheet";
+          const fileName = getUploadedFileName(sp) || "callsheet";
           entries.push({ zipPath: base + fileName, bucket: "callsheets", storagePath: sp });
         }
       }
@@ -93,7 +94,7 @@ async function collectDocs(
         if (!sp || seen.has(sp)) continue;
         seen.add(sp);
         const bucket = doc.bucketId ?? "project_documents";
-        const fileName = doc.name || sp.split("/").pop() || "documento";
+        const fileName = doc.name || getUploadedFileName(sp) || "documento";
         entries.push({ zipPath: base + sanitize(fileName), bucket, storagePath: sp });
       }
     }
@@ -119,7 +120,7 @@ async function collectDocs(
 
       const projectName = pidToName.get(doc.project_id) || "proyecto";
       const pFolder = sanitize(projectName, 60);
-      const fileName = doc.name || sp.split("/").pop() || "documento";
+      const fileName = doc.name || getUploadedFileName(sp) || "documento";
       entries.push({
         zipPath: `docs/${pFolder}/_documentos_generales/${sanitize(fileName)}`,
         bucket: "project_documents",

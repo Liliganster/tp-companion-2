@@ -1,9 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { compactCallsheetReviewReason } from './callsheetReview';
+import { toStorageFileName } from './uploadFileName';
 
 /** One result per selected file, including upload/queue failures. Never deletes evidence. */
 export async function uploadCallsheetFile(client: SupabaseClient, userId: string, file: File, id: string, isCancelled = () => false) {
-  const storagePath = `${userId}/${id}/${file.name}`;
+  const storagePath = `${userId}/${id}/${toStorageFileName(file.name)}`;
   let persisted = false;
   let uploaded = false;
   let stage = 'No se pudo registrar el documento';
@@ -13,7 +14,7 @@ export async function uploadCallsheetFile(client: SupabaseClient, userId: string
     persisted = true;
     if (isCancelled()) throw new Error('Carga interrumpida');
     stage = 'No se pudo subir el documento; vuelve a seleccionarlo';
-    const upload = await client.storage.from('callsheets').upload(storagePath, file);
+    const upload = await client.storage.from('callsheets').upload(storagePath, file, { metadata: { originalName: file.name } });
     if (upload.error) throw upload.error;
     uploaded = true;
     if (isCancelled()) throw new Error('Carga interrumpida');

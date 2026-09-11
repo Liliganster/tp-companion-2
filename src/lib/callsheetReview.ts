@@ -1,3 +1,4 @@
+import { getUploadedFileName } from "@/lib/uploadFileName";
 import type { Trip } from '@/contexts/TripsContext';
 import { resolveCallsheetMime } from './callsheetMime';
 
@@ -22,7 +23,7 @@ export function getReviewCallsheetDrafts(jobs: ReviewCallsheetJob[], trips: Pick
   const saved = new Set(trips.map(t => t.callsheet_job_id).filter(Boolean));
   return jobs.filter(job => ['created', 'queued', 'processing', 'done', 'failed', 'needs_review', 'out_of_quota', 'cancelled'].includes(job.status) && !saved.has(job.id) && job.storage_path && job.storage_path !== 'pending')
     .map(job => {
-      const name = job.storage_path.split('/').pop() || job.id;
+      const name = getUploadedFileName(job.storage_path) || job.id;
       const trip: Trip = {
         id: job.id, callsheet_job_id: job.id, date: job.callsheet_results?.date_value ?? '',
         extractedDate: job.callsheet_results?.date_evidence ?? undefined,

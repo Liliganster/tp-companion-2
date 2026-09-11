@@ -1,3 +1,4 @@
+import { getUploadedFileName } from "@/lib/uploadFileName";
 import { CALLSHEET_CLIENT_TIMEOUT_MS } from "@/lib/callsheetTiming";
 import { canMaterializeCallsheet, getReviewCallsheetDrafts } from '@/lib/callsheetReview';
 import { AddTripModal } from '@/components/trips/AddTripModal';
@@ -416,7 +417,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           documents: [
             {
               id: `${job.id}-callsheet`,
-              name: storagePath.split("/").pop() || "Callsheet",
+              name: getUploadedFileName(storagePath) || "Callsheet",
               mimeType: resolveCallsheetMime(storagePath),
               storagePath,
               createdAt: new Date().toISOString(),
@@ -539,7 +540,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                 if (!seenIds.has(job.id)) {
                     seenIds.add(job.id);
                     const path = job.storage_path || "Unknown";
-                    const name = path.split("/").pop() || path;
+                    const name = getUploadedFileName(path) || path;
                     allDocs.push({
                         id: job.id,
                         name: name,
@@ -560,7 +561,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             seenIds.add(job.id);
 
             const path = job.storage_path || "Unknown";
-            const name = path.split("/").pop() || path;
+            const name = getUploadedFileName(path) || path;
             allDocs.push({
               id: job.id,
               name: name,
@@ -594,7 +595,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                 if (!seenIds.has(job.id)) {
                     seenIds.add(job.id);
                     const path = job.storage_path || "Unknown";
-                    const name = path.split("/").pop() || path;
+                    const name = getUploadedFileName(path) || path;
                     allDocs.push({
                         id: job.id,
                         name: name,
@@ -728,7 +729,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
               const existing = byId.get(job.id);
               const path = job.storage_path || existing?.storage_path || "";
-              const name = (existing?.name || path.split("/").pop() || path || "Documento").toString();
+              const name = (existing?.name || getUploadedFileName(path) || path || "Documento").toString();
 
               const next: ProjectDocument = {
                 id: job.id,

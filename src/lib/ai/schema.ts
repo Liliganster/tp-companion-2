@@ -12,18 +12,21 @@ type ExtractionSchemaNode = {
 export const extractionSchema = {
   type: "object",
   properties: {
+    companyEvidence: { type: "string", description: "Brief factual page/section or visual references establishing which company is the advertised client, which is the agency, and which produces the shoot. Include recognizable logo identities and associated role labels; no reasoning transcript." },
+    clientName: { type: "string", description: "Advertised client/brand established from logos and client/Kunde/advertiser credits in the document. Empty if no client can be identified. A restaurant/venue name alone is insufficient." },
+    agencyNames: { type: "array", items: { type: "string", description: "Advertising agency credited for this shoot." }, description: "Advertising agencies, distinct from the client and production company. Empty if none established." },
+    productionCompanies: {
+      type: "array",
+      items: { type: "string", description: "Name of a company producing this shoot. Prefer the full name printed in credits or footer over stylized logo lettering; a graphical emblem is not extra letters in the company name. A legal suffix is not required; do not invent one." },
+      description: "Production companies established by logos, credits, role labels and context across all pages. Exclude the advertised client and advertising agency unless also explicitly credited as a producer. Empty array if unresolved."
+    },
+    projectName: { type: "string", description: "Film/show/campaign title, if the document establishes one independently of the company credits. For an advertisement with no separate campaign title, use clientName. Never use the production company or agency logo as the campaign title. Empty if unresolved." },
     documentUnit: { type: "string", enum: ["main_unit", "other_unit", "mixed", "unspecified", "uncertain"], description: 'Unit governing this document; other_unit for a callsheet dedicated to second/additional unit (eligible), mixed for mixed main/other-unit blocks; unspecified when no unit is named.' },
     date: { type: "string", description: "Main shooting date on the FIRST PAGE, understood using the whole document. YYYY-MM-DD if complete; otherwise keep the known part, e.g. '19 November', for review. Empty only if no date is readable. Do not invent missing parts." },
     dateRaw: { type: "string", description: "The main shooting date EXACTLY as printed on the FIRST PAGE, verbatim (e.g. 'Tuesday, 19th Nov' or 'Montag, 06.05.2024')." },
     dateYearInDocument: { type: "boolean", description: "true ONLY if a year is explicitly documented and clearly governs the first-page shooting date, even across associated headings. A year belonging only to a revision, another day or an unrelated block is not evidence. false if the applicable year is absent." },
-    projectName: { type: "string", description: "Film/show/project title established from the whole header and context, including standalone titles without a field label. Not a venue, slogan or producer." },
     documentReviewScope: { type: 'string', enum: ['none', 'metadata', 'date', 'unit', 'locations', 'unknown'], description: 'Field affected by documentReviewReason. Missing/uncertain project title or producer is metadata (nonblocking); date, unit and physical-site coverage are separate. none when there is no issue. Never classify missing project metadata as missing physical sites.' },
     documentReviewReason: { type: 'string', description: 'Concrete unresolved whole-document issue for documentReviewScope. Empty when none; site-specific conflicts go in that site reviewReason. Descriptive metadata is advisory and must not block an otherwise supported date and route.' },
-    productionCompanies: {
-      type: "array",
-      items: { type: "string", description: "Production company name (has GmbH/LLC/Productions)." },
-      description: "All production companies. Look for 'Produktion:' label, GmbH names, logos. Empty array if none."
-    },
     locations: {
       type: "array",
       items: {
@@ -55,5 +58,5 @@ export const extractionSchema = {
       description: 'Physical sites reconciled against the whole shooting day, in document order, with separate logistics for exclusion. Consolidate scene aliases of the same site; do not enumerate every address or scene row.'
     }
   },
-  required: ["documentUnit", "date", "dateRaw", "projectName", "productionCompanies", "documentReviewScope", "documentReviewReason", "locations"]
+  required: ["companyEvidence", "clientName", "agencyNames", "productionCompanies", "projectName", "documentUnit", "date", "dateRaw", "documentReviewScope", "documentReviewReason", "locations"]
 } satisfies ExtractionSchemaNode;
