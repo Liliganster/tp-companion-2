@@ -5,9 +5,11 @@ const LabeledLocationSchema = z.union([
     label: z.string().trim().max(120).catch("").default(""),
     address: z.string().trim().max(300).nullish().transform(value => value ?? ''),
     normalizedAddress: z.string().trim().max(300).optional().catch(''),
-    locationKind: z.enum(['physical_destination', 'internal_marker', 'uncertain']).optional().catch('uncertain'),
+    locationKind: z.enum(['physical_destination', 'internal_marker', 'mobile_scene', 'uncertain']).optional().catch('uncertain'),
+    addressRelation: z.enum(['set_address', 'access_only', 'unresolved']).optional().catch('unresolved'),
+    siteEvidence: z.string().trim().transform(value => value.slice(0, 1200)).catch('').default(''),
     role: z.enum(['filming', 'logistics', 'other', 'uncertain']).optional().catch('uncertain'),
-    reviewReason: z.string().trim().max(1000).catch('').default(''),
+    reviewReason: z.string().trim().transform(value => value.slice(0, 1000)).catch('').default(''),
     unitScope: z.enum(['main_unit', 'other_unit', 'unspecified', 'uncertain']).catch('uncertain').default('unspecified'),
     unitEvidence: z.string().trim().max(3000).catch('').default(''),
     dayScope: z.enum(['document_day', 'other_day', 'uncertain']).catch('uncertain').default('document_day'),
@@ -24,6 +26,7 @@ export type LabeledLocation = { label: string; address: string; addressCorrected
 
 export const CallsheetExtractionResultSchema = z.object({
   documentUnit: z.enum(['main_unit', 'other_unit', 'mixed', 'unspecified', 'uncertain']).catch('uncertain').default('unspecified'),
+  documentReviewReason: z.string().trim().transform(value => value.slice(0, 1000)).catch('').default(''),
   // A readable non-ISO date must not discard locations or the whole document.
   date: z.string().trim().max(160).nullish().catch('').transform(value => value ?? ''),
   dateRaw: z.string().trim().max(300).nullable().optional().catch(''),

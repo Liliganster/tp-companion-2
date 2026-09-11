@@ -14,10 +14,10 @@ describe("buildUniversalExtractorPrompt", () => {
     expect(extractionSchema.properties.date.description).toContain('FIRST PAGE');
     expect(extractionSchema.properties.locations.items.properties.dayScope.description).toContain('FIRST PAGE');
   });
-  it('collects logistics without the previous instruction to skip their addresses', () => {
+  it('keeps separately identified logistics available for exclusion without enumerating every address', () => {
     const prompt = buildUniversalExtractorPrompt('[PDF ATTACHED]');
-    expect(prompt).toContain('including filming AND logistics');
-    expect(extractionSchema.properties.locations.description).toContain('including filming AND logistics');
+    expect(prompt).toContain('including separately identified logistics for exclusion');
+    expect(extractionSchema.properties.locations.description).toContain('separate logistics for exclusion');
     expect(prompt).toContain('not used as filming destinations');
     expect(prompt).not.toContain('SKIP its address completely');
     expect(prompt).not.toContain('NEVER include addresses from these sections');

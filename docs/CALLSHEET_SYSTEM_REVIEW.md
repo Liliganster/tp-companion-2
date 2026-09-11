@@ -1,7 +1,21 @@
 # Revisión integrada del extractor — 2026-09-11
 
 Carpeta: C:\Users\lilia\Escritorio\trip-companion-main 2\trip-companion-main.
-Estado: cambios locales; no publicados por esta revisión. No se midió todavía precisión real ni mejora de latencia con IA.
+Estado actual: perfil `callsheet-2026-09-11-v3-context`, cambios locales sin publicar. El perfil anterior v2 se evaluó con IA/Maps reales; la revisión contextual v3 solo tiene validación local. No se ha demostrado un 95 % de precisión.
+
+## Lectura contextual después de la evaluación real
+
+La evaluación v2 procesó los 11 PDF de DISPOS 24 - copia sin timeout (8,2–16,5 s), pero solo permitió certificar completamente las direcciones/ruta automática de 5 de los 9 callsheets principales. Los otros dos documentos eran controles de reconocimiento técnico y segunda unidad. El informe, referencia previa, respuestas originales, Maps y presupuesto se encuentran en `C:\Users\lilia\Documents\Codex\2026-09-10\la-x20\outputs\callsheet-eval-20260911\INFORME.md`. El guardado se capturó con adaptadores locales; no fue una prueba de persistencia o interfaz en producción.
+
+El PDF ya llegaba íntegro a la IA. La revisión v3 cambia la tarea de interpretación: establecer primero día, unidad, proyecto, sitios físicos y relaciones entre cabecera, escenas, movimientos y mapas; después completar los campos y contrastar la cobertura del día. Distingue escenarios ficticios de destinos reales y direcciones de set de accesos/logística. No añade un parser de direcciones ni excepciones por archivo.
+
+El esquema conserva un resumen factual de las páginas/secciones relacionadas (`siteEvidence`), la relación de la dirección con el set (`addressRelation`), escenas móviles sin destino independiente y conflictos globales (`documentReviewReason`). La evidencia no exige que los datos aparezcan juntos ni que una cita literal continua coincida con OCR; tampoco pide transcribir el razonamiento interno del modelo.
+
+La validación y selección conservan esos datos. Una duda explícita ya no se pierde por haber clasificado el lugar como filmación; una dirección de acceso no se presenta como dirección postal del set. Una escena móvil sin sitio independiente no produce un destino vacío. Si sí existe evidencia conflictiva de otro lugar, se conserva el candidato. Las dudas globales pasan al estado guardado y la evidencia breve a `evidence_text`, dentro del RPC atómico existente. El contenido original del modelo queda conservado aunque la selección no acepte su dirección.
+
+Se mantienen una única llamada, PDF íntegro, límites de tiempo/tokens, cuota y mecanismos de revisión existentes. No se amplió el presupuesto ni se hicieron nuevas llamadas pagadas en esta corrección. 166 pruebas locales pasaron, incluida una del núcleo real con proveedor/Storage/BD simulados que verifica evidencia, acceso, escena móvil, conflicto global, guardado y borrador. Esas pruebas no miden la comprensión del nuevo prompt ni justifican reutilizar el resultado v2 como precisión de v3.
+
+Siguen pendientes de solución/verificación conjunta los cambios de número/rango de Google, la ruta calculada desde texto cuando una geocodificación no se acepta, la normalización de sitios dentro de documentos pendientes por otra causa y la validación autenticada de edición/informes. Esta corrección contextual no se presenta como solución completa de esos puntos.
 
 ## Diagnóstico comprobado
 
@@ -44,4 +58,4 @@ Las anotaciones de evaluación incluían años deducidos, direcciones completada
 
 Pruebas locales de SDK con fetch simulado comprueban parámetros realmente serializados, tokens informados, corte temporal y ausencia de segunda petición ante errores. Pruebas de pipeline comprueban guardado, estado de trigger, truncamiento, candidato mal formado y ausencia de normalización. Pruebas del handler real del worker con base/proveedor simulados comprueban que dos invocaciones no regeneran el fallido y que un procesamiento abandonado no se reencola.
 
-No se realizaron llamadas de IA o Maps de pago, no se modificaron saldos, ni se publicó. La mejora de precisión/tiempo sobre PDFs reales sigue sin medirse. Los límites previenen crecimiento de trabajo y hacen diagnosticable una repetición; no demuestran que todo formato sea interpretable ni explican por sí solos la demora interna anterior.
+La fase inicial fue local. Después se ejecutó la evaluación real v2 con un máximo autorizado de 1 €: coste por tarifas estimado en 0,2340309 US$, reserva conservadora total 0,7960077 €. No se modificaron saldos ni se publicó. La revisión contextual v3 posterior no ha generado gasto nuevo y su precisión/latencia con IA real siguen sin medirse. Los límites previenen crecimiento de trabajo; no demuestran que todo formato sea interpretable ni explican por sí solos la demora interna anterior.
