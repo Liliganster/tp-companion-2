@@ -1,9 +1,8 @@
 import { supabase } from "@/lib/supabaseClient";
 import { logger } from "@/lib/logger";
 
-const CALLSHEET_CANCELABLE_STATUSES = ["created", "queued", "processing", "failed"] as const;
+const CALLSHEET_CANCELABLE_STATUSES = ["created", "queued", "processing"] as const;
 const INVOICE_CANCELABLE_STATUSES = ["created", "queued", "processing", "failed"] as const;
-const CALLSHEET_DELETABLE_STATUSES = ["created", "queued", "processing", "failed", "cancelled", "out_of_quota"] as const;
 
 function uniqueIds(ids: string[]) {
   return Array.from(
@@ -45,44 +44,11 @@ async function updateWithFallback<T extends Record<string, any>>(args: {
 }
 
 export async function cancelCallsheetJobs(jobIds: string[]) {
-  const ids = uniqueIds(jobIds);
-  if (ids.length === 0) return;
-
-  const { data: rows, error: fetchError } = await supabase
-    .from("callsheet_jobs")
-    .select("id, storage_path, status")
-    .in("id", ids)
-    .in("status", [...CALLSHEET_DELETABLE_STATUSES]);
-
-  if (fetchError) {
-    logger.warn("[aiJobCancellation] Failed to fetch callsheet jobs for delete", fetchError);
-    return;
-  }
-
-  const jobs = Array.isArray(rows) ? rows : [];
-  const paths = jobs
-    .map((row: any) => String(row?.storage_path ?? "").trim())
-    .filter((p: string) => p && p !== "pending");
-
-  if (paths.length > 0) {
-    const { error: storageError } = await supabase.storage.from("callsheets").remove(paths);
-    if (storageError) {
-      logger.warn("[aiJobCancellation] Failed to remove callsheet files", storageError);
-    }
-  }
-
-  const deletableIds = jobs.map((row: any) => String(row?.id ?? "").trim()).filter(Boolean);
-  if (deletableIds.length === 0) return;
-
-  const { error: deleteError } = await supabase
-    .from("callsheet_jobs")
-    .delete()
-    .in("id", deletableIds)
-    .in("status", [...CALLSHEET_DELETABLE_STATUSES]);
-
-  if (deleteError) {
-    logger.warn("[aiJobCancellation] Failed to delete callsheet jobs", deleteError);
-  }
+  await updateWithFallback({
+    table: "callsheet_jobs", ids: uniqueIds(jobIds), statuses: CALLSHEET_CANCELABLE_STATUSES,
+    fullPatch: { status: "cancelled", needs_review_reason: "Extracción interrumpida. Revisa el documento o vuelve a subirlo." },
+    minimalPatch: { status: "cancelled" },
+  });
 }
 
 export async function cancelInvoiceJobs(jobIds: string[]) {

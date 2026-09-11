@@ -16,7 +16,7 @@ type GetBulkCloseCancellationArgs = {
  * Qué hacer con los jobs de la sesión cuando se cierra el modal.
  *
  * Regla: cerrar el modal NUNCA destruye trabajo de IA ya en marcha o terminado.
- * - `created`/`queued` (aún no consumen IA) → se cancelan y limpian.
+ * - `created`/`queued` (aún no consumen IA) → se cancelan conservando registro y archivo.
  * - `processing`/`done` → siguen su curso en el servidor; al reabrir el modal
  *   se recuperan para revisión (resurrección).
  */

@@ -591,12 +591,12 @@ export default function Trips() {
       {/* Mobile & Tablet Cards View */}
       <div className="lg:hidden space-y-3 animate-fade-in animation-delay-200">
         {reviewDrafts.map(({ trip, name, job }) => <div key={trip.id} className="glass-card p-4 border border-warning/40">
-          <div className="flex items-center gap-2"><Checkbox disabled={deletingSelected} checked={selectedIds.has(trip.id)} onCheckedChange={() => toggleSelect(trip.id)} aria-label={tf("trips.selectTrip", { id: name })} /><Badge variant="outline" className="text-warning">{job.status === "needs_review" ? t("callsheetReview.title") : t("bulk.statusFailed")}</Badge></div>
+          <div className="flex items-center gap-2"><Checkbox disabled={deletingSelected} checked={selectedIds.has(trip.id)} onCheckedChange={() => toggleSelect(trip.id)} aria-label={tf("trips.selectTrip", { id: name })} /><Badge variant="outline" className="text-warning">{job.status === "processing" ? t("bulk.statusProcessing") : ["created", "queued"].includes(job.status) ? t("bulk.statusQueued") : job.status === "done" ? t("bulk.statusReady") : job.status === "failed" ? t("bulk.statusFailed") : t("callsheetReview.title")}</Badge></div>
           <p className="my-2 break-all">{name}</p>
           <CallsheetReviewSummary job={job} />
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => { setSelectedTrip(trip); setDetailModalOpen(true); }}>{t("callsheetReview.open")}</Button>
-            <Button variant="outline" onClick={() => handleEditTrip(trip)}>{t("callsheetReview.edit")}</Button>
+            <Button variant="outline" disabled={["created", "queued", "processing"].includes(job.status)} onClick={() => handleEditTrip(trip)}>{t("callsheetReview.edit")}</Button>
           </div>
         </div>)}
 
@@ -799,12 +799,12 @@ export default function Trips() {
             <TableBody>
               {reviewDrafts.map(({ trip, name, job }) => <TableRow key={trip.id} className="bg-warning/5">
                 <TableCell><Checkbox disabled={deletingSelected} checked={selectedIds.has(trip.id)} onCheckedChange={() => toggleSelect(trip.id)} aria-label={tf("trips.selectTrip", { id: name })} /></TableCell>
-                <TableCell><Badge variant="outline" className="text-warning">{job.status === "needs_review" ? t("callsheetReview.title") : t("bulk.statusFailed")}</Badge></TableCell>
+                <TableCell><Badge variant="outline" className="text-warning">{job.status === "processing" ? t("bulk.statusProcessing") : ["created", "queued"].includes(job.status) ? t("bulk.statusQueued") : job.status === "done" ? t("bulk.statusReady") : job.status === "failed" ? t("bulk.statusFailed") : t("callsheetReview.title")}</Badge></TableCell>
                 <TableCell colSpan={2}><span className="break-all">{name}</span><CallsheetReviewSummary job={job} /></TableCell>
                 <TableCell colSpan={7}>
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={() => { setSelectedTrip(trip); setDetailModalOpen(true); }}>{t("callsheetReview.open")}</Button>
-                    <Button variant="outline" onClick={() => handleEditTrip(trip)}>{t("callsheetReview.edit")}</Button>
+                    <Button variant="outline" disabled={["created", "queued", "processing"].includes(job.status)} onClick={() => handleEditTrip(trip)}>{t("callsheetReview.edit")}</Button>
                   </div>
                 </TableCell>
               </TableRow>)}

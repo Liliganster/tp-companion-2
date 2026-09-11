@@ -1,6 +1,11 @@
 import { expect, it } from 'vitest';
 import { resolveCallsheetProcessingState } from './callsheetProcessingState';
 const job = { status: 'processing', processing_started_at: new Date(0).toISOString() };
+it.each(['created', 'queued'])('exposes abandoned %s jobs without automatically restarting AI', status => {
+  const pending = { status, created_at: new Date(0).toISOString() };
+  expect(resolveCallsheetProcessingState(pending, false, 180_000).status).toBe('failed');
+  expect(resolveCallsheetProcessingState(pending, true, 180_000).status).toBe(status);
+});
 it('stops displaying an abandoned request as processing, even on repeated polls', () => {
   for (const now of [180_000, 240_000, 300_000]) expect(resolveCallsheetProcessingState(job, false, now).status).toBe('failed');
 });

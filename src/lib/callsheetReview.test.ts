@@ -39,9 +39,9 @@ describe('persisted callsheet review drafts', () => {
     const second = { ...job, id: 'job-2', storage_path: 'user/job-2/Dispo #17.pdf' };
     expect(getReviewCallsheetDrafts([job, second], [{ callsheet_job_id: job.id }], []).map(d => d.trip.id)).toEqual(['job-2']);
   });
-  it('includes failures and quota failures but not cancelled or unfinished uploads', () => {
+  it('keeps failures, interrupted and active jobs visible; only pending paths without a filename are excluded', () => {
     const jobs = ['failed', 'out_of_quota', 'processing', 'cancelled'].map(status => ({ ...job, id: status, status }));
     jobs.push({ ...job, id: 'pending', storage_path: 'pending' });
-    expect(getReviewCallsheetDrafts(jobs, [], []).map(d => d.trip.id)).toEqual(['failed', 'out_of_quota']);
+    expect(getReviewCallsheetDrafts(jobs, [], []).map(d => d.trip.id)).toEqual(['failed', 'out_of_quota', 'processing', 'cancelled']);
   });
 });

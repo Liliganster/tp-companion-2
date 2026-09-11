@@ -20,7 +20,7 @@ export type ReviewCallsheetJob = {
 // must not enter reports, distances or emissions before the user saves them.
 export function getReviewCallsheetDrafts(jobs: ReviewCallsheetJob[], trips: Pick<Trip, 'callsheet_job_id'>[], projects: { id: string; name: string }[]) {
   const saved = new Set(trips.map(t => t.callsheet_job_id).filter(Boolean));
-  return jobs.filter(job => ['failed', 'needs_review', 'out_of_quota'].includes(job.status) && !saved.has(job.id) && job.storage_path && job.storage_path !== 'pending')
+  return jobs.filter(job => ['created', 'queued', 'processing', 'done', 'failed', 'needs_review', 'out_of_quota', 'cancelled'].includes(job.status) && !saved.has(job.id) && job.storage_path && job.storage_path !== 'pending')
     .map(job => {
       const name = job.storage_path.split('/').pop() || job.id;
       const trip: Trip = {

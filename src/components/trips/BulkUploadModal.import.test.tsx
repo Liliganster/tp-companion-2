@@ -1,15 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-const mocks = vi.hoisted(() => ({ save: vi.fn(), fetch: vi.fn(), error: vi.fn(), tables: [] }));
-vi.mock('@/hooks/use-i18n', () => ({ useI18n: () => ({ t: (s: string) => s, tf: (s: string) => s, locale: 'es' }) }));
+const mocks = vi.hoisted(() => ({ save: vi.fn(), fetch: vi.fn(), error: vi.fn(), tables: [] as any[], jobs: [] as any[], t: (s: string) => s, tf: (s: string) => s }));
+vi.mock('@/hooks/use-i18n', () => ({ useI18n: () => ({ t: mocks.t, tf: mocks.tf, locale: 'es' }) }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ getAccessToken: async () => 'test' }) }));
 vi.mock('@/contexts/UserProfileContext', () => ({ useUserProfile: () => ({ profile: { baseAddress: 'Home' } }) }));
 vi.mock('@/contexts/ProjectsContext', () => ({ useProjects: () => ({ projects: [{ id: 'project', name: 'Film' }], addProject: async () => true, updateProject: async () => true }) }));
 vi.mock('@/contexts/TripsContext', () => ({ useTrips: () => ({ trips: mocks.tables }) }));
 vi.mock('@/hooks/use-ai-quota', () => ({ useAiQuota: () => ({ used: 0, limit: 3, remaining: 3 }) }));
 vi.mock('@/hooks/use-plan-limits', () => ({ usePlanLimits: () => ({ checkCSVImportLimit: () => ({ allowed: true }), checkStopsLimit: () => ({ allowed: true }), canAddNonAITrip: { allowed: true }, limits: { maxCallsheetsPerBatch: 5 } }) }));
-vi.mock('@/lib/supabaseClient', () => ({ supabase: { auth: { getUser: async () => ({ data: { user: null } }) } } }));
+vi.mock('@/lib/supabaseClient', () => ({ supabase: {
+  auth: { getUser: async () => ({ data: { user: mocks.jobs.length ? { id: 'user' } : null } }) },
+  from: () => {
+    const filters: ((row: any) => boolean)[] = [];
+    const q: any = { select: () => q, eq: () => q, order: () => q, range: () => q,
+      in: (key: string, values: any[]) => { filters.push(row => values.includes(row[key])); return q; },
+      then: (resolve: any) => Promise.resolve({ data: mocks.jobs.filter(row => filters.every(fn => fn(row))), error: null }).then(resolve),
+    }; return q;
+  },
+} }));
 vi.mock('sonner', () => ({ toast: { error: mocks.error, success: () => {}, info: () => {}, warning: () => {} } }));
 import { BulkUploadModal } from './BulkUploadModal';
 const csv = 'date;projectName;origin;destination;km\n2026-09-09;Film;A;B;25';
@@ -19,7 +28,7 @@ function file(name: string, text: string, type = 'text/csv') {
   return f;
 }
 function open() { return render(<MemoryRouter><BulkUploadModal defaultOpen trigger={<button>Open</button>} onSave={mocks.save} /></MemoryRouter>); }
-beforeEach(() => { cleanup(); vi.clearAllMocks(); mocks.save.mockResolvedValue(true); vi.stubGlobal('fetch', mocks.fetch); });
+beforeEach(() => { cleanup(); mocks.jobs = []; mocks.tables = []; vi.clearAllMocks(); mocks.save.mockResolvedValue(true); vi.stubGlobal('fetch', mocks.fetch); });
 describe('bulk import user flow', () => {
   it('defaults to manual CSV; drop, edit and save use the reviewed value without AI', async () => {
     open();
@@ -71,4 +80,15 @@ describe('bulk import user flow', () => {
     expect(screen.getByRole('button', { name: /bulk.removeFile mensaje-/ })).toBeInTheDocument();
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
+});
+
+it('reopens a four-document batch with both failed and cancelled originals, excluding only the two saved trips', async () => {
+  mocks.jobs = ['done', 'failed', 'cancelled', 'done'].map((status,index) => ({ id: 'job-'+index, status, storage_path: 'user/job-'+index+'/Document-'+index+'.pdf', created_at: new Date().toISOString(), needs_review_reason: status === 'failed' ? 'Upload failed' : null }));
+  mocks.tables = [{ callsheet_job_id: 'job-0' }, { callsheet_job_id: 'job-3' }];
+  open();
+  await screen.findByText('Document-1.pdf');
+  expect(await screen.findByText('Document-2.pdf')).toBeInTheDocument();
+  expect(screen.queryByText('Document-0.pdf')).not.toBeInTheDocument();
+  expect(screen.queryByText('Document-3.pdf')).not.toBeInTheDocument();
+  expect(mocks.fetch).not.toHaveBeenCalled();
 });

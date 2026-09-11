@@ -17,7 +17,7 @@ export function useCallsheetReview() {
       for (let offset = 0; ; offset += 500) {
         const { data, error } = await supabase.from('callsheet_jobs')
           .select('id, storage_path, created_at, project_id, status, processing_started_at, processed_at, needs_review_reason, callsheet_results(date_value, date_evidence, project_value), callsheet_locations(formatted_address, address_raw, name_raw, page, position, label_source, selection_state, review_reason)')
-          .eq('user_id', user!.id).in('status', ['failed', 'needs_review', 'out_of_quota', 'processing'])
+          .eq('user_id', user!.id).in('status', ['created', 'queued', 'processing', 'done', 'failed', 'needs_review', 'out_of_quota', 'cancelled'])
           .order('created_at').order('id').range(offset, offset + 499);
         if (error) throw error;
         jobs.push(...(data ?? []).map(job => ({ ...resolveCallsheetProcessingState(job, false), callsheet_results: Array.isArray(job.callsheet_results) ? job.callsheet_results[0] ?? null : job.callsheet_results })));

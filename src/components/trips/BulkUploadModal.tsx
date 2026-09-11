@@ -24,10 +24,9 @@ import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimizati
 import { useAuth } from "@/contexts/AuthContext";
 import { getBulkCloseCancellation } from "@/components/trips/bulkUploadClose";
 import { getBulkDisplayStatus, getInitialBulkJobStateById } from "@/components/trips/bulkUploadProcessingState";
-import { getBulkDuplicateCleanupIds } from "@/components/trips/bulkUploadCleanup";
+import { uploadCallsheetFile } from "@/lib/callsheetUpload";
 
 import { cancelCallsheetJobs } from "@/lib/aiJobCancellation";
-import { cascadeDeleteCallsheetJobById } from "@/lib/cascadeDelete";
 import { usePlanLimits } from "@/hooks/use-plan-limits";
 import { logger } from "@/lib/logger";
 import { FEATURES } from "@/lib/features";
@@ -322,25 +321,25 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     resetAiState();
   }, [open]);
 
-  // Resurrección: al abrir el modal en limpio, recuperar extracciones de las
-  // últimas 24 h que siguen vivas (queued/processing) o terminadas sin guardar
-  // como viaje. Cerrar el modal ya no las destruye; aquí se retoman.
+  // Restore every unfinished document, including failures and interrupted uploads.
   useEffect(() => {
     if (!open || !supabase) return;
     let alive = true;
     void (async () => {
       const { data: { user } = { user: null } } = await supabase.auth.getUser();
       if (!alive || !user) return;
-      const sinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const { data, error } = await supabase
-        .from("callsheet_jobs")
-        .select("id, status, storage_path, created_at")
-        .eq("user_id", user.id)
-        .in("status", ["queued", "processing", "done"])
-        .gte("created_at", sinceIso)
-        .order("created_at", { ascending: false })
-        .limit(10);
-      if (!alive || error || !data?.length) return;
+      const data: any[] = [];
+      for (let offset = 0; ; offset += 500) {
+        const page = await supabase.from("callsheet_jobs")
+          .select("id, status, storage_path, created_at, needs_review_reason, processing_started_at, processed_at")
+          .eq("user_id", user.id)
+          .in("status", ["created", "queued", "processing", "done", "failed", "needs_review", "out_of_quota", "cancelled"])
+          .order("created_at", { ascending: false }).order("id").range(offset, offset + 499);
+        if (!alive || page.error) return;
+        data.push(...(page.data ?? []).map(row => resolveCallsheetProcessingState(row, false)));
+        if ((page.data?.length ?? 0) < 500) break;
+      }
+      if (!data.length) return;
 
       const savedJobIds = new Set(
         (trips ?? []).map((tr) => String((tr as any)?.callsheet_job_id ?? "").trim()).filter(Boolean),
@@ -361,7 +360,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
           }),
         ),
       );
-      setJobStateById(Object.fromEntries(rows.map((r) => [String(r.id), { status: String(r.status) as JobStatus }])));
+      setJobStateById(Object.fromEntries(rows.map((r) => [String(r.id), { status: String(r.status) as JobStatus, needsReviewReason: r.needs_review_reason }])));
       setJobIds(ids);
       // El polling existente carga los resultados y avanza a "review" solo.
       setAiStep("processing");
@@ -404,8 +403,8 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
   const isAiCancelled = (signal?: AbortSignal | null) =>
     cancelRequestedRef.current || Boolean(signal?.aborted);
 
-  // Botón "Cancelar extracción": detiene el cliente, borra los jobs (y sus
-  // archivos) del servidor y vuelve al paso de subida. El worker comprueba la
+  // Botón "Cancelar extracción": detiene el cliente; los jobs y sus archivos se
+  // conservan en el servidor y vuelve al paso de subida. El worker comprueba la
   // cancelación antes de llamar a la IA; como mucho se consume la llamada ya
   // en vuelo (una por callsheet).
   const cancelActiveExtraction = async () => {
@@ -858,25 +857,6 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     selectAiFiles(files);
   };
 
-  const cleanupTransientCallsheetJobs = async (ids: string[]) => {
-    const uniqueIds = Array.from(new Set(ids.map((id) => String(id ?? "").trim()).filter(Boolean)));
-    if (uniqueIds.length === 0) return;
-
-    const results = await Promise.allSettled(
-      uniqueIds.map(async (id) => {
-        await cascadeDeleteCallsheetJobById(supabase, id);
-      }),
-    );
-
-    results.forEach((result, index) => {
-      if (result.status === "fulfilled") return;
-      logger.warn("[BulkUploadModal] Failed to cleanup transient callsheet job", {
-        jobId: uniqueIds[index],
-        error: result.reason,
-      });
-    });
-  };
-
   const triggerBulkProcessing = async (
     ids: string[],
     signal: AbortSignal | null | undefined,
@@ -1145,89 +1125,16 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
 
       const processSelectedFile = async (file: File) => {
         if (isAiCancelled(aiSignal)) return;
-        let createdJobId: string | null = null;
-        try {
-          // Bulk upload must not reuse rows by filename alone. A previous unsaved or out-of-quota
-          // job with the same name can belong to a different file revision and would resurrect stale UI state.
-          const existingPattern = `%/${file.name}`;
-          const existingQuery = supabase
-            .from("callsheet_jobs")
-            .select("id, storage_path, status, created_at")
-            .eq("user_id", user.id)
-            .ilike("storage_path", existingPattern)
-            .order("created_at", { ascending: false })
-            .limit(5);
-
-          const { data: existingRows, error: existingError } = await existingQuery;
-          if (isAiCancelled(aiSignal)) return;
-          if (!existingError && Array.isArray(existingRows) && existingRows.length > 0) {
-            const existingJobs = existingRows
-              .map((r: any) => ({
-                id: String(r?.id ?? ""),
-                status: String(r?.status ?? "").trim(),
-              }))
-              .filter((job) => job.id);
-
-            const staleJobIds = getBulkDuplicateCleanupIds({
-              existingJobs,
-              persistedJobIds,
-            });
-            if (staleJobIds.length > 0) {
-              await cleanupTransientCallsheetJobs(staleJobIds);
-              if (isAiCancelled(aiSignal)) return;
-            }
-          }
-
-          if (isAiCancelled(aiSignal)) return;
-
-          // 1. Create Job
-          const { data: job, error: jobError } = await supabase
-            .from("callsheet_jobs")
-            .insert({
-              user_id: user.id,
-              storage_path: "pending",
-              status: "created",
-            })
-            .select()
-            .single();
-
-          if (jobError) throw jobError;
-          createdJobId = job.id;
-          activeJobIdsRef.current.push(job.id);
-
-          if (isAiCancelled(aiSignal)) return;
-
-          // 2. Upload File
-          const filePath = `${user.id}/${job.id}/${file.name}`;
-          const { error: uploadError } = await supabase.storage.from("callsheets").upload(filePath, file);
-          if (uploadError) throw uploadError;
-
-          if (isAiCancelled(aiSignal)) return;
-
-          // 3. Queue Job
-          const { error: updateError } = await supabase
-            .from("callsheet_jobs")
-            .update({ storage_path: filePath, status: "queued" })
-            .eq("id", job.id);
-          if (updateError) throw updateError;
-          if (isAiCancelled(aiSignal)) return;
-
-          createdJobIds.push(job.id);
-          // resolveCallsheetMime: los HEIC/algunos drag&drop llegan sin file.type;
-          // se deduce de la extensión para que el worker envíe el mime correcto.
-          metaById[job.id] = { fileName: file.name, mimeType: resolveCallsheetMime(file.name, file.type), storagePath: filePath };
-          initialJobStateById[job.id] = { status: "queued" };
-          successCount += 1;
-        } catch (err) {
-          logger.warn("Bulk upload error", err);
+        const id = uuidv4();
+        activeJobIdsRef.current.push(id);
+        const outcome = await uploadCallsheetFile(supabase, user.id, file, id, () => isAiCancelled(aiSignal));
+        createdJobIds.push(id);
+        metaById[id] = { fileName: file.name, mimeType: resolveCallsheetMime(file.name, file.type), storagePath: outcome.storagePath };
+        initialJobStateById[id] = { status: outcome.status, needsReviewReason: outcome.reason };
+        if (outcome.status === 'queued') successCount += 1;
+        else {
           failCount += 1;
-          if (createdJobId) {
-            try {
-              await cleanupTransientCallsheetJobs([createdJobId]);
-            } catch {
-              // ignore
-            }
-          }
+          logger.warn('Callsheet upload retained as failed', { id, persisted: outcome.persisted, uploaded: outcome.uploaded, reason: outcome.reason, persistenceError: outcome.persistenceError });
         }
       };
 
@@ -1239,13 +1146,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
       }
 
       if (isAiCancelled(aiSignal)) {
-        void cleanupTransientCallsheetJobs(createdJobIds);
-        return;
-      }
-
-      if (successCount === 0) {
-        setAiStep("upload");
-        toast.error(t("bulk.errorUploadNone"));
+        // Each upload records its own interruption; preserve every registered file.
         return;
       }
 
@@ -1270,7 +1171,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
       setJobStateById(getInitialBulkJobStateById({ createdJobIds, jobStateById: initialJobStateById }) as Record<string, JobState>);
       // Start extraction from the browser so bulk uploads don't depend on trigger-worker.
       try {
-        await triggerBulkProcessing(createdJobIds, aiSignal, "initial_batch");
+        await triggerBulkProcessing(createdJobIds.filter(id => initialJobStateById[id]?.status === "queued"), aiSignal, "initial_batch");
       } catch {
         // ignore: polling will still update already-finished jobs
       }
@@ -1299,10 +1200,10 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
       aiAbortControllerRef.current = null;
       scheduledProcessJobIdsRef.current.clear();
       optimizeChainRef.current = Promise.resolve();
-      // Solo se cancelan/limpian jobs que aún no consumen IA (created/queued).
+      // Se interrumpen sin borrar los jobs que aún no consumen IA (created/queued).
       // Los processing/done siguen en el servidor y se recuperan al reabrir.
       void cancelCallsheetJobs(jobsToCancel);
-      void cleanupTransientCallsheetJobs(jobsToCancel);
+      // Closing stops unstarted jobs but never deletes their records or files.
 
       if (shouldShowBackgroundToast) {
         setTimeout(() => {
@@ -1455,7 +1356,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
         if (isAiCancelled(aiSignal)) return;
         const { data: fetchedJobs, error: jobsError } = await supabase
           .from("callsheet_jobs")
-          .select("id, status, needs_review_reason, processing_started_at, processed_at")
+          .select("id, status, needs_review_reason, created_at, processing_started_at, processed_at")
           .in("id", jobIds);
         if (isAiCancelled(aiSignal)) return;
 
@@ -1473,7 +1374,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
           .filter((j: any) => String(j?.status ?? "") === "processing")
           .map((j: any) => String(j.id));
         const failedJobs = jobs.filter(
-          (j: any) => j.status === "failed" || j.status === "needs_review" || j.status === "out_of_quota",
+          (j: any) => j.status === "failed" || j.status === "needs_review" || j.status === "out_of_quota" || j.status === "cancelled",
         );
 
         const hasPending = jobs.some((j: any) => {
@@ -1584,7 +1485,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     const done = jobsForUi.filter((j) => j.status === "done").length;
     const ready = jobsForUi.filter((j) => j.status === "done" && Boolean(j.review) && !j.saved && !j.review?.optimizing).length;
     const saved = jobsForUi.filter((j) => j.saved).length;
-    const failed = jobsForUi.filter((j) => j.status === "failed" || j.status === "needs_review" || j.status === "out_of_quota").length;
+    const failed = jobsForUi.filter((j) => j.status === "failed" || j.status === "needs_review" || j.status === "out_of_quota" || j.status === "cancelled").length;
     const pending = total - done - failed;
     return { total, done, ready, saved, failed, pending };
   }, [jobsForUi]);
@@ -1794,6 +1695,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
             {t("bulk.statusQueued")}
           </Badge>
         );
+      case "cancelled":
       case "failed":
         return (
           <Badge variant="outline" className="border-destructive/30 bg-destructive/10 text-destructive">
@@ -2208,7 +2110,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                   {jobsForUi.map((job) => {
                     const review = job.review;
                     const showProcessing = job.status === "processing" || job.status === "queued" || job.status === "created";
-                    const showFailed = job.status === "failed" || job.status === "needs_review" || job.status === "out_of_quota";
+                    const showFailed = job.status === "failed" || job.status === "needs_review" || job.status === "out_of_quota" || job.status === "cancelled";
                     const showDoneNoReview = job.status === "done" && !review && !job.saved;
 
                     return (

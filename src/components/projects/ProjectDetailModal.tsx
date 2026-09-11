@@ -1042,12 +1042,12 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
       docAbortControllersRef.current.delete(doc.id);
     }
     cancelCallsheetJobIdsRef.current.delete(doc.id);
-    // Remove from UI immediately because cancelled jobs are deleted
-    localStatusOverridesRef.current.delete(doc.id);
-    setRealCallSheets(prev => prev.filter(p => p.id !== doc.id));
+    // Cancelling stops extraction; deleting a document is a separate action.
+    localStatusOverridesRef.current.set(doc.id, 'cancelled');
+    setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'cancelled' } : p));
     logger.warn("[handleCancelExtract] Showing toast");
-    toast.info("Procesamiento cancelado y eliminado");
-    // Delete cancelled job (and file) from DB/storage
+    toast.info("Procesamiento cancelado; documento conservado");
+    // Preserve the job and file for review.
     try {
       await cancelCallsheetJobs([doc.id]);
     } finally {
