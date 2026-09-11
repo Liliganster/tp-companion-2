@@ -196,7 +196,7 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
     formatted_address: normalizeCallsheetAddress(location.normalizedAddress ?? location.address),
     label_source: location.label, position: location.position,
     selection_state: location.selection_state, review_reason: location.review_reason,
-    evidence_text: `${location.label}: ${location.address}`,
+    evidence_text: [ `${location.label}: ${location.address}`, location.siteEvidence ].filter(Boolean).join('\n'),
   }));
   // Geocoding is optional route enrichment in the client. It cannot delay,
   // replace, or invalidate the extraction, nor cross-associate Maps blocks.

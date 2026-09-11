@@ -213,7 +213,7 @@ it('uses the persisted trigger-adjusted state and records request diagnostics al
  const result=await extractMockLocations([{label:'SET',address:'Main Road 1',normalizedAddress:'Main Road 1',role:'filming'}],'SET Main Road 1');
  expect(result).toMatchObject({ok:true,status:'needs_review',reviewReason:'Project does not match'});
  const stored=mocks.insert.mock.calls.find(([table])=>table==='callsheet_results')?.[1] as any;
- expect(stored.model_output._diagnostics).toMatchObject({profile:'callsheet-2026-09-11-v2',inputMode:'text',limits:{allowSchemaRetry:false,maxOutputTokens:8192}});
+ expect(stored.model_output._diagnostics).toMatchObject({profile:'callsheet-2026-09-11-v3-context',inputMode:'text',limits:{allowSchemaRetry:false,maxOutputTokens:8192}});
  expect(stored.model_output._diagnostics.fileHash).toMatch(/^[a-f0-9]{64}$/);
 });
 it('rejects even syntactically valid but truncated provider output before atomic saving',async()=>{
@@ -225,4 +225,34 @@ it('rejects even syntactically valid but truncated provider output before atomic
 });
 it('does not silently use raw addresses when the current provider omits normalization',async()=>{
  expect(await extractMockLocations([{label:'SET',address:'Venue - odd address',role:'filming'}],'Venue - odd address')).toMatchObject({ok:true,status:'needs_review',locations:[]});
+});
+
+it('carries whole-document understanding through the actual PDF pipeline and atomic-save payload', async () => {
+ const bytes=new TextEncoder().encode('%PDF-1.7 unchanged complete document');
+ mocks.download.mockResolvedValue({data:{size:bytes.length,arrayBuffer:async()=>bytes.buffer}});
+ const data={
+  date:'2026-09-10',dateRaw:'10 septembre 2026',dateYearInDocument:true,projectName:'Across the River',
+  documentReviewReason:'The final exterior has no established relation to the listed sites.',
+  locations:[
+   {label:'Décor A / Maison',address:'River Road 12',normalizedAddress:'River Road 12',role:'filming',locationKind:'physical_destination',addressRelation:'set_address',siteEvidence:'Header names Décor A; page 3 links the house scenes to River Road 12.'},
+   {label:'Jardins',address:'Sculpture garden; loading at River Road 20-28',normalizedAddress:'River Road 20-28',role:'filming',locationKind:'physical_destination',addressRelation:'access_only',siteEvidence:'Page 2: garden filming; page 4: street marked loading only.',reviewReason:'No filming entrance is specified.'},
+   {label:'CAR',address:'The character drives home',normalizedAddress:'',role:'filming',locationKind:'mobile_scene',addressRelation:'unresolved',reviewReason:''},
+  ],
+ };
+ mocks.binary.mockResolvedValue({text:JSON.stringify(data),provider:'mock',model:'mock',finishReason:'STOP'});
+ const result=await run('context.pdf');
+ expect(mocks.binary).toHaveBeenCalledOnce();
+ expect(mocks.binary.mock.calls[0][2]).toEqual(Buffer.from(bytes));
+ expect(result).toMatchObject({ok:true,status:'needs_review',locations:['River Road 12']});
+ const payload=mocks.rpc.mock.calls[0][1];
+ expect(payload.p_result.review_reason).toContain(data.documentReviewReason);
+ expect(payload.p_result.model_output.locations[1].normalizedAddress).toBe('River Road 20-28');
+ expect(payload.p_locations).toHaveLength(2);
+ expect(payload.p_locations[0]).toMatchObject({label_source:'Décor A / Maison',formatted_address:'River Road 12',selection_state:'confirmed'});
+ expect(payload.p_locations[0].evidence_text).toContain(data.locations[0].siteEvidence);
+ expect(payload.p_locations[1]).toMatchObject({formatted_address:'',selection_state:'candidate'});
+ expect(payload.p_excluded).toEqual([expect.objectContaining({label:'CAR',reason:'mobile_scene_without_destination'})]);
+ const drafts=getReviewCallsheetDrafts([{id:'job',storage_path:'user/job/context.pdf',status:'needs_review',created_at:'2026-09-10',callsheet_results:payload.p_result,callsheet_locations:payload.p_locations}],[],[]);
+ expect(drafts[0].trip.route).toEqual(['River Road 12']);
+ expect(drafts[0].trip.distance).toBe(0);
 });
