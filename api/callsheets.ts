@@ -14,6 +14,7 @@ import { MAX_DOCUMENT_BYTES } from "../src/lib/importDocuments.js";
 import { z } from "zod";
 import { assertStorageOwnership, StorageOwnershipError } from "./_utils/storageOwnership.js";
 import { isSupportedUploadFileName, toStorageFileName } from "../src/lib/uploadFileName.js";
+import { CallsheetUploadError, signRegisteredCallsheetUpload, finalizeRegisteredCallsheetUpload, recordRegisteredUploadFailure } from './_utils/callsheetUploadLifecycle.js';
 
 // ─── /api/callsheets/process ────────────────────────────────────────────────
 // Direct synchronous extraction: claim job → download PDF → call Gemini → save results → done.
@@ -123,6 +124,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
 
 // ─── /api/callsheets/create-upload ──────────────────────────────────────────
 const CreateUploadBodySchema = z.object({
+  jobId: z.string().uuid().optional(),
   filename: z.string().max(180).optional(),
   contentType: z.string().max(120).optional(),
   size: z.number().int().min(0).max(MAX_DOCUMENT_BYTES).optional(),
@@ -134,7 +136,7 @@ const handleCreateUpload = withApiObservability(async function handler(req: any,
   const user = await requireSupabaseUser(req, res);
   if (!user) return;
 
-  const allowed = await enforceRateLimit({ req, res, name: "callsheet_create_upload", identifier: user.id, limit: 20, windowMs: 60_000, requestId });
+  const allowed = await enforceRateLimit({ req, res, name: "callsheet_create_upload", identifier: user.id, limit: 40, windowMs: 60_000, requestId });
   if (!allowed) return;
 
   const parsed = CreateUploadBodySchema.safeParse(req.body ?? {});
@@ -144,6 +146,10 @@ const handleCreateUpload = withApiObservability(async function handler(req: any,
     const { filename } = parsed.data;
     if (filename && !isSupportedUploadFileName(filename)) {
       return sendJson(res, 400, { error: "invalid_filename" });
+    }
+    if (parsed.data.jobId) {
+      if (!filename) return sendJson(res, 400, { error: 'missing_filename' });
+      return sendJson(res, 200, await signRegisteredCallsheetUpload(user.id, parsed.data.jobId, filename));
     }
     const { data: job, error: jobError } = await supabaseAdmin.from("callsheet_jobs").insert({ user_id: user.id, storage_path: "pending", status: "created" }).select("id").single();
     if (jobError || !job?.id) { log.error({ jobError }, "[callsheets/create-upload] job insert failed"); return sendJson(res, 500, { error: "job_insert_failed", message: jobError?.message }); }
@@ -156,12 +162,13 @@ const handleCreateUpload = withApiObservability(async function handler(req: any,
     return sendJson(res, 200, { jobId: job.id, uploadUrl: uploadData.signedUrl, path: uploadData.path });
   } catch (err: any) {
     log.error({ err }, "[callsheets/create-upload] error");
+    if (err instanceof CallsheetUploadError) return sendJson(res, err.status, { error: 'upload_unavailable', message: err.message });
     return sendJson(res, 500, { error: "create_upload_failed", message: err?.message ?? "Create upload failed" });
   }
 }, { name: "callsheets/create-upload" });
 
 // ─── /api/callsheets/queue ───────────────────────────────────────────────────
-const QueueBodySchema = z.object({ jobId: z.string().uuid() });
+const QueueBodySchema = z.object({ jobId: z.string().uuid(), size: z.number().int().positive().max(MAX_DOCUMENT_BYTES).optional(), enqueue: z.boolean().default(true) });
 
 const handleQueue = withApiObservability(async function handler(req: any, res: any, { log, requestId }) {
   if (req.method !== "POST") { res.statusCode = 405; res.setHeader("Allow", "POST"); res.end(); return; }
@@ -169,7 +176,7 @@ const handleQueue = withApiObservability(async function handler(req: any, res: a
   const user = await requireSupabaseUser(req, res);
   if (!user) return;
 
-  const allowed = await enforceRateLimit({ req, res, name: "callsheet_queue", identifier: user.id, limit: 10, windowMs: 10_000, requestId });
+  const allowed = await enforceRateLimit({ req, res, name: "callsheet_queue", identifier: user.id, limit: 40, windowMs: 60_000, requestId });
   if (!allowed) return;
 
   const parsed = QueueBodySchema.safeParse(req.body ?? {});
@@ -177,18 +184,29 @@ const handleQueue = withApiObservability(async function handler(req: any, res: a
   const { jobId } = parsed.data;
 
   try {
-    const { data: job, error: fetchError } = await supabaseAdmin.from("callsheet_jobs").select("id, status, user_id").eq("id", jobId).eq("user_id", user.id).maybeSingle();
-    if (fetchError || !job) return sendJson(res, 404, { error: "job_not_found" });
-    if (job.status !== "created" && job.status !== "failed" && job.status !== "cancelled") return sendJson(res, 400, { error: "job_already_queued_or_done", status: job.status });
-
-    const { error: updateError } = await supabaseAdmin.from("callsheet_jobs").update({ status: "queued" }).eq("id", jobId);
-    if (updateError) { log.error({ updateError }, "[callsheets/queue] Update error"); return sendJson(res, 500, { error: "update_failed", message: updateError.message }); }
-    return sendJson(res, 200, { ok: true, jobId });
+    return sendJson(res, 200, await finalizeRegisteredCallsheetUpload(user.id, jobId, parsed.data.size, parsed.data.enqueue));
   } catch (err: any) {
     log.error({ err }, "[callsheets/queue] error");
+    if (err instanceof CallsheetUploadError) return sendJson(res, err.status, { error: 'upload_not_confirmed', message: err.message });
+    if (err instanceof StorageOwnershipError) return sendJson(res, 403, { error: 'storage_ownership_not_verified' });
     return sendJson(res, 500, { error: "queue_failed", message: err?.message ?? "Queue failed" });
   }
 }, { name: "callsheets/queue" });
+
+const handleUploadFailed = withApiObservability(async function handler(req: any, res: any, { requestId }) {
+  if (req.method !== 'POST') return sendJson(res, 405, { error: 'method_not_allowed' });
+  const user = await requireSupabaseUser(req, res);
+  if (!user) return;
+  if (!await enforceRateLimit({ req, res, name: 'callsheet_upload_failed', identifier: user.id, limit: 40, windowMs: 60_000, requestId })) return;
+  const parsed = z.object({ jobId: z.string().uuid(), reason: z.string().min(1).max(300) }).safeParse(req.body);
+  if (!parsed.success) return sendJson(res, 400, { error: 'invalid_body' });
+  try {
+    await recordRegisteredUploadFailure(user.id, parsed.data.jobId, parsed.data.reason);
+    return sendJson(res, 200, { ok: true });
+  } catch (err) {
+    return sendJson(res, 503, { error: 'failure_not_saved', message: err instanceof Error ? err.message : 'Error' });
+  }
+}, { name: 'callsheets/upload-failed' });
 
 // ─── /api/callsheets/status ──────────────────────────────────────────────────
 const StatusQuerySchema = z.object({ jobId: z.string().uuid() });
@@ -353,6 +371,7 @@ export default async function handler(req: any, res: any) {
   if (path === "/api/callsheets/process"        || path.endsWith("/process"))        return handleProcess(req, res);
   if (path === "/api/callsheets/create-upload" || path.endsWith("/create-upload"))   return handleCreateUpload(req, res);
   if (path === "/api/callsheets/queue"          || path.endsWith("/queue"))           return handleQueue(req, res);
+  if (path.endsWith('/upload-failed')) return handleUploadFailed(req, res);
   if (path === "/api/callsheets/status"         || path.endsWith("/status"))          return handleStatus(req, res);
   if (path === "/api/callsheets/trigger-worker" || path.endsWith("/trigger-worker")) return handleTriggerWorker(req, res);
 

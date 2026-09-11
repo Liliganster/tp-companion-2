@@ -3,6 +3,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { uploadCallsheetFile } from './callsheetUpload';
 import { getReviewCallsheetDrafts } from './callsheetReview';
 import { getUploadedFileName } from './uploadFileName';
+import { uploadSignedCallsheet, finalizeCallsheetUpload, recordCallsheetUploadFailure } from './callsheetUploadTransport';
+vi.mock('./callsheetUploadTransport', () => ({ uploadSignedCallsheet: vi.fn(), finalizeCallsheetUpload: vi.fn(), recordCallsheetUploadFailure: vi.fn() }));
 
 function backend() {
   const jobs = new Map<string, any>();
@@ -34,6 +36,18 @@ function backend() {
       files.add(path); return { error: null };
     } }) },
   } as unknown as SupabaseClient;
+  vi.mocked(uploadSignedCallsheet).mockImplementation(async (_client, _id, _name, path) => {
+    const result = await client.storage.from('callsheets').upload(path, new Blob());
+    if (result.error) throw result.error;
+  });
+  vi.mocked(finalizeCallsheetUpload).mockImplementation(async (_client, id, _size, enqueue = true) => {
+    const result = await client.from('callsheet_jobs').update({ status: enqueue ? 'queued' : 'created' }).eq('id', id);
+    if (result.error) throw result.error;
+    return { ok: true };
+  });
+  vi.mocked(recordCallsheetUploadFailure).mockImplementation(async (_client, id, reason) => {
+    await client.from('callsheet_jobs').update({ status: 'failed', needs_review_reason: reason }).eq('id', id).eq('status', 'created');
+  });
   return { client, jobs, files, deleted };
 }
 
@@ -72,10 +86,27 @@ it('uploads a callsheet with # and recovers its original name after reload', asy
 
 it('retains a registered file when the user closes while its upload completes', async () => {
   const db = backend();
-  let checks = 0;
-  const result = await uploadCallsheetFile(db.client, 'user', new File(['PDF'], 'Dispo.pdf'), 'interrupted', () => ++checks >= 2);
+  const result = await uploadCallsheetFile(db.client, 'user', new File(['PDF'], 'Dispo.pdf'), 'interrupted', () => db.files.size > 0);
   expect(result.status).toBe('failed');
   expect(db.files.has(result.storagePath)).toBe(true);
   expect(db.jobs.get('interrupted').status).toBe('failed');
+  expect(db.deleted).not.toHaveBeenCalled();
+});
+
+it('preserves a local read failure without uploading or queuing an extraction', async () => {
+  const db = backend();
+  vi.spyOn(FileReader.prototype, 'readAsArrayBuffer').mockImplementation(() => { throw new DOMException('File unavailable', 'NotReadableError'); });
+  const result = await uploadCallsheetFile(db.client, 'user', new File(['PDF'], '#49.pdf'), 'unreadable');
+  expect(result).toMatchObject({ persisted: true, uploaded: false, status: 'failed' });
+  expect(result.reason).toContain('No se pudo leer el archivo');
+  expect(db.files.size).toBe(0);
+  expect(db.jobs.get('unreadable').status).toBe('failed');
+});
+
+it('supports project uploads without starting extraction or deleting failed evidence', async () => {
+  const db = backend();
+  const result = await uploadCallsheetFile(db.client, 'user', new File(['PDF'], 'Dispo.pdf'), 'manual', () => false, { projectId: 'project', autoQueue: false });
+  expect(result.status).toBe('created');
+  expect(db.jobs.get('manual')).toMatchObject({ project_id: 'project', status: 'created' });
   expect(db.deleted).not.toHaveBeenCalled();
 });
