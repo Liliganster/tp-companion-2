@@ -72,10 +72,19 @@ it('uploads a callsheet with # and recovers its original name after reload', asy
 
 it('retains a registered file when the user closes while its upload completes', async () => {
   const db = backend();
-  let checks = 0;
-  const result = await uploadCallsheetFile(db.client, 'user', new File(['PDF'], 'Dispo.pdf'), 'interrupted', () => ++checks >= 2);
+  const result = await uploadCallsheetFile(db.client, 'user', new File(['PDF'], 'Dispo.pdf'), 'interrupted', () => db.files.size > 0);
   expect(result.status).toBe('failed');
   expect(db.files.has(result.storagePath)).toBe(true);
   expect(db.jobs.get('interrupted').status).toBe('failed');
   expect(db.deleted).not.toHaveBeenCalled();
+});
+
+it('preserves a local read failure without uploading or queuing an extraction', async () => {
+  const db = backend();
+  vi.spyOn(FileReader.prototype, 'readAsArrayBuffer').mockImplementation(() => { throw new DOMException('File unavailable', 'NotReadableError'); });
+  const result = await uploadCallsheetFile(db.client, 'user', new File(['PDF'], '#49.pdf'), 'unreadable');
+  expect(result).toMatchObject({ persisted: true, uploaded: false, status: 'failed' });
+  expect(result.reason).toContain('No se pudo leer el archivo');
+  expect(db.files.size).toBe(0);
+  expect(db.jobs.get('unreadable').status).toBe('failed');
 });

@@ -13,6 +13,7 @@ import { isSupportedUploadFileName, toStorageFileName } from "@/lib/uploadFileNa
 import { useI18n } from "@/hooks/use-i18n";
 
 import { validateDocumentSize } from '@/lib/importDocuments';
+import { prepareCallsheetUploadBody } from '@/lib/callsheetUploadBody';
 
 interface CallsheetUploaderProps {
   onJobCreated?: (jobId: string) => void;
@@ -84,7 +85,8 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
           createdJobId = job.id;
 
           const filePath = `${user.id}/${job.id}/${toStorageFileName(file.name)}`;
-          const { error: uploadError } = await supabase.storage.from("callsheets").upload(filePath, file, { metadata: { originalName: file.name } });
+          const body = await prepareCallsheetUploadBody(file);
+          const { error: uploadError } = await supabase.storage.from("callsheets").upload(filePath, body, { contentType: body.type, metadata: { originalName: file.name } });
           if (uploadError) throw uploadError;
 
           const { error: updateError } = await supabase

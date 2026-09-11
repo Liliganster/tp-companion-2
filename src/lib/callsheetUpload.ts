@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { compactCallsheetReviewReason } from './callsheetReview';
 import { toStorageFileName } from './uploadFileName';
+import { CallsheetFileReadError, prepareCallsheetUploadBody } from './callsheetUploadBody';
 
 /** One result per selected file, including upload/queue failures. Never deletes evidence. */
 export async function uploadCallsheetFile(client: SupabaseClient, userId: string, file: File, id: string, isCancelled = () => false) {
@@ -13,8 +14,10 @@ export async function uploadCallsheetFile(client: SupabaseClient, userId: string
     if (inserted.error) throw inserted.error;
     persisted = true;
     if (isCancelled()) throw new Error('Carga interrumpida');
+    const body = await prepareCallsheetUploadBody(file);
+    if (isCancelled()) throw new Error('Carga interrumpida');
     stage = 'No se pudo subir el documento; vuelve a seleccionarlo';
-    const upload = await client.storage.from('callsheets').upload(storagePath, file, { metadata: { originalName: file.name } });
+    const upload = await client.storage.from('callsheets').upload(storagePath, body, { contentType: body.type, metadata: { originalName: file.name } });
     if (upload.error) throw upload.error;
     uploaded = true;
     if (isCancelled()) throw new Error('Carga interrumpida');
@@ -24,7 +27,7 @@ export async function uploadCallsheetFile(client: SupabaseClient, userId: string
     return { id, storagePath, persisted, uploaded, status: 'queued' as const, reason: null };
   } catch (error) {
     const detail = error && typeof error === 'object' && 'message' in error ? String(error.message) : String(error);
-    const reason = compactCallsheetReviewReason(isCancelled() ? 'Carga interrumpida. Revisa el documento o vuelve a subirlo.' : `${stage}: ${detail}`);
+    const reason = compactCallsheetReviewReason(isCancelled() ? 'Carga interrumpida. Revisa el documento o vuelve a subirlo.' : error instanceof CallsheetFileReadError ? error.message : `${stage}: ${detail}`);
     let persistenceError: unknown = null;
     if (persisted) {
       // A late upload response cannot overwrite a claimed or completed extraction.
