@@ -10,7 +10,7 @@ export function selectCallsheetLocations(data: CallsheetExtractionResult, date: 
   const filming: Array<{ label: string; address: string; normalizedAddress?: string; siteEvidence?: string; position: number; selection_state: 'confirmed' | 'candidate'; review_reason: string | null }> = [];
   const documentReviewReasons: string[] = [];
   if (data.documentReviewReason && data.documentReviewScope !== 'metadata' && !(data.documentReviewScope === 'date' && !date)) documentReviewReasons.push(data.documentReviewReason);
-  if (!date) documentReviewReasons.push('Confirma la fecha completa de rodaje; falta o es ambigua, incluido el año.');
+  if (!date) documentReviewReasons.push(data.dateRaw || data.date ? 'Fecha incompleta o ambigua.' : 'Fecha pendiente.');
   const reviewReasons = [...documentReviewReasons];
   data.locations.forEach((location, position) => {
     const label = location.label ?? '';

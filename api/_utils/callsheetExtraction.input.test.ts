@@ -213,7 +213,7 @@ it('uses the persisted trigger-adjusted state and records request diagnostics al
  const result=await extractMockLocations([{label:'SET',address:'Main Road 1',normalizedAddress:'Main Road 1',role:'filming'}],'SET Main Road 1');
  expect(result).toMatchObject({ok:true,status:'needs_review',reviewReason:'Project does not match'});
  const stored=mocks.insert.mock.calls.find(([table])=>table==='callsheet_results')?.[1] as any;
- expect(stored.model_output._diagnostics).toMatchObject({profile:'callsheet-2026-09-11-v4-review',inputMode:'text',limits:{allowSchemaRetry:false,maxOutputTokens:8192}});
+ expect(stored.model_output._diagnostics).toMatchObject({profile:'callsheet-2026-09-11-v5-partial-date',inputMode:'text',limits:{allowSchemaRetry:false,maxOutputTokens:8192}});
  expect(stored.model_output._diagnostics.fileHash).toMatch(/^[a-f0-9]{64}$/);
 });
 it('rejects even syntactically valid but truncated provider output before atomic saving',async()=>{
@@ -281,4 +281,18 @@ it('persists a single document date warning and independent address states for r
  expect(payload.p_locations[0]).toMatchObject({selection_state:'confirmed',review_reason:null});
  expect(payload.p_locations[1]).toMatchObject({selection_state:'candidate',formatted_address:''});
  expect(payload.p_locations[1].review_reason).not.toContain('fecha');
+});
+
+it.each([
+ {date:'19 November',dateRaw:'Tuesday, 19th Nov'},
+ {date:'19 de noviembre',dateRaw:''},
+])('retains the readable partial date in API, storage and review draft: %o', async extra=>{
+ const result=await extractMockLocations([{label:'SET',address:'Example Street 1',normalizedAddress:'Example Street 1',role:'filming'}],'Callsheet',{...extra,dateYearInDocument:false,documentReviewScope:'date',documentReviewReason:'Year unknown.'});
+ const evidence=extra.dateRaw || extra.date;
+ expect(result).toMatchObject({status:'needs_review',date:'',dateRaw:evidence,locations:['Example Street 1']});
+ const payload=mocks.rpc.mock.calls[0][1];
+ expect(payload.p_result).toMatchObject({date_value:null,date_evidence:evidence});
+ expect(payload.p_locations[0]).toMatchObject({selection_state:'confirmed',review_reason:null});
+ const [draft]=getReviewCallsheetDrafts([{id:'job',storage_path:'user/job/source.pdf',created_at:'2026-09-11',status:'needs_review',callsheet_results:payload.p_result,callsheet_locations:payload.p_locations}],[],[]);
+ expect(draft.trip).toMatchObject({date:'',extractedDate:evidence,route:['Example Street 1']});
 });

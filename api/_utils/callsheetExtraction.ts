@@ -61,6 +61,7 @@ export type ExtractCallsheetOutcome =
       status: 'done' | 'needs_review';
       reviewReason: string | null;
       date: string;
+      dateRaw: string;
       projectName: string;
       locations: string[];
       aiProvider: string;
@@ -185,6 +186,7 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
     date: validated.data.date, dateRaw: validated.data.dateRaw,
     dateYearInDocument: validated.data.dateYearInDocument,
   });
+  const dateEvidence = validated.data.dateRaw?.trim() || validated.data.date;
   const currentData = { ...validated.data, locations: validated.data.locations.map(location => ({
     ...location, normalizedAddress: 'normalizedAddress' in location ? location.normalizedAddress ?? '' : '',
   })) };
@@ -209,7 +211,7 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
     p_user_id: args.userId, p_job_id: jobId,
     p_request_id: args.requestId, p_attempt_id: args.attemptId,
     p_result: {
-      date_value: resolvedDate || null, date_evidence: validated.data.dateRaw ?? null,
+      date_value: resolvedDate || null, date_evidence: dateEvidence || null,
       // An absent title is not a conflicting title. NULL also prevents the
       // database mismatch trigger comparing a placeholder to a chosen project.
       project_value: validated.data.projectName === 'Untitled Project' ? null : validated.data.projectName,
@@ -228,7 +230,7 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
   const finalReviewReason = persisted.review_reason ?? null;
   log.info({ jobId, status: finalStatus, retained: locs.length, excluded: selection.excluded.length }, 'callsheet_committed');
   return {
-    ok: true, status: finalStatus, reviewReason: finalReviewReason, date: resolvedDate,
+    ok: true, status: finalStatus, reviewReason: finalReviewReason, date: resolvedDate, dateRaw: dateEvidence,
     projectName: validated.data.projectName, locations: locs.map(l => l.formatted_address).filter(Boolean),
     aiProvider: aiResult.provider, aiModel: aiResult.model, aiVendor: aiResult.vendor,
     aiDurationMs, geocodingDurationMs: null, locationsCount: locs.length,

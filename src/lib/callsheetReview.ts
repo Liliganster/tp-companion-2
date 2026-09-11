@@ -12,7 +12,7 @@ export type ReviewCallsheetJob = {
   project_id?: string | null;
   status: string;
   needs_review_reason?: string | null;
-  callsheet_results?: { date_value?: string | null; project_value?: string | null } | null;
+  callsheet_results?: { date_value?: string | null; date_evidence?: string | null; project_value?: string | null } | null;
   callsheet_locations?: { formatted_address?: string | null; address_raw?: string | null; name_raw?: string | null; page?: number | null; position?: number | null; label_source?: string | null; selection_state?: string | null; review_reason?: string | null }[];
 };
 
@@ -25,6 +25,7 @@ export function getReviewCallsheetDrafts(jobs: ReviewCallsheetJob[], trips: Pick
       const name = job.storage_path.split('/').pop() || job.id;
       const trip: Trip = {
         id: job.id, callsheet_job_id: job.id, date: job.callsheet_results?.date_value ?? '',
+        extractedDate: job.callsheet_results?.date_evidence ?? undefined,
         route: [...(job.callsheet_locations ?? [])].sort((a, b) => (a.position ?? a.page ?? 0) - (b.position ?? b.page ?? 0))
           .map(location => location.formatted_address ?? location.address_raw ?? '').filter(Boolean),
         project: projects.find(p => p.id === job.project_id)?.name ?? job.callsheet_results?.project_value ?? '',
@@ -34,4 +35,10 @@ export function getReviewCallsheetDrafts(jobs: ReviewCallsheetJob[], trips: Pick
       };
       return { job, trip, name };
     });
+}
+
+/** Presentation only. Preserve full evidence in storage; keep review rows short. */
+export function compactCallsheetReviewReason(reason?: string | null): string {
+  const text = (reason ?? '').replace(/https?:\/\/\S+/gi, '').replace(/\s+/g, ' ').trim();
+  return text.length <= 110 ? text : `${text.slice(0, 107).trimEnd()}…`;
 }

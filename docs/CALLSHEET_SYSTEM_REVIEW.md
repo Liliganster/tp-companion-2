@@ -39,3 +39,13 @@ Estos tres casos conocidos comprueban bloqueos concretos; no establecen un 95 % 
 Siguen pendientes la identificación consistente del título, las sustituciones de número/rango de Google, el cálculo desde texto cuya geocodificación no se acepta y la normalización de destinos de documentos pendientes por otros campos. Tener kilómetros o estado completado no certifica por sí solo una ubicación precisa.
 
 El PDF sigue llegando íntegro. Se mantiene una generación, 100 segundos, 8192 tokens máximos de salida y presupuesto de pensamiento 1024. No se amplían tiempos, cuotas ni reintentos. Los resultados históricos no se modifican ni regeneran automáticamente con el despliegue.
+
+## Actualización v5: fecha parcial visible y revisión breve
+
+Perfil callsheet-2026-09-11-v5-partial-date. El prompt se reduce a seis párrafos que piden interpretar el PDF completo como una unidad, conservar los datos conocidos y señalar brevemente la incertidumbre del campo afectado. dateRaw es obligatorio en la respuesta del modelo. Una fecha sin año conserva día y mes; date_value sigue siendo NULL hasta disponer de una fecha completa, sin inventar el año.
+
+La revisión ahora consulta date_evidence, antes guardado pero omitido por la vista, y muestra la fecha detectada junto a direcciones ordenadas y un aviso corto. Las etiquetas y observaciones individuales quedan plegadas. Esto también mejora la presentación de registros históricos sin regenerarlos ni gastar IA. El formulario conserva la fecha original como ayuda al completar la fecha canónica. Las explicaciones antiguas se abrevian para su presentación, sin eliminar la evidencia almacenada. No requiere migración.
+
+Validación: 179 pruebas en 24 archivos y TypeScript aprobados. Una generación real adicional sobre FUNDBOX_Dispo DT 4.pdf completo devolvió date=19 November, dateRaw=Tuesday, 19th Nov y cuatro destinos en orden, en 9,2 segundos. El núcleo conservó date_evidence y emitió únicamente Fecha incompleta o ambigua. Se usaron adaptadores locales para Storage y persistencia; esta prueba no valida escrituras autenticadas en producción. Sin llamadas nuevas a Maps. Evidencia privada en outputs/callsheet-eval-20260911/v5 del workspace Codex. Presupuesto acumulado conservador: 0,77474445 EUR del máximo autorizado de 1 EUR, sujeto a la misma estimación y provisiones anteriores.
+
+Esta prueba verifica la recuperación de fecha parcial, no una precisión general del 95 %. Permanecen los límites de precisión geográfica descritos arriba.

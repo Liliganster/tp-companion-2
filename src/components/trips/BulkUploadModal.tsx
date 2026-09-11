@@ -1,4 +1,5 @@
 import { CALLSHEET_CLIENT_TIMEOUT_MS } from "@/lib/callsheetTiming";
+import { compactCallsheetReviewReason } from '@/lib/callsheetReview';
 import { resolveCallsheetProcessingState } from '@/lib/callsheetProcessingState';
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -262,6 +263,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
   type JobState = { status: JobStatus; needsReviewReason?: string | null };
   type ReviewTrip = {
     date: string;
+    extractedDate?: string;
     project: string;
     producer: string;
     rawLocations: string[];
@@ -1423,6 +1425,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
           ...prev,
           [jobId]: {
             date: String((result as any).date_value ?? ""),
+            extractedDate: String((result as any).date_evidence ?? ""),
             project: String((result as any).project_value ?? ""),
             producer: String((result as any).producer_value ?? ""),
             rawLocations,
@@ -2218,7 +2221,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                             <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                             <div className="min-w-0">
                               <p className="text-sm font-medium truncate">{job.fileName}</p>
-                              {job.reason && <p className="text-xs text-muted-foreground truncate">{job.reason}</p>}
+                              {job.reason && <p className="text-xs text-muted-foreground">{compactCallsheetReviewReason(job.reason)}</p>}
                             </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
@@ -2242,6 +2245,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                               </div>
                               <div className="space-y-1.5">
                                 <Label className="text-xs text-muted-foreground">{t("tripModal.date")}</Label>
+                                {review.extractedDate && <p className="text-xs text-muted-foreground">{t('callsheetReview.detectedDate')}: {review.extractedDate}</p>}
                                 <div className="relative">
                                   <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                                   <Input
@@ -2303,7 +2307,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                                       </span>
                                       <div className="min-w-0 flex-1">
                                       <p className="text-xs text-muted-foreground">{review.locationDetails?.[idx]?.label_source} · {review.locationDetails?.[idx]?.selection_state === 'candidate' ? t('bulk.statusNeedsReview') : t('bulk.statusReady')}</p>
-                                      <p className="text-xs text-muted-foreground">{review.locationDetails?.[idx]?.review_reason}</p>
+                                      <p className="text-xs text-muted-foreground">{compactCallsheetReviewReason(review.locationDetails?.[idx]?.review_reason)}</p>
                                       <Input
                                         aria-label={tf("bulk.locationsRouteLabel", { count: idx + 1 })}
                                         value={loc}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canMaterializeCallsheet, getReviewCallsheetDrafts, type ReviewCallsheetJob } from './callsheetReview';
+import { canMaterializeCallsheet, compactCallsheetReviewReason, getReviewCallsheetDrafts, type ReviewCallsheetJob } from './callsheetReview';
 
 const job: ReviewCallsheetJob = { id: 'job-1', status: 'needs_review', storage_path: 'user/job-1/Dispo #17.pdf', created_at: '2026-09-10T08:00:00Z', project_id: 'project-1' };
 
@@ -11,6 +11,17 @@ it.each([
   ['done', 'done', 'confirmed', true],
 ])('project materialization respects stored state even with stale UI: %s/%s/%s', (status, result, selection_state, allowed) => {
   expect(canMaterializeCallsheet(String(status), String(result), [{ selection_state: String(selection_state) }])).toBe(allowed);
+});
+
+it('restores the partial date already saved by older extractions without assigning a year',()=>{
+ const [draft]=getReviewCallsheetDrafts(JSON.parse(JSON.stringify([{...job,callsheet_results:{date_value:null,date_evidence:'Tuesday, 19th Nov'},callsheet_locations:[{formatted_address:'Example Street 12'}]}])),[],[]);
+ expect(draft.trip).toMatchObject({date:'',extractedDate:'Tuesday, 19th Nov',route:['Example Street 12']});
+});
+it('keeps old verbose review messages compact without copying Maps URLs',()=>{
+ const reason='Check the date https://maps.app.goo.gl/example '+ 'Repeated explanation '.repeat(30);
+ expect(compactCallsheetReviewReason(reason).length).toBeLessThanOrEqual(110);
+ expect(compactCallsheetReviewReason(reason)).not.toContain('https');
+ expect(compactCallsheetReviewReason('Year missing.')).toBe('Year missing.');
 });
 describe('persisted callsheet review drafts', () => {
   it('restores extracted candidates and date beside the original without making a confirmed trip', () => {

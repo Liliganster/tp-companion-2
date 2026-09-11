@@ -46,9 +46,9 @@ describe("buildUniversalExtractorPrompt", () => {
     const prompt = buildUniversalExtractorPrompt("[PDF ATTACHED]");
 
     expect(prompt).toContain("Read ALL pages");
-    expect(prompt).toContain("NÄCHSTER DREHTAG");
-    expect(prompt).toContain("Contacts, hospitals");
-    expect(prompt).toContain("govern their own blocks");
+    expect(prompt).toContain("Explicit other-day blocks remain separate");
+    expect(prompt).toContain("Logistics are not used as filming destinations");
+    expect(prompt).toContain("schedule, movements and maps together");
     expect(prompt).not.toContain("Only analyze the FIRST 2 PAGES");
   });
 });

@@ -157,6 +157,7 @@ function SortableStop({ stop, onRemove, onChange, onDraftChange, canRemove, disa
 interface TripData {
   id?: string;
   date?: string;
+  extractedDate?: string;
   route?: string[];
   project?: string;
   projectId?: string; // Added
@@ -860,6 +861,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="date">{t("tripModal.date")}</Label>
+              {trip?.extractedDate && <p className="text-xs text-muted-foreground">{t('callsheetReview.detectedDate')}: {trip.extractedDate}</p>}
               <Input
                 id="date"
                 type="date"

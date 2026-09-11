@@ -19,6 +19,8 @@ const DEBUG = import.meta.env.DEV;
 export type Trip = {
   id: string;
   date: string;
+  /** Original callsheet date, possibly partial; only a review hint, never trip_date. */
+  extractedDate?: string;
   route: string[];
   project: string; 
   projectId?: string | null; // Added for relational link

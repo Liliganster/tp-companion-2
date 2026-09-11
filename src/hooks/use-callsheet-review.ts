@@ -16,7 +16,7 @@ export function useCallsheetReview() {
       // Supabase caps a response: paginate so large batches are never omitted.
       for (let offset = 0; ; offset += 500) {
         const { data, error } = await supabase.from('callsheet_jobs')
-          .select('id, storage_path, created_at, project_id, status, processing_started_at, processed_at, needs_review_reason, callsheet_results(date_value, project_value), callsheet_locations(formatted_address, address_raw, name_raw, page, position, label_source, selection_state, review_reason)')
+          .select('id, storage_path, created_at, project_id, status, processing_started_at, processed_at, needs_review_reason, callsheet_results(date_value, date_evidence, project_value), callsheet_locations(formatted_address, address_raw, name_raw, page, position, label_source, selection_state, review_reason)')
           .eq('user_id', user!.id).in('status', ['failed', 'needs_review', 'out_of_quota', 'processing'])
           .order('created_at').order('id').range(offset, offset + 499);
         if (error) throw error;
