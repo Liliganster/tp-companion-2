@@ -60,6 +60,7 @@ function extractOpenRouterText(content: unknown): string {
 export type JsonSchema = Record<string, unknown>;
 
 type OpenRouterMessage = { role: string; content: unknown };
+type GenerationOptions = { timeoutMs?: number };
 
 /**
  * Limpia la respuesta cuando el modelo no soporta salida estructurada:
@@ -104,6 +105,7 @@ async function callOpenRouter(
   apiKey: string,
   schema?: JsonSchema,
   messages?: OpenRouterMessage[],
+  options?: GenerationOptions,
 ): Promise<AiGenerationResult> {
   const finalMessages = messages || [{ role: "user", content: prompt }];
 
@@ -145,11 +147,14 @@ async function callOpenRouter(
     };
   }
 
+  const deadline = Date.now() + (options?.timeoutMs ?? 40_000);
   const doRequest = async (body: Record<string, unknown>): Promise<Response> => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 40000); // Leave time for job state and quota cleanup before the server limit
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw new Error('OpenRouter request timed out');
+    const timeoutId = setTimeout(() => controller.abort(), remaining);
     try {
-      return await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${apiKey}`,
@@ -160,6 +165,9 @@ async function callOpenRouter(
         body: JSON.stringify(body),
         signal: controller.signal,
       });
+      // The deadline covers the body too, not just receipt of HTTP headers.
+      const bodyText = await response.text();
+      return new Response(bodyText, { status: response.status, headers: response.headers });
     } finally {
       clearTimeout(timeoutId);
     }
@@ -208,10 +216,11 @@ export async function generateContent(
   prompt: string,
   schema?: JsonSchema,
   userSettings?: AiUserSettings,
+  options?: GenerationOptions,
 ): Promise<AiGenerationResult> {
   if (userSettings?.openrouterEnabled && userSettings?.openrouterApiKey) {
     const orModel = userSettings.openrouterModel || "google/gemini-2.5-flash";
-    return callOpenRouter(orModel, prompt, userSettings.openrouterApiKey, schema);
+    return callOpenRouter(orModel, prompt, userSettings.openrouterApiKey, schema, undefined, options);
   }
 
   const model = requireGemini().getGenerativeModel({
@@ -225,7 +234,7 @@ export async function generateContent(
     } : undefined
   });
 
-  const result = await model.generateContent(prompt, { timeout: 30000 });
+  const result = await model.generateContent(prompt, { timeout: options?.timeoutMs ?? 30000 });
 
   return {
     text: result.response.text(),
@@ -242,6 +251,7 @@ export async function generateContentFromPDF(
   mimeType = "application/pdf",
   schema?: JsonSchema,
   userSettings?: AiUserSettings,
+  options?: GenerationOptions,
 ): Promise<AiGenerationResult> {
     if (userSettings?.openrouterEnabled && userSettings?.openrouterApiKey) {
         const orModel = userSettings.openrouterModel || "google/gemini-2.5-flash";
@@ -274,7 +284,7 @@ export async function generateContentFromPDF(
             }
         ];
 
-        return callOpenRouter(orModel, prompt, userSettings.openrouterApiKey, schema, messages);
+        return callOpenRouter(orModel, prompt, userSettings.openrouterApiKey, schema, messages, options);
     }
 
     const model = requireGemini().getGenerativeModel({
@@ -294,7 +304,7 @@ export async function generateContentFromPDF(
                 },
             },
             prompt,
-        ], { timeout: 40000 });
+        ], { timeout: options?.timeoutMs ?? 40000 });
 
     return {
       text: result.response.text(),

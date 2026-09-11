@@ -1,5 +1,6 @@
 import { selectCallsheetLocations } from './callsheetSelection.js';
 import { normalizeCallsheetAddress } from '../../src/lib/callsheetAddress.js';
+import { CALLSHEET_PROVIDER_TIMEOUT_MS } from '../../src/lib/callsheetTiming.js';
 /**
  * Pipeline de extracción de callsheets — módulo COMPARTIDO (Fase 2).
  *
@@ -124,13 +125,15 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
 
   // C. IA
   const aiStartTime = Date.now();
-  const aiResult = documentText !== null ? await generateContent('gemini-2.5-flash', systemInstruction, extractionSchema, userSettings) : await generateContentFromPDF(
+  const options = { timeoutMs: CALLSHEET_PROVIDER_TIMEOUT_MS };
+  const aiResult = documentText !== null ? await generateContent('gemini-2.5-flash', systemInstruction, extractionSchema, userSettings, options) : await generateContentFromPDF(
     "gemini-2.5-flash",
     systemInstruction,
     buffer,
     mimeType,
     extractionSchema,
     userSettings,
+    options,
   );
   const aiDurationMs = Date.now() - aiStartTime;
   log.info(

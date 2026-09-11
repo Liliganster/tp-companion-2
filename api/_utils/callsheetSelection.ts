@@ -18,13 +18,16 @@ export function selectCallsheetLocations(data: CallsheetExtractionResult, date: 
     const unit = 'unitScope' in location ? location.unitScope : undefined;
     const dayDateRaw = 'dayDate' in location ? location.dayDate : undefined;
     const dayDate = dayDateRaw ? resolveCallsheetDate({date:dayDateRaw,dateRaw:dayDateRaw,dateYearInDocument:true}) : '';
+    const locationKind = 'locationKind' in location ? location.locationKind : undefined;
     const role = classifyLocationRole({ ...location, label, address });
     let excludedReason = '';
-    if (day === 'other_day' || (date && dayDate && date !== dayDate)) excludedReason = 'other_shooting_day';
+    if (locationKind === 'internal_marker' && !normalizedAddress) excludedReason = 'internal_site_marker';
+    else if (day === 'other_day' || (date && dayDate && date !== dayDate)) excludedReason = 'other_shooting_day';
     else if (data.documentUnit === 'other_unit' || unit === 'other_unit') excludedReason = 'other_filming_unit';
     else if (role === 'logistics' || role === 'other') excludedReason = `${role}_block`;
     if (excludedReason) { excluded.push({ label, address, reason: excludedReason }); return; }
     const reasons: string[] = [];
+    if (locationKind === 'uncertain' || (locationKind === 'internal_marker' && normalizedAddress)) reasons.push(('reviewReason' in location && location.reviewReason) || 'Confirma si es un destino independiente o una posición dentro del mismo recinto.');
     if (role === 'uncertain') reasons.push(('reviewReason' in location && location.reviewReason) || 'Confirma si el bloque identifica un set físico de filmación.');
     if (!address.trim()) reasons.push('Falta el nombre o dirección del set.');
     if (normalizedAddress === '') reasons.push('Falta resolver la dirección postal del lugar; confirma la calle y el número.');

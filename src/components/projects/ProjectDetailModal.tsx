@@ -1,3 +1,4 @@
+import { CALLSHEET_CLIENT_TIMEOUT_MS } from "@/lib/callsheetTiming";
 import { canMaterializeCallsheet, getReviewCallsheetDrafts } from '@/lib/callsheetReview';
 import { AddTripModal } from '@/components/trips/AddTripModal';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -957,7 +958,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
           Authorization: accessToken ? `Bearer ${accessToken}` : "",
           "Content-Type": "application/json",
         },
-        signal: AbortSignal.any([docAc.signal, AbortSignal.timeout(65_000)]),
+        signal: AbortSignal.any([docAc.signal, AbortSignal.timeout(CALLSHEET_CLIENT_TIMEOUT_MS)]),
       });
       logger.warn("[handleExtract] API response", { docId: doc.id, status: response.status, ok: response.ok });
 

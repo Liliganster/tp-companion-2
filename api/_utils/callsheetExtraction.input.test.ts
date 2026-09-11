@@ -35,7 +35,7 @@ it('sends pasted messages through the text provider with the full source', async
   const buffer = new TextEncoder().encode('Rodaje 09.09.2026 - MOTIV: Wien, Austria');
   mocks.download.mockResolvedValue({ data: { size: buffer.byteLength, arrayBuffer: async () => buffer.buffer } });
   await expect(run('mensaje.txt')).rejects.toThrow('MOCK_PROVIDER_REACHED');
-  expect(mocks.text).toHaveBeenCalledWith('gemini-2.5-flash', expect.stringContaining('MOTIV: Wien, Austria'), expect.any(Object), undefined);
+  expect(mocks.text).toHaveBeenCalledWith('gemini-2.5-flash', expect.stringContaining('MOTIV: Wien, Austria'), expect.any(Object), undefined, { timeoutMs: 100_000 });
   expect(mocks.binary).not.toHaveBeenCalled();
 });
 it('does not reject a PDF at the old 15 MB threshold or at exactly 50 MB', async () => {

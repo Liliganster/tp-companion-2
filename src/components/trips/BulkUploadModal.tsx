@@ -1,3 +1,4 @@
+import { CALLSHEET_CLIENT_TIMEOUT_MS } from "@/lib/callsheetTiming";
 import { resolveCallsheetProcessingState } from '@/lib/callsheetProcessingState';
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -915,7 +916,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                   Authorization: token ? `Bearer ${token}` : "",
                   "Content-Type": "application/json",
                 },
-                signal: signal ?? undefined,
+                signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(CALLSHEET_CLIENT_TIMEOUT_MS)]),
               });
 
               if (!response.ok) {

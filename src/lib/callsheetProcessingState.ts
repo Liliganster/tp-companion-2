@@ -1,4 +1,5 @@
-export const CALLSHEET_STALE_MS = 90_000;
+import { CALLSHEET_RECOVERY_TIMEOUT_MS } from './callsheetTiming';
+export const CALLSHEET_STALE_MS = CALLSHEET_RECOVERY_TIMEOUT_MS;
 export function resolveCallsheetProcessingState<T extends { status: string; processing_started_at?: string | null; processed_at?: string | null; needs_review_reason?: string | null }>(job: T, requestActive: boolean, now = Date.now()): T {
   if (job.status !== 'processing' || requestActive) return job;
   const started = Date.parse(job.processing_started_at || job.processed_at || '');

@@ -14,9 +14,10 @@ import {
 } from "./_utils/callsheetWorker.js";
 import { startRuntimeWatchdog } from "./_utils/runtimeWatchdog.js";
 
-const CALLSHEET_WORKER_RUNTIME_WARNING_MS = 55_000;
+const CALLSHEET_WORKER_RUNTIME_WARNING_MS = 285_000;
 
 export default withApiObservability(async function handler(req: any, res: any, { log, requestId }) {
+  const workerStartedAt = Date.now();
   // CRON authentication
   const authHeader = req.headers?.authorization;
   const cronSecret = process.env.CRON_SECRET;
@@ -219,6 +220,8 @@ export default withApiObservability(async function handler(req: any, res: any, {
     const processedResults: any[] = [];
 
     async function processJob(job: any) {
+      // Leave queued work for the next invocation with a full provider budget.
+      if (Date.now() - workerStartedAt > 150_000) return;
       const jobId = job.id;
       const currentRetry = job.retry_count || 0;
 

@@ -13,6 +13,7 @@ BEGIN
     VALUES(job,u,'__rollback_only_test__/'||job::text,CASE WHEN mode='mismatch' THEN proj ELSE NULL END);
     reservation:=public.reserve_ai_quota(u,job,2147483647,NULL,attempt,req);
     IF NOT (reservation->>'allowed')::boolean THEN RAISE EXCEPTION 'reserve_failed'; END IF;
+    IF NOT EXISTS (SELECT 1 FROM public.ai_quota_reservations WHERE request_id=req AND lease_until >= now()+interval '3 minutes') THEN RAISE EXCEPTION 'lease_too_short'; END IF;
     expected:=CASE WHEN mode='done' THEN 'done' ELSE 'needs_review' END;
     IF NOT public.save_callsheet_extraction(u,job,req,attempt,
       jsonb_build_object('date_value','2026-09-10','project_value','Other Production',

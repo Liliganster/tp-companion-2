@@ -1,4 +1,4 @@
-import { LOCATION_ROLE_RULE, LOCATION_COLLECTION_RULE, LOCATION_DESTINATION_RULE, LOCATION_LABEL_RULE, LOCATION_DAY_RULE, LOCATION_UNIT_RULE } from './locationPolicy.js';
+import { LOCATION_KIND_RULE, LOCATION_ROLE_RULE, LOCATION_COLLECTION_RULE, LOCATION_DESTINATION_RULE, LOCATION_LABEL_RULE, LOCATION_DAY_RULE, LOCATION_UNIT_RULE } from './locationPolicy.js';
 
 // Strict schema keywords: policy constants belong in descriptions, never as
 // extra API fields. This catches malformed nested schemas during typecheck.
@@ -29,6 +29,7 @@ export const extractionSchema = {
       items: {
         type: "object",
         properties: {
+          locationKind: { type: 'string', enum: ['physical_destination', 'internal_marker', 'uncertain'], description: LOCATION_KIND_RULE },
           role: { type: 'string', enum: ['filming', 'logistics', 'other', 'uncertain'], description: LOCATION_ROLE_RULE },
           reviewReason: { type: 'string', description: 'Concrete unresolved conflict, empty when none.' },
           unitScope: { type: "string", enum: ["main_unit", "other_unit", "unspecified", "uncertain"], description: LOCATION_UNIT_RULE },
@@ -53,7 +54,7 @@ export const extractionSchema = {
             description: 'Postal street address only, normalized from this block and its governing context: street and house number, postal code and city, country when printed. Reorder arbitrary layouts, join broken lines, separate street and number, expand unambiguous abbreviations. Exclude venue/set names, labels, access instructions, floors, contacts and notes. Never invent missing streets, house numbers, cities or postal codes. Do not turn a venue name into an address from memory. Return empty string when no street address is supplied; preserve the original venue/coordinates/link in address for review.'
           }
         },
-        required: ["label", "address", "normalizedAddress", "role", "dayScope", "unitScope"]
+        required: ["locationKind", "label", "address", "normalizedAddress", "role", "dayScope", "unitScope"]
       },
       description: `${LOCATION_COLLECTION_RULE} ${LOCATION_DESTINATION_RULE}`
     }

@@ -1,4 +1,4 @@
-import { LOCATION_ROLE_RULE, LOCATION_COLLECTION_RULE, LOCATION_DESTINATION_RULE, LOCATION_LABEL_RULE, LOCATION_UNIT_RULE } from './locationPolicy.js';
+import { LOCATION_KIND_RULE, LOCATION_ROLE_RULE, LOCATION_COLLECTION_RULE, LOCATION_DESTINATION_RULE, LOCATION_LABEL_RULE, LOCATION_UNIT_RULE } from './locationPolicy.js';
 
 export function buildUniversalExtractorPrompt(text: string) {
   return [
@@ -16,6 +16,7 @@ export function buildUniversalExtractorPrompt(text: string) {
     'NEXT DAY, NÄCHSTER DREHTAG, tomorrow and equivalent headings govern their own blocks, not the rest of the callsheet. Collect those blocks as other_day so the app excludes them.',
     LOCATION_UNIT_RULE,
     'Use main_unit when the block belongs to the main crew, other_unit for an explicitly separate second unit. Without unit labels use unspecified. Do not require a MAIN UNIT heading. In mixed documents use each block context; a second-unit crew contact, building Unit 2 or Unit Base is not a second-unit filming location.',
+    LOCATION_KIND_RULE,
     'Return every distinct physical filming location for that day, in document order, including moves between sets. Do not return only the first one.',
     'Copy the printed street address, venue name, coordinates or associated Maps link. Street numbers, postal codes and district prefixes have no fixed order. A venue such as an opera, park or library is valid without a street number. Never invent an address for a venue or replace it with an address from memory.',
     'Scene descriptions and interior sub-rooms are not separate destinations unless the document identifies distinct physical locations. Contacts, hospitals, parking, catering and production offices are logistics, unless explicitly identified as the filming set itself.',

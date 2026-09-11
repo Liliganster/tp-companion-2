@@ -6,6 +6,8 @@
     }
   ],
   "functions": {
+    "api/callsheets.ts": { "maxDuration": 150, "includeFiles": "test/data/**" },
+    "api/worker.ts": { "maxDuration": 300, "includeFiles": "test/data/**" },
     "api/**/*.ts": {
       "maxDuration": 60,
       "includeFiles": "test/data/**"

@@ -56,3 +56,24 @@ it('removes repeated variants of the same set without merging different street n
  expect(result.filming.map(l=>l.address)).toEqual(['1080 Wien, Josefsagasse12','Josefsagasse 14, 1080 Wien']);
  expect(result.excluded[0].reason).toBe('duplicate_filming_destination');
 });
+
+it('keeps physical sites and excludes their internal map markers without creating review destinations', () => {
+  const result = select([
+    {label:'LOCATION 1',address:'WAC Prater 2., Rustenschacherallee 9',normalizedAddress:'Rustenschacherallee 9, 1020 Wien',role:'filming',locationKind:'physical_destination'},
+    {label:'LOCATION 2',address:'Jesuitenwiese Prater HV: 2., Rustenschacherallee 32-40',normalizedAddress:'Rustenschacherallee 32-40, 1020 Wien',role:'filming',locationKind:'physical_destination'},
+    ...['PLATZ 16 & 17','LOCATION 2A','LOCATION 2B','LOCATION 2C'].map(label=>({label,address:label,normalizedAddress:'',role:'filming',locationKind:'internal_marker'})),
+  ]);
+  expect(result.filming.map(x=>x.normalizedAddress)).toEqual(['Rustenschacherallee 9, 1020 Wien','Rustenschacherallee 32-40, 1020 Wien']);
+  expect(result.excluded).toHaveLength(4);
+  expect(result.reviewReasons).toEqual([]);
+});
+it('does not hide named venues, unresolved markers or contradictory physical addresses',()=>{
+  const result=select([
+    {label:'LOCATION 2A',address:'Unspecified Theatre',normalizedAddress:'',role:'filming',locationKind:'physical_destination'},
+    {label:'Zone bleue',address:'Zone bleue',normalizedAddress:'',role:'filming',locationKind:'uncertain',reviewReason:'Separate site or area inside the park?'},
+    {label:'Position 4',address:'Other Road 14',normalizedAddress:'Other Road 14',role:'filming',locationKind:'internal_marker'},
+  ]);
+  expect(result.filming).toHaveLength(3);
+  expect(result.filming.every(x=>x.selection_state==='candidate')).toBe(true);
+  expect(result.reviewReasons.join(' ')).toContain('Separate site');
+});
