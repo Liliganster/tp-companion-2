@@ -2,18 +2,17 @@ import { useState, useId } from "react";
 import { usePlan } from "@/contexts/PlanContext";
 import { supabase } from "@/lib/supabaseClient";
 import { formatSupabaseError } from "@/lib/supabaseErrors";
-import { cascadeDeleteCallsheetJobById } from "@/lib/cascadeDelete";
 import { CALLSHEET_ACCEPT, isSupportedCallsheetFile } from "@/lib/callsheetMime";
 import { Button } from "@/components/ui/button";
 import { Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 import { CallsheetUploadHelp } from "./CallsheetUploadHelp";
-import { isSupportedUploadFileName, toStorageFileName } from "@/lib/uploadFileName";
+import { isSupportedUploadFileName } from "@/lib/uploadFileName";
 import { useI18n } from "@/hooks/use-i18n";
 
 import { validateDocumentSize } from '@/lib/importDocuments';
-import { prepareCallsheetUploadBody } from '@/lib/callsheetUploadBody';
+import { uploadCallsheetFile } from '@/lib/callsheetUpload';
 
 interface CallsheetUploaderProps {
   onJobCreated?: (jobId: string) => void;
@@ -68,58 +67,15 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
       if (authError || !user) throw new Error("No estas autenticado");
 
       for (const file of files) {
-        let createdJobId: string | null = null;
-        try {
-          const { data: job, error: jobError } = await supabase
-            .from("callsheet_jobs")
-            .insert({
-              user_id: user.id,
-              storage_path: "pending",
-              status: "created",
-              project_id: projectId || null,
-            })
-            .select()
-            .single();
-
-          if (jobError) throw jobError;
-          createdJobId = job.id;
-
-          const filePath = `${user.id}/${job.id}/${toStorageFileName(file.name)}`;
-          const body = await prepareCallsheetUploadBody(file);
-          const { error: uploadError } = await supabase.storage.from("callsheets").upload(filePath, body, { contentType: body.type, metadata: { originalName: file.name } });
-          if (uploadError) throw uploadError;
-
-          const { error: updateError } = await supabase
-            .from("callsheet_jobs")
-            .update({
-              storage_path: filePath,
-              status: autoQueue ? "queued" : "created",
-              needs_review_reason: null,
-            })
-            .eq("id", job.id);
-
-          if (updateError) {
-            if (updateError.code === "23505") {
-              logger.debug(`Storage path ${filePath} already exists, skipping update`);
-              failCount += 1;
-            } else {
-              throw updateError;
-            }
-          } else {
-            successCount += 1;
-            if (autoQueue) queuedJobIds.push(job.id);
-            onJobCreated?.(job.id);
-          }
-        } catch (err: any) {
-          logger.warn("CallsheetUploader upload error", err);
+        const id = crypto.randomUUID();
+        const outcome = await uploadCallsheetFile(supabase, user.id, file, id, () => false, { projectId, autoQueue });
+        if (outcome.persisted) onJobCreated?.(id);
+        if (outcome.status === 'failed') {
+          logger.warn('CallsheetUploader upload error', { id, reason: outcome.reason });
           failCount += 1;
-          if (createdJobId) {
-            try {
-              await cascadeDeleteCallsheetJobById(supabase, createdJobId);
-            } catch {
-              // ignore
-            }
-          }
+        } else {
+          successCount += 1;
+          if (autoQueue) queuedJobIds.push(id);
         }
       }
 
