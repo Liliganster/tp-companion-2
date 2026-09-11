@@ -3,10 +3,10 @@ import { z } from "zod";
 const LabeledLocationSchema = z.union([
   z.object({
     label: z.string().trim().max(120).catch("").default(""),
-    address: z.string().trim().max(300),
+    address: z.string().trim().max(300).nullish().transform(value => value ?? ''),
     normalizedAddress: z.string().trim().max(300).optional().catch(''),
     locationKind: z.enum(['physical_destination', 'internal_marker', 'uncertain']).optional().catch('uncertain'),
-    role: z.enum(['filming', 'logistics', 'other', 'uncertain']).optional(),
+    role: z.enum(['filming', 'logistics', 'other', 'uncertain']).optional().catch('uncertain'),
     reviewReason: z.string().trim().max(1000).catch('').default(''),
     unitScope: z.enum(['main_unit', 'other_unit', 'unspecified', 'uncertain']).catch('uncertain').default('unspecified'),
     unitEvidence: z.string().trim().max(3000).catch('').default(''),
@@ -33,7 +33,10 @@ export const CallsheetExtractionResultSchema = z.object({
   projectName: z.string().trim().max(160).nullish().transform(value => value || 'Untitled Project'),
   productionCompanies: z.array(z.string().trim().max(160).nullable())
     .nullish().transform(values => (values ?? []).filter((value): value is string => Boolean(value))),
-  locations: z.array(LabeledLocationSchema),
+  locations: z.array(LabeledLocationSchema.catch({
+    label: '', address: '', normalizedAddress: '', role: 'uncertain',
+    reviewReason: 'La IA devolvió un bloque de locación ilegible; comprueba este bloque en el documento.',
+  })),
 });
 
 export type CallsheetExtractionResult = z.infer<typeof CallsheetExtractionResultSchema>;

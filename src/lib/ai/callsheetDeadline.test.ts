@@ -23,3 +23,30 @@ it('bounds OpenRouter response-body reads as well as headers',async()=>{
  const stalled=expect(generateContent('mock','offline',undefined,{openrouterEnabled:true,openrouterApiKey:'offline-only'},{timeoutMs:CALLSHEET_PROVIDER_TIMEOUT_MS})).rejects.toThrow(/abort/i);
  await vi.advanceTimersByTimeAsync(CALLSHEET_PROVIDER_TIMEOUT_MS);await stalled;
 });
+
+it('serializes bounded callsheet generation and reports actual provider usage',async()=>{
+ vi.stubEnv('GEMINI_API_KEY','mock-key-for-offline-tests-only');vi.resetModules();
+ const {generateContentFromPDF}=await import('./geminiClient');
+ const {CALLSHEET_GENERATION_OPTIONS}=await import('./callsheetProfile');
+ const {extractionSchema}=await import('./schema');
+ const fetch=vi.fn(async(_url,init)=>{
+  const body=JSON.parse(init.body);
+  expect(body.generationConfig).toMatchObject({maxOutputTokens:8192,thinkingConfig:{thinkingBudget:1024}});
+  expect(body.contents[0].parts[0].inlineData.data).toBe(Buffer.from('%PDF offline full document').toString('base64'));
+  return new Response(JSON.stringify({candidates:[{finishReason:'STOP',content:{role:'model',parts:[{text:'{}'}]}}],usageMetadata:{promptTokenCount:2000,candidatesTokenCount:100,thoughtsTokenCount:200,totalTokenCount:2300}}),{status:200});
+ });
+ vi.stubGlobal('fetch',fetch);
+ const result=await generateContentFromPDF('gemini-2.5-flash','offline',Buffer.from('%PDF offline full document'),'application/pdf',extractionSchema,undefined,CALLSHEET_GENERATION_OPTIONS);
+ expect(fetch).toHaveBeenCalledOnce();
+ expect(result).toMatchObject({finishReason:'STOP',usage:{inputTokens:2000,outputTokens:100,thinkingTokens:200,totalTokens:2300}});
+});
+it.each([400,401,422,429,500])('does not repeat a callsheet request after OpenRouter HTTP %s',async(status)=>{
+ const {generateContent}=await import('./geminiClient');
+ const {CALLSHEET_GENERATION_OPTIONS}=await import('./callsheetProfile');
+ const fetch=vi.fn(async(_url,init)=>{
+  expect(JSON.parse(init.body).max_tokens).toBe(8192);
+  return new Response('provider rejected request',{status});
+ });vi.stubGlobal('fetch',fetch);
+ await expect(generateContent('mock','offline',{type:'object',properties:{}},{openrouterEnabled:true,openrouterApiKey:'offline-only'},CALLSHEET_GENERATION_OPTIONS)).rejects.toThrow('OpenRouter API error');
+ expect(fetch).toHaveBeenCalledOnce();
+});

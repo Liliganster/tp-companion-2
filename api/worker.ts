@@ -3,7 +3,7 @@ import { captureServerException, withApiObservability } from "./_utils/observabi
 import { enforceRateLimit } from "./_utils/rateLimit.js";
 import { reserveAiQuota, finishAiQuota, type AiReservation } from "./_utils/aiQuota.js";
 import { getServerPlanTier } from "./_utils/entitlements.js";
-import { calculateNextRetry, DEFAULT_RETRY_STRATEGY } from "./_utils/retry.js";
+import { CALLSHEET_RECOVERY_TIMEOUT_MS } from "../src/lib/callsheetTiming.js";
 import { extractCallsheet } from "./_utils/callsheetExtraction.js";
 import {
   CALLSHEET_PARALLEL_BATCH_SIZE,
@@ -88,53 +88,15 @@ export default withApiObservability(async function handler(req: any, res: any, {
   if (!cronAllowed) return;
 
   try {
-    // 1. Detect and reset stuck jobs.
-    // Skip for targeted manual single-job runs: the job was just queued so it can't be stuck,
-    // and running this check adds unnecessary latency for the user pressing "Procesar".
+    // A stale attempt may already have cost provider tokens: fail it, never regenerate.
     if (!manual || !manualJobId) {
-      const stuckTimeout = DEFAULT_RETRY_STRATEGY.timeoutMinutes;
-      const stuckThreshold = new Date(Date.now() - stuckTimeout * 60 * 1000).toISOString();
-
-      const { data: stuckJobs } = await supabaseAdmin
-        .from("callsheet_jobs")
-        .select("id, retry_count, max_retries")
-        .eq("status", "processing")
-        .lt("processing_started_at", stuckThreshold);
-
-      if (stuckJobs && stuckJobs.length > 0) {
-        log.warn({ count: stuckJobs.length }, "callsheet_stuck_jobs_detected");
-
-        for (const stuck of stuckJobs) {
-          const retryCount = (stuck.retry_count || 0) + 1;
-          const maxRetries = stuck.max_retries || DEFAULT_RETRY_STRATEGY.maxRetries;
-
-          if (retryCount > maxRetries) {
-            await supabaseAdmin
-              .from("callsheet_jobs")
-              .update({
-                status: "failed",
-                last_error: "Job stuck in processing, exceeded max retries",
-                retry_count: retryCount,
-              })
-              .eq("id", stuck.id);
-          } else {
-            const nextRetry = calculateNextRetry(retryCount);
-            await supabaseAdmin
-              .from("callsheet_jobs")
-              .update({
-                status: "failed",
-                last_error: "Job stuck in processing, will retry",
-                retry_count: retryCount,
-                next_retry_at: nextRetry,
-              })
-              .eq("id", stuck.id);
-          }
-        }
-      }
+      const stuckThreshold = new Date(Date.now() - CALLSHEET_RECOVERY_TIMEOUT_MS).toISOString();
+      const { error: staleError } = await supabaseAdmin.from('callsheet_jobs').update({
+        status: 'failed', needs_review_reason: 'La extracción no terminó dentro del plazo. El original se conserva; no se reintentará automáticamente.',
+        next_retry_at: null,
+      }).eq('status', 'processing').lt('processing_started_at', stuckThreshold);
+      if (staleError) log.warn({ error: staleError }, 'callsheet_stale_recovery_failed');
     }
-
-    // 2. Fetch jobs ready for processing (queued + failed with retry time reached)
-    const now = new Date().toISOString();
 
     let jobs: any[] = [];
 
@@ -170,27 +132,13 @@ export default withApiObservability(async function handler(req: any, res: any, {
       if (manual && manualUserId) queuedQuery = queuedQuery.eq("user_id", manualUserId);
       queuedQuery = queuedQuery.order("created_at", { ascending: !manual });
 
-      let retryQuery = supabaseAdmin
-        .from("callsheet_jobs")
-        .select("*")
-        .eq("status", "failed")
-        .not("next_retry_at", "is", null)
-        .lte("next_retry_at", now)
-        .lt("retry_count", DEFAULT_RETRY_STRATEGY.maxRetries);
-      if (manual && manualUserId) retryQuery = retryQuery.eq("user_id", manualUserId);
-      retryQuery = retryQuery.order("next_retry_at", { ascending: true });
-
       const { data: queuedJobs, error: queuedError } = await queuedQuery.limit(maxJobs);
-      const { data: retryJobs, error: retryError } = await retryQuery.limit(maxJobs);
-
       if (queuedError) throw queuedError;
-      if (retryError) log.warn({ retryError }, "callsheet_retry_fetch_error");
-
-      jobs = [...(queuedJobs || []), ...(retryJobs || [])].slice(0, maxJobs);
+      jobs = queuedJobs ?? [];
     }
 
     if (jobs.length === 0) {
-      res.status(200).json({ message: "No jobs queued or ready for retry" });
+      res.status(200).json({ message: "No jobs queued" });
       return;
     }
 
@@ -290,7 +238,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
             return;
           }
           if (outcome.kind === "download_failed") {
-            // lanzar → el catch programa el reintento con backoff
+            // El fallo conserva el documento, sin reintento automático.
             throw new Error(`Failed to download document: ${outcome.message}`);
           }
           // file_too_large | invalid_extraction → fallo definitivo revisable
@@ -343,46 +291,12 @@ export default withApiObservability(async function handler(req: any, res: any, {
         const errorMessage = jobErr?.message || String(jobErr);
         captureServerException(jobErr, { requestId, jobId, kind: "callsheet" });
         
-        const nextRetry = currentRetry + 1;
-        const maxRetries = job.max_retries || DEFAULT_RETRY_STRATEGY.maxRetries;
-        
-        if (nextRetry > maxRetries) {
-          // Exceeded max retries, mark as permanently failed
-          await supabaseAdmin
-            .from("callsheet_jobs")
-            .update({ 
-              status: "failed", 
-              needs_review_reason: errorMessage,
-              last_error: errorMessage,
-              retry_count: nextRetry
-            })
-            .eq("id", jobId)
-            .eq("status", "processing");
-          
-          processedResults.push({ id: jobId, status: "failed", error: errorMessage, retries: nextRetry });
-        } else {
-          // Schedule retry with exponential backoff
-          const nextRetryAt = calculateNextRetry(nextRetry);
-          await supabaseAdmin
-            .from("callsheet_jobs")
-            .update({ 
-              status: "failed", 
-              needs_review_reason: `Will retry (${nextRetry}/${maxRetries})`,
-              last_error: errorMessage,
-              retry_count: nextRetry,
-              next_retry_at: nextRetryAt
-            })
-            .eq("id", jobId)
-            .eq("status", "processing");
-          
-          processedResults.push({ 
-            id: jobId, 
-            status: "scheduled_retry", 
-            error: errorMessage, 
-            retries: nextRetry, 
-            nextRetryAt 
-          });
-        }
+        // A new provider attempt requires an explicit user action.
+        await supabaseAdmin.from('callsheet_jobs').update({
+          status: 'failed', needs_review_reason: errorMessage, last_error: errorMessage,
+          retry_count: currentRetry + 1, next_retry_at: null,
+        }).eq('id', jobId).eq('status', 'processing');
+        processedResults.push({ id: jobId, status: 'failed', error: errorMessage });
       } finally {
         if (reservation?.allowed) {
           try { await finishAiQuota(reservation, false); }

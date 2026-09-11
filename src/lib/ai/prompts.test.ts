@@ -54,7 +54,8 @@ describe("buildUniversalExtractorPrompt", () => {
 });
 
 it('shares the filming-unit contract between prompt and schema', () => {
-  expect(buildUniversalExtractorPrompt('')).toContain(extractionSchema.properties.documentUnit.description);
+  expect(extractionSchema.properties.documentUnit.enum).toContain('mixed');
+  expect(buildUniversalExtractorPrompt('')).toContain('governing document header');
   expect(extractionSchema.properties.locations.items.required).toContain('unitScope');
   expect(extractionSchema.properties.locations.items.required).not.toContain('unitEvidence');
   expect(buildUniversalExtractorPrompt('')).toContain('absence of a unit label is not a reason to reject it');

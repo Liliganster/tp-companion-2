@@ -16,7 +16,7 @@ import { assertStorageOwnership, isSafeStoragePath, StorageOwnershipError } from
 
 // ─── /api/callsheets/process ────────────────────────────────────────────────
 // Direct synchronous extraction: claim job → download PDF → call Gemini → save results → done.
-// Provider deadlines must leave time to persist failures and release quota before 60s.
+// Provider deadlines must leave time to persist failures and release quota before the server deadline. No automatic provider retry.
 const handleProcess = withApiObservability(async function handler(req: any, res: any, { log, requestId }) {
   if (req.method !== "POST") { res.statusCode = 405; res.setHeader("Allow", "POST"); res.end(); return; }
 

@@ -33,6 +33,8 @@ export interface AiGenerationResult {
   provider: AiProvider;
   model: string;
   vendor: string | null;
+  finishReason?: string | null;
+  usage?: { inputTokens: number | null; outputTokens: number | null; thinkingTokens: number | null; totalTokens: number | null };
 }
 
 function requireGemini() {
@@ -60,7 +62,33 @@ function extractOpenRouterText(content: unknown): string {
 export type JsonSchema = Record<string, unknown>;
 
 type OpenRouterMessage = { role: string; content: unknown };
-type GenerationOptions = { timeoutMs?: number };
+export type GenerationOptions = {
+  timeoutMs?: number;
+  maxOutputTokens?: number;
+  thinkingBudget?: number;
+  allowSchemaRetry?: boolean;
+};
+
+function generationLimits(options?: GenerationOptions) {
+  return {
+    ...(options?.maxOutputTokens ? { maxOutputTokens: options.maxOutputTokens } : {}),
+    ...(options?.thinkingBudget !== undefined ? { thinkingConfig: { thinkingBudget: options.thinkingBudget } } : {}),
+  };
+}
+
+function geminiResult(response: any, model: string): AiGenerationResult {
+  const usage = response.usageMetadata;
+  return {
+    text: response.text(), provider: 'gemini', model, vendor: 'google',
+    finishReason: response.candidates?.[0]?.finishReason ?? null,
+    usage: usage ? {
+      inputTokens: usage.promptTokenCount ?? null,
+      outputTokens: usage.candidatesTokenCount ?? null,
+      thinkingTokens: usage.thoughtsTokenCount ?? null,
+      totalTokens: usage.totalTokenCount ?? null,
+    } : undefined,
+  };
+}
 
 /**
  * Limpia la respuesta cuando el modelo no soporta salida estructurada:
@@ -112,6 +140,7 @@ async function callOpenRouter(
   const payload: Record<string, unknown> = {
     model: modelName,
     messages: finalMessages,
+    ...(options?.maxOutputTokens ? { max_tokens: options.maxOutputTokens } : {}),
     temperature: 0, // extracción determinista (igual que la ruta Gemini directa)
   };
 
@@ -180,7 +209,7 @@ async function callOpenRouter(
   // devuelven 4xx. Reintento ÚNICO sin salida estructurada, con el esquema
   // incrustado en el prompt; la respuesta se limpia con extractJsonPayload.
   let usedSchemaFallback = false;
-  if (!response.ok && schema && response.status >= 400 && response.status < 500) {
+  if (!response.ok && schema && options?.allowSchemaRetry !== false && [400, 422].includes(response.status)) {
     const note = `\n\nDevuelve EXCLUSIVAMENTE un objeto JSON válido (sin markdown, sin comentarios, sin texto adicional) que cumpla exactamente este esquema JSON:\n${JSON.stringify(schema)}`;
     usedSchemaFallback = true;
     response = await doRequest({
@@ -196,7 +225,8 @@ async function callOpenRouter(
   }
 
   const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: unknown } }>;
+    choices?: Array<{ message?: { content?: unknown }; finish_reason?: string }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; completion_tokens_details?: { reasoning_tokens?: number } };
     model?: unknown;
     provider?: unknown;
   };
@@ -206,6 +236,11 @@ async function callOpenRouter(
   return {
     text: schema && usedSchemaFallback ? extractJsonPayload(text) : text,
     provider: "openrouter",
+    finishReason: data.choices?.[0]?.finish_reason ?? null,
+    usage: data.usage ? {
+      inputTokens: data.usage.prompt_tokens ?? null, outputTokens: data.usage.completion_tokens ?? null,
+      thinkingTokens: data.usage.completion_tokens_details?.reasoning_tokens ?? null, totalTokens: data.usage.total_tokens ?? null,
+    } : undefined,
     model: typeof data?.model === "string" && data.model.trim() ? data.model : modelName,
     vendor: typeof data?.provider === "string" && data.provider.trim() ? data.provider : "openrouter",
   };
@@ -226,6 +261,7 @@ export async function generateContent(
   const model = requireGemini().getGenerativeModel({
     model: modelName,
     generationConfig: schema ? {
+        ...generationLimits(options),
         responseMimeType: "application/json",
         responseSchema: schema as any,
         // Extracción determinista: sin temperatura fijada, el modelo variaba
@@ -236,12 +272,7 @@ export async function generateContent(
 
   const result = await model.generateContent(prompt, { timeout: options?.timeoutMs ?? 30000 });
 
-  return {
-    text: result.response.text(),
-    provider: "gemini",
-    model: modelName,
-    vendor: "google",
-  };
+  return geminiResult(result.response, modelName);
 }
 
 export async function generateContentFromPDF(
@@ -290,6 +321,7 @@ export async function generateContentFromPDF(
     const model = requireGemini().getGenerativeModel({
         model: modelName,
         generationConfig: schema ? {
+        ...generationLimits(options),
             responseMimeType: "application/json",
             responseSchema: schema as any,
             temperature: 0, // extracción determinista
@@ -306,12 +338,7 @@ export async function generateContentFromPDF(
             prompt,
         ], { timeout: options?.timeoutMs ?? 40000 });
 
-    return {
-      text: result.response.text(),
-      provider: "gemini",
-      model: modelName,
-      vendor: "google",
-    };
+    return geminiResult(result.response, modelName);
 }
 
 /**

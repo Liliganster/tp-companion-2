@@ -1,6 +1,7 @@
 import { selectCallsheetLocations } from './callsheetSelection.js';
 import { normalizeCallsheetAddress } from '../../src/lib/callsheetAddress.js';
-import { CALLSHEET_PROVIDER_TIMEOUT_MS } from '../../src/lib/callsheetTiming.js';
+import { createHash } from 'node:crypto';
+import { CALLSHEET_PROFILE_VERSION, CALLSHEET_MODEL, CALLSHEET_GENERATION_OPTIONS } from '../../src/lib/ai/callsheetProfile.js';
 /**
  * Pipeline de extracción de callsheets — módulo COMPARTIDO (Fase 2).
  *
@@ -125,16 +126,26 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
 
   // C. IA
   const aiStartTime = Date.now();
-  const options = { timeoutMs: CALLSHEET_PROVIDER_TIMEOUT_MS };
-  const aiResult = documentText !== null ? await generateContent('gemini-2.5-flash', systemInstruction, extractionSchema, userSettings, options) : await generateContentFromPDF(
-    "gemini-2.5-flash",
+  const options = CALLSHEET_GENERATION_OPTIONS;
+  const diagnostics = {
+    profile: CALLSHEET_PROFILE_VERSION, fileHash: createHash('sha256').update(buffer).digest('hex'),
+    bytes: buffer.length, mimeType, inputMode: documentText === null ? 'multimodal' : 'text',
+    promptChars: systemInstruction.length, schemaChars: JSON.stringify(extractionSchema).length,
+    limits: options, provider: userSettings?.openrouterEnabled ? 'openrouter' : 'gemini',
+  };
+  log.info({ jobId, ...diagnostics }, 'callsheet_ai_started');
+  const aiResult = await (documentText !== null ? generateContent(CALLSHEET_MODEL, systemInstruction, extractionSchema, userSettings, options) : generateContentFromPDF(
+    CALLSHEET_MODEL,
     systemInstruction,
     buffer,
     mimeType,
     extractionSchema,
     userSettings,
     options,
-  );
+  )).catch(error => {
+    log.error({ jobId, ...diagnostics, durationMs: Date.now() - aiStartTime, error: error instanceof Error ? error.message : String(error) }, 'callsheet_ai_failed');
+    throw error;
+  });
   const aiDurationMs = Date.now() - aiStartTime;
   log.info(
     {
@@ -143,10 +154,16 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
       aiModel: aiResult.model,
       aiVendor: aiResult.vendor,
       length: aiResult.text?.length || 0,
-      durationMs: aiDurationMs,
+      durationMs: aiDurationMs, usage: aiResult.usage ?? null, finishReason: aiResult.finishReason ?? null, profile: CALLSHEET_PROFILE_VERSION,
     },
     "callsheet_ai_response",
   );
+
+  if (aiResult.finishReason && !['STOP', 'stop'].includes(aiResult.finishReason)) {
+    return { ok: false, kind: 'invalid_extraction', message: ['MAX_TOKENS', 'length'].includes(aiResult.finishReason)
+      ? 'La IA alcanzó el límite de generación sin completar el documento. No se ha guardado una extracción parcial ni se reintentará automáticamente.'
+      : `La IA no completó la extracción (${aiResult.finishReason}). El original se conserva.` };
+  }
 
   // D. Parseo y validación
   let extractedJson: any = null;
@@ -168,7 +185,10 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
     date: validated.data.date, dateRaw: validated.data.dateRaw,
     dateYearInDocument: validated.data.dateYearInDocument,
   });
-  const selection = selectCallsheetLocations(validated.data, resolvedDate, pdfText);
+  const currentData = { ...validated.data, locations: validated.data.locations.map(location => ({
+    ...location, normalizedAddress: 'normalizedAddress' in location ? location.normalizedAddress ?? '' : '',
+  })) };
+  const selection = selectCallsheetLocations(currentData, resolvedDate, pdfText);
   const status = selection.reviewReasons.length ? 'needs_review' : 'done';
   const reviewReason = selection.reviewReasons.join(' ') || null;
   const locs = selection.filming.map(location => ({
@@ -190,15 +210,20 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
       project_value: validated.data.projectName,
       producer_value: validated.data.productionCompanies[0] ?? null,
       extraction_state: status, review_reason: reviewReason,
-      model_output: extractedJson,
+      model_output: { ...extractedJson, _diagnostics: { ...diagnostics, durationMs: aiDurationMs, model: aiResult.model, usage: aiResult.usage ?? null, finishReason: aiResult.finishReason ?? null } },
     },
     p_locations: locs, p_excluded: selection.excluded,
   });
   if (saveError) throw new Error(`Atomic extraction save failed: ${saveError.message}`);
   if (saved !== true) throw new Error('Atomic extraction save was not confirmed');
-  log.info({ jobId, status, retained: locs.length, excluded: selection.excluded.length }, 'callsheet_committed');
+  const { data: persisted, error: stateError } = await supabaseAdmin.from('callsheet_results')
+    .select('extraction_state, review_reason').eq('job_id', jobId).maybeSingle();
+  if (stateError || !persisted?.extraction_state) throw new Error('No se pudo verificar el estado guardado de la extracción.');
+  const finalStatus = persisted.extraction_state as 'done' | 'needs_review';
+  const finalReviewReason = persisted.review_reason ?? null;
+  log.info({ jobId, status: finalStatus, retained: locs.length, excluded: selection.excluded.length }, 'callsheet_committed');
   return {
-    ok: true, status, reviewReason, date: resolvedDate,
+    ok: true, status: finalStatus, reviewReason: finalReviewReason, date: resolvedDate,
     projectName: validated.data.projectName, locations: locs.map(l => l.formatted_address).filter(Boolean),
     aiProvider: aiResult.provider, aiModel: aiResult.model, aiVendor: aiResult.vendor,
     aiDurationMs, geocodingDurationMs: null, locationsCount: locs.length,

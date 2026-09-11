@@ -50,7 +50,7 @@ type Annotation = {
   expectedStatus?: string;
   proyecto?: string;
   productora?: string;
-  localizaciones?: Array<{ etiqueta?: string; direccion?: string; enlace_maps?: string }>;
+  localizaciones?: Array<{ etiqueta?: string; direccion?: string; direccion_original?: string; estado?: 'confirmed' | 'candidate'; enlace_maps?: string }>;
   excluidas?: string[];
   notas?: string;
 };
@@ -83,10 +83,12 @@ function overlap(a: string | null | undefined, b: string | null | undefined): nu
   return common / Math.min(ta.size, tb.size);
 }
 
-function locationMatches(pred: PredictedLocation, expected: { etiqueta?: string; direccion?: string }): boolean {
+function locationMatches(pred: PredictedLocation, expected: { etiqueta?: string; direccion?: string; direccion_original?: string; estado?: string }): boolean {
   const exact = (value: string | null | undefined) => String(value ?? '').normalize('NFC').replace(/\s+/g,' ').trim();
-  return Boolean(expected.direccion && exact(pred.address_raw || pred.name_raw) === exact(expected.direccion)
-    && (!expected.etiqueta || exact(pred.label_source) === exact(expected.etiqueta)));
+  return Boolean(pred && exact(pred.formatted_address) === exact(expected.direccion)
+    && exact(pred.address_raw) === exact(expected.direccion_original)
+    && exact(pred.label_source) === exact(expected.etiqueta)
+    && pred.selection_state === (expected.estado ?? 'confirmed'));
 
 }
 
@@ -144,6 +146,11 @@ async function main() {
   }
   if (cases.length === 0) { console.error("Ninguna anotación tiene su PDF en docs/eval/callsheets/."); process.exit(1); }
 
+  const incompatible = cases.filter(c => c.ann.contractVersion !== 3 || c.ann.fecha === undefined || !c.ann.expectedStatus
+    || !Array.isArray(c.ann.localizaciones) || c.ann.localizaciones.some(l =>
+      l.etiqueta === undefined || l.direccion === undefined || l.direccion_original === undefined));
+  if (incompatible.length) throw new Error(`Anotaciones pendientes de revisión bajo contrato v3 (sin llamadas ni altas): ${incompatible.map(c=>c.file).join(', ')}`);
+
   // 2. Usuario dedicado del eval (se crea una vez, se reutiliza)
   let evalUserId: string;
   {
@@ -178,7 +185,7 @@ async function main() {
     const pdf = readFileSync(c.pdfPath);
 
     const { error: upErr } = await admin.storage.from("callsheets").upload(storagePath, pdf, { contentType: "application/pdf", upsert: true });
-    if (upErr) { console.log(`❌ upload: ${upErr.message}`); continue; }
+    if (upErr) { perCase.push({archivo:c.ann.archivo,status:'upload_failed',correct:false,error:upErr.message}); continue; }
     cleanupPaths.push(storagePath);
 
     // Se crea ya "processing" (preClaimed) para que el cron local de
@@ -193,7 +200,7 @@ async function main() {
       })
       .select("id")
       .single();
-    if (jobErr || !job) { console.log(`❌ job: ${jobErr?.message}`); continue; }
+    if (jobErr || !job) { perCase.push({archivo:c.ann.archivo,status:'job_failed',correct:false,error:jobErr?.message}); continue; }
     cleanupJobIds.push(job.id);
 
     const t0 = Date.now();
@@ -211,12 +218,12 @@ async function main() {
     await finished;
     const ms = Date.now() - t0;
 
-    const { data: jobRow } = await admin.from("callsheet_jobs").select("status, error, needs_review_reason").eq("id", job.id).single();
+    const { data: jobRow } = await admin.from("callsheet_jobs").select("status, last_error, needs_review_reason").eq("id", job.id).single();
     const { data: result } = await admin.from("callsheet_results").select("date_value, project_value, producer_value, model_output, extraction_state").eq("job_id", job.id).maybeSingle();
     const { data: locs } = await admin.from("callsheet_locations").select("name_raw, address_raw, formatted_address, label_source, selection_state, position").eq("job_id", job.id).order("position").order("id");
 
     // 4. Puntuación
-    const expectedLocs = (c.ann.localizaciones ?? []).filter((l) => l.etiqueta || l.direccion);
+    const expectedLocs = c.ann.localizaciones ?? [];
     const predicted: PredictedLocation[] = (locs ?? []) as any[];
 
     const dateOk = c.ann.fecha !== undefined ? String(result?.date_value ?? "") === String(c.ann.fecha) : null;
@@ -228,9 +235,9 @@ async function main() {
     const precision = predicted.length ? matchedPredicted.length / predicted.length : null;
     const forbiddenHits = (c.ann.excluidas ?? [])
       .filter(Boolean)
-      .filter((x) => predicted.some((p) => locationMatches(p, { etiqueta: x, direccion: x })));
+      .filter((x) => predicted.some((p) => normalize(p.label_source) === normalize(x) || normalize(p.address_raw) === normalize(x)));
 
-    const correct = c.ann.contractVersion === 2 && dateOk === true
+    const correct = c.ann.contractVersion === 3 && dateOk === true
       && jobRow?.status === (c.ann.expectedStatus ?? 'done')
       && expectedLocs.length === predicted.length
       && expectedLocs.every((expected, index) => locationMatches(predicted[index], expected));
@@ -238,7 +245,7 @@ async function main() {
       correct, modelOutput: result?.model_output ?? null, savedLocations: predicted,
       archivo: c.ann.archivo,
       status: jobRow?.status ?? "?",
-      error: jobRow?.error ?? null,
+      error: jobRow?.last_error ?? null,
       needs_review: jobRow?.needs_review_reason ?? null,
       ms,
       fecha: { esperado: c.ann.fecha ?? null, extraido: result?.date_value ?? null, ok: dateOk },
@@ -282,7 +289,7 @@ async function main() {
 
   const pct = (v: number | null) => (v == null ? "–" : `${Math.round(v * 100)}%`);
   console.log("\n─────────────────────────────────────────────");
-  console.log(`Documentos correctos (contrato v2): ${summary.correctDocuments}/${summary.cases}; exactitud ${pct(summary.documentAccuracy)}`);
+  console.log(`Documentos correctos (contrato v3): ${summary.correctDocuments}/${summary.cases}; exactitud ${pct(summary.documentAccuracy)}`);
   console.log(`Resumen: ${summary.completed}/${summary.cases} completados`);
   console.log(`  Fecha:        ${pct(summary.fechaAcierto)}`);
   console.log(`  Proyecto:     ${pct(summary.proyectoAcierto)}`);
