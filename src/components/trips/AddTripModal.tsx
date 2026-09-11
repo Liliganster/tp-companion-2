@@ -453,7 +453,8 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
     // como paradas y origen/destino quedan vacíos para añadirlos alrededor.
     const cameFromCallsheet = Boolean((seedTrip as any)?.callsheet_job_id);
     const baseNorm = (baseLocation ?? "").trim().toLowerCase();
-    const routeVals = (seedTrip?.route ?? []).map((v) => String(v ?? "").trim()).filter(Boolean);
+    const routeVals = (seedTrip?.route ?? []).map((v) => String(v ?? "").trim())
+      .filter(value => cameFromCallsheet || Boolean(value));
     const routeTouchesBase = baseNorm.length > 0 && routeVals.some((v) => v.toLowerCase() === baseNorm);
     if (cameFromCallsheet && routeVals.length >= 1 && !routeTouchesBase) {
       return [

@@ -108,7 +108,10 @@ it('carries partial extraction through stored results into the editable review d
   const stored = mocks.insert.mock.calls.find(([table]) => table === 'callsheet_results')?.[1];
   const locations = mocks.insert.mock.calls.find(([table]) => table === 'callsheet_locations')?.[1];
   const [draft] = getReviewCallsheetDrafts([{ id: 'job', status: 'needs_review', storage_path: 'user/job/source.pdf', created_at: '2026-09-10', callsheet_results: stored as any, callsheet_locations: locations as any }], [], []);
-  expect(draft.trip.route).toEqual([]);
+  // Pending evidence must remain editable without becoming a confirmed destination.
+  expect(draft.trip.route).toEqual(['Staatsoper', 'Stadtpark']);
+  expect(draft.job.status).toBe('needs_review');
+  expect((locations as any[]).map(x => x.formatted_address)).toEqual(['', '']);
   expect((locations as any[]).map(x=>x.address_raw)).toEqual(['Staatsoper','Stadtpark']);
   expect(draft.trip.date).toBe('2026-09-10');
   expect(draft.trip.distance).toBe(0);
@@ -267,7 +270,8 @@ it('carries whole-document understanding through the actual PDF pipeline and ato
  expect(payload.p_locations[1]).toMatchObject({formatted_address:'',selection_state:'candidate'});
  expect(payload.p_excluded).toEqual([expect.objectContaining({label:'CAR',reason:'mobile_scene_without_destination'})]);
  const drafts=getReviewCallsheetDrafts([{id:'job',storage_path:'user/job/context.pdf',status:'needs_review',created_at:'2026-09-10',callsheet_results:payload.p_result,callsheet_locations:payload.p_locations}],[],[]);
- expect(drafts[0].trip.route).toEqual(['River Road 12']);
+ expect(drafts[0].trip.route).toEqual(['River Road 12', 'Sculpture garden; loading at River Road 20-28']);
+ expect(drafts[0].job.status).toBe('needs_review');
  expect(drafts[0].trip.distance).toBe(0);
 });
 

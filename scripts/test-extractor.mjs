@@ -6,6 +6,7 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const ctx = await startVitest('test', process.argv.slice(2).length ? process.argv.slice(2) : [
   'api/_utils/callsheet', 'src/lib/ai', 'src/lib/callsheet',
   'src/components/trips/BulkUploadModal.import.test.tsx',
+  'src/components/trips/AddTripModal.review.test.tsx',
   'src/components/callsheets/CallsheetReviewSummary.test.tsx',
   'src/lib/aiJobCancellation.test.ts', 'src/components/trips/bulkUploadClose.test.ts',
   'src/lib/uploadFileName.test.ts', 'api/_utils/storageOwnership.test.ts',

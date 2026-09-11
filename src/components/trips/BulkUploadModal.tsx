@@ -1,5 +1,5 @@
 import { CALLSHEET_CLIENT_TIMEOUT_MS } from "@/lib/callsheetTiming";
-import { compactCallsheetReviewReason } from '@/lib/callsheetReview';
+import { compactCallsheetReviewReason, getCallsheetReviewLocations, type ReviewCallsheetLocation } from '@/lib/callsheetReview';
 import { resolveCallsheetProcessingState } from '@/lib/callsheetProcessingState';
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -267,7 +267,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     producer: string;
     rawLocations: string[];
     locations: string[];
-    locationDetails?: { label_source?: string; selection_state?: string; review_reason?: string; address_raw?: string }[];
+    locationDetails?: ReviewCallsheetLocation[];
     distance: string;
     distanceDirty: boolean;
     optimizing: boolean;
@@ -1259,7 +1259,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
 
         const token = await getAccessToken();
         if (isAiCancelled(signal)) return;
-        const { locations: normalizedLocs, distanceKm } = await optimizeCallsheetLocationsAndDistance({
+        const { distanceKm } = await optimizeCallsheetLocationsAndDistance({
           profile,
           rawLocations,
           accessToken: token,
@@ -1280,7 +1280,8 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
             ...prev,
             [jobId]: {
               ...cur,
-              locations: locationsUnchanged ? normalizedLocs : cur.locations,
+              // Route enrichment can consolidate places. It must not replace
+              // review rows while leaving their labels/evidence behind.
               distance: locationsUnchanged ? nextDistance : cur.distance,
               optimizing: false,
             },
@@ -1314,11 +1315,8 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
 
       if (resultError || locsError || !result) return;
 
-      const rawLocations = (locs ?? [])
-        .map((l: any) => {
-          return String(l?.formatted_address ?? l?.address_raw ?? "").trim();
-        })
-        .filter(Boolean);
+      const locationDetails = getCallsheetReviewLocations(locs ?? []);
+      const rawLocations = locationDetails.map(location => location.value);
 
       setReviewByJobId((prev) => {
         if (prev[jobId]) return prev;
@@ -1330,7 +1328,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
             project: String((result as any).project_value ?? ""),
             producer: String((result as any).producer_value ?? ""),
             rawLocations,
-            locationDetails: (locs ?? []).filter((l: any) => String(l.address_raw ?? l.name_raw ?? "").trim()),
+            locationDetails,
             locations: rawLocations,
             distance: "0",
             distanceDirty: false,

@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, cleanup } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, cleanup, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-const mocks = vi.hoisted(() => ({ save: vi.fn(), fetch: vi.fn(), error: vi.fn(), tables: [] as any[], jobs: [] as any[], t: (s: string) => s, tf: (s: string) => s }));
+const mocks = vi.hoisted(() => ({ save: vi.fn(), fetch: vi.fn(), error: vi.fn(), optimize: vi.fn(), tables: [] as any[], jobs: [] as any[], locations: [] as any[], result: null as any, t: (s: string) => s, tf: (s: string) => s }));
+vi.mock('@/lib/callsheetOptimization', () => ({ optimizeCallsheetLocationsAndDistance: mocks.optimize }));
 vi.mock('@/hooks/use-i18n', () => ({ useI18n: () => ({ t: mocks.t, tf: mocks.tf, locale: 'es' }) }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ getAccessToken: async () => 'test' }) }));
 vi.mock('@/contexts/UserProfileContext', () => ({ useUserProfile: () => ({ profile: { baseAddress: 'Home' } }) }));
@@ -11,11 +12,12 @@ vi.mock('@/hooks/use-ai-quota', () => ({ useAiQuota: () => ({ used: 0, limit: 3,
 vi.mock('@/hooks/use-plan-limits', () => ({ usePlanLimits: () => ({ checkCSVImportLimit: () => ({ allowed: true }), checkStopsLimit: () => ({ allowed: true }), canAddNonAITrip: { allowed: true }, limits: { maxCallsheetsPerBatch: 5 } }) }));
 vi.mock('@/lib/supabaseClient', () => ({ supabase: {
   auth: { getUser: async () => ({ data: { user: mocks.jobs.length ? { id: 'user' } : null } }) },
-  from: () => {
+  from: (table: string) => {
     const filters: ((row: any) => boolean)[] = [];
     const q: any = { select: () => q, eq: () => q, order: () => q, range: () => q,
+      maybeSingle: async () => ({ data: mocks.result, error: null }),
       in: (key: string, values: any[]) => { filters.push(row => values.includes(row[key])); return q; },
-      then: (resolve: any) => Promise.resolve({ data: mocks.jobs.filter(row => filters.every(fn => fn(row))), error: null }).then(resolve),
+      then: (resolve: any) => Promise.resolve({ data: (table === 'callsheet_locations' ? mocks.locations : mocks.jobs).filter(row => filters.every(fn => fn(row))), error: null }).then(resolve),
     }; return q;
   },
 } }));
@@ -28,8 +30,36 @@ function file(name: string, text: string, type = 'text/csv') {
   return f;
 }
 function open() { return render(<MemoryRouter><BulkUploadModal defaultOpen trigger={<button>Open</button>} onSave={mocks.save} /></MemoryRouter>); }
-beforeEach(() => { cleanup(); mocks.jobs = []; mocks.tables = []; vi.clearAllMocks(); mocks.save.mockResolvedValue(true); vi.stubGlobal('fetch', mocks.fetch); });
+beforeEach(() => { cleanup(); mocks.jobs = []; mocks.tables = []; mocks.locations = []; mocks.result = null; vi.clearAllMocks(); mocks.save.mockResolvedValue(true); mocks.optimize.mockResolvedValue({ locations: ['Merged place'], distanceKm: 12 }); vi.stubGlobal('fetch', mocks.fetch); });
 describe('bulk import user flow', () => {
+  it.each(['needs_review', 'done'])('preserves row associations, edits and saved route when reopening %s', async status => {
+    mocks.jobs = [{ id: 'job', status, storage_path: 'user/job/Original.pdf', created_at: new Date().toISOString() }];
+    mocks.result = { date_value: '2026-09-10', project_value: 'Film' };
+    mocks.locations = [
+      { position: 0, label_source: 'LOCATION 1', address_raw: 'Jesuitenwiese Prater', formatted_address: status === 'done' ? 'Park Street 1' : '', selection_state: status === 'done' ? 'confirmed' : 'candidate', review_reason: status === 'done' ? null : 'Confirm park address' },
+      { position: 1, label_source: 'LOCATION 2', address_raw: 'Erzbischofgasse 8', formatted_address: 'Erzbischofgasse 8, Wien', selection_state: 'confirmed' },
+    ];
+    open();
+    const first = await screen.findByDisplayValue(status === 'done' ? 'Park Street 1' : 'Jesuitenwiese Prater');
+    const second = screen.getByDisplayValue('Erzbischofgasse 8, Wien');
+    expect(within(first.parentElement!).getByText(/LOCATION 1/)).toHaveTextContent(status === 'done' ? 'bulk.statusReady' : 'bulk.statusNeedsReview');
+    expect(within(second.parentElement!).getByText(/LOCATION 2/)).toHaveTextContent('bulk.statusReady');
+    if (status === 'needs_review') {
+      expect(within(first.parentElement!).getByText('Confirm park address')).toBeInTheDocument();
+      expect(mocks.optimize).not.toHaveBeenCalled();
+    } else {
+      await waitFor(() => expect(mocks.optimize).toHaveBeenCalledOnce());
+      await waitFor(() => expect(screen.getByText('bulk.saveTrip')).not.toBeDisabled());
+      expect(screen.queryByDisplayValue('Merged place')).toBeNull();
+    }
+    expect(mocks.save).not.toHaveBeenCalled();
+    fireEvent.change(first, { target: { value: 'Reviewed Park Address' } });
+    fireEvent.click(screen.getByText('bulk.saveTrip'));
+    await waitFor(() => expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({
+      callsheet_job_id: 'job', route: ['Home', 'Reviewed Park Address', 'Erzbischofgasse 8, Wien', 'Home'],
+    })));
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
   it('defaults to manual CSV; drop, edit and save use the reviewed value without AI', async () => {
     open();
     expect(screen.getByLabelText('bulk.pasteCsv')).toBeInTheDocument();

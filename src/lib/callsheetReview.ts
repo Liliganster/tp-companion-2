@@ -17,6 +17,19 @@ export type ReviewCallsheetJob = {
   callsheet_locations?: { formatted_address?: string | null; address_raw?: string | null; name_raw?: string | null; page?: number | null; position?: number | null; label_source?: string | null; selection_state?: string | null; review_reason?: string | null }[];
 };
 
+export type ReviewCallsheetLocation = NonNullable<ReviewCallsheetJob['callsheet_locations']>[number];
+
+/** Keep every review row paired with its evidence, including unresolved blanks.
+ * The fallback is an editable source value, not a confirmed postal address. */
+export function getCallsheetReviewLocations(locations: readonly ReviewCallsheetLocation[] = []) {
+  return [...locations]
+    .sort((a, b) => (a.position ?? a.page ?? 0) - (b.position ?? b.page ?? 0))
+    .map(location => ({
+      ...location,
+      value: location.formatted_address?.trim() || location.address_raw?.trim() || location.name_raw?.trim() || '',
+    }));
+}
+
 // These drafts are already persisted as jobs. They are not confirmed trips and
 // must not enter reports, distances or emissions before the user saves them.
 export function getReviewCallsheetDrafts(jobs: ReviewCallsheetJob[], trips: Pick<Trip, 'callsheet_job_id'>[], projects: { id: string; name: string }[]) {
@@ -27,8 +40,7 @@ export function getReviewCallsheetDrafts(jobs: ReviewCallsheetJob[], trips: Pick
       const trip: Trip = {
         id: job.id, callsheet_job_id: job.id, date: job.callsheet_results?.date_value ?? '',
         extractedDate: job.callsheet_results?.date_evidence ?? undefined,
-        route: [...(job.callsheet_locations ?? [])].sort((a, b) => (a.position ?? a.page ?? 0) - (b.position ?? b.page ?? 0))
-          .map(location => location.formatted_address ?? location.address_raw ?? '').filter(Boolean),
+        route: getCallsheetReviewLocations(job.callsheet_locations).map(location => location.value),
         project: projects.find(p => p.id === job.project_id)?.name ?? job.callsheet_results?.project_value ?? '',
         projectId: job.project_id, purpose: '', passengers: 0, distance: 0, co2: 0,
         documents: [{ id: job.id, name, storagePath: job.storage_path, bucketId: 'callsheets',
