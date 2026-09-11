@@ -101,8 +101,8 @@ it('distinguishes a fictional vehicle scene from a physical filming set without 
   expect(result.excluded[0].reason).toBe('mobile_scene_without_destination');
   expect(result.reviewReasons).toEqual([]);
 });
-it('does not silently discard a mobile scene with conflicting evidence about another physical site', () => {
-  const result = select(['mobile_scene','internal_marker'].map(locationKind=>({label:'Scene',address:'Possible second building',normalizedAddress:'',role:'filming',locationKind,reviewReason:'Schedule may require a separate building not identified on the map.'})));
+it('does not silently discard uncertain physical sites or unresolved internal markers', () => {
+  const result = select(['uncertain','internal_marker'].map(locationKind=>({label:'Scene',address:'Possible second building',normalizedAddress:'',role:'filming',locationKind,reviewReason:'Schedule may require a separate building not identified on the map.'})));
   expect(result.filming.every(x=>x.selection_state==='candidate')).toBe(true);
   expect(result.excluded.every(x=>x.reason==='duplicate_filming_destination')).toBe(true);
   expect(result.filming).toHaveLength(1);
@@ -112,4 +112,62 @@ it('retains a whole-document conflict while preserving individually supported lo
   const result = select([{label:'SET',address:'East Road 4',normalizedAddress:'East Road 4',role:'filming'}], '', {documentReviewReason:'A final exterior scene has no established physical site.'});
   expect(result.filming[0].selection_state).toBe('confirmed');
   expect(result.reviewReasons).toEqual(['A final exterior scene has no established physical site.']);
+});
+
+it('treats metadata advisories as nonblocking without discarding physical-site conflicts', () => {
+  const locations=[{label:'Hotel',address:'Frankenberggasse 10, 1040 Wien',normalizedAddress:'Frankenberggasse 10, 1040 Wien',role:'filming'}];
+  const result=select(locations,'',{projectName:'Untitled Project',documentReviewScope:'metadata',documentReviewReason:"Project name is not explicitly stated; inferred as 'Untitled Project'."});
+  expect(result.reviewReasons).toEqual([]);
+  expect(result.filming[0].selection_state).toBe('confirmed');
+  for(const scope of ['locations','unit','unknown','invalid']) {
+    expect(select(locations,'',{documentReviewScope:scope,documentReviewReason:'Two schedules refer to different physical sites.'}).reviewReasons).toHaveLength(1);
+  }
+});
+
+it('leaves a missing year pending once without invalidating independently supported addresses', () => {
+  const data=CallsheetExtractionResultSchema.parse({date:'',dateRaw:'Tuesday, 19th Nov',dateYearInDocument:false,documentReviewScope:'date',documentReviewReason:'Year is missing.',locations:[
+    {label:'Location 2',address:'Theatre: Example Street 12',normalizedAddress:'Example Street 12',role:'filming',dayScope:'document_day'},
+    {label:'Location 3',address:'Example Avenue 2',normalizedAddress:'Example Avenue 2',role:'filming',dayScope:'document_day'},
+  ]});
+  const result=selectCallsheetLocations(data,'','');
+  expect(result.reviewReasons).toHaveLength(1);
+  expect(result.documentReviewReasons).toEqual(result.reviewReasons);
+  expect(result.filming.map(l=>[l.selection_state,l.review_reason])).toEqual([['confirmed',null],['confirmed',null]]);
+});
+
+it('uses the unit governing a dedicated callsheet and still excludes explicitly different-unit blocks', () => {
+  const locations=[
+    {label:'SET',address:'Unit Road 3',normalizedAddress:'Unit Road 3',role:'filming',unitScope:'other_unit'},
+    {label:'SET B',address:'Unit Road 5',normalizedAddress:'Unit Road 5',role:'filming',unitScope:'unspecified'},
+    {label:'MAIN',address:'Main Road 1',normalizedAddress:'Main Road 1',role:'filming',unitScope:'main_unit'},
+  ];
+  const result=select(locations,'',{documentUnit:'other_unit'});
+  expect(result.filming.map(l=>l.address)).toEqual(['Unit Road 3','Unit Road 5']);
+  expect(result.reviewReasons).toEqual([]);
+  expect(result.excluded).toEqual([expect.objectContaining({label:'MAIN',reason:'other_filming_unit'})]);
+  expect(select(locations,'',{documentUnit:'mixed'}).filming.map(l=>l.address)).toEqual(['Unit Road 5','Main Road 1']);
+});
+
+it('does not turn a descriptive mobile-scene explanation into a missing destination', () => {
+  const result=select([
+    {label:'TAXI 2',address:'TAXI 2',normalizedAddress:'',role:'filming',locationKind:'mobile_scene',reviewReason:"No physical filming location provided; it's a mobile scene."},
+    {label:'HOTEL',address:'Hotel Road 10',normalizedAddress:'Hotel Road 10',role:'filming',locationKind:'physical_destination'},
+  ]);
+  expect(result.reviewReasons).toEqual([]);
+  expect(result.filming).toHaveLength(1);
+  expect(result.excluded[0].reason).toBe('mobile_scene_without_destination');
+});
+
+it('groups adjacent postal aliases with their labels but preserves a later return to the site', () => {
+  const block=(label:string,normalizedAddress:string)=>({label,address:normalizedAddress,normalizedAddress,role:'filming',locationKind:'physical_destination'});
+  const result=select([
+    block('Hotel Room','Frankenberggasse 10, 1040 Wien'),
+    block('Hotel Lobby','Frankenberggasse 10, 1040 Wien'),
+    block('Hotel Außen','Frankenberggasse 10, 1040 Wien'),
+    block('Station','Station Road 1'),
+    block('Hotel','Frankenberggasse 10, 1040 Wien'),
+  ]);
+  expect(result.filming.map(l=>l.normalizedAddress)).toEqual(['Frankenberggasse 10, 1040 Wien','Station Road 1','Frankenberggasse 10, 1040 Wien']);
+  expect(result.filming[0].label).toBe('Hotel Room / Hotel Lobby / Hotel Außen');
+  expect(result.filming[0].siteEvidence).toContain('Hotel Lobby: Frankenberggasse 10');
 });

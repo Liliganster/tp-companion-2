@@ -28,7 +28,18 @@ it.each([{resultCount:2,partialMatch:false},{resultCount:1,partialMatch:true},{r
  expect(result.locations).toEqual(['Street 12']);
 });
 it('preserves different street numbers and original order without network access',async()=>{
- expect(await optimizeCallsheetLocationsAndDistance({profile:{},rawLocations:['Street 6C','Street 8','Street 6C']})).toEqual({locations:['Street 6C','Street 8'],distanceKm:null});
+ expect(await optimizeCallsheetLocationsAndDistance({profile:{},rawLocations:['Street 6C','Street 8','Street 6C']})).toEqual({locations:['Street 6C','Street 8','Street 6C'],distanceKm:null});
+});
+it('keeps return visits in the route without geocoding the same postal address twice', async()=>{
+ const request=vi.fn(async(url:unknown,init:RequestInit)=>{
+  const body=JSON.parse(String(init.body));
+  if(url==='/api/google/geocode') return new Response(JSON.stringify({resultCount:1,partialMatch:false,placeId:body.address,postalAddress:body.address,types:['street_address']}));
+  expect(body.waypoints).toEqual(['place_id:Street 1','place_id:Street 2','place_id:Street 1']);
+  return new Response(JSON.stringify({totalDistanceMeters:5000}));
+ });
+ vi.stubGlobal('fetch',request);
+ expect(await optimizeCallsheetLocationsAndDistance({profile:{baseAddress:'Base'},rawLocations:['Street 1','Street 1','Street 2','Street 1'],accessToken:'mock'})).toEqual({locations:['Street 1','Street 2','Street 1'],distanceKm:5});
+ expect(request).toHaveBeenCalledTimes(3);
 });
 it('preserves useful locations when distance calculation fails',async()=>{
  vi.stubGlobal('fetch',vi.fn(async()=>{throw new Error('offline')}));

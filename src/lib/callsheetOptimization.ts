@@ -64,11 +64,11 @@ export async function optimizeCallsheetLocationsAndDistance(args: {
   const baseAddress = buildBaseRouteAddress(profile);
   const country = (profile.country ?? "").trim();
 
-  const seen = new Set<string>();
+  let previousAddressKey = '';
   const currentLocs = rawLocations.map(normalizeCallsheetAddress).filter(l => {
     const key = callsheetAddressKey(l);
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
+    if (!key || previousAddressKey === key) return false;
+    previousAddressKey = key;
     return true;
   });
   if (currentLocs.length === 0) return { locations: [], distanceKm: null };
@@ -79,14 +79,19 @@ export async function optimizeCallsheetLocationsAndDistance(args: {
 
   const normalizedLocs: string[] = [];
   const waypoints: string[] = [];
-  const places = new Set<string>();
+  let previousPlace = '';
+  const resolved = new Map<string, {display: string; waypoint: string; identity: string}>();
   for (const address of currentLocs) {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     let display = address;
     let waypoint = address;
     let identity = callsheetAddressKey(address);
+    const addressKey = identity;
+    const cached = resolved.get(addressKey);
     // Coordinates and Maps links already identify a destination; do not geocode them as prose.
-    if (!/^https?:\/\//i.test(address) && !/^-?\d+\.\d+\s*,\s*-?\d+\.\d+$/.test(address)) {
+    if (cached) {
+      ({display, waypoint, identity} = cached);
+    } else if (!/^https?:\/\//i.test(address) && !/^-?\d+\.\d+\s*,\s*-?\d+\.\d+$/.test(address)) {
       try {
         const { res, data } = await fetchJsonWithTimeout('/api/google/geocode', {
           method: 'POST',
@@ -104,8 +109,9 @@ export async function optimizeCallsheetLocationsAndDistance(args: {
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
       }
     }
-    if (places.has(identity)) continue;
-    places.add(identity);
+    resolved.set(addressKey, {display, waypoint, identity});
+    if (previousPlace === identity) continue;
+    previousPlace = identity;
     normalizedLocs.push(display);
     waypoints.push(waypoint);
   }

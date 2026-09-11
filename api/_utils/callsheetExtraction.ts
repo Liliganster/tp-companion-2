@@ -190,7 +190,10 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
   })) };
   const selection = selectCallsheetLocations(currentData, resolvedDate, pdfText);
   const status = selection.reviewReasons.length ? 'needs_review' : 'done';
-  const reviewReason = selection.reviewReasons.join(' ') || null;
+  const pendingLocations = selection.filming.filter(location => location.selection_state === 'candidate').length;
+  const reviewReason = [...selection.documentReviewReasons,
+    ...(pendingLocations ? [`Hay ${pendingLocations} locaciones pendientes de confirmar; revisa el motivo indicado en cada una.`] : []),
+  ].join(' ') || null;
   const locs = selection.filming.map(location => ({
     address_raw: location.address, name_raw: null,
     formatted_address: normalizeCallsheetAddress(location.normalizedAddress ?? location.address),
@@ -207,7 +210,9 @@ export async function extractCallsheet(args: ExtractCallsheetArgs): Promise<Extr
     p_request_id: args.requestId, p_attempt_id: args.attemptId,
     p_result: {
       date_value: resolvedDate || null, date_evidence: validated.data.dateRaw ?? null,
-      project_value: validated.data.projectName,
+      // An absent title is not a conflicting title. NULL also prevents the
+      // database mismatch trigger comparing a placeholder to a chosen project.
+      project_value: validated.data.projectName === 'Untitled Project' ? null : validated.data.projectName,
       producer_value: validated.data.productionCompanies[0] ?? null,
       extraction_state: status, review_reason: reviewReason,
       model_output: { ...extractedJson, _diagnostics: { ...diagnostics, durationMs: aiDurationMs, model: aiResult.model, usage: aiResult.usage ?? null, finishReason: aiResult.finishReason ?? null } },

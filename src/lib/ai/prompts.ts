@@ -6,7 +6,7 @@ export function buildUniversalExtractorPrompt(text: string) {
     LOCATION_UNDERSTANDING_RULE,
     LOCATION_DAY_RULE,
     'Dates may use ANY language, translated or abbreviated months, weekday prefixes, ordinals, DD.MM.YYYY, DD/MM/YYYY, MM/DD/YYYY or year-first layouts. Resolve order from document context. Return ISO plus the printed dateRaw. A different format is not missing data. If the date/year is absent or genuinely ambiguous leave date empty, preserve evidence and continue extracting locations. Never infer a year from upload time.',
-    'Identify projectName from the full header and document context, including prominent standalone titles without a Projekt/Serie label. A title can also be a word used inside the story. Distinguish it from a producer, venue or slogan; use Untitled Project only if no title can be established. productionCompanies may be empty without blocking other data.',
+    'Identify projectName from the full header and document context, including prominent standalone titles without a Projekt/Serie label. Inspect the central header panel as well as the margins: a short standalone title above a slogan or crew names remains a title, not part of the slogan. A title can also be a word used inside the story. Distinguish it from a producer, venue or slogan; use Untitled Project only if no title can be established. Missing or uncertain projectName/productionCompanies are optional metadata: documentReviewScope=metadata for any such advisory, never a date/unit/locations conflict. They must not make supported filming sites uncertain. Do not add a review reason just to explain a fallback.',
     LOCATION_COLLECTION_RULE,
     LOCATION_ROLE_RULE,
     LOCATION_LABEL_RULE,

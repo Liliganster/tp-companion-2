@@ -75,10 +75,10 @@ it('does not save a successful result when the only location belongs to tomorrow
   expect(mocks.insert).not.toHaveBeenCalledWith('callsheet_locations', expect.anything());
 });
 
-const extractMockLocations = async (locations: object[], source: string) => {
+const extractMockLocations = async (locations: object[], source: string, extra: object = {}) => {
   const bytes = new TextEncoder().encode(source);
   mocks.download.mockResolvedValue({ data: { size: bytes.length, arrayBuffer: async () => bytes.buffer } });
-  mocks.text.mockResolvedValue({ text: JSON.stringify({ date: '2026-09-10', dateRaw: '10.09.2026', dateYearInDocument: true, projectName: 'Test', locations }), provider: 'mock', model: 'mock' });
+  mocks.text.mockResolvedValue({ text: JSON.stringify({ date: '2026-09-10', dateRaw: '10.09.2026', dateYearInDocument: true, projectName: 'Test', locations, ...extra }), provider: 'mock', model: 'mock' });
   return run('review.txt');
 };
 
@@ -142,11 +142,11 @@ it('excludes second-unit locations before persistence and keeps multiple main lo
   expect(mocks.insert).toHaveBeenCalledWith('callsheet_excluded_blocks', expect.arrayContaining([expect.objectContaining({ evidence_text: second.address, reason: 'other_filming_unit' })]));
 });
 
-it('sends a second-unit-only document to manual review without persisting a route', async () => {
+it('persists the filming route of a document dedicated to second unit', async () => {
   const evidence = 'SEGUNDA UNIDAD\nSET: Other Street 20, City';
-  const result = await extractMockLocations([{ label: 'SET', address: 'Other Street 20, City', normalizedAddress: 'Other Street 20, City', dayScope: 'document_day', dayDate: '2026-09-10', dayEvidence: evidence, unitScope: 'other_unit', unitEvidence: evidence }], evidence);
-  expect(result).toMatchObject({ ok: true, status: 'needs_review' });
-  expect(mocks.insert).not.toHaveBeenCalledWith('callsheet_locations', expect.anything());
+  const result = await extractMockLocations([{ label: 'SET', address: 'Other Street 20, City', normalizedAddress: 'Other Street 20, City', dayScope: 'document_day', dayDate: '2026-09-10', dayEvidence: evidence, unitScope: 'other_unit', unitEvidence: evidence }], evidence, {documentUnit:'other_unit'});
+  expect(result).toMatchObject({ ok: true, status: 'done', locations:['Other Street 20, City'] });
+  expect(mocks.insert).toHaveBeenCalledWith('callsheet_locations', [expect.objectContaining({selection_state:'confirmed'})]);
 });
 
 it('sends result, ordered candidates, exclusions and the reservation to one atomic RPC', async () => {
@@ -213,7 +213,7 @@ it('uses the persisted trigger-adjusted state and records request diagnostics al
  const result=await extractMockLocations([{label:'SET',address:'Main Road 1',normalizedAddress:'Main Road 1',role:'filming'}],'SET Main Road 1');
  expect(result).toMatchObject({ok:true,status:'needs_review',reviewReason:'Project does not match'});
  const stored=mocks.insert.mock.calls.find(([table])=>table==='callsheet_results')?.[1] as any;
- expect(stored.model_output._diagnostics).toMatchObject({profile:'callsheet-2026-09-11-v3-context',inputMode:'text',limits:{allowSchemaRetry:false,maxOutputTokens:8192}});
+ expect(stored.model_output._diagnostics).toMatchObject({profile:'callsheet-2026-09-11-v4-review',inputMode:'text',limits:{allowSchemaRetry:false,maxOutputTokens:8192}});
  expect(stored.model_output._diagnostics.fileHash).toMatch(/^[a-f0-9]{64}$/);
 });
 it('rejects even syntactically valid but truncated provider output before atomic saving',async()=>{
@@ -255,4 +255,30 @@ it('carries whole-document understanding through the actual PDF pipeline and ato
  const drafts=getReviewCallsheetDrafts([{id:'job',storage_path:'user/job/context.pdf',status:'needs_review',created_at:'2026-09-10',callsheet_results:payload.p_result,callsheet_locations:payload.p_locations}],[],[]);
  expect(drafts[0].trip.route).toEqual(['River Road 12']);
  expect(drafts[0].trip.distance).toBe(0);
+});
+
+it('does not block a usable route or trigger project mismatch with an unknown-title placeholder', async () => {
+ const result=await extractMockLocations([{label:'Hotel',address:'Frankenberggasse 10, 1040 Wien',normalizedAddress:'Frankenberggasse 10, 1040 Wien',role:'filming'}],'Callsheet',{
+  projectName:'Untitled Project',documentReviewScope:'metadata',documentReviewReason:"Project name is not explicitly stated; inferred as 'Untitled Project'.",
+ });
+ expect(result).toMatchObject({status:'done',reviewReason:null,locations:['Frankenberggasse 10, 1040 Wien']});
+ const payload=mocks.rpc.mock.calls[0][1];
+ expect(payload.p_result).toMatchObject({project_value:null,extraction_state:'done',review_reason:null});
+ expect(payload.p_result.model_output.documentReviewScope).toBe('metadata');
+ expect(payload.p_result.model_output.documentReviewReason).toContain('Project name');
+});
+
+it('persists a single document date warning and independent address states for review', async () => {
+ const result=await extractMockLocations([
+  {label:'SET A',address:'Example Street 1',normalizedAddress:'Example Street 1',role:'filming'},
+  {label:'SET B',address:'Unresolved garden; access at Example Street 3',normalizedAddress:'Example Street 3',role:'filming',addressRelation:'access_only'},
+ ],'Tuesday, 19th Nov',{date:'',dateRaw:'Tuesday, 19th Nov',dateYearInDocument:false,documentReviewScope:'date',documentReviewReason:'Missing year.'});
+ expect(result.status).toBe('needs_review');
+ const payload=mocks.rpc.mock.calls[0][1];
+ expect(payload.p_result.date_value).toBeNull();
+ expect(payload.p_result.review_reason).toContain('Hay 1 locaciones');
+ expect(payload.p_result.review_reason).not.toContain('Example Street');
+ expect(payload.p_locations[0]).toMatchObject({selection_state:'confirmed',review_reason:null});
+ expect(payload.p_locations[1]).toMatchObject({selection_state:'candidate',formatted_address:''});
+ expect(payload.p_locations[1].review_reason).not.toContain('fecha');
 });

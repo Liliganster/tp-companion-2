@@ -8,9 +8,10 @@ import { resolveCallsheetDate } from './callsheetDate.js';
 export function selectCallsheetLocations(data: CallsheetExtractionResult, date: string, _source: string) {
   const excluded: Array<{ label: string; address: string; reason: string }> = [];
   const filming: Array<{ label: string; address: string; normalizedAddress?: string; siteEvidence?: string; position: number; selection_state: 'confirmed' | 'candidate'; review_reason: string | null }> = [];
-  const reviewReasons: string[] = [];
-  if (data.documentReviewReason) reviewReasons.push(data.documentReviewReason);
-  if (!date) reviewReasons.push('Confirma la fecha completa de rodaje de la primera página; falta o es inválida, incluido el año.');
+  const documentReviewReasons: string[] = [];
+  if (data.documentReviewReason && data.documentReviewScope !== 'metadata' && !(data.documentReviewScope === 'date' && !date)) documentReviewReasons.push(data.documentReviewReason);
+  if (!date) documentReviewReasons.push('Confirma la fecha completa de rodaje; falta o es ambigua, incluido el año.');
+  const reviewReasons = [...documentReviewReasons];
   data.locations.forEach((location, position) => {
     const label = location.label ?? '';
     const address = location.address ?? '';
@@ -29,9 +30,9 @@ export function selectCallsheetLocations(data: CallsheetExtractionResult, date: 
     const role = classifyLocationRole({ ...location, label, address });
     let excludedReason = '';
     if (locationKind === 'internal_marker' && !normalizedAddress && !contextConflict) excludedReason = 'internal_site_marker';
-    else if (locationKind === 'mobile_scene' && !normalizedAddress && !contextConflict) excludedReason = 'mobile_scene_without_destination';
+    else if (locationKind === 'mobile_scene' && !normalizedAddress) excludedReason = 'mobile_scene_without_destination';
     else if (day === 'other_day' || (date && dayDate && date !== dayDate)) excludedReason = 'other_shooting_day';
-    else if (data.documentUnit === 'other_unit' || unit === 'other_unit') excludedReason = 'other_filming_unit';
+    else if ((data.documentUnit === 'other_unit' && unit === 'main_unit') || (data.documentUnit !== 'other_unit' && unit === 'other_unit')) excludedReason = 'other_filming_unit';
     else if (role === 'logistics' || role === 'other') excludedReason = `${role}_block`;
     if (excludedReason) { excluded.push({ label, address, reason: excludedReason }); return; }
     const reasons: string[] = [];
@@ -45,22 +46,35 @@ export function selectCallsheetLocations(data: CallsheetExtractionResult, date: 
     if (role === 'uncertain') reasons.push(('reviewReason' in location && location.reviewReason) || 'Confirma si el bloque identifica un set físico de filmación.');
     if (!address.trim()) reasons.push('Falta el nombre o dirección del set.');
     if (normalizedAddress === '') reasons.push('Falta resolver la dirección postal del lugar; confirma la calle y el número.');
-    if (!date) reasons.push('Falta confirmar la fecha completa de rodaje.');
     if (day === 'uncertain') reasons.push('Confirma a qué día de rodaje pertenece el set.');
     if (dayDateRaw && !dayDate) reasons.push('Confirma la fecha indicada para este set.');
-    if (unit === 'uncertain' || data.documentUnit === 'uncertain' || (data.documentUnit === 'mixed' && (!unit || unit === 'unspecified'))) reasons.push('Confirma a qué unidad pertenece el set.');
-    const reason = reasons.length ? `${label || 'Bloque'} ${address}: ${[...new Set(reasons)].join(' ')}` : null;
-    const duplicate = address.trim() && filming.find(item =>
-      item.label.trim().toLowerCase() === label.trim().toLowerCase() &&
-      callsheetAddressKey(item.normalizedAddress || item.address) === callsheetAddressKey(normalizedAddress || address) &&
-      item.selection_state === (reason ? 'candidate' : 'confirmed'));
+    if (unit === 'uncertain' || data.documentUnit === 'uncertain') reasons.push('Confirma a qué unidad pertenece el set.');
+    // The caller already has label/address. A field-specific reason must not
+    // copy the whole address, Maps URL and document-level date warning again.
+    const reason = reasons.length ? [...new Set(reasons)].join(' ') : null;
+    // Adjacent aliases with the same resolved postal destination are one road
+    // stop. Preserve all labels/evidence and later return visits (A -> B -> A).
+    const previous = filming.at(-1);
+    const duplicate = address.trim() && previous &&
+      (previous.label.trim().toLowerCase() === label.trim().toLowerCase() ||
+        (!reason && previous.selection_state === 'confirmed' && previous.normalizedAddress && normalizedAddress)) &&
+      callsheetAddressKey(previous.normalizedAddress || previous.address) === callsheetAddressKey(normalizedAddress || address) &&
+      previous.selection_state === (reason ? 'candidate' : 'confirmed') ? previous : undefined;
     if (duplicate) {
+      if (label && duplicate.label !== label) duplicate.label = [duplicate.label, label].filter(Boolean).join(' / ');
+      duplicate.siteEvidence = [duplicate.siteEvidence, `${label}: ${address}`, siteEvidence].filter(Boolean).join('\n');
       excluded.push({ label, address, reason: 'duplicate_filming_destination' });
       return;
     }
     if (reason) reviewReasons.push(reason);
     filming.push({ label, address, normalizedAddress, siteEvidence, position, selection_state: reason ? 'candidate' : 'confirmed', review_reason: reason });
   });
-  if (!filming.length) reviewReasons.push('No hay sets físicos de la fecha y unidad seleccionadas; comprueba el original.');
-  return { filming, excluded, reviewReasons: [...new Set(reviewReasons)], candidates: filming };
+  if (!filming.length) {
+    const reason = excluded.some(block => block.reason === 'other_filming_unit')
+      ? 'Las locaciones detectadas pertenecen a una unidad excluida por la selección actual.'
+      : 'No hay sets físicos de la fecha y unidad seleccionadas; comprueba el original.';
+    documentReviewReasons.push(reason);
+    reviewReasons.push(reason);
+  }
+  return { filming, excluded, reviewReasons: [...new Set(reviewReasons)], documentReviewReasons: [...new Set(documentReviewReasons)], candidates: filming };
 }

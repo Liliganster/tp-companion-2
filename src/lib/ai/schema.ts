@@ -12,12 +12,13 @@ type ExtractionSchemaNode = {
 export const extractionSchema = {
   type: "object",
   properties: {
-    documentUnit: { type: "string", enum: ["main_unit", "other_unit", "mixed", "unspecified", "uncertain"], description: 'Unit governing this document/block; unspecified when no unit is named.' },
+    documentUnit: { type: "string", enum: ["main_unit", "other_unit", "mixed", "unspecified", "uncertain"], description: 'Unit governing this document; other_unit for a callsheet dedicated to second/additional unit (eligible), mixed for mixed main/other-unit blocks; unspecified when no unit is named.' },
     date: { type: "string", description: "Main shooting date printed on the FIRST PAGE, in YYYY-MM-DD; never the file creation, upload or revision date. If its year is missing, return an empty string and preserve dateRaw for review. Never infer a year. If the shooting date itself is absent, return an empty string." },
     dateRaw: { type: "string", description: "The main shooting date EXACTLY as printed on the FIRST PAGE, verbatim (e.g. 'Tuesday, 19th Nov' or 'Montag, 06.05.2024')." },
     dateYearInDocument: { type: "boolean", description: "true ONLY if a year is explicitly documented and clearly governs the first-page shooting date, even across associated headings. A year belonging only to a revision, another day or an unrelated block is not evidence. false if the applicable year is absent." },
     projectName: { type: "string", description: "Film/show/project title established from the whole header and context, including standalone titles without a field label. Not a venue, slogan or producer." },
-    documentReviewReason: { type: 'string', description: 'Concrete unresolved whole-document conflict after reconciling sites and schedule. Empty when none; site-specific conflicts go in that site reviewReason.' },
+    documentReviewScope: { type: 'string', enum: ['none', 'metadata', 'date', 'unit', 'locations', 'unknown'], description: 'Field affected by documentReviewReason. Missing/uncertain project title or producer is metadata (nonblocking); date, unit and physical-site coverage are separate. none when there is no issue. Never classify missing project metadata as missing physical sites.' },
+    documentReviewReason: { type: 'string', description: 'Concrete unresolved whole-document issue for documentReviewScope. Empty when none; site-specific conflicts go in that site reviewReason. Descriptive metadata is advisory and must not block an otherwise supported date and route.' },
     productionCompanies: {
       type: "array",
       items: { type: "string", description: "Production company name (has GmbH/LLC/Productions)." },
@@ -54,5 +55,5 @@ export const extractionSchema = {
       description: 'Physical sites reconciled against the whole shooting day, in document order, with separate logistics for exclusion. Consolidate scene aliases of the same site; do not enumerate every address or scene row.'
     }
   },
-  required: ["documentUnit", "date", "projectName", "productionCompanies", "documentReviewReason", "locations"]
+  required: ["documentUnit", "date", "projectName", "productionCompanies", "documentReviewScope", "documentReviewReason", "locations"]
 } satisfies ExtractionSchemaNode;

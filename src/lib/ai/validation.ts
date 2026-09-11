@@ -26,6 +26,9 @@ export type LabeledLocation = { label: string; address: string; addressCorrected
 
 export const CallsheetExtractionResultSchema = z.object({
   documentUnit: z.enum(['main_unit', 'other_unit', 'mixed', 'unspecified', 'uncertain']).catch('uncertain').default('unspecified'),
+  // Legacy or malformed scope stays conservative; do not guess from free text
+  // in one language whether a review reason is merely descriptive metadata.
+  documentReviewScope: z.enum(['none', 'metadata', 'date', 'unit', 'locations', 'unknown']).catch('unknown').default('unknown'),
   documentReviewReason: z.string().trim().transform(value => value.slice(0, 1000)).catch('').default(''),
   // A readable non-ISO date must not discard locations or the whole document.
   date: z.string().trim().max(160).nullish().catch('').transform(value => value ?? ''),

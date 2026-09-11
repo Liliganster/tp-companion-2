@@ -1,61 +1,41 @@
-# Revisión integrada del extractor — 2026-09-11
+# Extractor de callsheets: revisión de bloqueos — 2026-09-11
 
-Carpeta: C:\Users\lilia\Escritorio\trip-companion-main 2\trip-companion-main.
-Estado actual: perfil `callsheet-2026-09-11-v3-context`, cambios locales sin publicar. El perfil anterior v2 se evaluó con IA/Maps reales; la revisión contextual v3 solo tiene validación local. No se ha demostrado un 95 % de precisión.
+Proyecto: C:\Users\lilia\Escritorio\trip-companion-main 2\trip-companion-main.
+Perfil: callsheet-2026-09-11-v4-review.
 
-## Lectura contextual después de la evaluación real
+## Problema y comportamiento corregido
 
-La evaluación v2 procesó los 11 PDF de DISPOS 24 - copia sin timeout (8,2–16,5 s), pero solo permitió certificar completamente las direcciones/ruta automática de 5 de los 9 callsheets principales. Los otros dos documentos eran controles de reconocimiento técnico y segunda unidad. El informe, referencia previa, respuestas originales, Maps y presupuesto se encuentran en `C:\Users\lilia\Documents\Codex\2026-09-10\la-x20\outputs\callsheet-eval-20260911\INFORME.md`. El guardado se capturó con adaptadores locales; no fue una prueba de persistencia o interfaz en producción.
+Un callsheet con fecha y dirección identificadas quedaba en revisión porque el modelo explicaba que no había encontrado el nombre del proyecto. Otro PDF, dedicado a segunda unidad, perdía todas sus locaciones por una exclusión global. Un año ausente se propagaba a cada dirección como incertidumbre y se repetía con direcciones y enlaces completos en la tabla.
 
-El PDF ya llegaba íntegro a la IA. La revisión v3 cambia la tarea de interpretación: establecer primero día, unidad, proyecto, sitios físicos y relaciones entre cabecera, escenas, movimientos y mapas; después completar los campos y contrastar la cobertura del día. Distingue escenarios ficticios de destinos reales y direcciones de set de accesos/logística. No añade un parser de direcciones ni excepciones por archivo.
+La extracción ahora separa el ámbito de una observación (documentReviewScope) de su explicación. Los avisos de metadatos no invalidan fecha ni destinos. Los conflictos reales de cobertura, unidad o fecha se mantienen. Una observación antigua sin ámbito, o con ámbito inválido, sigue tratándose de forma conservadora; no se clasifica mediante palabras de un idioma concreto.
 
-El esquema conserva un resumen factual de las páginas/secciones relacionadas (`siteEvidence`), la relación de la dirección con el set (`addressRelation`), escenas móviles sin destino independiente y conflictos globales (`documentReviewReason`). La evidencia no exige que los datos aparezcan juntos ni que una cita literal continua coincida con OCR; tampoco pide transcribir el razonamiento interno del modelo.
+El nombre desconocido se guarda como NULL, conservando la respuesta original en la evidencia. Así el trigger existente no compara Untitled Project contra un proyecto elegido como si fuese un título real diferente. Las discrepancias entre títulos reales siguen comprobándose. No requiere migración.
 
-La validación y selección conservan esos datos. Una duda explícita ya no se pierde por haber clasificado el lugar como filmación; una dirección de acceso no se presenta como dirección postal del set. Una escena móvil sin sitio independiente no produce un destino vacío. Si sí existe evidencia conflictiva de otro lugar, se conserva el candidato. Las dudas globales pasan al estado guardado y la evidencia breve a `evidence_text`, dentro del RPC atómico existente. El contenido original del modelo queda conservado aunque la selección no acepte su dirección.
+La unidad que gobierna un PDF es elegible, incluida una segunda unidad. En documentos mixtos se separa la planificación principal de los bloques explícitamente asignados a otra unidad. Una locación sin etiqueta de unidad hereda el contexto; una contradicción explícita sigue pendiente. Esto sustituye la exclusión global de segunda unidad conforme a la indicación del usuario.
 
-Se mantienen una única llamada, PDF íntegro, límites de tiempo/tokens, cuota y mecanismos de revisión existentes. No se amplió el presupuesto ni se hicieron nuevas llamadas pagadas en esta corrección. 166 pruebas locales pasaron, incluida una del núcleo real con proveedor/Storage/BD simulados que verifica evidencia, acceso, escena móvil, conflicto global, guardado y borrador. Esas pruebas no miden la comprensión del nuevo prompt ni justifican reutilizar el resultado v2 como precisión de v3.
+La fecha incompleta mantiene el documento pendiente, pero no degrada por sí sola direcciones identificadas. El resumen contiene el motivo documental una vez y la cantidad de locaciones pendientes; cada locación conserva su propio motivo sin repetir dirección y enlace.
 
-Siguen pendientes de solución/verificación conjunta los cambios de número/rango de Google, la ruta calculada desde texto cuando una geocodificación no se acepta, la normalización de sitios dentro de documentos pendientes por otra causa y la validación autenticada de edición/informes. Esta corrección contextual no se presenta como solución completa de esos puntos.
+Una escena identificada como móvil sin destino físico no crea un candidato vacío por tener una explicación descriptiva. Una posible locación independiente no resuelta debe clasificarse como incierta. Las menciones consecutivas con la misma dirección postal se agrupan conservando etiquetas y evidencia. Las visitas posteriores A → B → A se conservan también en el optimizador; una dirección repetida se geocodifica una sola vez por ejecución.
 
-## Diagnóstico comprobado
+## Validación
 
-El fallo de DISPO_25 fue un aborto de la petición a Gemini, no un rechazo demostrado de su fecha. El ejemplar local tiene 11 páginas y 8 124 566 bytes; la primera página muestra 21.08.2024 y Loc 1. Incluye segunda unidad, planes internos, mapas, contactos y protocolo. No hay prueba de qué fase interna del proveedor consumió el tiempo.
-HOFER_060524 produjo dos direcciones normalizadas y añadió rótulos internos como locaciones sin dirección. Son fallos diferentes: demora del proveedor y clasificación de bloques.
+- 174 pruebas locales en 23 archivos aprobadas y TypeScript comprobado.
+- Tres PDF completos enviados una vez cada uno a Gemini real: aproximadamente 10–11 segundos, sin timeouts ni reintentos.
+- Storage, propiedad y guardado usan adaptadores locales: no certifica persistencia, RLS, cuota ni recorrido autenticado en producción.
+- Tras observar tres alias del hotel en la respuesta real, se ajustó su agrupación. Se reprodujeron las mismas respuestas mediante el núcleo final y optimizador sin red ni gasto adicional, conservando ambas ejecuciones.
 
-Había reglas duplicadas en prompt/esquema, campos de salida obsoletos, generación sin límite explícito de tokens, reintentos programados del worker y repetición por ciertos errores OpenRouter. Un timeout local no garantizaba una sola llamada ni un coste fijo.
-Una locación con estructura inválida podía rechazar las válidas del mismo documento. Faltaba normalización en respuestas antiguas/sin ese campo y podía usarse texto literal como destino.
-La selección calculaba un estado antes del guardado, pero un trigger puede añadir una discrepancia de proyecto; la respuesta HTTP no leía ese estado final.
-Las anotaciones de evaluación incluían años deducidos, direcciones completadas y etiquetas mezcladas con nombres. No son una referencia válida para las reglas actuales.
-
-## Recorrido y decisión común
-
-| Capa | Contrato y estado de verificación |
+| Documento | Resultado del núcleo final |
 |---|---|
-| Subida | Se mantienen formatos y 50 MB; originales privados con comprobación de propietario. Pruebas locales de formatos/tamaño/propiedad. No se ensayó una subida real de 50 MB a Gemini. |
-| Lectura | PDF/foto íntegros a visión; formatos de texto/Office decodificados como texto. No se recortan páginas ni se usan fechas del archivo. |
-| IA | Directo y worker usan el mismo perfil y prompt. Una petición por ejecución, 100 s, 8192 tokens de salida solicitados; Gemini con presupuesto de razonamiento 1024. OpenRouter mantiene modelo propio y límite de salida; el presupuesto interno depende de ese proveedor/modelo. No hay garantía de importe fijo ni cancelación remota confirmada. |
-| Selección | Fecha de página uno; relación de día/unidad por contexto; sitios físicos en orden; rótulos internos/logística fuera de rutas. Original y dirección normalizada separados. Sin excepciones por archivo. |
-| Validación | Metadatos vacíos/locación mal formada no descartan hermanos válidos. Ausencia de normalización actual requiere revisión. Respuesta truncada no se guarda como completa. |
-| Guardado/cuota | RPC atómico existente conserva resultado, locaciones, exclusiones y un consumo. Se relee el estado persistido. Error técnico sin resultado libera reserva; no se alteraron balances ni se hizo nueva migración. |
-| Cola | Solo procesa queued; fallidos y abandonados no se regeneran automáticamente. Reprocesar exige acción del usuario. Reserva vigente impide dos ejecuciones concurrentes. |
-| Revisión | Candidatos diferenciados; original siempre disponible. La tabla muestra evidencia literal cuando falta dirección normalizada, sin convertir esa evidencia en dirección de cálculo. |
-| Mapas | Enriquecimiento posterior a extracción; sus fallos no invalidan la extracción. Solo destinos confirmados se materializan automáticamente; Google puede normalizar una coincidencia única. |
-| Edición/tablas/informes | Edición guarda Trip mediante TripsContext; borradores no son trips confirmados; informes usan los trips persistidos. Inspección del código y pruebas locales, sin recorrido autenticado completo de edición/informe en esta revisión. |
-| Medición | Hash y versión de perfil, entrada, duración, finishReason y usage cuando existen. Evaluador v3 separa etiqueta, evidencia y dirección normalizada; bloquea anotaciones históricas antes de llamadas externas. |
+| Fundbox_Dispo DT 1.pdf | Completado, 12.11.2024, Frankenberggasse 10 una vez. El modelo aún omite el título Fundbox que sí aparece en la cabecera; esa omisión ya no bloquea el recorrido. |
+| FUNDBOX_Dispo DT 4.pdf | Pendiente por año ausente; cuatro bloques en orden y un único aviso de fecha. Las erratas postales y el punto preciso de Stadtpark siguen sin resolverse; no se certifica su recorrido. |
+| TF2 DT61 20240515 2ND UNIT.pdf | Completado, 15.05.2024, Jochen-Rindt-Straße 21. El PDF gobierna la segunda unidad. |
 
-## Criterios de aceptación
+Evidencia local privada: C:\Users\lilia\Documents\Codex\2026-09-10\la-x20\outputs\callsheet-eval-20260911\v4. Contiene respuestas reales, reproducción final, hashes y ejecutores. El registro presupuestario compartido está en la carpeta superior: aproximadamente **0,7663 €** contabilizados con margen y provisiones, dentro del máximo acumulado de **1 €**. No es una lectura del saldo ni de la factura. No hubo llamadas nuevas a Maps en esta corrección.
 
-1. Una acción no desencadena regeneraciones automáticas tras error o abandono.
-2. Ventanas de tiempo finitas; salida limitada; truncamiento no se presenta como éxito.
-3. Fechas variables no descartan locaciones; año ausente no se inventa.
-4. Sitios válidos sobreviven a hermanos inválidos; estos quedan pendientes sin entrar en cálculo.
-5. Etiquetas, originales y direcciones normalizadas no se confunden.
-6. Estado HTTP coincide con estado guardado, incluidos triggers.
-7. Una extracción completa con revisión cuenta una vez; fallos sin resultado no cuentan.
-8. Precisión real requiere anotaciones válidas y muestra independiente; las pruebas simuladas no autorizan afirmar 95 %.
+## Límites y evaluaciones anteriores
 
-## Pruebas y límites
+Estos tres casos conocidos comprueban bloqueos concretos; no establecen un 95 % general. La evaluación v2 verificó automáticamente 5/9 rodajes principales y la v3 4/9. Los otros dos documentos eran controles; la política de segunda unidad cambió después, por lo que no procede comparar porcentajes sin ajustar el criterio.
 
-Pruebas locales de SDK con fetch simulado comprueban parámetros realmente serializados, tokens informados, corte temporal y ausencia de segunda petición ante errores. Pruebas de pipeline comprueban guardado, estado de trigger, truncamiento, candidato mal formado y ausencia de normalización. Pruebas del handler real del worker con base/proveedor simulados comprueban que dos invocaciones no regeneran el fallido y que un procesamiento abandonado no se reencola.
+Siguen pendientes la identificación consistente del título, las sustituciones de número/rango de Google, el cálculo desde texto cuya geocodificación no se acepta y la normalización de destinos de documentos pendientes por otros campos. Tener kilómetros o estado completado no certifica por sí solo una ubicación precisa.
 
-La fase inicial fue local. Después se ejecutó la evaluación real v2 con un máximo autorizado de 1 €: coste por tarifas estimado en 0,2340309 US$, reserva conservadora total 0,7960077 €. No se modificaron saldos ni se publicó. La revisión contextual v3 posterior no ha generado gasto nuevo y su precisión/latencia con IA real siguen sin medirse. Los límites previenen crecimiento de trabajo; no demuestran que todo formato sea interpretable ni explican por sí solos la demora interna anterior.
+El PDF sigue llegando íntegro. Se mantiene una generación, 100 segundos, 8192 tokens máximos de salida y presupuesto de pensamiento 1024. No se amplían tiempos, cuotas ni reintentos. Los resultados históricos no se modifican ni regeneran automáticamente con el despliegue.
