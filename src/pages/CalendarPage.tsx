@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter,  DialogTitle } from "@/components/ui/dialog";
 import { ModalHeaderImage } from "@/components/ui/modal-header-image";
+import { FormSection } from "@/components/ui/form-section";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -749,15 +750,13 @@ export default function CalendarPage() {
 	        )}
 
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogContent className="glass max-w-lg max-h-[90vh] overflow-y-auto p-0">
-            <ModalHeaderImage />
-            <div className="px-6 pb-6 space-y-4">
-            <DialogHeader className="pb-0">
+          <DialogContent className="w-[calc(100vw-1.5rem)] max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0 max-w-2xl">
+            <ModalHeaderImage>
               <DialogTitle>{t("calendar.createEventTitle")}</DialogTitle>
               <DialogDescription className="sr-only">{t("calendar.createEventTitle")}</DialogDescription>
-            </DialogHeader>
+            </ModalHeaderImage>
 
-            <div className="space-y-4">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="event-title">{t("calendar.eventTitleLabel")}</Label>
                 <Input
@@ -809,7 +808,7 @@ export default function CalendarPage() {
               </div>
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="flex-row [&>button]:flex-1 sm:[&>button]:flex-none sm:space-x-0 shrink-0 border-t border-border bg-card p-4 sm:px-6 flex flex-wrap items-center justify-end gap-2">
               <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={createBusy}>
                 {t("calendar.cancel")}
               </Button>
@@ -817,7 +816,6 @@ export default function CalendarPage() {
                 {createBusy ? t("calendar.creating") : t("calendar.create")}
               </Button>
             </DialogFooter>
-            </div>
           </DialogContent>
         </Dialog>
 
@@ -978,49 +976,18 @@ export default function CalendarPage() {
 
         {/* Import Event as Trip Dialog */}
         <Dialog open={importOpen} onOpenChange={setImportOpen}>
-          <DialogContent className="glass sm:max-w-lg max-h-[90vh] overflow-y-auto p-0">
-            <ModalHeaderImage />
-            <div className="px-6 pb-6 space-y-4">
-            <DialogHeader className="pb-0">
+          <DialogContent onOpenAutoFocus={event => { event.preventDefault(); (event.target as HTMLElement).focus({ preventScroll: true }); }} className="focus:outline-none w-[calc(100vw-1.5rem)] max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0 max-w-2xl">
+            <ModalHeaderImage>
               <DialogTitle>{t("calendar.importEventTitle")}</DialogTitle>
               <DialogDescription>{t("calendar.importEventDescription")}</DialogDescription>
-            </DialogHeader>
+            </ModalHeaderImage>
 
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4">
             {selectedEvent && (
-              <div className="space-y-4 py-4">
-                {/* Event details */}
-                <div className="space-y-3">
-                  <div>
-                    <Label className="text-xs text-muted-foreground">{t("calendar.eventTitleLabel")}</Label>
-                    <p className="font-medium">{selectedEvent.title}</p>
-                  </div>
-
-                  {selectedEvent.location && (
-                    <div>
-                      <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />
-                        {t("calendar.eventLocation")}
-                      </Label>
-                      <p className="text-sm">{selectedEvent.location}</p>
-                    </div>
-                  )}
-
-                  {selectedEvent.description && (
-                    <div>
-                      <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                        <FileText className="w-3 h-3" />
-                        {t("calendar.eventDescription")}
-                      </Label>
-                      <p className="text-sm line-clamp-3">{selectedEvent.description}</p>
-                    </div>
-                  )}
-
-{/* Date moved to summary */}
-                </div>
-
+              <div className="space-y-4">
                 {/* Info about how trip will be created */}
                 <div className="rounded-lg bg-secondary/50 p-3 grid gap-2 text-sm">
-                  <div className="grid grid-cols-[140px_1fr] gap-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-[120px_minmax(0,1fr)] gap-x-4 gap-y-2 [&>span]:min-w-0 [&>span]:break-words">
                     <span className="text-muted-foreground">{t("tripModal.date")}:</span>
                     <span className="font-medium capitalize">
                       {new Date(selectedEvent.date + "T00:00:00").toLocaleDateString(locale, {
@@ -1055,25 +1022,38 @@ export default function CalendarPage() {
                     </span>
 
                     <span className="text-muted-foreground">{t("tripModal.route")}:</span>
-                    <span className="font-medium text-xs break-words">
-                      {extractLocationsFromEvent(selectedEvent).join(" → ")}
-                    </span>
+                    <ol className="space-y-2 min-w-0">
+                      {extractLocationsFromEvent(selectedEvent).map((address, index) => <li key={index} className="flex gap-2"><span className="text-muted-foreground shrink-0">{index + 1}.</span><span className="break-words min-w-0">{address}</span></li>)}
+                    </ol>
                   </div>
                 </div>
-              </div>
-            )}
+                {/* Event details */}
+                <FormSection title={t("calendar.eventDescription")}>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">{t("calendar.eventTitleLabel")}</Label>
+                    <p className="font-medium">{selectedEvent.title}</p>
+                  </div>
 
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setImportOpen(false);
-                  setSelectedEvent(null);
-                }}
-                disabled={importing}
-              >
-                {t("calendar.cancel")}
-              </Button>
+                  {selectedEvent.location && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
+                        {t("calendar.eventLocation")}
+                      </Label>
+                      <p className="text-sm break-words">{selectedEvent.location}</p>
+                    </div>
+                  )}
+
+                  {selectedEvent.description && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                        <FileText className="w-3 h-3" />
+                        {t("calendar.eventDescription")}
+                      </Label>
+                      <p className="text-sm whitespace-pre-wrap break-words">{selectedEvent.description}</p>
+                    </div>
+                  )}
+
               {selectedEvent?.htmlLink && (
                 <Button
                   variant="outline"
@@ -1084,6 +1064,23 @@ export default function CalendarPage() {
                   {t("calendar.viewInGoogle")}
                 </Button>
               )}
+                </FormSection>
+
+              </div>
+            )}
+            </div>
+
+            <DialogFooter className="flex-row [&>button]:flex-1 sm:[&>button]:flex-none sm:space-x-0 shrink-0 border-t border-border bg-card p-4 sm:px-6 flex flex-wrap items-center justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setImportOpen(false);
+                  setSelectedEvent(null);
+                }}
+                disabled={importing}
+              >
+                {t("calendar.cancel")}
+              </Button>
               <Button
                 onClick={() => selectedEvent && handleImportEventAsTrip(selectedEvent)}
                 disabled={importing}
@@ -1092,7 +1089,6 @@ export default function CalendarPage() {
                 {importing ? t("calendar.importing") : t("calendar.importAsTrip")}
               </Button>
             </DialogFooter>
-            </div>
           </DialogContent>
         </Dialog>
       </div>

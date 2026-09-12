@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ModalHeaderImage } from "@/components/ui/modal-header-image";
+import { FormSection } from "@/components/ui/form-section";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +12,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogHeader,
+
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
@@ -531,17 +533,17 @@ export default function AdvancedRoutes() {
           else closeModal();
         }}
       >
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0 max-w-3xl">
+          <ModalHeaderImage>
             <DialogTitle>
               {editingTemplateId ? t("advancedRoutes.editTemplateTitle") : t("advancedRoutes.createTemplateTitle")}
             </DialogTitle>
             <DialogDescription className="sr-only">
               {editingTemplateId ? t("advancedRoutes.editTemplateTitle") : t("advancedRoutes.createTemplateTitle")}
             </DialogDescription>
-          </DialogHeader>
+          </ModalHeaderImage>
 
-          <div className="space-y-6 py-4">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4">
             {/* Información básica */}
             <div className="space-y-4">
               <h3 className="text-sm font-medium">{t("advancedRoutes.basicInfo")}</h3>
@@ -681,7 +683,8 @@ export default function AdvancedRoutes() {
                       className="h-10 w-10 shrink-0"
                       onClick={() => void calculateRoute()}
                       disabled={loading || routeCalcLoading}
-                      title="Recalcular distancia"
+                      title={t("modal.calculate")}
+                      aria-label={t("modal.calculate")}
                     >
                       {routeCalcLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Route className="w-5 h-5" />}
                     </Button>
@@ -700,9 +703,7 @@ export default function AdvancedRoutes() {
               </div>
             </div>
 
-            {/* Detalles adicionales */}
-            <div className="space-y-4">
-              <h3 className="text-sm font-medium">{t("advancedRoutes.additionalDetails")}</h3>
+            <FormSection title={t("advancedRoutes.additionalDetails")} reveal={Boolean(formData.description)}>
               <div className="space-y-2">
                 <Label htmlFor="description">{t("advancedRoutes.description")}</Label>
                 <Textarea
@@ -710,14 +711,14 @@ export default function AdvancedRoutes() {
                   placeholder={t("advancedRoutes.descriptionPlaceholder")}
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="resize-none min-h-[100px]"
+                  className="resize-y min-h-[80px]"
                   disabled={loading}
                 />
               </div>
-            </div>
+            </FormSection>
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+          <div className="shrink-0 border-t border-border bg-card p-4 sm:px-6 flex flex-wrap items-center justify-end gap-2">
             <Button variant="outline" onClick={closeModal} disabled={loading}>
               {t("advancedRoutes.cancel")}
             </Button>

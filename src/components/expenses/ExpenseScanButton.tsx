@@ -352,7 +352,7 @@ export function ExpenseScanButton({
       </Button>
 
       <Dialog open={isOpen} onOpenChange={(open) => !open && !deleteInFlight.current && handleCancel()}>
-        <DialogContent className="glass max-w-md max-h-[90vh] overflow-hidden p-0">
+        <DialogContent onOpenAutoFocus={event => { event.preventDefault(); (event.target as HTMLElement).focus({ preventScroll: true }); }} className="focus:outline-none w-[calc(100vw-1.5rem)] max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0 max-w-xl">
           <ModalHeaderImage className="h-24">
             <DialogTitle className="text-lg font-bold tracking-tight">{t("expenseScan.title")}</DialogTitle>
             <DialogDescription>
@@ -360,7 +360,7 @@ export function ExpenseScanButton({
             </DialogDescription>
           </ModalHeaderImage>
 
-          <div className="px-4 pb-4 space-y-4 overflow-y-auto max-h-[70vh]">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4">
             {/* Existing receipts list */}
             {existingReceipts.length > 0 && showUploadOptions && !imagePreview && (
               <div className="space-y-2">
@@ -414,6 +414,9 @@ export function ExpenseScanButton({
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                   onClick={() => fileInputRef.current?.click()}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); fileInputRef.current?.click(); } }}
                   className={cn(
                     "border-2 border-dashed rounded-lg p-6 cursor-pointer transition-colors",
                     "flex flex-col items-center justify-center gap-3 text-center",
@@ -472,10 +475,10 @@ export function ExpenseScanButton({
             {/* Image Preview */}
             {imagePreview && (
               <div className="relative">
-                <div className="aspect-[3/4] bg-secondary/50 rounded-lg overflow-hidden">
+                <div className="h-[min(48dvh,440px)] bg-secondary/50 rounded-lg overflow-hidden">
                   <img
                     src={imagePreview}
-                    alt="Receipt preview"
+                    alt={t("expenseScan.receipt")}
                     className="w-full h-full object-contain"
                   />
                 </div>
@@ -487,6 +490,7 @@ export function ExpenseScanButton({
                     variant="secondary"
                     size="icon"
                     className="absolute top-2 right-2"
+                    aria-label={t("expenseScan.rotateImage")}
                     onClick={handleRotate}
                   >
                     <RotateCw className="w-4 h-4" />
@@ -505,9 +509,10 @@ export function ExpenseScanButton({
               </div>
             )}
 
-            {/* Action buttons - only show when image is loaded */}
+          </div>
+            {/* Actions stay visible while the receipt scrolls. */}
             {imagePreview && (
-              <div className="flex gap-2">
+              <div className="shrink-0 border-t border-border bg-card p-4 sm:px-6 flex flex-wrap items-center justify-end gap-2">
                 <Button
                   type="button"
                   variant="outline"
@@ -533,7 +538,7 @@ export function ExpenseScanButton({
                 </Button>
               </div>
             )}
-          </div>
+            {!imagePreview && <div className="shrink-0 border-t border-border bg-card p-4 sm:px-6 flex flex-wrap items-center justify-end gap-2"><Button variant="outline" onClick={handleCancel} disabled={deletingReceiptId !== null}>{t("modal.close")}</Button></div>}
         </DialogContent>
       </Dialog>
     </>

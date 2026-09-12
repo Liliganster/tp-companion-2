@@ -2,6 +2,7 @@ import type { I18nKey } from "./es";
 
 // Cargado perezosamente por src/lib/i18n.ts (chunk separado del bundle principal).
 export const en: Record<I18nKey, string> = {
+  "modal.close": "Close",
   "modal.addDocuments": "Add documents",
   "modal.addExpense": "Add expense",
   "modal.details": "Trip details",

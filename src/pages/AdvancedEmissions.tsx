@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { ModalHeaderImage } from "@/components/ui/modal-header-image";
+import { FormSection } from "@/components/ui/form-section";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +10,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogHeader,
+
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
@@ -890,14 +892,14 @@ export default function AdvancedEmissions() {
 
       {/* Configuration Modal */}
       <Dialog open={configModalOpen} onOpenChange={setConfigModalOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0 max-w-lg">
+          <ModalHeaderImage>
             <DialogTitle>{t("advancedEmissions.configTitle")}</DialogTitle>
             <DialogDescription>{t("advancedEmissions.configSubtitle")}</DialogDescription>
-          </DialogHeader>
+          </ModalHeaderImage>
 
-          <div className="grid gap-6 py-4">
-            <div className="grid gap-4 sm:grid-cols-2">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4">
+            <div className="grid gap-4">
               {/* Sort By */}
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground uppercase tracking-wide">
@@ -918,23 +920,14 @@ export default function AdvancedEmissions() {
                 </div>
               </div>
 
-            {/* Info Box */}
-            <div className="p-4 rounded-lg bg-secondary/30 border border-border/50">
-              <div className="flex items-start gap-3">
-                <Info className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
-                <div>
-                  <h4 className="text-sm font-medium mb-1">{t("advancedEmissions.aboutTitle")}</h4>
-                  <p className="text-xs text-muted-foreground">
-                    {t("advancedEmissions.aboutBody")}
-                  </p>
-                </div>
-              </div>
-            </div>
+            <FormSection title={t("advancedEmissions.aboutTitle")}>
+              <p className="text-sm text-muted-foreground">{t("advancedEmissions.aboutBody")}</p>
+            </FormSection>
           </div>
 
-          <div className="flex justify-end gap-3">
+          <div className="shrink-0 border-t border-border bg-card p-4 sm:px-6 flex flex-wrap items-center justify-end gap-2">
             <Button variant="outline" onClick={() => setConfigModalOpen(false)}>
-              {t("advancedEmissions.cancel")}
+              {t("modal.close")}
             </Button>
           </div>
         </DialogContent>

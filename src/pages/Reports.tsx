@@ -15,7 +15,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ModalHeaderImage } from "@/components/ui/modal-header-image";
@@ -457,15 +456,13 @@ export default function Reports() {
 
       {/* Verification Modal */}
       <Dialog open={verificationModalOpen} onOpenChange={setVerificationModalOpen}>
-        <DialogContent className="glass sm:max-w-md max-h-[90vh] overflow-y-auto p-0">
-          <ModalHeaderImage />
-          <div className="px-6 pb-6">
-          <DialogHeader className="pb-2">
+        <DialogContent onOpenAutoFocus={event => { event.preventDefault(); (event.target as HTMLElement).focus({ preventScroll: true }); }} className="focus:outline-none w-[calc(100vw-1.5rem)] max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0 max-w-2xl">
+          <ModalHeaderImage>
             <DialogTitle>{t("reports.verifyTitle")}</DialogTitle>
             <DialogDescription className="sr-only">{t("reports.verifyTitle")}</DialogDescription>
-          </DialogHeader>
+          </ModalHeaderImage>
 
-          <div className="space-y-4 py-2">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4">
             <div>
               <h4 className="font-semibold text-sm mb-2">{t("reports.verifyChecklistTitle")}</h4>
               <p className="text-sm text-muted-foreground">{t("reports.verifyChecklistBody")}</p>
@@ -484,14 +481,14 @@ export default function Reports() {
                     {tf("reports.verifyFoundWarnings", { count: warnings.length })}
                   </span>
                 </div>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
+                <div className="space-y-2">
                   {warnings.map((warning, index) => (
                     <div
                       key={index}
                       className="flex items-start gap-3 p-3 rounded-lg bg-warning/10 border border-warning/30"
                     >
                       <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
-                      <div className="text-sm">
+                      <div className="text-sm min-w-0 break-words">
                         <p className="font-medium">{warning.route}</p>
                         <p className="text-muted-foreground text-xs">
                           {warning.date} - {warning.warning}
@@ -507,14 +504,13 @@ export default function Reports() {
 
           </div>
 
-          <div className="flex gap-2 pt-2">
+          <div className="shrink-0 border-t border-border bg-card p-4 sm:px-6 flex flex-wrap items-center justify-end gap-2">
             <Button variant="outline" onClick={() => setVerificationModalOpen(false)}>
               {t("reports.back")}
             </Button>
-            <Button className="flex-1" onClick={handleGenerateReport}>
+            <Button className="flex-1 sm:flex-none" onClick={handleGenerateReport}>
               {t("reports.generateReport")}
             </Button>
-          </div>
           </div>
         </DialogContent>
       </Dialog>

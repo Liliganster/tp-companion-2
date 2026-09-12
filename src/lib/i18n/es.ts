@@ -1,6 +1,7 @@
 // Idioma base de Fahrtenbuch Pro. Las claves tipadas (I18nKey) derivan de este objeto.
 // ES se queda: es el idioma de la propietaria (decisión registrada en PLAN.md).
 export const es = {
+  "modal.close": "Cerrar",
   "modal.addDocuments": "Añadir documentos",
   "modal.addExpense": "Añadir gasto",
   "modal.details": "Datos del viaje",
