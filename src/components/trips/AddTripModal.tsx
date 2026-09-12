@@ -1,3 +1,4 @@
+import { FormSection } from "@/components/ui/form-section";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -825,7 +826,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
 
   const dialogContent = (
     <DialogContent
-      className="glass max-w-lg max-h-[90vh] overflow-y-auto p-0"
+      className="w-[calc(100vw-1.5rem)] max-w-3xl max-h-[90dvh] overflow-hidden p-0 gap-0 flex flex-col"
       onEscapeKeyDown={(e) => {
         // Con el tutorial activo, Esc cierra el tutorial (SpotlightOverlay), no el modal.
         if (tripTourActive) e.preventDefault();
@@ -855,11 +856,11 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
         </DialogDescription>
       </ModalHeaderImage>
 
-        <div className="px-6 pb-6">
+        <div className="min-h-0 overflow-y-auto px-5 py-5 sm:px-6">
 
         {onViewDocument && (trip?.documents?.length ?? 0) > 0 && <Button type="button" variant="outline" className="mb-4" onClick={onViewDocument}>{t("callsheetReview.open")}</Button>}
         <div className="grid gap-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="date">{t("tripModal.date")}</Label>
               {trip?.extractedDate && <p className="text-xs text-muted-foreground">{t('callsheetReview.detectedDate')}: {trip.extractedDate}</p>}
@@ -1000,32 +1001,6 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
             </DndContext>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2" data-tour="trip-origin-mode">
-              <Label>{t("tripModal.specialOrigin")}</Label>
-              <Select value={specialOrigin} onValueChange={(value) => handleSpecialOriginChange(value as SpecialOrigin)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="base">{t("tripModal.specialOriginBase")}</SelectItem>
-                  <SelectItem value="continue">{t("tripModal.specialOriginContinue")}</SelectItem>
-                  <SelectItem value="return">{t("tripModal.specialOriginReturn")}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2" data-tour="trip-passengers">
-              <Label htmlFor="passengers">{t("tripModal.passengers")}</Label>
-              <Input
-                id="passengers"
-                type="number"
-                placeholder="0"
-                value={passengers}
-                onChange={(e) => setPassengers(e.target.value)}
-                             />
-            </div>
-          </div>
-
           <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2" data-tour="trip-distance">
             <div className="grid gap-2">
               <Label htmlFor="distance">{t("tripModal.distance")}</Label>
@@ -1042,6 +1017,8 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
               variant="ghost"
               size="icon"
               className="h-10 w-10 shrink-0"
+              aria-label={t("modal.calculate")}
+              title={t("modal.calculate")}
               onClick={() => void calculateDistance()}
               disabled={distanceLoading}
             >
@@ -1070,9 +1047,37 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
             />
           </div>
 
+          <FormSection title={t("modal.options")} reveal={tripTourActive || specialOrigin !== "base" || Number(passengers) > 0}>          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid gap-2" data-tour="trip-origin-mode">
+              <Label>{t("tripModal.specialOrigin")}</Label>
+              <Select value={specialOrigin} onValueChange={(value) => handleSpecialOriginChange(value as SpecialOrigin)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="base">{t("tripModal.specialOriginBase")}</SelectItem>
+                  <SelectItem value="continue">{t("tripModal.specialOriginContinue")}</SelectItem>
+                  <SelectItem value="return">{t("tripModal.specialOriginReturn")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2" data-tour="trip-passengers">
+              <Label htmlFor="passengers">{t("tripModal.passengers")}</Label>
+              <Input
+                id="passengers"
+                type="number"
+                placeholder="0"
+                value={passengers}
+                onChange={(e) => setPassengers(e.target.value)}
+                             />
+            </div>
+          </div>
+
+</FormSection>
+          <FormSection title={t("tripModal.expenses")} reveal={tripTourActive || Boolean(tollAmount || parkingAmount || otherExpenses || fuelAmount || tollReceipts.length || parkingReceipts.length || otherReceipts.length || fuelReceipts.length)}>
           {/* Per-trip expenses */}
           <div className="flex items-center gap-1.5 -mb-2">
-            <span className="text-sm font-medium text-foreground">{t("tripModal.expenses") ?? "Gastos"}</span>
+            <span className="text-xs text-muted-foreground">{t("tripModal.expensesHintBefore")}</span>
             <TooltipProvider delayDuration={200}>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -1286,10 +1291,11 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
               </div>
             </div>
           </div>
-
+          </FormSection>
           </div>
-
-          <div className="flex items-center gap-2 mt-2">
+        </div>
+          <div className="shrink-0 flex items-center justify-end gap-3 border-t border-border bg-card px-5 py-4 sm:px-6">
+            <Button type="button" variant="outline" disabled={savingTrip || deletingReceipt} onClick={() => setIsOpen(false)}>{t("bulk.cancel")}</Button>
             {/* Plantillas de ruta: viven en las páginas Advanced (hibernadas en
                 Fase 1) — sin la página, el botón guardaba en un sitio inaccesible. */}
             {FEATURES.advancedPages && (
@@ -1373,7 +1379,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
             <DialogClose asChild>
               <Button
                 variant="save"
-                className="flex-1"
+                className="min-w-36"
                 disabled={deletingReceipt || savingTrip}
               onClick={async (event) => {
                 event.preventDefault();
@@ -1484,7 +1490,6 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
             </Button>
           </DialogClose>
         </div>
-      </div>
       <TripModalTour active={tripTourActive} onClose={() => setTripTourActive(false)} user={user} />
     </DialogContent>
   );

@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Receipt, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,8 @@ interface ProjectExpenseSectionProps {
 
 export function ProjectExpenseSection({ projectId, onExpenseChange }: ProjectExpenseSectionProps) {
   const { t, locale } = useI18n();
+  const [adding, setAdding] = useState(false);
+  const [expenseType, setExpenseType] = useState<ProjectExpense["type"]>("other");
   const [expenses, setExpenses] = useState<ProjectExpense[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -203,7 +206,7 @@ export function ProjectExpenseSection({ projectId, onExpenseChange }: ProjectExp
 
   if (loading) {
     return (
-      <div className="glass-card p-4">
+      <div className="space-y-4">
         <div className="flex items-center gap-2 mb-4">
           <Receipt className="w-5 h-5 text-muted-foreground" />
           <h3 className="font-medium">{t("projectExpenses.title")}</h3>
@@ -218,7 +221,7 @@ export function ProjectExpenseSection({ projectId, onExpenseChange }: ProjectExp
   const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
 
   return (
-    <div className="glass-card p-4">
+    <div className="space-y-4">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Receipt className="w-5 h-5 text-muted-foreground" />
@@ -235,11 +238,22 @@ export function ProjectExpenseSection({ projectId, onExpenseChange }: ProjectExp
         {t("projectExpenses.description")}
       </p>
 
-      <div className="space-y-2">
-        {renderExpenseRow("toll", t("tripModal.toll").replace(" (€)", ""), tollReceipts)}
-        {renderExpenseRow("parking", t("tripModal.parking").replace(" (€)", ""), parkingReceipts)}
-        {renderExpenseRow("fuel", t("tripModal.fuel").replace(" (€)", ""), fuelReceipts)}
-        {renderExpenseRow("other", t("tripModal.otherExpenses").replace(" (€)", ""), otherReceipts)}
+      <div className="space-y-3">
+        {([
+          ["toll", "tripModal.toll", tollReceipts], ["parking", "tripModal.parking", parkingReceipts],
+          ["fuel", "tripModal.fuel", fuelReceipts], ["other", "tripModal.otherExpenses", otherReceipts],
+        ] as const).filter(([type, , receipts]) => (receipts.length > 0 || getTotalByType(type) > 0) && (!adding || type !== expenseType))
+          .map(([type, label, receipts]) => renderExpenseRow(type, t(label).replace(" (€)", ""), receipts))}
+        {!adding ? <Button variant="outline" onClick={() => setAdding(true)}>{t("modal.addExpense")}</Button> : <div className="space-y-3 rounded-xl border border-border p-4">
+          <div className="flex items-center gap-2">
+            <Select value={expenseType} onValueChange={value => setExpenseType(value as ProjectExpense["type"])}>
+              <SelectTrigger aria-label={t("modal.addExpense")}><SelectValue /></SelectTrigger>
+              <SelectContent>{([['toll','tripModal.toll'],['parking','tripModal.parking'],['fuel','tripModal.fuel'],['other','tripModal.otherExpenses']] as const).map(([value,label])=><SelectItem key={value} value={value}>{t(label).replace(" (€)", "")}</SelectItem>)}</SelectContent>
+            </Select>
+            <Button variant="ghost" onClick={() => setAdding(false)}>{t("bulk.cancel")}</Button>
+          </div>
+          {renderExpenseRow(expenseType, t(({toll:'tripModal.toll',parking:'tripModal.parking',fuel:'tripModal.fuel',other:'tripModal.otherExpenses'} as const)[expenseType]).replace(" (€)", ""), getReceiptsByType(expenseType))}
+        </div>}
       </div>
     </div>
   );

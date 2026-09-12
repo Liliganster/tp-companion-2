@@ -1,3 +1,4 @@
+import { FormSection } from "@/components/ui/form-section";
 import { CALLSHEET_CLIENT_TIMEOUT_MS } from "@/lib/callsheetTiming";
 import { compactCallsheetReviewReason, getCallsheetReviewLocations, type ReviewCallsheetLocation } from '@/lib/callsheetReview';
 import { resolveCallsheetProcessingState } from '@/lib/callsheetProcessingState';
@@ -9,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload, Sparkles, FileSpreadsheet, FileText, CloudUpload, Info, Loader2, MapPin, Calendar, Building2, CheckCircle, Save, AlertTriangle, XCircle } from "lucide-react";
+import { Upload, Sparkles, FileSpreadsheet, FileText, CloudUpload, Loader2, MapPin, Calendar, Building2, CheckCircle, Save, AlertTriangle, XCircle } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useI18n } from "@/hooks/use-i18n";
 import { supabase } from "@/lib/supabaseClient";
@@ -239,6 +240,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
   const resumeDriveImportRef = useRef(false);
   const importFromGoogleDriveRef = useRef<(() => Promise<void>) | null>(null);
   
+  const [aiSource, setAiSource] = useState<"files" | "text" | "drive">("files");
   const [activeTab, setActiveTab] = useState<"csv" | "ai">("csv");
 
   // AI Tab State
@@ -1372,7 +1374,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
           .filter((j: any) => String(j?.status ?? "") === "processing")
           .map((j: any) => String(j.id));
         const failedJobs = jobs.filter(
-          (j: any) => j.status === "failed" || j.status === "needs_review" || j.status === "out_of_quota" || j.status === "cancelled",
+          (j: any) => j.status === "failed" || j.status === "out_of_quota",
         );
 
         const hasPending = jobs.some((j: any) => {
@@ -1483,9 +1485,11 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     const done = jobsForUi.filter((j) => j.status === "done").length;
     const ready = jobsForUi.filter((j) => j.status === "done" && Boolean(j.review) && !j.saved && !j.review?.optimizing).length;
     const saved = jobsForUi.filter((j) => j.saved).length;
-    const failed = jobsForUi.filter((j) => j.status === "failed" || j.status === "needs_review" || j.status === "out_of_quota" || j.status === "cancelled").length;
-    const pending = total - done - failed;
-    return { total, done, ready, saved, failed, pending };
+    const failed = jobsForUi.filter((j) => j.status === "failed" || j.status === "out_of_quota").length;
+    const needsReview = jobsForUi.filter(j => j.status === "needs_review" && !j.saved).length;
+    const cancelled = jobsForUi.filter(j => j.status === "cancelled").length;
+    const pending = jobsForUi.filter(j => ["created", "queued", "processing"].includes(j.status)).length;
+    return { total, done, ready, saved, failed, needsReview, cancelled, pending };
   }, [jobsForUi]);
 
   // UI safety net: if all jobs are terminal, stop the processing step immediately.
@@ -1694,6 +1698,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
           </Badge>
         );
       case "cancelled":
+        return <Badge variant="outline">{t("projectDetail.cancelled")}</Badge>;
       case "failed":
         return (
           <Badge variant="outline" className="border-destructive/30 bg-destructive/10 text-destructive">
@@ -1733,32 +1738,33 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
         e.preventDefault(); e.stopPropagation(); setIsDragActive(false); dragDepthRef.current = 0;
         const files = Array.from(e.dataTransfer.files);
         if (activeTab === 'csv') void selectManualFiles(files); else selectAiFiles(files);
-      }} className="glass w-[95vw] sm:max-w-5xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+      }} className={cn("w-[calc(100vw-1.5rem)] sm:max-w-4xl overflow-hidden flex flex-col p-0 gap-0", activeTab === "csv" && manualTables.length === 0 ? "h-[min(600px,90dvh)]" : activeTab === "ai" && aiStep === "upload" ? "h-[min(720px,90dvh)]" : "h-[min(800px,90dvh)]")}>
         <ModalHeaderImage className="h-36 sm:h-40">
-          <DialogTitle className="text-2xl font-bold tracking-tight">{t("bulk.title")}</DialogTitle>
+          <DialogTitle className="text-xl font-semibold tracking-tight">{t("bulk.title")}</DialogTitle>
           <DialogDescription>{t("bulk.subtitle")}</DialogDescription>
         </ModalHeaderImage>
-        <div className="px-6 pb-6 pt-5">
+        <div className="min-h-0 flex flex-1 flex-col">
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "csv" | "ai")} className="w-full">
-          <TabsList className="mb-6 grid w-full max-w-md mx-auto grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-background/40 p-1">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "csv" | "ai")} className="flex min-h-0 flex-1 flex-col">
+          <TabsList className="my-3 mx-5 grid shrink-0 grid-cols-2 gap-1 rounded-lg bg-secondary/50 p-1 sm:mx-6">
             <TabsTrigger
               value="csv"
-              className="gap-2 rounded-xl border-0 py-2 data-[state=active]:shadow-[0_0_20px_hsl(var(--primary)/0.3)]"
+              className="gap-2 rounded-xl border-0 py-2 data-[state=active]:shadow-sm"
             >
               <FileSpreadsheet className="w-4 h-4" />
               {t("bulk.tabCsv")}
             </TabsTrigger>
             <TabsTrigger
               value="ai"
-              className="gap-2 rounded-xl border-0 py-2 data-[state=active]:shadow-[0_0_20px_hsl(var(--primary)/0.3)]"
+              className="gap-2 rounded-xl border-0 py-2 data-[state=active]:shadow-sm"
             >
               <Sparkles className="w-4 h-4" />
               {t("bulk.tabAi")}
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="csv" className="space-y-5">
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 sm:px-6">
+          <TabsContent value="csv" className="space-y-4 mt-0">
             <input
               type="file"
               ref={csvFileInputRef}
@@ -1800,7 +1806,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
               )}
             </div>
 
-            <div className="space-y-3">
+            <FormSection title={t("bulk.pasteCsv")}>
               <Label htmlFor="manual-csv-text">{t('bulk.pasteCsv')}</Label>
               <Textarea id="manual-csv-text" value={pastedCsv} disabled={csvBusy} onChange={e => setPastedCsv(e.target.value)} placeholder={exampleText} className="min-h-24 font-mono text-xs" />
               <Button type="button" variant="outline" disabled={!pastedCsv.trim() || csvBusy} onClick={() => {
@@ -1813,26 +1819,13 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                   setManualTables(prev => [...prev, loaded]); setPastedCsv('');
                 } catch (error) { toast.error((error as Error).message); }
               }}>{t('bulk.reviewPastedCsv')}</Button>
-              <ManualImportPreview tables={manualTables} onChange={setManualTables} disabled={csvBusy} />
-              <Button
-                className="w-full gap-2"
-                disabled={!csvText.trim() || csvBusy}
-                type="button"
-                onClick={() => void importCsvText(csvText, "CSV / Excel")}
-              >
-                {csvBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-                {t("bulk.saveManual")}
-              </Button>
-            </div>
+
+
+            </FormSection>
+            <ManualImportPreview tables={manualTables} onChange={setManualTables} disabled={csvBusy} />
 
             {/* Referencia de formato, discreta al final */}
-            <div className="rounded-2xl border border-white/10 bg-secondary/20 p-4">
-              <div className="flex items-center gap-2">
-                <Info className="h-4 w-4 shrink-0 text-primary" />
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  {t("bulk.csvInstructionsTitle")}
-                </h4>
-              </div>
+            <FormSection title={t("bulk.csvInstructionsTitle")}>
               <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{t("bulk.csvExcelHint")}</p>
               <ul className="mt-3 space-y-2 text-xs leading-relaxed text-muted-foreground">
                 {[t("bulk.csvInstructionsRequired"), t("bulk.csvInstructionsStops"), t("bulk.csvInstructionsSeparator")].map((line) => (
@@ -1842,16 +1835,15 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                   </li>
                 ))}
               </ul>
-            </div>
+            </FormSection>
 
-            <div className="flex justify-end pt-1">
-              <Button variant="ghost" onClick={() => handleOpenChange(false)}>
-                {t("bulk.cancel")}
-              </Button>
-            </div>
+
           </TabsContent>
 
-          <TabsContent value="ai" className="space-y-6">
+          <TabsContent value="ai" className="space-y-4 mt-0">
+            <ol aria-label={t("bulk.title")} className="flex items-center gap-3 border-b border-border pb-3 text-xs sm:text-sm">
+              {["upload", "processing", "review"].map((step, index) => <li key={step} aria-current={aiStep === step ? "step" : undefined} className={cn("flex items-center gap-2", aiStep === step ? "font-medium text-foreground" : "text-muted-foreground")}><span className={cn("flex h-6 w-6 items-center justify-center rounded-full", aiStep === step ? "bg-primary text-primary-foreground" : "bg-secondary")}>{index + 1}</span>{t(index === 0 ? "modal.select" : index === 1 ? "modal.process" : "modal.review")}</li>)}
+            </ol>
             <input 
                 type="file"
                 ref={fileInputRef}
@@ -1863,7 +1855,12 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
             
             {aiStep === "upload" && (
               <>
-                <CallsheetUploadHelp maxFiles={Math.min(20, limits.maxCallsheetsPerBatch)} />
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant={aiSource === "files" ? "secondary" : "ghost"} aria-pressed={aiSource === "files"} onClick={() => setAiSource("files")}>{t("modal.files")}</Button>
+                  <Button type="button" variant={aiSource === "text" ? "secondary" : "ghost"} aria-pressed={aiSource === "text"} onClick={() => setAiSource("text")}>{t("modal.text")}</Button>
+                  {driveConfigured && <Button type="button" variant={aiSource === "drive" ? "secondary" : "ghost"} aria-pressed={aiSource === "drive"} onClick={() => setAiSource("drive")}>Google Drive</Button>}
+                </div>
+                <div hidden={aiSource !== "files"} className="space-y-3">
                 <div
                   role="button"
                   tabIndex={0}
@@ -1874,7 +1871,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                   onDragLeave={onDragLeave}
                   onDragOver={onDragOver}
                   className={cn(
-                    "group flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 py-10 text-center transition-all",
+                    "group flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 py-5 text-center transition-all",
                     isDragActive
                       ? "border-primary bg-primary/10 shadow-[inset_0_0_60px_hsl(var(--primary)/0.08)]"
                       : "border-white/15 bg-secondary/20 hover:border-primary/50 hover:bg-secondary/30",
@@ -1900,29 +1897,18 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                       {selectedFiles.length > 0 ? t("bulk.aiChangeFilesHint") : t("bulk.aiDropSubtitle")}
                     </p>
                   </div>
-                  {selectedFiles.length > 1 && (
-                    <div className="flex max-w-full flex-wrap items-center justify-center gap-1.5">
-                      {selectedFiles.slice(0, 4).map((file, idx) => (
-                        <span
-                          key={`${file.name}-${idx}`}
-                          className="inline-flex max-w-[180px] items-center gap-1.5 rounded-full border border-white/10 bg-background/40 px-2.5 py-1 text-xs text-muted-foreground"
-                        >
-                          <FileText className="h-3 w-3 shrink-0 text-primary" />
-                          <span className="truncate">{file.name}</span>
-                        </span>
-                      ))}
-                      {selectedFiles.length > 4 && (
-                        <span className="text-xs text-muted-foreground">+{selectedFiles.length - 4}</span>
-                      )}
-                    </div>
-                  )}
+
                 </div>
 
+                <CallsheetUploadHelp maxFiles={Math.min(20, limits.maxCallsheetsPerBatch)} />
+                </div>
                 <div className="space-y-2">
                   {selectedFiles.map((file, index) => <div key={`${file.name}-${index}`} className="flex items-center justify-between gap-2 text-sm">
                     <span className="truncate">{file.name} · {(file.size / 1024 / 1024).toFixed(2)} MB</span>
                     <Button type="button" variant="ghost" aria-label={`${t('bulk.removeFile')} ${file.name}`} onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== index))}>×</Button>
                   </div>)}
+                </div>
+                <div hidden={aiSource !== "text"} className="space-y-2">
                   <Label htmlFor="ai-pasted-text">{t('bulk.aiPasteLabel')}</Label>
                   <Textarea id="ai-pasted-text" value={aiText} onChange={e => setAiText(e.target.value)} placeholder={t('bulk.aiPasteHint')} />
                   <Button type="button" variant="outline" disabled={!aiText.trim()} onClick={() => {
@@ -1934,7 +1920,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                   <p className="text-xs text-muted-foreground">{t('bulk.aiTextQuotaHint')}</p>
                 </div>
 
-                {driveConfigured && (
+                {driveConfigured && aiSource === "drive" && (
                   <Button
                     variant="outline"
                     className="w-full h-11 gap-2 rounded-xl border-white/10 bg-secondary/20 hover:border-primary/40 hover:bg-primary/5"
@@ -1961,9 +1947,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                   </div>
                 )}
 
-                <p className="text-center text-sm text-muted-foreground">
-                  {t("bulk.aiDescription")}
-                </p>
+
 
                 <div className="flex items-start gap-2.5 rounded-xl border border-warning/20 bg-warning/10 p-3">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
@@ -1972,20 +1956,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                   </p>
                 </div>
 
-                <div className="flex justify-end gap-2 pt-1">
-                  <Button variant="ghost" onClick={() => handleOpenChange(false)}>
-                    {t("bulk.cancel")}
-                  </Button>
-                  <Button
-                    variant="add"
-                    className="gap-2"
-                    onClick={startAiProcess}
-                    disabled={selectedFiles.length === 0 || aiLoading}
-                  >
-                    {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                    {t("bulk.aiProcess")}
-                  </Button>
-                </div>
+
               </>
             )}
 
@@ -2083,40 +2054,26 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                           saved: jobStats.saved,
                           pending: jobStats.pending,
                           failed: jobStats.failed,
+                          review: jobStats.needsReview,
+                          cancelled: jobStats.cancelled,
                         })}
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex gap-2 shrink-0">
-                    <Button variant="ghost" type="button" onClick={resetAiState}>
-                      {t("bulk.back")}
-                    </Button>
-                    <Button
-                      type="button"
-                      className="gap-2"
-                      onClick={() => void saveAllReadyTrips()}
-                      disabled={!onSave || jobStats.ready === 0}
-                    >
-                      <Save className="w-4 h-4" />
-                      {t("bulk.saveAll")}
-                    </Button>
-                  </div>
+
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {jobsForUi.map((job) => {
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">{t("modal.batchReview")}</p>
+                  {jobsForUi.map((job, jobIndex) => {
                     const review = job.review;
                     const showProcessing = job.status === "processing" || job.status === "queued" || job.status === "created";
-                    const showFailed = job.status === "failed" || job.status === "needs_review" || job.status === "out_of_quota" || job.status === "cancelled";
+                    const showFailed = job.status === "failed" || job.status === "out_of_quota";
                     const showDoneNoReview = job.status === "done" && !review && !job.saved;
 
                     return (
-                      <div
-                        key={job.id}
-                        className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-secondary/20 p-4 transition-colors hover:border-white/15"
-                      >
-                        <div className="flex items-start justify-between gap-3">
+                      <FormSection key={job.id} reveal={jobIndex === 0} title={<span className="flex min-w-0 flex-1 items-start justify-between gap-3">
                           <div className="flex min-w-0 items-center gap-2.5">
                             <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                             <div className="min-w-0">
@@ -2130,7 +2087,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                             )}
                             {renderJobStatusBadge(job.status, job.saved)}
                           </div>
-                        </div>
+                        </span>}>
 
                         {review && (job.status === "done" || job.status === "needs_review") && (
                           <>
@@ -2196,7 +2153,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                                   <span className="truncate">{profile.baseAddress || t("bulk.notSet")}</span>
                                 </div>
 
-                                <div className="max-h-44 space-y-1.5 overflow-y-auto">
+                                <div className="space-y-2">
                                   {review.locations.map((loc, idx) => (
                                     <div
                                       key={idx}
@@ -2208,7 +2165,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                                       <div className="min-w-0 flex-1">
                                       <p className="text-xs text-muted-foreground">{review.locationDetails?.[idx]?.label_source} · {review.locationDetails?.[idx]?.selection_state === 'candidate' ? t('bulk.statusNeedsReview') : t('bulk.statusReady')}</p>
                                       <p className="text-xs text-muted-foreground">{compactCallsheetReviewReason(review.locationDetails?.[idx]?.review_reason)}</p>
-                                      <Input
+                                      <Textarea rows={2}
                                         aria-label={tf("bulk.locationsRouteLabel", { count: idx + 1 })}
                                         value={loc}
                                         onChange={(event) => updateReview(job.id, { locations: review.locations.map((value, position) => position === idx ? event.target.value : value), distance: "0", distanceDirty: true })}
@@ -2261,6 +2218,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                           </div>
                         )}
 
+                        {job.status === "needs_review" && !review && <p className="text-sm text-muted-foreground">{job.reason || t("bulk.loadingResults")}</p>}
                         {showDoneNoReview && (
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Loader2 className="w-4 h-4 animate-spin" />
@@ -2297,14 +2255,47 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                             )}
                           </>
                         )}
-                      </div>
+                      </FormSection>
                     );
                   })}
                 </div>
               </div>
             )}
           </TabsContent>
+          </div>
         </Tabs>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-border bg-card px-5 py-4 sm:px-6">
+          {activeTab === "csv" ? <><Button variant="outline" onClick={() => handleOpenChange(false)}>{t("bulk.cancel")}</Button>              <Button
+                className="gap-2"
+                disabled={!csvText.trim() || csvBusy}
+                type="button"
+                onClick={() => void importCsvText(csvText, "CSV / Excel")}
+              >
+                {csvBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+                {t("bulk.saveManual")}
+              </Button></> : aiStep === "upload" ? <><Button variant="outline" onClick={() => handleOpenChange(false)}>{t("bulk.cancel")}</Button>                  <Button
+                    variant="add"
+                    className="gap-2"
+                    onClick={startAiProcess}
+                    disabled={selectedFiles.length === 0 || aiLoading}
+                  >
+                    {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    {t("bulk.aiProcess")}
+                  </Button></> : aiStep === "review" ?                   <div className="flex gap-2 shrink-0">
+                    <Button variant="ghost" type="button" onClick={resetAiState}>
+                      {t("bulk.back")}
+                    </Button>
+                    <Button
+                      type="button"
+                      className="gap-2"
+                      onClick={() => void saveAllReadyTrips()}
+                      disabled={!onSave || jobStats.ready === 0}
+                    >
+                      <Save className="w-4 h-4" />
+                      {t("bulk.saveAll")}
+                    </Button>
+                  </div> : <Button variant="outline" onClick={() => handleOpenChange(false)}>{t("bulk.cancel")}</Button>}
         </div>
       </DialogContent>
     </Dialog>

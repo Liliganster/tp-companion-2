@@ -30,9 +30,10 @@ export function TripDetailModal({ trip, open, onOpenChange, onSave }: TripDetail
   const { trips } = useTrips();
   const { getAccessToken } = useAuth();
   const { toast } = useToast();
+  const [mobilePane, setMobilePane] = useState("details");
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  useEffect(() => { setEditing(false); }, [open, trip?.id]);
+  useEffect(() => { setEditing(false); setMobilePane("details"); }, [open, trip?.id]);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewDocName, setPreviewDocName] = useState<string>("");
 
@@ -134,14 +135,18 @@ export function TripDetailModal({ trip, open, onOpenChange, onSave }: TripDetail
           que un callsheet A4 se lea sin lupa (queja de la propietaria).
           Cabecera de imagen BAJA (h-16) por lo mismo: estilo unificado sin
           robarle altura al documento. */}
-      <DialogContent className="glass w-[96vw] sm:w-[96vw] sm:max-w-[1500px] h-[92vh] max-h-[92vh] p-0 gap-0 overflow-hidden flex flex-col">
+      <DialogContent className="w-[96vw] sm:w-[96vw] sm:max-w-[1500px] h-[92dvh] max-h-[92dvh] p-0 gap-0 overflow-hidden flex flex-col">
         <ModalHeaderImage className="h-20">
           <DialogTitle className="text-lg font-bold tracking-tight">{t("tripDetail.title")}</DialogTitle>
           <DialogDescription className="sr-only">{t("tripDetail.title")}</DialogDescription>
         </ModalHeaderImage>
 
+        <div className="grid shrink-0 grid-cols-2 gap-2 border-b border-border px-4 py-2 md:hidden">
+          <Button variant={mobilePane === "details" ? "secondary" : "ghost"} aria-pressed={mobilePane === "details"} onClick={() => setMobilePane("details")}>{t("modal.details")}</Button>
+          <Button variant={mobilePane === "document" ? "secondary" : "ghost"} aria-pressed={mobilePane === "document"} onClick={() => setMobilePane("document")}>{t("modal.documents")}</Button>
+        </div>
         <div className="flex flex-col md:flex-row flex-1 min-h-0">
-          <div className="w-full md:w-96 md:shrink-0 max-h-[45%] md:max-h-none p-4 space-y-4 overflow-y-auto border-b md:border-b-0 md:border-r border-border/50 bg-secondary/20 min-h-0">
+          <div className={`w-full flex-1 md:flex-none md:shrink-0 md:border-r border-border min-h-0 ${mobilePane !== "details" ? "hidden md:block" : ""} ${editing ? "md:w-[44%] overflow-hidden" : "md:w-[360px] p-5 space-y-4 overflow-y-auto"}`}>
             {editing ? <TripDetailEditor key={liveTrip.id} trip={liveTrip} onSave={onSave} onCancel={() => setEditing(false)} onSaved={() => setEditing(false)} onSaving={setSaving} /> : <>
             <Button type="button" variant="outline" onClick={() => setEditing(true)}>{t("trips.edit")}</Button>
             <div>
@@ -259,7 +264,7 @@ export function TripDetailModal({ trip, open, onOpenChange, onSave }: TripDetail
             </>}
           </div>
 
-          <div className="flex-1 flex flex-col min-h-0">
+          <div className={`${mobilePane !== "document" ? "hidden md:flex" : "flex"} flex-1 flex-col min-h-0`}>
             <Tabs defaultValue="document" className="flex-1 flex flex-col min-h-0">
               <div className="flex-1 relative min-h-0">
                 <TabsContent value="map" className="absolute inset-0 m-0">

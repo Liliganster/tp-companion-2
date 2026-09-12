@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, cleanup, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-const mocks = vi.hoisted(() => ({ save: vi.fn(), fetch: vi.fn(), error: vi.fn(), optimize: vi.fn(), tables: [] as any[], jobs: [] as any[], locations: [] as any[], result: null as any, t: (s: string) => s, tf: (s: string) => s }));
+const mocks = vi.hoisted(() => ({ save: vi.fn(), fetch: vi.fn(), error: vi.fn(), optimize: vi.fn(), tables: [] as any[], jobs: [] as any[], locations: [] as any[], result: null as any, t: (s: string) => s, tf: vi.fn((s: string) => s) }));
 vi.mock('@/lib/callsheetOptimization', () => ({ optimizeCallsheetLocationsAndDistance: mocks.optimize }));
 vi.mock('@/hooks/use-i18n', () => ({ useI18n: () => ({ t: mocks.t, tf: mocks.tf, locale: 'es' }) }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ getAccessToken: async () => 'test' }) }));
@@ -42,6 +42,11 @@ describe('bulk import user flow', () => {
     open();
     const first = await screen.findByDisplayValue(status === 'done' ? 'Park Street 1' : 'Jesuitenwiese Prater');
     const second = screen.getByDisplayValue('Erzbischofgasse 8, Wien');
+    expect(screen.queryByText('bulk.docProcessFailed')).not.toBeInTheDocument();
+    expect(mocks.error).not.toHaveBeenCalled();
+    expect(mocks.tf).toHaveBeenCalledWith('bulk.aiParallelReviewStats', expect.objectContaining({
+      review: status === 'needs_review' ? 1 : 0, failed: 0,
+    }));
     expect(within(first.parentElement!).getByText(/LOCATION 1/)).toHaveTextContent(status === 'done' ? 'bulk.statusReady' : 'bulk.statusNeedsReview');
     expect(within(second.parentElement!).getByText(/LOCATION 2/)).toHaveTextContent('bulk.statusReady');
     if (status === 'needs_review') {

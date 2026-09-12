@@ -15,6 +15,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   User,
+  Car,
+  Wallet,
   Lock,
   Sparkles,
   Languages,
@@ -185,7 +187,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   // definido en index.css. AppearanceContext queda hibernado.
   const navItems = [
     { id: "profile", label: t("settings.tabProfile"), icon: User },
-    { id: "apis", label: t("settings.tabApis"), icon: Sparkles },
+    { id: "vehicle", label: t("modal.vehicle"), icon: Car },
+    { id: "costs", label: t("modal.costs"), icon: Wallet },
+    { id: "apis", label: t("modal.integrations"), icon: Sparkles },
+    { id: "security", label: t("modal.security"), icon: Lock },
     { id: "language", label: t("settings.tabLanguage"), icon: Languages },
     { id: "news", label: t("settings.tabNews"), icon: Newspaper },
     { id: "help", label: t("settings.tabHelp"), icon: HelpCircle },
@@ -299,6 +304,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
       const evValue = parseLocaleNumber(profileData.evKwhPer100Km);
       const result = validateEvConsumption(evValue);
       if (!result.valid) {
+        setActiveTab("vehicle");
         const errorData = getConsumptionErrorData(result, true);
         if (errorData) {
           const msg = errorData.type === "excessive"
@@ -316,6 +322,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
       const fuelValue = parseLocaleNumber(profileData.fuelLPer100Km);
       const result = validateFuelConsumption(fuelValue);
       if (!result.valid) {
+        setActiveTab("vehicle");
         const errorData = getConsumptionErrorData(result, false);
         if (errorData) {
           const msg = errorData.type === "excessive"
@@ -357,31 +364,17 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
   return (
       <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent className="max-w-3xl w-full sm:w-[800px] h-[90vh] sm:h-[600px] p-0 gap-0 overflow-hidden flex flex-col">
+      <DialogContent className="max-w-4xl w-[calc(100vw-1.5rem)] h-[90dvh] sm:h-[min(640px,90dvh)] p-0 gap-0 overflow-hidden flex flex-col">
         <ModalHeaderImage className="h-20">
           <DialogTitle className="text-lg sm:text-xl font-bold tracking-tight">{t("settings.title")}</DialogTitle>
           <DialogDescription className="sr-only">{t("settings.title")}</DialogDescription>
         </ModalHeaderImage>
 
-        {/* Mobile Navigation - Outside flex container */}
-        <div className="sm:hidden border-b border-border shrink-0 overflow-x-auto">
-          <div className="flex gap-2 px-4 py-2 min-w-max">
-            {navItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={cn(
-                  "flex flex-col items-center gap-1 px-3 py-2 text-xs rounded-xl border whitespace-nowrap transition-colors min-w-[70px] flex-shrink-0",
-                  activeTab === item.id
-                    ? "border-transparent bg-primary text-primary-foreground"
-                    : "border-border text-muted-foreground hover:text-foreground hover:bg-accent"
-                )}
-              >
-                <item.icon className="w-5 h-5" />
-                <span className="text-[10px] leading-tight text-center">{item.label}</span>
-              </button>
-            ))}
-          </div>
+        <div className="shrink-0 border-b border-border px-4 py-3 sm:hidden">
+          <Select value={activeTab} onValueChange={setActiveTab}>
+            <SelectTrigger aria-label={t("settings.title")}><SelectValue /></SelectTrigger>
+            <SelectContent>{navItems.map(item => <SelectItem key={item.id} value={item.id}>{item.label}</SelectItem>)}</SelectContent>
+          </Select>
         </div>
 
         <div className="flex flex-1 overflow-hidden">
@@ -392,6 +385,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
+                aria-current={activeTab === item.id ? "page" : undefined}
                   className={cn(
                     "mx-2 mb-1 flex w-[calc(100%-1rem)] items-center gap-3 rounded-xl px-4 py-2.5 text-sm text-left transition-colors",
                     activeTab === item.id
@@ -407,7 +401,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
           </nav>
 
           {/* Content */}
-          <ScrollArea className="flex-1">
+          <ScrollArea key={activeTab} className="min-w-0 flex-1">
             <div className="p-4 sm:p-6">
               {activeTab === "profile" && (
                 <div className="space-y-6">
@@ -430,32 +424,11 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         onChange={(e) => setProfileData({ ...profileData, vatId: e.target.value })}
                                              />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="licensePlate">{t("settings.licensePlate")}</Label>
-                      <Input
-                        id="licensePlate"
-                        value={profileData.licensePlate}
-                        onChange={(e) => setProfileData({ ...profileData, licensePlate: e.target.value })}
-                                             />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="ratePerKm">{t("settings.ratePerKm")}</Label>
-                      <Input
-                        id="ratePerKm"
-                        value={profileData.ratePerKm}
-                        onChange={(e) => setProfileData({ ...profileData, ratePerKm: e.target.value })}
-                                             />
-                    </div>
+
+
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="passengerSurcharge">{t("settings.passengerSurcharge")}</Label>
-                    <Input
-                      id="passengerSurcharge"
-                      value={profileData.passengerSurcharge}
-                      onChange={(e) => setProfileData({ ...profileData, passengerSurcharge: e.target.value })}
-                                         />
-                  </div>
+
 
                   <div className="space-y-2">
                     <Label htmlFor="baseAddress">{t("settings.baseAddress")}</Label>
@@ -485,7 +458,20 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                     </div>
                   </div>
 
-                  <div className="pt-4">
+
+                </div>
+              )}
+
+
+
+              {activeTab === "vehicle" && <div className="space-y-5"><h2 className="text-lg font-semibold">{t("modal.vehicle")}</h2><div className="space-y-2">
+                      <Label htmlFor="licensePlate">{t("settings.licensePlate")}</Label>
+                      <Input
+                        id="licensePlate"
+                        value={profileData.licensePlate}
+                        onChange={(e) => setProfileData({ ...profileData, licensePlate: e.target.value })}
+                                             />
+                    </div>                  <div className="pt-4">
                     <h3 className="text-sm font-medium">{t("settings.vehicleSectionTitle")}</h3>
                     <p className="text-xs text-muted-foreground mt-1">{t("settings.vehicleSectionBody")}</p>
                   </div>
@@ -553,7 +539,79 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                     )}
                   </div>
 
-                  {/* Costes del coche + km anuales (Fase 4: margen neto y % uso profesional) */}
+                  {/* Emissions Data Source Info */}
+                  {((fuelFactor && (profileData.fuelType === "gasoline" || profileData.fuelType === "diesel")) ||
+                    (atGrid && profileData.fuelType === "ev")) && (
+                    <div className="mt-4 p-4 rounded-lg bg-secondary/30 border border-border/50">
+                      <div className="flex items-start gap-2 mb-3">
+                        <Info className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                        <div className="flex-1">
+                          <h4 className="text-sm font-medium mb-1">{t("settings.emissionsDataSourceTitle")}</h4>
+                          <p className="text-xs text-muted-foreground mb-3">
+                            {t("settings.emissionsDataSourceBody")}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        {fuelFactor && (profileData.fuelType === "gasoline" || profileData.fuelType === "diesel") && (
+                          <div className="text-xs space-y-1">
+                            <span className="font-semibold text-primary">{t("settings.emissionsStaticFuelTitle")}</span>
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
+                              <div><span className="font-medium">{t("settings.emissionsFactor")}:</span> {
+                                fuelFactor.kgCo2ePerLiter != null ? `${fuelFactor.kgCo2ePerLiter.toFixed(2)} kg CO₂/L` : "N/A"
+                              }</div>
+                              {fuelFactor.source && <div><span className="font-medium">{t("settings.emissionsSource")}:</span> {fuelFactor.source}</div>}
+                            </div>
+                            <p className="text-[10px] text-muted-foreground mt-2 italic">
+                              {t("settings.emissionsWellToWheel")}
+                            </p>
+                          </div>
+                        )}
+
+                        {atGrid && profileData.fuelType === "ev" && (
+                          <div className="text-xs space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-primary">{t("settings.emissionsStaticGridTitle")}</span>
+                              <a
+                                href="https://ourworldindata.org/grapher/carbon-intensity-electricity"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            </div>
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
+                              <div><span className="font-medium">{t("settings.emissionsIntensity")}:</span> {atGrid.gCo2PerKwh.toFixed(0)} g CO₂/kWh</div>
+                              {atGrid.zone && <div><span className="font-medium">{t("settings.emissionsZone")}:</span> {atGrid.zone}</div>}
+                              <div><span className="font-medium">{t("settings.emissionsYear")}:</span> {GRID_FACTORS_YEAR}</div>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground mt-2 italic">
+                              {t("settings.emissionsGridAnnualNote")}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+</div>}
+              {activeTab === "costs" && <div className="space-y-5"><h2 className="text-lg font-semibold">{t("modal.costs")}</h2><div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2">
+                      <Label htmlFor="ratePerKm">{t("settings.ratePerKm")}</Label>
+                      <Input
+                        id="ratePerKm"
+                        value={profileData.ratePerKm}
+                        onChange={(e) => setProfileData({ ...profileData, ratePerKm: e.target.value })}
+                                             />
+                    </div><div className="space-y-2">
+                    <Label htmlFor="passengerSurcharge">{t("settings.passengerSurcharge")}</Label>
+                    <Input
+                      id="passengerSurcharge"
+                      value={profileData.passengerSurcharge}
+                      onChange={(e) => setProfileData({ ...profileData, passengerSurcharge: e.target.value })}
+                                         />
+                  </div></div>                  {/* Costes del coche + km anuales (Fase 4: margen neto y % uso profesional) */}
                   <div className="mt-4 space-y-3">
                     <div>
                       <h4 className="text-sm font-medium">{t("settings.carCostsTitle")}</h4>
@@ -613,64 +671,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                     </div>
                   </div>
 
-                  {/* Emissions Data Source Info */}
-                  {((fuelFactor && (profileData.fuelType === "gasoline" || profileData.fuelType === "diesel")) || 
-                    (atGrid && profileData.fuelType === "ev")) && (
-                    <div className="mt-4 p-4 rounded-lg bg-secondary/30 border border-border/50">
-                      <div className="flex items-start gap-2 mb-3">
-                        <Info className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
-                        <div className="flex-1">
-                          <h4 className="text-sm font-medium mb-1">{t("settings.emissionsDataSourceTitle")}</h4>
-                          <p className="text-xs text-muted-foreground mb-3">
-                            {t("settings.emissionsDataSourceBody")}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        {fuelFactor && (profileData.fuelType === "gasoline" || profileData.fuelType === "diesel") && (
-                          <div className="text-xs space-y-1">
-                            <span className="font-semibold text-primary">{t("settings.emissionsStaticFuelTitle")}</span>
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
-                              <div><span className="font-medium">{t("settings.emissionsFactor")}:</span> {
-                                fuelFactor.kgCo2ePerLiter != null ? `${fuelFactor.kgCo2ePerLiter.toFixed(2)} kg CO₂/L` : "N/A"
-                              }</div>
-                              {fuelFactor.source && <div><span className="font-medium">{t("settings.emissionsSource")}:</span> {fuelFactor.source}</div>}
-                            </div>
-                            <p className="text-[10px] text-muted-foreground mt-2 italic">
-                              {t("settings.emissionsWellToWheel")}
-                            </p>
-                          </div>
-                        )}
-
-                        {atGrid && profileData.fuelType === "ev" && (
-                          <div className="text-xs space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-primary">{t("settings.emissionsStaticGridTitle")}</span>
-                              <a
-                                href="https://ourworldindata.org/grapher/carbon-intensity-electricity"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-                              >
-                                <ExternalLink className="w-3 h-3" />
-                              </a>
-                            </div>
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
-                              <div><span className="font-medium">{t("settings.emissionsIntensity")}:</span> {atGrid.gCo2PerKwh.toFixed(0)} g CO₂/kWh</div>
-                              {atGrid.zone && <div><span className="font-medium">{t("settings.emissionsZone")}:</span> {atGrid.zone}</div>}
-                              <div><span className="font-medium">{t("settings.emissionsYear")}:</span> {GRID_FACTORS_YEAR}</div>
-                            </div>
-                            <p className="text-[10px] text-muted-foreground mt-2 italic">
-                              {t("settings.emissionsGridAnnualNote")}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Password / Security */}
+</div>}
+              {activeTab === "security" && <div className="space-y-5">                  {/* Password / Security */}
                   <div className="pt-4">
                     <h3 className="text-sm font-medium">Seguridad</h3>
                     <p className="text-xs text-muted-foreground mt-1 mb-3">
@@ -708,11 +710,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         </Button>
                       </div>
                     </div>
-                  </div>
-                </div>
-              )}
-
-
+                  </div></div>}
               {activeTab === "apis" && (
                 <div className="space-y-6">
                   <h2 className="text-lg font-medium">{t("settings.tabApis")}</h2>
@@ -941,10 +939,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-border flex flex-col sm:flex-row items-center gap-3 sm:justify-between shrink-0">
-          <p className="text-xs text-muted-foreground hidden sm:block">
-            {t("settings.build")} 1fded46 @ 2025-12-20T20:43:47.046Z
-          </p>
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-border flex flex-col sm:flex-row items-center gap-3 sm:justify-end shrink-0">
+
           <div className="flex items-center gap-3 w-full sm:w-auto">
             <Button variant="outline" onClick={handleClose} className="flex-1 sm:flex-none">
               {t("settings.cancel")}

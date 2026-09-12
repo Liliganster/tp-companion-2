@@ -1,3 +1,5 @@
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { FormSection } from "@/components/ui/form-section";
 import { getUploadedFileName } from "@/lib/uploadFileName";
 import { CALLSHEET_CLIENT_TIMEOUT_MS } from "@/lib/callsheetTiming";
 import { canMaterializeCallsheet, getReviewCallsheetDrafts } from '@/lib/callsheetReview';
@@ -1285,59 +1287,23 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
 
       {/* Main Project Detail Dialog */}
       <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent className="glass sm:max-w-2xl max-h-[90vh] p-0 gap-0 overflow-hidden">
+      <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-4xl h-[min(560px,90dvh)] p-0 gap-0 overflow-hidden flex flex-col">
         <ModalHeaderImage>
           <DialogTitle className="text-xl font-bold tracking-tight">{project.name}</DialogTitle>
           <DialogDescription className="sr-only">{project.name}</DialogDescription>
         </ModalHeaderImage>
 
-        {/* 144px = cabecera hero (128, el título va dentro) + respiro superior */}
-        <ScrollArea className="max-h-[calc(90vh-144px)]">
-          <div className="px-6 pb-6 pt-5 space-y-6">
-            {/* Stats Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">{t("projectDetail.totalKm")}</p>
-                <div className="flex items-center gap-2">
-                  <Car className="w-5 h-5 text-primary" />
-                  <span className="text-xl font-bold">{project.totalKm.toFixed(1)} km</span>
-                </div>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">{t("projectDetail.shootingDays")}</p>
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-muted-foreground" />
-                  <span className="text-xl font-bold">{project.shootingDays}</span>
-                </div>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">{t("projectDetail.kmPerDay")}</p>
-                <div className="flex items-center gap-2">
-                  <Route className="w-5 h-5 text-success" />
-                  <span className="text-xl font-bold">{project.kmPerDay.toFixed(1)} km</span>
-                </div>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">{t("projectDetail.co2Estimated")}</p>
-                <div className="flex items-center gap-2">
-                  <Leaf className="w-5 h-5 text-warning" />
-                  {isLoadingEmissionsData ? (
-                    <Loader2 className="w-5 h-5 animate-spin text-warning" />
-                  ) : (
-                    <span className="text-xl font-bold">{realProjectCo2.toFixed(1)} kg</span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-
-
-            {/* Project Expenses */}
-            <ProjectExpenseSection projectId={project.id} />
-
-            {/* Call Sheets */}
-            <div className="glass-card p-4">
-              <div className="flex items-center justify-between mb-4">
+        <Tabs key={project.id} defaultValue="documents" className="flex min-h-0 flex-1 flex-col">
+          <TabsList className="mx-5 my-3 grid shrink-0 grid-cols-4 sm:mx-6 [&_button]:px-1 [&_button]:text-xs sm:[&_button]:px-3 sm:[&_button]:text-sm">
+            <TabsTrigger value="documents">{t("modal.documents")}</TabsTrigger>
+            <TabsTrigger value="trips">{t("nav.trips")}</TabsTrigger>
+            <TabsTrigger value="expenses">{t("tripModal.expenses")}</TabsTrigger>
+            <TabsTrigger value="summary">{t("modal.summary")}</TabsTrigger>
+          </TabsList>
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 sm:px-6">
+            <TabsContent value="documents" className="mt-0">            {/* Call Sheets */}
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <FileText className="w-5 h-5 text-muted-foreground" />
                   <h3 className="font-medium">{t("projectDetail.callSheetsTitle")}</h3>
@@ -1364,10 +1330,13 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                       )}
                     </Button>
                   )}
-                  <CallsheetUploader projectId={project.id} onJobCreated={handleJobCreated} autoQueue={false} />
+
                 </div>
               </div>
 
+              <FormSection title={t("modal.addDocuments")}>
+                <CallsheetUploader projectId={project.id} onJobCreated={handleJobCreated} autoQueue={false} />
+              </FormSection>
               <div className="space-y-2">
                 {allCallSheets.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">
@@ -1375,7 +1344,7 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                   </p>
                 ) : (
                   allCallSheets.map((sheet) => (
-                    <div key={sheet.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors group">
+                    <div key={sheet.id} className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors group">
                       <div className="flex items-center gap-3 min-w-0">
                         <FileText className="w-4 h-4 text-primary shrink-0" />
                         <span className="text-sm truncate">{sheet.name}</span>
@@ -1440,8 +1409,56 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
                 )}
               </div>
             </div>
+</TabsContent>
+            <TabsContent value="trips" className="mt-0 space-y-3">
+              {trips.filter(trip => trip.projectId === project.id || (!trip.projectId && trip.project === project.name)).map(trip => <div key={trip.id} className="space-y-2 rounded-xl border border-border p-4">
+                <div className="flex items-center justify-between gap-3 text-sm font-medium"><span>{trip.date}</span><span>{trip.distance} km</span></div>
+                <ol className="space-y-1 text-sm text-muted-foreground">{trip.route.map((stop, index) => <li key={index} className="flex gap-2"><span className="text-primary">{index + 1}.</span><span>{stop}</span></li>)}</ol>
+              </div>)}
+              {!trips.some(trip => trip.projectId === project.id || (!trip.projectId && trip.project === project.name)) && <p className="py-8 text-center text-sm text-muted-foreground">{t("modal.noTrips")}</p>}
+            </TabsContent>
+            <TabsContent value="expenses" className="mt-0"><ProjectExpenseSection projectId={project.id} /></TabsContent>
+            <TabsContent value="summary" className="mt-0 py-3">            {/* Stats Grid */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">{t("projectDetail.totalKm")}</p>
+                <div className="flex items-center gap-2">
+                  <Car className="w-5 h-5 text-primary" />
+                  <span className="text-xl font-bold">{project.totalKm.toFixed(1)} km</span>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">{t("projectDetail.shootingDays")}</p>
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-muted-foreground" />
+                  <span className="text-xl font-bold">{project.shootingDays}</span>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">{t("projectDetail.kmPerDay")}</p>
+                <div className="flex items-center gap-2">
+                  <Route className="w-5 h-5 text-success" />
+                  <span className="text-xl font-bold">{project.kmPerDay.toFixed(1)} km</span>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">{t("projectDetail.co2Estimated")}</p>
+                <div className="flex items-center gap-2">
+                  <Leaf className="w-5 h-5 text-warning" />
+                  {isLoadingEmissionsData ? (
+                    <Loader2 className="w-5 h-5 animate-spin text-warning" />
+                  ) : (
+                    <span className="text-xl font-bold">{realProjectCo2.toFixed(1)} kg</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+
+
+</TabsContent>
           </div>
-        </ScrollArea>
+        </Tabs>
       </DialogContent>
     </Dialog>
     </>

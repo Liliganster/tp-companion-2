@@ -88,7 +88,7 @@ export function ProjectEditModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass max-w-lg max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-xl max-h-[90dvh] overflow-hidden flex flex-col p-0 gap-0">
         <ModalHeaderImage>
           <DialogTitle className="text-xl font-bold tracking-tight">
             {project ? t("projects.edit") : t("projects.createNewProject")}
@@ -97,7 +97,7 @@ export function ProjectEditModal({
             {project ? t("projects.edit") : t("projects.createNewProject")}
           </DialogDescription>
         </ModalHeaderImage>
-        <div className="px-6 pb-6">
+        <div className="min-h-0 overflow-y-auto px-5 py-5 sm:px-6">
           <div className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor="name">{t("projects.projectName")}</Label>
@@ -138,7 +138,11 @@ export function ProjectEditModal({
               onChange={(e) => setRatePerKm(e.target.value)}
             />
           </div>
-            <Button className="w-full mt-2" onClick={handleSubmit} disabled={loading}>
+          </div>
+        </div>
+        <div className="shrink-0 flex justify-end gap-3 border-t border-border px-5 py-4 sm:px-6">
+            <Button variant="outline" disabled={loading} onClick={() => onOpenChange(false)}>{t("bulk.cancel")}</Button>
+            <Button onClick={handleSubmit} disabled={loading}>
               {loading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : project ? (
@@ -147,7 +151,6 @@ export function ProjectEditModal({
                 t("projects.createProject")
               )}
             </Button>
-          </div>
         </div>
       </DialogContent>
     </Dialog>
