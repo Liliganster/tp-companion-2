@@ -48,8 +48,8 @@ export default function Trips() {
   // We alias it to `localEmissionsInput` to match the previous variable name if needed, or just `emissionsInput`.
   const emissionsInput = localEmissionsInput;
 
-  const calculateCO2 = (distance: number, fuelLiters?: number | null, evKwhUsed?: number | null) =>
-    calculateTripEmissions({ distanceKm: distance, fuelLiters, evKwhUsed, ...emissionsInput }).co2Kg;
+  const calculateCO2 = (distance: number) =>
+    calculateTripEmissions({ distanceKm: distance, ...emissionsInput }).co2Kg;
 
   const TRIPS_FILTERS_KEY = "filters:trips:v1";
   const loadTripsFilters = () => {
@@ -403,7 +403,7 @@ export default function Trips() {
       distance: data.distance,
       fuelLiters: data.fuelLiters,
       evKwhUsed: data.evKwhUsed,
-      co2: calculateCO2(data.distance, data.fuelLiters, data.evKwhUsed),
+      co2: calculateCO2(data.distance),
       ratePerKmOverride: data.ratePerKmOverride ?? null,
       specialOrigin: data.specialOrigin ?? "base",
       callsheet_job_id: data.callsheet_job_id,
@@ -667,7 +667,7 @@ export default function Trips() {
                   <div className="flex justify-between md:flex-col md:gap-0.5">
                     <span className="text-muted-foreground text-center">CO₂:</span>
                     <span className="text-foreground font-medium text-center">
-                      {isLoadingEmissionsData ? <Loader2 className="w-3 h-3 animate-spin inline" /> : `${calculateCO2(trip.distance, trip.fuelLiters, trip.evKwhUsed)} kg`}
+                      {isLoadingEmissionsData ? <Loader2 className="w-3 h-3 animate-spin inline" /> : `${calculateCO2(trip.distance).toLocaleString(locale, { maximumFractionDigits: 1 })} kg`}
                     </span>
                   </div>
                   <div className="flex justify-between md:flex-col md:gap-0.5">
@@ -871,7 +871,7 @@ export default function Trips() {
                   </span>
                 </TableCell>
                 <TableCell className="text-right text-foreground whitespace-nowrap">
-                  {isLoadingEmissionsData ? <Loader2 className="w-3 h-3 animate-spin inline" /> : `${calculateCO2(trip.distance, trip.fuelLiters, trip.evKwhUsed)} kg`}
+                  {isLoadingEmissionsData ? <Loader2 className="w-3 h-3 animate-spin inline" /> : `${calculateCO2(trip.distance).toLocaleString(locale, { maximumFractionDigits: 1 })} kg`}
                 </TableCell>
                 <TableCell className="text-right whitespace-nowrap">{formatTripReceiptCell(trip)}</TableCell>
                 <TableCell className="text-right hidden lg:table-cell whitespace-nowrap">

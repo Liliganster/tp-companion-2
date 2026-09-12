@@ -57,6 +57,7 @@ export function gridZoneForCountry(country: string | null | undefined): GridZone
 /**
  * Árboles equivalentes — un árbol maduro absorbe ~21 kg de CO₂ al año
  * (valor aproximado, muy dependiente de especie y clima).
- * Fuente: aprox. habitual citada por Arbor Day Foundation / EPA (≈48 lb/año).
+ * Fuente ilustrativa: Arbor Day Foundation, https://www.arborday.org/value (≈48 lb/año).
+ * No representa una compensación efectiva ni una tasa universal de absorción.
  */
 export const TREE_KG_CO2_PER_YEAR = 21;

@@ -58,7 +58,7 @@ import { parseLocaleNumber } from "@/lib/number";
 import { useEmissionsInput } from "@/hooks/use-emissions-input";
 import { usePlanLimits } from "@/hooks/use-plan-limits";
 
-const getProjectKey = (name: string) => name.trim().toLowerCase();
+import { groupProjectTrips, resolveLegacyProjectId } from "@/lib/projectTrips";
 
 export default function Projects() {
   const { t, tf, locale } = useI18n();
@@ -222,12 +222,12 @@ export default function Projects() {
         // 3) Legacy/extracted results by project_value (name linking)
         if (projects.length > 0) {
              const idToKey = new Map<string, string>();
-             projects.forEach(p => idToKey.set(p.id, getProjectKey(p.name)));
+             projects.forEach(p => idToKey.set(p.id, p.id));
              
              const callsheetPathsByKey: Record<string, Set<string>> = {};
              const invoiceCountsByKey: Record<string, number> = {};
 
-             // Transfer explicit project_id callsheets to NAME keys
+             // Keep explicit project_id callsheets keyed by ID
              for (const [pid, pathSet] of Object.entries(callsheetPathsByProjectId)) {
                const key = idToKey.get(pid);
                if (!key) continue;
@@ -235,7 +235,7 @@ export default function Projects() {
                for (const p of pathSet) callsheetPathsByKey[key].add(p);
              }
 
-             // Transfer project invoice counts to NAME keys (Facturas column)
+             // Keep project invoice counts keyed by ID (Facturas column)
              for (const [pid, count] of Object.entries(invoiceCountsByProjectId)) {
                const key = idToKey.get(pid);
                if (!key) continue;
@@ -256,7 +256,8 @@ export default function Projects() {
                 const path = (job?.storage_path ?? "").toString().trim();
                 if (!path || path === "pending") return;
                 if (!job?.project_id) {
-                  const key = getProjectKey(res.project_value);
+                  const key = resolveLegacyProjectId(projects, res.project_value);
+                  if (!key) return;
                  if (!callsheetPathsByKey[key]) callsheetPathsByKey[key] = new Set();
                  callsheetPathsByKey[key].add(path);
                }
@@ -273,72 +274,71 @@ export default function Projects() {
   }, [projects, trips, countsRefreshToken]);
 
 
+  const projectTripsById = useMemo(
+    () => groupProjectTrips(trips, projects, selectedYear),
+    [trips, projects, selectedYear],
+  );
+
   const statsByProjectKey = useMemo(() => {
     const map = new Map<string, AggregatedTripStats>();
 
-    for (const trip of trips) {
-      const key = getProjectKey(trip.project ?? "");
-      if (!key) continue;
+    for (const [key, projectTrips] of projectTripsById) {
+      for (const trip of projectTrips) {
 
-      // Filter by selected year
-      const matchesYear = selectedYear === "all" || trip.date.startsWith(selectedYear);
-      if (!matchesYear) continue;
+        const distance = Number.isFinite(trip.distance) ? trip.distance : 0;
+        const co2 = calculateTripEmissions({
+          distanceKm: distance,
+          ...emissionsInput,
+        }).co2Kg;
 
-      const distance = Number.isFinite(trip.distance) ? trip.distance : 0;
-      const co2 = calculateTripEmissions({
-        distanceKm: distance,
-        fuelLiters: trip.fuelLiters,
-        evKwhUsed: trip.evKwhUsed,
-        ...emissionsInput,
-      }).co2Kg;
+        const current = map.get(key) ?? {
+          trips: 0,
+          totalKm: 0,
+          documents: 0,
+          invoices: 0,
+          co2Emissions: 0,
+          overrideCost: 0,
+          distanceAtDefaultRate: 0,
+          invoiceDocs: [],
+          callSheetDocs: [],
+          tripDocs: [],
+        };
 
-      const current = map.get(key) ?? {
-        trips: 0,
-        totalKm: 0,
-        documents: 0,
-        invoices: 0,
-        co2Emissions: 0,
-        overrideCost: 0,
-        distanceAtDefaultRate: 0,
-        invoiceDocs: [],
-        callSheetDocs: [],
-        tripDocs: [],
-      };
+        current.trips += 1;
+        current.totalKm += distance;
+        current.co2Emissions += co2;
 
-      current.trips += 1;
-      current.totalKm += distance;
-      current.co2Emissions += co2;
-      
-      // Count trip receipts (toll, parking, fuel, other receipts)
-      if (trip.documents && trip.documents.length > 0) {
-        const tripReceiptCount = trip.documents.filter(doc => 
-          doc.kind === "toll_receipt" || 
-          doc.kind === "parking_receipt" || 
-          doc.kind === "fuel_receipt" || 
-          doc.kind === "other_receipt" ||
-          doc.kind === "invoice"
-        ).length;
-        current.invoices += tripReceiptCount;
-        
-        // Add trip documents
-        trip.documents.forEach(doc => {
-          current.callSheetDocs.push({
-             id: doc.id,
-             name: doc.name,
-             type: "document"
+        // Count trip receipts (toll, parking, fuel, other receipts)
+        if (trip.documents && trip.documents.length > 0) {
+          const tripReceiptCount = trip.documents.filter(doc =>
+            doc.kind === "toll_receipt" ||
+            doc.kind === "parking_receipt" ||
+            doc.kind === "fuel_receipt" ||
+            doc.kind === "other_receipt" ||
+            doc.kind === "invoice"
+          ).length;
+          current.invoices += tripReceiptCount;
+
+          // Add trip documents
+          trip.documents.forEach(doc => {
+            current.callSheetDocs.push({
+               id: doc.id,
+               name: doc.name,
+               type: "document"
+            });
           });
-        });
-      }
+        }
 
-      if (typeof trip.ratePerKmOverride === "number" && Number.isFinite(trip.ratePerKmOverride)) {
-        current.overrideCost += distance * trip.ratePerKmOverride;
-      } else {
-        current.distanceAtDefaultRate += distance;
-      }
+        if (typeof trip.ratePerKmOverride === "number" && Number.isFinite(trip.ratePerKmOverride)) {
+          current.overrideCost += distance * trip.ratePerKmOverride;
+        } else {
+          current.distanceAtDefaultRate += distance;
+        }
 
-      map.set(key, current);
+        map.set(key, current);
+      }
     }
-    
+
     // Count project callsheets (from callsheet_jobs ONLY)
     const keys = new Set<string>([
       ...Array.from(map.keys()),
@@ -377,7 +377,7 @@ export default function Projects() {
     }
 
     return map;
-  }, [trips, projectCallsheetPathsByKey, projectInvoiceCountsByKey, emissionsInput, selectedYear]);
+  }, [projectTripsById, projectCallsheetPathsByKey, projectInvoiceCountsByKey, emissionsInput]);
 
 
 
@@ -431,7 +431,7 @@ export default function Projects() {
     if (!matchesSearch || !matchesProducer) return false;
 
     if (selectedYear !== "all") {
-      const key = getProjectKey(project.name);
+      const key = project.id;
       const stats = statsByProjectKey.get(key);
       if (!stats || stats.trips === 0) return false;
     }
@@ -454,7 +454,7 @@ export default function Projects() {
 
   const selectedProjectStats = useMemo(() => {
     if (!selectedProject) return null;
-    const baseStats = statsByProjectKey.get(getProjectKey(selectedProject.name));
+    const baseStats = statsByProjectKey.get(selectedProject.id);
     
     // Create default stats for projects with 0 trips to allow document uploads
     const defaultStats = {
@@ -472,7 +472,7 @@ export default function Projects() {
     const stats = baseStats || defaultStats;
 
     // Calculate shooting days from trips
-    const projectTrips = trips.filter((t) => getProjectKey(t.project ?? "") === getProjectKey(selectedProject.name));
+    const projectTrips = projectTripsById.get(selectedProject.id) ?? [];
     const uniqueDates = new Set(projectTrips.map((t) => t.date).filter(Boolean));
     const shootingDays = uniqueDates.size;
     const kmPerDay = shootingDays > 0 ? stats.totalKm / shootingDays : 0;
@@ -482,7 +482,7 @@ export default function Projects() {
       shootingDays,
       kmPerDay,
     };
-  }, [selectedProject, statsByProjectKey, trips]);
+  }, [selectedProject, statsByProjectKey, projectTripsById]);
 
   const toggleSelectAll = () => {
     if (selectedIds.size === filteredProjects.length) {
@@ -693,7 +693,7 @@ export default function Projects() {
               <TableBody>
                 {visibleProjects.map((project, index) => (
                   (() => {
-                    const stats = statsByProjectKey.get(getProjectKey(project.name)) ?? null;
+                    const stats = statsByProjectKey.get(project.id) ?? null;
                     const tripsCount = stats?.trips ?? 0;
                     const totalKm = stats?.totalKm ?? 0;
                     const documents = stats?.documents ?? 0;
@@ -843,7 +843,7 @@ export default function Projects() {
             </span>
             <span className="font-medium">
               {tf("projects.summaryTotal", { km: filteredProjects.reduce((acc, p) => {
-                const stats = statsByProjectKey.get(getProjectKey(p.name));
+                const stats = statsByProjectKey.get(p.id);
                 return acc + (stats?.totalKm ?? 0);
               }, 0).toLocaleString(locale) })}
             </span>
@@ -852,6 +852,7 @@ export default function Projects() {
 
         {/* Project Detail Modal */}
         <ProjectDetailModal
+          selectedYear={selectedYear}
           open={detailModalOpen}
           onOpenChange={setDetailModalOpen}
           project={selectedProject && selectedProjectStats ? {

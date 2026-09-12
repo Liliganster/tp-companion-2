@@ -17,7 +17,7 @@ import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useI18n } from "@/hooks/use-i18n";
 import { useTrips } from "@/contexts/TripsContext";
 import { useAiQuota } from "@/hooks/use-ai-quota";
-import { calculateTreesNeeded, calculateTripEmissions, TripEmissionsInput } from "@/lib/emissions";
+import { calculateTreesNeeded, formatTreeEquivalent, calculateTripEmissions, TripEmissionsInput } from "@/lib/emissions";
 import { parseLocaleNumber } from "@/lib/number";
 import { useEmissionsInput } from "@/hooks/use-emissions-input";
 import { billableAmount } from "@/lib/tripMoney";
@@ -39,7 +39,7 @@ function sumCo2(
   emissionsInput: Omit<TripEmissionsInput, "distanceKm">,
 ): number {
   return trips.reduce((acc, t) => {
-    return acc + calculateTripEmissions({ distanceKm: t.distance, fuelLiters: t.fuelLiters, evKwhUsed: t.evKwhUsed, ...emissionsInput }).co2Kg;
+    return acc + calculateTripEmissions({ distanceKm: t.distance, ...emissionsInput }).co2Kg;
   }, 0);
 }
 
@@ -218,11 +218,11 @@ export default function Index() {
           />
           <FlatKpi
             label={t("dashboard.kpiCo2Month")}
-            value={`${co2ThisMonth.toFixed(0)} kg`}
+            value={`${co2ThisMonth.toLocaleString(locale, { maximumFractionDigits: 1 })} kg`}
             to="/trips"
             sub={
               <span className="text-xs text-muted-foreground" title={t("dashboard.equivalentTreesTooltip")}>
-                {tf("dashboard.treesPerYearShort", { trees: treesThisMonth })}
+                {tf(treesThisMonth > 0 && treesThisMonth < 1.5 ? "dashboard.treePerYearShort" : "dashboard.treesPerYearShort", { trees: formatTreeEquivalent(treesThisMonth, locale) })}
               </span>
             }
           />

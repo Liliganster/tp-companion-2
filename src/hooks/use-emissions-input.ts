@@ -34,14 +34,12 @@ export function useEmissionsInput(): {
       fuelType: profile.fuelType,
       fuelLPer100Km: parseLocaleNumber(profile.fuelLPer100Km),
       fuelKgCo2ePerLiter: fuelFactor?.kgCo2ePerLiter ?? null,
-      fuelKgCo2ePerKm: fuelFactor?.kgCo2ePerKm ?? null,
       evKwhPer100Km: parseLocaleNumber(profile.evKwhPer100Km),
       gridKgCo2PerKwh: atGrid?.kgCo2PerKwh ?? null,
     };
   }, [
     atGrid?.kgCo2PerKwh,
     fuelFactor?.kgCo2ePerLiter,
-    fuelFactor?.kgCo2ePerKm,
     profile.evKwhPer100Km,
     profile.fuelLPer100Km,
     profile.fuelType

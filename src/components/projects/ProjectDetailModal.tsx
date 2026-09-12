@@ -19,6 +19,7 @@ import { CallsheetUploader } from "@/components/callsheets/CallsheetUploader";
 import { ProjectExpenseSection } from "@/components/projects/ProjectExpenseSection";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useProjects } from "@/contexts/ProjectsContext";
+import { groupProjectTrips } from "@/lib/projectTrips";
 import { calculateTripEmissions } from "@/lib/emissions";
 import { buildTripDuplicateKey } from "@/lib/trip-warnings";
 import { parseLocaleNumber } from "@/lib/number";
@@ -50,6 +51,7 @@ interface ProjectDocument {
 }
 
 interface ProjectDetailModalProps {
+  selectedYear?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   project: {
@@ -63,11 +65,11 @@ interface ProjectDetailModalProps {
   } | null;
 }
 
-export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetailModalProps) {
+export function ProjectDetailModal({ open, onOpenChange, project, selectedYear = "all" }: ProjectDetailModalProps) {
   const { t, tf, locale } = useI18n();
   const { profile } = useUserProfile();
   const { trips, addTrip, updateTrip } = useTrips();
-  const { refreshProjects } = useProjects();
+  const { projects, refreshProjects } = useProjects();
   const { getAccessToken } = useAuth();
   const [realCallSheets, setRealCallSheets] = useState<ProjectDocument[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -217,21 +219,19 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
     (trip: { distance: number; fuelLiters?: number | null; evKwhUsed?: number | null }) =>
       calculateTripEmissions({
         distanceKm: trip.distance,
-        fuelLiters: trip.fuelLiters,
-        evKwhUsed: trip.evKwhUsed,
         ...emissionsInput,
       }).co2Kg,
     [emissionsInput],
   );
 
-  const realProjectCo2 = useMemo(() => {
-    if (!project) return 0;
-    const projectTrips = trips.filter(t => 
-      t.projectId === project.id || 
-      (!t.projectId && t.project === project.name)
-    );
-    return projectTrips.reduce((acc, t) => acc + calculateCO2(t), 0);
-  }, [project, trips, calculateCO2]);
+  const projectTrips = useMemo(
+    () => project ? groupProjectTrips(trips, projects, selectedYear).get(project.id) ?? [] : [],
+    [project, projects, trips, selectedYear],
+  );
+  const realProjectCo2 = useMemo(
+    () => projectTrips.reduce((acc, trip) => acc + calculateCO2(trip), 0),
+    [projectTrips, calculateCO2],
+  );
 
   const hasTripForJob = useCallback(
     (jobId: string | undefined, storagePath: string | undefined) => {
@@ -1411,11 +1411,11 @@ export function ProjectDetailModal({ open, onOpenChange, project }: ProjectDetai
             </div>
 </TabsContent>
             <TabsContent value="trips" className="mt-0 space-y-3">
-              {trips.filter(trip => trip.projectId === project.id || (!trip.projectId && trip.project === project.name)).map(trip => <div key={trip.id} className="space-y-2 rounded-xl border border-border p-4">
+              {projectTrips.map(trip => <div key={trip.id} className="space-y-2 rounded-xl border border-border p-4">
                 <div className="flex items-center justify-between gap-3 text-sm font-medium"><span>{trip.date}</span><span>{trip.distance} km</span></div>
                 <ol className="space-y-1 text-sm text-muted-foreground">{trip.route.map((stop, index) => <li key={index} className="flex gap-2"><span className="text-primary">{index + 1}.</span><span>{stop}</span></li>)}</ol>
               </div>)}
-              {!trips.some(trip => trip.projectId === project.id || (!trip.projectId && trip.project === project.name)) && <p className="py-8 text-center text-sm text-muted-foreground">{t("modal.noTrips")}</p>}
+              {projectTrips.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">{t("modal.noTrips")}</p>}
             </TabsContent>
             <TabsContent value="expenses" className="mt-0"><ProjectExpenseSection projectId={project.id} /></TabsContent>
             <TabsContent value="summary" className="mt-0 py-3">            {/* Stats Grid */}

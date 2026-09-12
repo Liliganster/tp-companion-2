@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 
@@ -31,7 +31,8 @@ const mocks = vi.hoisted(() => {
 
   const removeChannel = vi.fn();
 
-  return { insert, orderTrips, updateEq, from, channel, removeChannel };
+  const profile = { fuelType: "unknown", fuelLPer100Km: "", evKwhPer100Km: "", gridKgCo2PerKwh: "" };
+  return { insert, orderTrips, updateEq, from, channel, removeChannel, profile };
 });
 
 vi.mock("@/lib/supabaseClient", () => ({
@@ -61,12 +62,7 @@ vi.mock("./PlanContext", () => ({
 
 vi.mock("@/contexts/UserProfileContext", () => ({
   useUserProfile: () => ({
-    profile: {
-      fuelType: "unknown",
-      fuelLPer100Km: "",
-      evKwhPer100Km: "",
-      gridKgCo2PerKwh: "",
-    },
+    profile: mocks.profile,
   }),
 }));
 
@@ -156,4 +152,27 @@ it('persists user-edited route/date/distance and exposes the same values to tabl
   expect(dbPatch).toMatchObject({trip_date:patch.date,distance_km:25,route:patch.route});
 
   await waitFor(()=>expect(out.current!.trips[0]).toMatchObject(patch));
+});
+
+it('uses configured consumption consistently on load, edit, storage sync and vehicle change',async()=>{
+  mocks.profile.fuelType='gasoline'; mocks.profile.fuelLPer100Km='7';
+  mocks.from.mockClear(); localStorage.clear();
+  mocks.orderTrips.mockImplementation(()=>({data:[{id:'trip-co2',trip_date:'2025-01-01',route:['A','B'],distance_km:100,co2_kg:2,passengers:0,purpose:'Film',fuel_liters:50,ev_kwh_used:120,projects:null}],error:null}));
+  const out: {current:ReturnType<typeof useTrips>|null}={current:null};
+  const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
+  const tree=()=> <QueryClientProvider client={client}><TripsProvider><CaptureTrips out={out}/></TripsProvider></QueryClientProvider>;
+  const rendered=render(tree());
+  const writes=()=>mocks.from.mock.results.flatMap(r=>r.value.update.mock.calls.map((call:any[])=>call[0]));
+  await waitFor(()=>expect(out.current?.trips[0]?.co2).toBeCloseTo(16.17));
+  await waitFor(()=>expect(writes().some(p=>Math.abs(p.co2_kg-16.17)<1e-9)).toBe(true));
+  // Old per-trip liters cannot affect reports consuming context values.
+  await act(async()=>{expect(await out.current!.updateTrip('trip-co2',{distance:200})).toBe(true)});
+  await waitFor(()=>expect(out.current?.trips[0]?.co2).toBeCloseTo(32.34));
+  expect(writes().find(p=>p.distance_km===200)?.co2_kg).toBeCloseTo(32.34);
+  mocks.profile.fuelType='diesel'; mocks.profile.fuelLPer100Km='6';
+  rendered.rerender(tree());
+  await waitFor(()=>expect(out.current?.trips[0]?.co2).toBeCloseTo(32.16));
+  await waitFor(()=>expect(writes().some(p=>Math.abs(p.co2_kg-32.16)<1e-9)).toBe(true));
+  rendered.unmount(); client.clear();
+  mocks.profile.fuelType='unknown'; mocks.profile.fuelLPer100Km='';
 });

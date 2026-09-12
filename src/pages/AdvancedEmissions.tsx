@@ -51,7 +51,7 @@ import { useNavigate } from "react-router-dom";
 import { useI18n } from "@/hooks/use-i18n";
 import { useTrips } from "@/contexts/TripsContext";
 import { useProjects } from "@/contexts/ProjectsContext";
-import { calculateTreesNeeded, calculateTripEmissions } from "@/lib/emissions";
+import { calculateTreesNeeded, formatTreeEquivalent, calculateTripEmissions } from "@/lib/emissions";
 import { useEmissionsInput } from "@/hooks/use-emissions-input";
 
 type EmissionsResult = {
@@ -193,11 +193,6 @@ export default function AdvancedEmissions() {
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
 
   const { emissionsInput: baseEmissionsInput, isLoading: isLoadingEmissionsData } = useEmissionsInput();
-
-  const numberFormatter0 = useMemo(
-    () => new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }),
-    [locale],
-  );
 
   const kgFormatter = useMemo(
     () => new Intl.NumberFormat(locale, { minimumFractionDigits: 0, maximumFractionDigits: 1 }),
@@ -417,7 +412,7 @@ export default function AdvancedEmissions() {
     setTimeRange("all");
   };
 
-  const treeWord = computed.treesNeeded === 1
+  const treeWord = computed.treesNeeded > 0 && computed.treesNeeded < 1.5
     ? t("advancedEmissions.treeSingular")
     : t("advancedEmissions.treePlural");
 
@@ -602,7 +597,7 @@ export default function AdvancedEmissions() {
                     </p>
                     <div className="flex flex-col items-center leading-none">
                       <h2 className="text-6xl sm:text-7xl font-black tracking-tighter">
-                        {numberFormatter0.format(computed.treesNeeded)}
+                        {formatTreeEquivalent(computed.treesNeeded, locale)}
                       </h2>
                       <span className="text-base sm:text-lg text-muted-foreground font-light mt-2 tracking-widest uppercase">
                         {treeWord}

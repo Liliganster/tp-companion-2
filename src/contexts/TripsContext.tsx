@@ -133,7 +133,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         passengers: t.passengers || 0,
         invoice: t.invoice_number ?? undefined,
         distance: Number(t.distance_km) || 0,
-        co2: 0, // Will be recalculated using API data in the trips memo
+        co2: Number(t.co2_kg) || 0, // Stored estimate; the memo below applies current settings.
         ratePerKmOverride: t.rate_per_km_override,
         specialOrigin: t.special_origin ?? undefined,
         // Trip expenses
@@ -153,8 +153,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
   const trips: Trip[] = useMemo(() => {
     const base = (tripsQuery.data ?? []) as Trip[];
-    // Always recalculate CO2 using current API data (Climatiq/Electricity Maps)
-    // Never trust stored values - APIs dictate the calculation
+    // Use the currently configured vehicle consistently in every view.
     return base.map((t) => {
       const computed = calculateTripEmissions({
         distanceKm: t.distance,
@@ -169,14 +168,9 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
   const loading = tripsQuery.isLoading;
 
-  // Best-effort: keep DB values in sync with API-calculated emissions
-  const lastEmissionsSyncKeyRef = useRef<string | null>(null);
+  // Best-effort: keep stored estimates aligned after data loads or settings change.
   useEffect(() => {
     if (!user || !supabase) return;
-    const key = JSON.stringify(emissionsInput);
-    if (lastEmissionsSyncKeyRef.current === key) return;
-    lastEmissionsSyncKeyRef.current = key;
-
     const base = (tripsQuery.data ?? []) as Trip[];
     if (base.length === 0) return;
 
@@ -187,8 +181,8 @@ export function TripsProvider({ children }: { children: ReactNode }) {
           ...emissionsInput,
         }).co2Kg;
         const prev = Number(t.co2);
-        const prevValid = Number.isFinite(prev) && prev > 0;
-        if (!prevValid || Math.abs(prev - next) > 0.1) return { id: t.id, co2: next };
+        const prevValid = Number.isFinite(prev) && prev >= 0;
+        if (!prevValid || Math.abs(prev - next) > 1e-9) return { id: t.id, co2: next };
         return null;
       })
       .filter(Boolean) as Array<{ id: string; co2: number }>;
@@ -231,7 +225,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
                     project: t.projectId
                         ? t.project
                         : (next.documents ?? []).find((d) => d.kind === "client_meta")?.name || "Unknown",
-                    // Don't update co2 from DB - always recalculate using API data
+                    // Display CO2 from current vehicle settings, not realtime stored estimates.
                     distance: Number.isFinite(Number(next.distance_km)) ? Number(next.distance_km) : t.distance,
                   }
                 : t,
@@ -388,7 +382,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
     const nextPatch: Partial<Trip> = { ...safePatch };
 
-    // App rule: CO₂ depends only on distance + vehicle consumption settings + external factor.
+    // CO₂ depends only on distance, configured vehicle consumption and energy factor.
     // It must not depend on fuelAmount.
     if (safePatch.distance !== undefined) {
       const distanceKm = Number(safePatch.distance);
