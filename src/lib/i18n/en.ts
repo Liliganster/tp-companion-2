@@ -25,6 +25,7 @@ export const en: Record<I18nKey, string> = {
   "modal.batchReview": "Open a document to check its details and route.",
   "callsheetReview.deletePartial": "Deleted {deleted} items. {failed} could not be deleted and remain selected for retry.",
   "tripDetail.editInvalid": "Check the date, complete every address, and enter valid distances and amounts.",
+  "tripDetail.editInvalidDocument": "Check the date and keep at least one valid location. Complete or remove empty locations. Distance, passengers and expenses are optional; any values entered must be valid.",
   "callsheetReview.title": "Review",
   "callsheetReview.description": "Extracted data awaiting confirmation.",
   "callsheetReview.detectedDate": "Detected date",

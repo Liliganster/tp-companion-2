@@ -25,6 +25,7 @@ export const de: Record<I18nKey, string> = {
   "modal.batchReview": "Öffne ein Dokument, um Daten und Route zu prüfen.",
   "callsheetReview.deletePartial": "{deleted} Einträge gelöscht. {failed} konnten nicht gelöscht werden und bleiben für einen erneuten Versuch ausgewählt.",
   "tripDetail.editInvalid": "Prüfe das Datum, ergänze alle Adressen und gib gültige Entfernungen und Beträge ein.",
+  "tripDetail.editInvalidDocument": "Prüfe das Datum und behalte mindestens einen gültigen Drehort. Ergänze oder entferne leere Drehorte. Kilometer, Mitfahrer und Ausgaben sind optional; eingegebene Werte müssen gültig sein.",
   "callsheetReview.title": "Prüfen",
   "callsheetReview.description": "Extrahierte Daten zur Bestätigung.",
   "callsheetReview.detectedDate": "Erkanntes Datum",

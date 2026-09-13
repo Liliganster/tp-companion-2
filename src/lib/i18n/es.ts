@@ -24,6 +24,7 @@ export const es = {
   "modal.batchReview": "Abre un documento para comprobar sus datos y su ruta.",
   "callsheetReview.deletePartial": "Se eliminaron {deleted} elementos. No se pudieron eliminar {failed}; siguen seleccionados para reintentar.",
   "tripDetail.editInvalid": "Comprueba la fecha, completa todas las direcciones e introduce distancias e importes válidos.",
+  "tripDetail.editInvalidDocument": "Comprueba la fecha y conserva al menos una localización válida. Completa o elimina las localizaciones vacías. Los kilómetros, pasajeros y gastos son opcionales; si los introduces, deben ser válidos.",
   "callsheetReview.title": "Revisar",
   "callsheetReview.description": "Datos extraídos pendientes de confirmar.",
   "callsheetReview.detectedDate": "Fecha detectada",
