@@ -2,6 +2,9 @@ import type { I18nKey } from "./es";
 
 // Available immediately with the other UI dictionaries.
 export const de: Record<I18nKey, string> = {
+  "bulk.retryDocument": "Extraktion erneut versuchen",
+  "bulk.retryDocumentConfirm": "Extraktion von „{name}“ mit der bereits hochgeladenen Datei erneut starten? Eine erfolgreiche Extraktion wird auf dein Kontingent angerechnet.",
+  "bulk.keepOpenWhileProcessing": "Der Stapel wird noch verarbeitet. Lass dieses Fenster bis zum Abschluss geöffnet. Zum Stoppen wähle „Extraktion abbrechen“.",
   "bulk.deleteDocument": "Löschen",
   "bulk.deleteDocumentLabel": "Dokument {name} löschen",
   "bulk.deleteDocumentConfirm": "„{name}“ und die Originaldatei löschen? Dies kann nicht rückgängig gemacht werden.",

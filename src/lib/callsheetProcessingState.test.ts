@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { resolveCallsheetProcessingState } from './callsheetProcessingState';
 const job = { status: 'processing', processing_started_at: new Date(0).toISOString() };
-it.each(['created', 'queued'])('exposes abandoned %s jobs without automatically restarting AI', status => {
+it.each(['created'])('exposes abandoned %s jobs without automatically restarting AI', status => {
   const pending = { status, created_at: new Date(0).toISOString() };
   expect(resolveCallsheetProcessingState(pending, false, 180_000).status).toBe('failed');
   expect(resolveCallsheetProcessingState(pending, true, 180_000).status).toBe(status);
@@ -16,4 +16,9 @@ it('keeps a live request and a recently claimed job in progress', () => {
 it('accepts a late persisted success and preserves queued jobs', () => {
   expect(resolveCallsheetProcessingState({ ...job, status: 'done' }, false, 120_000).status).toBe('done');
   expect(resolveCallsheetProcessingState({ ...job, status: 'queued' }, false, 120_000).status).toBe('queued');
+});
+
+it('does not turn queued documents into failures while earlier documents run', () => {
+  const queued = { status: 'queued', created_at: new Date(0).toISOString() };
+  expect(resolveCallsheetProcessingState(queued, false, 1_800_000)).toBe(queued);
 });

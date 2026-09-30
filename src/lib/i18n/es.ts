@@ -1,6 +1,9 @@
 // Idioma base de Fahrtenbuch Pro. Las claves tipadas (I18nKey) derivan de este objeto.
 // ES se queda: es el idioma de la propietaria (decisión registrada en PLAN.md).
 export const es = {
+  "bulk.retryDocument": "Reintentar extracción",
+  "bulk.retryDocumentConfirm": "¿Reintentar la extracción de «{name}» usando el archivo ya subido? Si termina correctamente, consumirá una extracción de tu cuota.",
+  "bulk.keepOpenWhileProcessing": "El lote sigue procesándose. Mantén esta ventana abierta hasta que termine. Para detenerlo, usa «Cancelar extracción».",
   "bulk.deleteDocument": "Eliminar",
   "bulk.deleteDocumentLabel": "Eliminar documento {name}",
   "bulk.deleteDocumentConfirm": "¿Eliminar \"{name}\" y su archivo original? Esta acción no se puede deshacer.",

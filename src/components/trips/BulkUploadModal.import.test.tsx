@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, cleanup, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-const mocks = vi.hoisted(() => ({ save: vi.fn(), fetch: vi.fn(), error: vi.fn(), optimize: vi.fn(), tables: [] as any[], jobs: [] as any[], locations: [] as any[], result: null as any, t: (s: string) => s, tf: vi.fn((s: string) => s) }));
+const mocks = vi.hoisted(() => ({ info: vi.fn(), confirm: vi.fn(), save: vi.fn(), fetch: vi.fn(), error: vi.fn(), optimize: vi.fn(), tables: [] as any[], jobs: [] as any[], locations: [] as any[], result: null as any, t: (s: string) => s, tf: vi.fn((s: string) => s) }));
 vi.mock('@/lib/callsheetOptimization', () => ({ optimizeCallsheetLocationsAndDistance: mocks.optimize }));
 vi.mock('@/hooks/use-i18n', () => ({ useI18n: () => ({ t: mocks.t, tf: mocks.tf, locale: 'es' }) }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ getAccessToken: async () => 'test' }) }));
@@ -21,7 +21,7 @@ vi.mock('@/lib/supabaseClient', () => ({ supabase: {
     }; return q;
   },
 } }));
-vi.mock('sonner', () => ({ toast: { error: mocks.error, success: () => {}, info: () => {}, warning: () => {} } }));
+vi.mock('sonner', () => ({ toast: { error: mocks.error, success: () => {}, info: mocks.info, warning: () => {} } }));
 import { BulkUploadModal } from './BulkUploadModal';
 const csv = 'date;projectName;origin;destination;km\n2026-09-09;Film;A;B;25';
 function file(name: string, text: string, type = 'text/csv') {
@@ -30,7 +30,7 @@ function file(name: string, text: string, type = 'text/csv') {
   return f;
 }
 function open() { return render(<MemoryRouter><BulkUploadModal defaultOpen trigger={<button>Open</button>} onSave={mocks.save} /></MemoryRouter>); }
-beforeEach(() => { cleanup(); mocks.jobs = []; mocks.tables = []; mocks.locations = []; mocks.result = null; vi.clearAllMocks(); mocks.save.mockResolvedValue(true); mocks.optimize.mockResolvedValue({ locations: ['Merged place'], distanceKm: 12 }); vi.stubGlobal('fetch', mocks.fetch); });
+beforeEach(() => { cleanup(); mocks.jobs = []; mocks.tables = []; mocks.locations = []; mocks.result = null; vi.clearAllMocks(); mocks.fetch.mockReset(); vi.stubGlobal("confirm", mocks.confirm); mocks.confirm.mockReturnValue(true); mocks.save.mockResolvedValue(true); mocks.optimize.mockResolvedValue({ locations: ['Merged place'], distanceKm: 12 }); vi.stubGlobal('fetch', mocks.fetch); });
 describe('bulk import user flow', () => {
   it.each(['needs_review', 'done'])('preserves row associations, edits and saved route when reopening %s', async status => {
     mocks.jobs = [{ id: 'job', status, storage_path: 'user/job/Original.pdf', created_at: new Date().toISOString() }];
@@ -125,5 +125,33 @@ it('reopens a four-document batch with both failed and cancelled originals, excl
   expect(await screen.findByText('Document-2.pdf')).toBeInTheDocument();
   expect(screen.queryByText('Document-0.pdf')).not.toBeInTheDocument();
   expect(screen.queryByText('Document-3.pdf')).not.toBeInTheDocument();
+  expect(mocks.fetch).not.toHaveBeenCalled();
+});
+
+it('keeps the modal and queue intact when Close is clicked during extraction', async () => {
+  mocks.jobs = [{ id: 'job', status: 'processing', storage_path: 'user/job/Active.pdf', created_at: new Date().toISOString(), processing_started_at: new Date().toISOString() }];
+  open(); await screen.findByText('Active.pdf');
+  fireEvent.click(screen.getAllByRole('button', { name: 'modal.close' })[0]);
+  expect(mocks.info).toHaveBeenCalledWith('bulk.keepOpenWhileProcessing');
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+  expect(screen.getByText('Active.pdf')).toBeInTheDocument();
+  expect(mocks.fetch).not.toHaveBeenCalled();
+});
+it.each(['failed', 'cancelled'])('retries a %s document only on explicit confirmation, using its existing id', async status => {
+  mocks.jobs = [{ id: 'job', status, storage_path: 'user/job/Original.pdf', created_at: new Date().toISOString() }];
+  mocks.fetch.mockResolvedValue(new Response('{}', { status: 200 }));
+  open(); await screen.findByText('Original.pdf');
+  expect(mocks.fetch).not.toHaveBeenCalled();
+  fireEvent.click(await screen.findByRole('button', { name: 'bulk.retryDocument' }));
+  await waitFor(() => expect(mocks.fetch).toHaveBeenCalledOnce());
+  expect(mocks.confirm).toHaveBeenCalledWith('bulk.retryDocumentConfirm');
+  expect(mocks.fetch.mock.calls[0][0]).toMatch(/^\/api\/callsheets\/process\?jobId=job&requestId=[a-f0-9-]+$/);
+  expect(mocks.fetch.mock.calls[0][1].method).toBe('POST');
+});
+it('does not retry when the user declines the new extraction', async () => {
+  mocks.jobs = [{ id: 'job', status: 'failed', storage_path: 'user/job/Original.pdf', created_at: new Date().toISOString() }];
+  mocks.confirm.mockReturnValue(false);
+  open(); await screen.findByText('Original.pdf');
+  fireEvent.click(await screen.findByRole('button', { name: 'bulk.retryDocument' }));
   expect(mocks.fetch).not.toHaveBeenCalled();
 });

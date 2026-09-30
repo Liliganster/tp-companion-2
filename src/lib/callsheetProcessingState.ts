@@ -1,7 +1,9 @@
 import { CALLSHEET_RECOVERY_TIMEOUT_MS } from './callsheetTiming';
 export const CALLSHEET_STALE_MS = CALLSHEET_RECOVERY_TIMEOUT_MS;
 export function resolveCallsheetProcessingState<T extends { status: string; created_at?: string | null; processing_started_at?: string | null; processed_at?: string | null; needs_review_reason?: string | null }>(job: T, requestActive: boolean, now = Date.now()): T {
-  if (!['created', 'queued', 'processing'].includes(job.status) || requestActive) return job;
+  // Waiting in a batch queue is not an extraction timeout. Only a claimed
+  // processing attempt (or an unfinished upload) has a recovery deadline.
+  if (!['created', 'processing'].includes(job.status) || requestActive) return job;
   const started = Date.parse(job.processing_started_at || job.processed_at || job.created_at || '');
   if (job.status !== 'processing' && !Number.isFinite(started)) return job;
   if (Number.isFinite(started) && now - started < CALLSHEET_STALE_MS) return job;

@@ -864,7 +864,8 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
   const triggerBulkProcessing = async (
     ids: string[],
     signal: AbortSignal | null | undefined,
-    reason: "initial_batch" | "queued_safety_net" | "stale_processing_retry",
+    reason: "initial_batch" | "queued_safety_net" | "stale_processing_retry" | "manual_retry",
+    requestIds: Record<string, string> = {},
   ) => {
     const targetIds = Array.from(new Set(ids.map((id) => String(id ?? "").trim()).filter(Boolean))).filter(
       (id) => !scheduledProcessJobIdsRef.current.has(id) && !savedByJobIdRef.current[id],
@@ -896,7 +897,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                 },
               }));
 
-              const response = await fetch(`/api/callsheets/process?jobId=${encodeURIComponent(jobId)}`, {
+              const response = await fetch(`/api/callsheets/process?jobId=${encodeURIComponent(jobId)}${requestIds[jobId] ? `&requestId=${encodeURIComponent(requestIds[jobId])}` : ""}`, {
                 method: "POST",
                 headers: {
                   Authorization: token ? `Bearer ${token}` : "",
@@ -973,6 +974,19 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
 
       await Promise.allSettled(workers);
     })();
+  };
+
+  const retryFailedJob = async (jobId: string) => {
+    if (!["failed", "cancelled"].includes(jobStateById[jobId]?.status ?? "") ||
+        savedByJobIdRef.current[jobId] || scheduledProcessJobIdsRef.current.has(jobId)) return;
+    if (!window.confirm(tf("bulk.retryDocumentConfirm", { name: jobMetaById[jobId]?.fileName ?? jobId }))) return;
+    failureToastShownRef.current.delete(jobId);
+    setJobStateById(prev => ({ ...prev, [jobId]: { status: "queued", needsReviewReason: null } }));
+    try {
+      await triggerBulkProcessing([jobId], aiAbortControllerRef.current?.signal, "manual_retry", { [jobId]: uuidv4() });
+    } catch {
+      setJobStateById(prev => ({ ...prev, [jobId]: { status: "failed", needsReviewReason: t("bulk.errorProcessOneDoc") } }));
+    }
   };
 
   const getQueuedJobsNeedingProcessing = (ids: string[]) => {
@@ -1191,33 +1205,14 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
-      const { jobsToCancel, shouldShowCancellationToast, shouldShowBackgroundToast } = getBulkCloseCancellation({
-        activeJobIds: activeJobIdsRef.current,
-        aiLoading,
-        aiStep,
-        jobIds,
-        jobStateById,
+      const { shouldBlockClose } = getBulkCloseCancellation({
+        activeJobIds: activeJobIdsRef.current, aiLoading, aiStep, jobIds, jobStateById,
       });
-
-      cancelRequestedRef.current = true;
-      aiAbortControllerRef.current?.abort();
-      aiAbortControllerRef.current = null;
-      scheduledProcessJobIdsRef.current.clear();
-      optimizeChainRef.current = Promise.resolve();
-      // Se interrumpen sin borrar los jobs que aún no consumen IA (created/queued).
-      // Los processing/done siguen en el servidor y se recuperan al reabrir.
-      void cancelCallsheetJobs(jobsToCancel);
-      // Closing stops unstarted jobs but never deletes their records or files.
-
-      if (shouldShowBackgroundToast) {
-        setTimeout(() => {
-          toast.info(t("bulk.toastBackgroundProcessing"));
-        }, 50);
-      } else if (shouldShowCancellationToast) {
-        setTimeout(() => {
-          toast.info(t("bulk.toastProcessingCancelled"));
-        }, 50);
+      if (shouldBlockClose || scheduledProcessJobIdsRef.current.size > 0) {
+        toast.info(t("bulk.keepOpenWhileProcessing"));
+        return;
       }
+
     }
 
     setOpen(nextOpen);
@@ -1985,6 +1980,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                         : t("bulk.aiProcessingHint")}
                     </p>
                   </div>
+                  <p className="text-xs text-muted-foreground">{t("bulk.keepOpenWhileProcessing")}</p>
                   {jobStats.total > 0 && (
                     <div className="mx-auto h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-secondary/60">
                       <div
@@ -2220,6 +2216,11 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                           </div>
                         )}
 
+                        {["failed", "cancelled"].includes(job.status) && !job.saved && (
+                          <Button type="button" variant="outline" onClick={() => void retryFailedJob(job.id)}>
+                            {t("bulk.retryDocument")}
+                          </Button>
+                        )}
                         {job.status === "needs_review" && !review && <p className="text-sm text-muted-foreground">{job.reason || t("bulk.loadingResults")}</p>}
                         {showDoneNoReview && (
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -2285,9 +2286,10 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                     {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                     {t("bulk.aiProcess")}
                   </Button></> : aiStep === "review" ?                   <div className="flex gap-2 shrink-0">
-                    <Button variant="ghost" type="button" onClick={resetAiState}>
+                    <Button variant="ghost" type="button" disabled={aiLoading || jobStats.pending > 0} onClick={resetAiState}>
                       {t("bulk.back")}
                     </Button>
+                    {jobStats.pending > 0 && <Button variant="outline" type="button" onClick={() => void cancelActiveExtraction()}>{t("bulk.aiCancelExtraction")}</Button>}
                     <Button
                       type="button"
                       className="gap-2"
@@ -2297,7 +2299,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                       <Save className="w-4 h-4" />
                       {t("bulk.saveAll")}
                     </Button>
-                  </div> : <Button variant="outline" onClick={() => handleOpenChange(false)}>{t("bulk.cancel")}</Button>}
+                  </div> : <Button variant="outline" onClick={() => handleOpenChange(false)}>{t("modal.close")}</Button>}
         </div>
       </DialogContent>
     </Dialog>

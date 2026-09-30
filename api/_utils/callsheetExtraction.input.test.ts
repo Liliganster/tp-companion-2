@@ -39,7 +39,7 @@ it('sends pasted messages through the text provider with the full source', async
   const buffer = new TextEncoder().encode('Rodaje 09.09.2026 - MOTIV: Wien, Austria');
   mocks.download.mockResolvedValue({ data: { size: buffer.byteLength, arrayBuffer: async () => buffer.buffer } });
   await expect(run('mensaje.txt')).rejects.toThrow('MOCK_PROVIDER_REACHED');
-  expect(mocks.text).toHaveBeenCalledWith('gemini-2.5-flash', expect.stringContaining('MOTIV: Wien, Austria'), expect.any(Object), undefined, expect.objectContaining({ timeoutMs: 100_000, maxOutputTokens: 8192, allowSchemaRetry: false }));
+  expect(mocks.text).toHaveBeenCalledWith('gemini-2.5-flash', expect.stringContaining('MOTIV: Wien, Austria'), expect.any(Object), undefined, expect.objectContaining({ timeoutMs: 100_000, maxOutputTokens: 16384, allowSchemaRetry: false }));
   expect(mocks.binary).not.toHaveBeenCalled();
 });
 it('does not reject a PDF at the old 15 MB threshold or at exactly 50 MB', async () => {
@@ -230,7 +230,7 @@ it('uses the persisted trigger-adjusted state and records request diagnostics al
  const result=await extractMockLocations([{label:'SET',address:'Main Road 1',normalizedAddress:'Main Road 1',role:'filming'}],'SET Main Road 1');
  expect(result).toMatchObject({ok:true,status:'needs_review',reviewReason:'Project does not match'});
  const stored=mocks.insert.mock.calls.find(([table])=>table==='callsheet_results')?.[1] as any;
- expect(stored.model_output._diagnostics).toMatchObject({profile:'callsheet-2026-09-11-v6-visual-roles',inputMode:'text',limits:{allowSchemaRetry:false,maxOutputTokens:8192}});
+ expect(stored.model_output._diagnostics).toMatchObject({profile:'callsheet-2026-10-01-v7-output-budget',inputMode:'text',limits:{allowSchemaRetry:false,maxOutputTokens:16384}});
  expect(stored.model_output._diagnostics.fileHash).toMatch(/^[a-f0-9]{64}$/);
 });
 it('rejects even syntactically valid but truncated provider output before atomic saving',async()=>{

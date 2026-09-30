@@ -31,7 +31,7 @@ it('serializes bounded callsheet generation and reports actual provider usage',a
  const {extractionSchema}=await import('./schema');
  const fetch=vi.fn(async(_url,init)=>{
   const body=JSON.parse(init.body);
-  expect(body.generationConfig).toMatchObject({maxOutputTokens:8192,thinkingConfig:{thinkingBudget:1024}});
+  expect(body.generationConfig).toMatchObject({maxOutputTokens:16384,thinkingConfig:{thinkingBudget:1024}});
   expect(body.contents[0].parts[0].inlineData.data).toBe(Buffer.from('%PDF offline full document').toString('base64'));
   return new Response(JSON.stringify({candidates:[{finishReason:'STOP',content:{role:'model',parts:[{text:'{}'}]}}],usageMetadata:{promptTokenCount:2000,candidatesTokenCount:100,thoughtsTokenCount:200,totalTokenCount:2300}}),{status:200});
  });
@@ -44,7 +44,7 @@ it.each([400,401,422,429,500])('does not repeat a callsheet request after OpenRo
  const {generateContent}=await import('./geminiClient');
  const {CALLSHEET_GENERATION_OPTIONS}=await import('./callsheetProfile');
  const fetch=vi.fn(async(_url,init)=>{
-  expect(JSON.parse(init.body).max_tokens).toBe(8192);
+  expect(JSON.parse(init.body).max_tokens).toBe(16384);
   return new Response('provider rejected request',{status});
  });vi.stubGlobal('fetch',fetch);
  await expect(generateContent('mock','offline',{type:'object',properties:{}},{openrouterEnabled:true,openrouterApiKey:'offline-only'},CALLSHEET_GENERATION_OPTIONS)).rejects.toThrow('OpenRouter API error');

@@ -44,7 +44,7 @@ it.each([{ linked: true }, { status: 'processing' }, { status: 'created' }, { st
   await expect(deleteReviewCallsheet(mocks.supabase, 'job')).rejects.toThrow();
   expect(mocks.remove).not.toHaveBeenCalled(); expect(mocks.deleteJob).not.toHaveBeenCalled();
 });
-it.each(['created', 'queued', 'processing'])('allows deleting an expired %s job that the Trips table displays as failed', async status => {
+it.each(['created', 'processing'])('allows deleting an expired %s job that the Trips table displays as failed', async status => {
   const mocks = client({ status, stale: true });
   await deleteReviewCallsheet(mocks.supabase, 'job');
   expect(mocks.cancel).toHaveBeenCalledWith({ status: 'cancelled' });
@@ -75,4 +75,10 @@ it('routes a mixed selection correctly, deduplicates ids and retains only failed
   expect(deleteTrip).toHaveBeenCalledExactlyOnceWith('trip');
   expect(deleteReview.mock.calls).toEqual([['review'], ['failed']]);
   expect(result).toEqual({ deleted: ['trip', 'review'], failed: ['failed'] });
+});
+
+it('does not delete an old document that is still waiting in the batch queue', async () => {
+  const mocks = client({ status: 'queued', stale: true });
+  await expect(deleteReviewCallsheet(mocks.supabase, 'job')).rejects.toThrow('review_status_changed');
+  expect(mocks.remove).not.toHaveBeenCalled();
 });

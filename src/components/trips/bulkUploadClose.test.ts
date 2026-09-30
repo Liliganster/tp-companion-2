@@ -1,79 +1,16 @@
-import { describe, expect, it } from "vitest";
-
-import { getBulkCloseCancellation } from "./bulkUploadClose";
-
-describe("getBulkCloseCancellation", () => {
-  it("keeps processing/done jobs alive on close and only cancels queued work", () => {
-    const result = getBulkCloseCancellation({
-      activeJobIds: ["job-1", "job-2"],
-      aiLoading: false,
-      aiStep: "processing",
-      jobIds: ["job-1", "job-3"],
-      jobStateById: {
-        "job-1": { status: "done" },
-        "job-2": { status: "queued" },
-        "job-3": { status: "processing" },
-      },
-    });
-
-    // queued se cancela; processing y done sobreviven (se recuperan al reabrir).
-    expect(result.jobsToCancel).toEqual(["job-2"]);
-    expect(result.backgroundJobIds).toEqual(["job-1", "job-3"]);
-    expect(result.shouldShowBackgroundToast).toBe(true);
-  });
-
-  it("preserves failed jobs for manual review when closing", () => {
-    const result = getBulkCloseCancellation({
-      activeJobIds: ["job-1", "job-2"],
-      aiLoading: false,
-      aiStep: "review",
-      jobIds: ["job-1", "job-3", "job-4"],
-      jobStateById: {
-        "job-1": { status: "done" },
-        "job-2": { status: "queued" },
-        "job-3": { status: "processing" },
-        "job-4": { status: "failed" },
-      },
-    });
-
-    expect(result.jobsToCancel).toEqual(["job-2"]);
-    // processing sigue vivo también al cerrar desde revisión.
-    expect(result.backgroundJobIds).toEqual(["job-3"]);
-    expect(result.shouldShowCancellationToast).toBe(true);
-  });
-
-  it("cancels unknown-status jobs only while an upload is still in flight", () => {
-    const uploading = getBulkCloseCancellation({
-      activeJobIds: ["job-1"],
-      aiLoading: true,
-      aiStep: "upload",
-      jobIds: [],
-      jobStateById: {},
-    });
-    expect(uploading.jobsToCancel).toEqual(["job-1"]);
-
-    const idleUnknown = getBulkCloseCancellation({
-      activeJobIds: ["job-1"],
-      aiLoading: false,
-      aiStep: "review",
-      jobIds: [],
-      jobStateById: {},
-    });
-    expect(idleUnknown.jobsToCancel).toEqual([]);
-  });
-
-  it("does not request any toast when the modal closes idle", () => {
-    const result = getBulkCloseCancellation({
-      activeJobIds: [],
-      aiLoading: false,
-      aiStep: "upload",
-      jobIds: [],
-      jobStateById: {},
-    });
-
-    expect(result.jobsToCancel).toEqual([]);
-    expect(result.backgroundJobIds).toEqual([]);
-    expect(result.shouldShowCancellationToast).toBe(false);
-    expect(result.shouldShowBackgroundToast).toBe(false);
-  });
+import { expect, it } from 'vitest';
+import { getBulkCloseCancellation } from './bulkUploadClose';
+const base = { activeJobIds: [], aiLoading: false, aiStep: 'review' as const, jobIds: [], jobStateById: {} };
+it.each(['created', 'queued', 'processing'])('blocks closing with %s work rather than cancelling it', status => {
+  expect(getBulkCloseCancellation({ ...base, jobIds: ['pending'], jobStateById: { pending: { status } } })).toEqual({ shouldBlockClose: true });
 });
+it('keeps the batch open when some results are ready but later documents still wait', () => {
+  expect(getBulkCloseCancellation({ ...base, jobIds: ['ready', 'pending'], jobStateById: { ready: { status: 'done' }, pending: { status: 'queued' } } }).shouldBlockClose).toBe(true);
+});
+it('blocks closing while files are uploading before the job list is ready', () => {
+  expect(getBulkCloseCancellation({ ...base, aiLoading: true, activeJobIds: ['uploading'] }).shouldBlockClose).toBe(true);
+});
+it.each(['done', 'needs_review', 'failed', 'out_of_quota', 'cancelled'])('allows closing after %s', status => {
+  expect(getBulkCloseCancellation({ ...base, jobIds: ['done'], jobStateById: { done: { status } } }).shouldBlockClose).toBe(false);
+});
+it('allows closing an idle dialog', () => { expect(getBulkCloseCancellation(base).shouldBlockClose).toBe(false); });
