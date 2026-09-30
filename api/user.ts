@@ -154,17 +154,22 @@ async function handleSubscription(req: VercelRequest, res: VercelResponse) {
       const entitlement = await getBillingEntitlement(user.id);
       const tier = entitlement.planTier;
       const baseLimits = PLAN_LIMITS[tier] || PLAN_LIMITS.basic;
-      const quota = await getCallsheetQuotaPolicy(user.id, entitlement);
+      let quota: Awaited<ReturnType<typeof getCallsheetQuotaPolicy>> | undefined;
+      try { quota = await getCallsheetQuotaPolicy(user.id, entitlement); }
+      catch (error) { console.error("[subscription] quota unavailable; preserving billing entitlement", error); }
+      const billingInterval = entitlement.billingInterval
+        ?? (entitlement.priceId && entitlement.priceId === process.env.STRIPE_PRICE_PRO_ANNUAL?.trim() ? "annual" : null);
       return sendJson(res, 200, {
         tier,
         status: entitlement.status ?? (tier === "pro" ? "active" : "free"),
         limits: baseLimits,
         aiQuota: quota,
-        billingInterval: entitlement.billingInterval,
+        billingInterval,
+        quotaUnavailable: !quota,
         startedAt: entitlement.currentPeriodStart ?? null,
         expiresAt: entitlement.currentPeriodEnd,
         cancelAtPeriodEnd: entitlement.cancelAtPeriodEnd,
-        priceCents: tier === "pro" ? (quota.period === "annual" ? 4999 : 899) : 0,
+        priceCents: tier === "pro" ? ((quota?.period ?? billingInterval) === "annual" ? 4999 : 899) : 0,
         currency: "EUR",
       });
     }

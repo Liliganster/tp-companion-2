@@ -1,6 +1,9 @@
 // Idioma base de Fahrtenbuch Pro. Las claves tipadas (I18nKey) derivan de este objeto.
 // ES se queda: es el idioma de la propietaria (decisión registrada en PLAN.md).
 export const es = {
+  "plans.checking": "Comprobando suscripción…",
+  "plans.unavailable": "No se ha podido comprobar tu suscripción. Vuelve a intentarlo; no necesitas comprar otro plan.",
+  "plans.statusUnavailable": "Suscripción sin verificar",
   "ui.csvRows": "CSV: incluye cabeceras y al menos una fila.",
   "ui.batchMax": "Máximo {count} documentos por vez",
   "ui.uploaded": "Se subieron {count} documentos",

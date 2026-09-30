@@ -20,7 +20,7 @@ export function Sidebar({
   const { profile } = useUserProfile();
   const { signOut } = useAuth();
   const { t } = useI18n();
-  const { planTier } = usePlan();
+  const { planTier, isLoading, subscriptionError, hasConfirmedSubscription } = usePlan();
   const profileInitial = getProfileInitial(profile.fullName);
   const logoSrc = "/Pro%20(23%20x%204.9%20cm)%20(2).png";
   const collapsedLogoSrc = "/Pro%20(1).png";
@@ -131,10 +131,10 @@ export function Sidebar({
             {!collapsed && (
               <div className="flex min-w-0 flex-col overflow-hidden">
                 <span className="text-sm font-semibold text-foreground whitespace-nowrap truncate">
-                  {planTier === "pro" ? "Pro Plan" : t("plans.sidebar.free")}
+                  {!hasConfirmedSubscription && (isLoading || subscriptionError) ? t(subscriptionError ? "plans.statusUnavailable" : "plans.checking") : planTier === "pro" ? t("plans.pro.name") : t("plans.sidebar.free")}
                 </span>
                 <span className="text-xs text-muted-foreground whitespace-nowrap truncate">
-                  {planTier === "pro" ? t("plans.sidebar.manage") : t("plans.sidebar.upgrade")}
+                  {subscriptionError ? t("ui.retry") : isLoading && !hasConfirmedSubscription ? t("nav.plans") : planTier === "pro" ? t("plans.sidebar.manage") : t("plans.sidebar.upgrade")}
                 </span>
               </div>
             )}

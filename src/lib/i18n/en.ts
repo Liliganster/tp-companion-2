@@ -2,6 +2,9 @@ import type { I18nKey } from "./es";
 
 // Available immediately with the other UI dictionaries.
 export const en: Record<I18nKey, string> = {
+  "plans.checking": "Checking subscription…",
+  "plans.unavailable": "Your subscription could not be checked. Try again; you do not need to buy another plan.",
+  "plans.statusUnavailable": "Subscription unverified",
   "ui.csvRows": "CSV: include column headers and at least one row.",
   "ui.batchMax": "Maximum {count} documents per batch",
   "ui.uploaded": "Uploaded {count} documents",

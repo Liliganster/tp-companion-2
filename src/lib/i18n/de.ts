@@ -2,6 +2,9 @@ import type { I18nKey } from "./es";
 
 // Available immediately with the other UI dictionaries.
 export const de: Record<I18nKey, string> = {
+  "plans.checking": "Abonnement wird geprüft…",
+  "plans.unavailable": "Dein Abonnement konnte nicht geprüft werden. Versuche es erneut; du musst keinen weiteren Tarif kaufen.",
+  "plans.statusUnavailable": "Abonnement nicht bestätigt",
   "ui.csvRows": "CSV: Spaltenüberschriften und mindestens eine Zeile sind erforderlich.",
   "ui.batchMax": "Maximal {count} Dokumente pro Stapel",
   "ui.uploaded": "{count} Dokumente hochgeladen",

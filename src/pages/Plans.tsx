@@ -10,7 +10,7 @@ import { useEffect, useState } from "react";
 
 export default function Plans() {
   const { t } = useI18n();
-  const { planTier, isLoading, refreshSubscription } = usePlan();
+  const { planTier, isLoading, subscriptionError, refreshSubscription } = usePlan();
   const { getAccessToken } = useAuth();
   const [upgrading, setUpgrading] = useState(false);
   // Anual preseleccionado (estrategia 2026-07-11): el uso es estacional/por
@@ -96,6 +96,10 @@ export default function Plans() {
 
   return (
     <MainLayout backgroundVariant="plans">
+      {subscriptionError && <div role="alert" className="mx-auto max-w-6xl px-4 pt-6">
+        <p>{t("plans.unavailable")}</p>
+        <Button variant="outline" disabled={isLoading} onClick={() => void refreshSubscription()}>{t("ui.retry")}</Button>
+      </div>}
       {/* Altura estándar de página (sin centrado vertical ni translate: el
           título quedaba pegado al borde superior) */}
       <div className="mx-auto max-w-6xl px-4 py-8 lg:px-8">
@@ -173,10 +177,12 @@ export default function Plans() {
             <Button
               variant="outline"
               className="w-full py-5 border-zinc-700/80 bg-zinc-950/20 hover:bg-zinc-800/60 text-sm disabled:opacity-100 disabled:bg-zinc-950/30 disabled:border-zinc-800/80 disabled:text-zinc-500"
-              disabled={planTier === "basic" || upgrading || isLoading}
+              disabled={planTier === "basic" || upgrading || isLoading || subscriptionError}
               onClick={handleStripePortal}
             >
-              {upgrading ? (
+              {isLoading || subscriptionError ? (
+                t(subscriptionError ? "plans.statusUnavailable" : "plans.checking")
+              ) : upgrading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : planTier === "basic" ? (
                 t("plans.currentPlan")
@@ -225,10 +231,12 @@ export default function Plans() {
 
             <Button
               className="w-full font-medium py-5 text-sm"
-              disabled={upgrading || isLoading}
+              disabled={upgrading || isLoading || subscriptionError}
               onClick={planTier === "pro" ? handleStripePortal : handleStripeCheckout}
             >
-              {upgrading ? (
+              {isLoading || subscriptionError ? (
+                t(subscriptionError ? "plans.statusUnavailable" : "plans.checking")
+              ) : upgrading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : planTier === "pro" ? (
                 t("plans.sidebar.manage")

@@ -21,8 +21,7 @@ function normalizePlanTier(value: unknown): PlanTier {
 
 function isMissingEntitlementsTable(error: any): boolean {
   const code = String(error?.code ?? "");
-  const message = String(error?.message ?? "").toLowerCase();
-  return code === "42P01" || code === "PGRST205" || message.includes("billing_entitlements");
+  return code === "42P01" || code === "PGRST205";
 }
 
 function fromRow(userId: string, row: any): BillingEntitlement {
@@ -41,28 +40,32 @@ function fromRow(userId: string, row: any): BillingEntitlement {
   };
 }
 
+const BILLING_COLUMNS = "plan_tier, stripe_customer_id, stripe_subscription_id, stripe_subscription_status, stripe_price_id, stripe_current_period_end, stripe_cancel_at_period_end, stripe_event_created_at";
+
 export async function getBillingEntitlement(userId: string): Promise<BillingEntitlement> {
-  const { data, error } = await supabaseAdmin
-    .from("billing_entitlements")
-    .select("plan_tier, stripe_customer_id, stripe_subscription_id, stripe_subscription_status, stripe_price_id, stripe_current_period_end, stripe_cancel_at_period_end, stripe_event_created_at, stripe_current_period_start, stripe_billing_interval")
-    .eq("user_id", userId)
-    .maybeSingle();
+  let result = await supabaseAdmin.from("billing_entitlements")
+    .select(BILLING_COLUMNS + ", stripe_current_period_start, stripe_billing_interval")
+    .eq("user_id", userId).maybeSingle();
 
-  if (!error && data) return fromRow(userId, data);
-
-  // Compatibilidad durante el despliegue: antes de aplicar la migración, la
-  // tabla legacy sigue protegida por el trigger de billing.
-  if (error && !isMissingEntitlementsTable(error)) {
-    console.error("[entitlements] secure table lookup failed; failing closed to basic", error.message);
-    return fromRow(userId, { plan_tier: "basic" });
+  // A rolling deployment may precede the additive annual-quota migration.
+  // Read the same protected table without its new optional fields in that case.
+  const code = String(result.error?.code ?? "");
+  const message = String(result.error?.message ?? "");
+  if (["42703", "PGRST204"].includes(code)
+      && /stripe_current_period_start|stripe_billing_interval/.test(message)) {
+    result = await supabaseAdmin.from("billing_entitlements")
+      .select(BILLING_COLUMNS).eq("user_id", userId).maybeSingle();
   }
+  if (!result.error && result.data) return fromRow(userId, result.data);
+  // An unavailable database is not evidence of a Free subscription. Callers
+  // must return an unavailable state and keep paid actions blocked.
+  if (result.error && !isMissingEntitlementsTable(result.error)) throw result.error;
 
-  const { data: legacy } = await supabaseAdmin
-    .from("user_profiles")
+  const legacy = await supabaseAdmin.from("user_profiles")
     .select("plan_tier, stripe_customer_id, stripe_subscription_id, stripe_subscription_status, stripe_price_id, stripe_current_period_end, stripe_cancel_at_period_end")
-    .eq("id", userId)
-    .maybeSingle();
-  return fromRow(userId, legacy ?? { plan_tier: "basic" });
+    .eq("id", userId).maybeSingle();
+  if (legacy.error) throw legacy.error;
+  return fromRow(userId, legacy.data ?? { plan_tier: "basic" });
 }
 
 export async function getServerPlanTier(userId: string): Promise<PlanTier> {
