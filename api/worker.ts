@@ -1,3 +1,5 @@
+import { waitUntil } from "@vercel/functions";
+import { dispatchCallsheetWorker } from "./_utils/callsheetDispatch.js";
 import { supabaseAdmin } from "../src/lib/supabaseServer.js";
 import { captureServerException, withApiObservability } from "./_utils/observability.js";
 import { enforceRateLimit } from "./_utils/rateLimit.js";
@@ -26,11 +28,10 @@ export default withApiObservability(async function handler(req: any, res: any, {
   const manual = String(req.query?.manual ?? "").trim() === "1";
   const skipGeocode = manual && String(req.query?.skipGeocode ?? "").trim() === "1";
   const manualJobId = manual && typeof req.query?.jobId === "string" ? String(req.query.jobId).trim() : null;
-  // preClaimed=1: trigger-worker already set this job to "processing"; skip the atomic claim step.
-  const preClaimed = manual && manualJobId != null && String(req.query?.preClaimed ?? "").trim() === "1";
+  const newRequestId = manual && typeof req.query?.requestId === "string" ? req.query.requestId : undefined;
   const maxJobs = getCallsheetWorkerFetchLimit({ manual, manualJobId });
   const manualUserId = manual && typeof req.query?.userId === "string" ? String(req.query.userId).trim() : null;
-  const runtimeWatchdog = startRuntimeWatchdog({
+  const createWatchdog = () => startRuntimeWatchdog({
     context: {
       manual,
       manualJobId,
@@ -87,14 +88,20 @@ export default withApiObservability(async function handler(req: any, res: any, {
   });
   if (!cronAllowed) return;
 
+  const background = String(req.query?.background ?? '') === '1';
+  const reply = background ? { status: (_code: number) => ({ json: (_body: unknown) => undefined }) } : res;
+  const run = async () => {
+  const runtimeWatchdog = createWatchdog();
   try {
     // A stale attempt may already have cost provider tokens: fail it, never regenerate.
     if (!manual || !manualJobId) {
       const stuckThreshold = new Date(Date.now() - CALLSHEET_RECOVERY_TIMEOUT_MS).toISOString();
-      const { error: staleError } = await supabaseAdmin.from('callsheet_jobs').update({
+      let staleQuery = supabaseAdmin.from('callsheet_jobs').update({
         status: 'failed', needs_review_reason: 'La extracción no terminó dentro del plazo. El original se conserva; no se reintentará automáticamente.',
         next_retry_at: null,
       }).eq('status', 'processing').lt('processing_started_at', stuckThreshold);
+      if (manualUserId) staleQuery = staleQuery.eq('user_id', manualUserId);
+      const { error: staleError } = await staleQuery;
       if (staleError) log.warn({ error: staleError }, 'callsheet_stale_recovery_failed');
     }
 
@@ -113,16 +120,14 @@ export default withApiObservability(async function handler(req: any, res: any, {
       if (jobError) throw jobError;
 
       if (!job) {
-        res.status(200).json({ message: "Job not found", processed: 0, details: [] });
+        reply.status(200).json({ message: "Job not found", processed: 0, details: [] });
         return;
       }
 
       const status = String((job as any)?.status ?? "");
-      // preClaimed: trigger-worker ya puso el job en "processing" antes de llamarnos;
-      // rechazarlo aquí dejaba el job atascado hasta el reintento de estancados.
-      const claimable = status === "queued" || status === "failed" || (preClaimed && status === "processing");
+      const claimable = status === "queued" || Boolean(newRequestId && ["failed", "cancelled", "done", "needs_review"].includes(status));
       if (!claimable) {
-        res.status(200).json({ message: `Job not claimable (status=${status})`, processed: 0, details: [] });
+        reply.status(200).json({ message: `Job not claimable (status=${status})`, processed: 0, details: [] });
         return;
       }
 
@@ -138,7 +143,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
     }
 
     if (jobs.length === 0) {
-      res.status(200).json({ message: "No jobs queued" });
+      reply.status(200).json({ message: "No jobs queued" });
       return;
     }
 
@@ -166,6 +171,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
     const limitedJobs = limitCallsheetJobsByPlan({ jobs, planTierByUserId });
 
     const processedResults: any[] = [];
+    let advancedCount = 0;
 
     async function processJob(job: any) {
       // Leave queued work for the next invocation with a full provider budget.
@@ -176,18 +182,25 @@ export default withApiObservability(async function handler(req: any, res: any, {
       let reservation: AiReservation | undefined;
       try {
         const userId = String(job.user_id ?? "").trim();
-        reservation = await reserveAiQuota(userId, jobId, planTierByUserId.get(userId));
+        reservation = await reserveAiQuota(userId, jobId, planTierByUserId.get(userId), newRequestId);
         if (reservation.completed) {
           processedResults.push({ id: jobId, status: "done", cached: true });
           return;
         }
         if (reservation.busy) return;
         if (!reservation.allowed) {
+          advancedCount += 1;
+          if (reservation.reason === "manual_retry_required") {
+            await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", needs_review_reason: "manual_retry_required" }).eq("id", jobId).eq("user_id", userId).in("status", ["queued", "processing"]);
+            processedResults.push({ id: jobId, status: "failed" });
+            return;
+          }
           await supabaseAdmin.from("callsheet_jobs").update({ status: "out_of_quota", needs_review_reason: (reservation.reason ?? "quota_exceeded") })
             .eq("id", jobId).eq("user_id", userId).in("status", ["queued", "failed", "processing"]);
           processedResults.push({ id: jobId, status: "out_of_quota", error: (reservation.reason ?? "quota_exceeded") });
           return;
         }
+        advancedCount += 1;
         const claimed = { user_id: userId, storage_path: reservation.storagePath, processed_at: new Date().toISOString() };
         log.info({ jobId, retryCount: currentRetry }, "callsheet_job_start");
 
@@ -305,7 +318,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
       }
     }
 
-    // Pro users can advance up to 5 jobs at once; Basic remains capped at 1 by plan slicing above.
+    // At most two provider calls per invocation; the database also bounds calls per account.
     await runWithConcurrencyLimit({
       items: limitedJobs,
       concurrency: CALLSHEET_PARALLEL_BATCH_SIZE,
@@ -314,98 +327,38 @@ export default withApiObservability(async function handler(req: any, res: any, {
       },
     });
 
-    // After processing this batch, check if there are still queued jobs.
-    // If so, self-trigger the worker so the next batch runs automatically.
-    // Manual single-job runs stay single-job; manual batch runs keep draining the same user's queue.
-    if (shouldSelfTriggerCallsheetBatch({ manual, manualJobId, manualUserId })) {
+    // Advance only after real progress. Failed documents never re-enter this queue.
+    // Each invocation has its own deadline; an empty/busy queue cannot spin forever.
+    if (advancedCount > 0 && shouldSelfTriggerCallsheetBatch({ manual, manualJobId, manualUserId })) {
       try {
-        let remainingQuery = supabaseAdmin
-          .from("callsheet_jobs")
-          .select("id", { head: true, count: "exact" })
-          .eq("status", "queued");
-        if (manual && manualUserId) {
-          remainingQuery = remainingQuery.eq("user_id", manualUserId);
+        let remaining = supabaseAdmin.from('callsheet_jobs').select('id', { head: true, count: 'exact' }).eq('status', 'queued');
+        if (manualUserId) remaining = remaining.eq('user_id', manualUserId);
+        const { count, error } = await remaining;
+        if (error) throw error;
+        if ((count ?? 0) > 0) {
+          const params = new URLSearchParams();
+          if (manualUserId) { params.set('manual', '1'); params.set('userId', manualUserId); }
+          if (skipGeocode) params.set('skipGeocode', '1');
+          await dispatchCallsheetWorker(params);
         }
-        const { count: remainingCount } = await remainingQuery;
-
-        if ((remainingCount ?? 0) > 0) {
-          const hostHeader = req.headers?.host;
-          if (hostHeader) {
-            const proto = hostHeader.includes("localhost") ? "http" : "https";
-            const cronSecret = process.env.CRON_SECRET;
-            const useInternalTriggerWorker = manual && Boolean(manualUserId);
-            const params = new URLSearchParams();
-            if (useInternalTriggerWorker && manualUserId) {
-              params.set("userId", manualUserId);
-            } else if (manual) {
-              params.set("manual", "1");
-              if (skipGeocode) params.set("skipGeocode", "1");
-              if (manualUserId) params.set("userId", manualUserId);
-            }
-            const selfUrl = useInternalTriggerWorker
-              ? `${proto}://${hostHeader}/api/callsheets/trigger-worker?${params.toString()}`
-              : params.size > 0
-                ? `${proto}://${hostHeader}/api/worker?${params.toString()}`
-                : `${proto}://${hostHeader}/api/worker`;
-            void fetch(selfUrl, {
-              method: "POST",
-              headers: { Authorization: cronSecret ? `Bearer ${cronSecret}` : "", "Content-Type": "application/json" },
-            })
-              .then(async (response) => {
-                if (response.ok) return;
-                const bodyPreview = (await response.text().catch(() => "")).slice(0, 300);
-                log.error(
-                  {
-                    remainingCount,
-                    manualBatch: manual,
-                    manualUserId,
-                    selfUrl,
-                    status: response.status,
-                    bodyPreview,
-                    via: useInternalTriggerWorker ? "callsheets_trigger_worker" : "worker",
-                  },
-                  "worker_self_trigger_non_ok",
-                );
-              })
-              .catch((err) =>
-                log.error(
-                  {
-                    err,
-                    remainingCount,
-                    manualBatch: manual,
-                    manualUserId,
-                    selfUrl,
-                    via: useInternalTriggerWorker ? "callsheets_trigger_worker" : "worker",
-                  },
-                  "worker_self_trigger_failed",
-                ),
-              );
-            log.info(
-              {
-                remainingCount,
-                manualBatch: manual,
-                manualUserId,
-                selfUrl,
-                via: useInternalTriggerWorker ? "callsheets_trigger_worker" : "worker",
-              },
-              "worker_self_triggered_for_next_batch",
-            );
-          }
-        }
-      } catch (err) {
-        log.warn({ err }, "worker_self_trigger_check_failed");
-      }
+      } catch (error) { log.error({ error }, 'worker_next_batch_not_started'); }
     }
 
-    res.status(200).json({ processed: processedResults.length, details: processedResults });
+    reply.status(200).json({ processed: processedResults.length, details: processedResults });
   } catch (err: any) {
     log.error({ err }, "worker_error");
     captureServerException(err, { requestId, kind: "callsheet_worker" });
-    res.status(500).json({ error: err.message });
+    reply.status(500).json({ error: err.message });
   } finally {
     const { context, elapsedMs, warningLogged } = runtimeWatchdog.cancel();
     if (warningLogged) {
       log.warn({ ...context, elapsedMs }, "worker_completed_after_timeout_warning");
     }
   }
+  };
+  if (background) {
+    waitUntil(run());
+    return res.status(202).json({ ok: true, accepted: true });
+  }
+  await run();
 }, { name: "worker" });

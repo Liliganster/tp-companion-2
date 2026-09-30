@@ -128,13 +128,12 @@ it('reopens a four-document batch with both failed and cancelled originals, excl
   expect(mocks.fetch).not.toHaveBeenCalled();
 });
 
-it('keeps the modal and queue intact when Close is clicked during extraction', async () => {
+it('closes the modal without cancelling server extraction', async () => {
   mocks.jobs = [{ id: 'job', status: 'processing', storage_path: 'user/job/Active.pdf', created_at: new Date().toISOString(), processing_started_at: new Date().toISOString() }];
   open(); await screen.findByText('Active.pdf');
   fireEvent.click(screen.getAllByRole('button', { name: 'modal.close' })[0]);
-  expect(mocks.info).toHaveBeenCalledWith('bulk.keepOpenWhileProcessing');
-  expect(screen.getByRole('dialog')).toBeInTheDocument();
-  expect(screen.getByText('Active.pdf')).toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(mocks.jobs[0].status).toBe('processing');
   expect(mocks.fetch).not.toHaveBeenCalled();
 });
 it.each(['failed', 'cancelled'])('retries a %s document only on explicit confirmation, using its existing id', async status => {
@@ -145,7 +144,7 @@ it.each(['failed', 'cancelled'])('retries a %s document only on explicit confirm
   fireEvent.click(await screen.findByRole('button', { name: 'bulk.retryDocument' }));
   await waitFor(() => expect(mocks.fetch).toHaveBeenCalledOnce());
   expect(mocks.confirm).toHaveBeenCalledWith('bulk.retryDocumentConfirm');
-  expect(mocks.fetch.mock.calls[0][0]).toMatch(/^\/api\/callsheets\/process\?jobId=job&requestId=[a-f0-9-]+$/);
+  expect(mocks.fetch.mock.calls[0][0]).toMatch(/^\/api\/callsheets\/trigger-worker\?jobId=job&requestId=[a-f0-9-]+$/);
   expect(mocks.fetch.mock.calls[0][1].method).toBe('POST');
 });
 it('does not retry when the user declines the new extraction', async () => {

@@ -1,7 +1,6 @@
 import { uiText } from "@/lib/ui-language";
 import { getProfileRates } from "@/lib/tripMoney";
 import { FormSection } from "@/components/ui/form-section";
-import { CALLSHEET_CLIENT_TIMEOUT_MS } from "@/lib/callsheetTiming";
 import { compactCallsheetReviewReason, getCallsheetReviewLocations, type ReviewCallsheetLocation } from '@/lib/callsheetReview';
 import { resolveCallsheetProcessingState } from '@/lib/callsheetProcessingState';
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -68,7 +67,6 @@ interface BulkUploadModalProps {
 
 let googleApiJsPromise: Promise<void> | null = null;
 let googlePickerApiPromise: Promise<void> | null = null;
-const BULK_CALLSHEET_PROCESS_CONCURRENCY = 2;
 const BULK_DRIVE_IMPORT_QUERY_PARAM = "bulkDriveImport";
 
 async function loadGoogleApiJs() {
@@ -878,102 +876,17 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     lastTriggerWorkerKickAtRef.current = Date.now();
     targetIds.forEach((id) => scheduledProcessJobIdsRef.current.add(id));
 
-    void (async () => {
-      const queue = [...targetIds];
-      const workers = Array.from(
-        { length: Math.min(BULK_CALLSHEET_PROCESS_CONCURRENCY, queue.length) },
-        async () => {
-          while (queue.length > 0 && !isAiCancelled(signal)) {
-            const jobId = queue.shift();
-            if (!jobId) return;
-
-            try {
-              setJobStateById((prev) => ({
-                ...prev,
-                [jobId]: {
-                  ...(prev[jobId] ?? { status: "queued" }),
-                  status: "processing",
-                  needsReviewReason: null,
-                },
-              }));
-
-              const response = await fetch(`/api/callsheets/process?jobId=${encodeURIComponent(jobId)}${requestIds[jobId] ? `&requestId=${encodeURIComponent(requestIds[jobId])}` : ""}`, {
-                method: "POST",
-                headers: {
-                  Authorization: token ? `Bearer ${token}` : "",
-                  "Content-Type": "application/json",
-                },
-                signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(CALLSHEET_CLIENT_TIMEOUT_MS)]),
-              });
-
-              if (!response.ok) {
-                const errorText = await response.text().catch(() => "");
-                let errorData: Record<string, unknown> | null = null;
-                try {
-                  errorData = errorText ? JSON.parse(errorText) as Record<string, unknown> : null;
-                } catch {
-                  errorData = null;
-                }
-
-                const errorCode = String(errorData?.error ?? "").trim();
-                const claimedStatus = String(errorData?.status ?? "").trim();
-                const nextReason =
-                  String(errorData?.reason ?? errorData?.message ?? errorText ?? "").trim() || null;
-
-                let nextStatus: JobStatus = "failed";
-                if (response.status === 402 || errorCode === "quota_exceeded") {
-                  nextStatus = "out_of_quota";
-                } else if (errorCode === "not_claimable" && claimedStatus === "done") {
-                  nextStatus = "done";
-                } else if (errorCode === "not_claimable" && claimedStatus === "processing") {
-                  nextStatus = "processing";
-                }
-
-                setJobStateById((prev) => ({
-                  ...prev,
-                  [jobId]: {
-                    ...(prev[jobId] ?? { status: "queued" }),
-                    status: nextStatus,
-                    needsReviewReason: nextReason,
-                  },
-                }));
-
-                logger.warn("[BulkUploadModal] direct callsheet process failed", {
-                  reason,
-                  jobId,
-                  status: response.status,
-                  errorCode,
-                  claimedStatus,
-                  errorText: nextReason ?? errorText,
-                });
-              }
-            } catch (error) {
-              if ((error as { name?: string } | null)?.name === "AbortError") return;
-
-              const message = error instanceof Error ? error.message : String(error ?? "");
-              setJobStateById((prev) => ({
-                ...prev,
-                [jobId]: {
-                  ...(prev[jobId] ?? { status: "queued" }),
-                  status: "failed",
-                  needsReviewReason: message || null,
-                },
-              }));
-
-              logger.warn("[BulkUploadModal] direct callsheet process error", {
-                reason,
-                jobId,
-                error,
-              });
-            } finally {
-              scheduledProcessJobIdsRef.current.delete(jobId);
-            }
-          }
-        },
-      );
-
-      await Promise.allSettled(workers);
-    })();
+    try {
+      const jobId = reason === 'manual_retry' ? targetIds[0] : undefined;
+      const query = jobId ? '?jobId=' + encodeURIComponent(jobId) + '&requestId=' + encodeURIComponent(requestIds[jobId]) : '';
+      const response = await fetch('/api/callsheets/trigger-worker' + query, {
+        method: 'POST', headers: { Authorization: token ? 'Bearer ' + token : '', 'Content-Type': 'application/json' },
+        signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(20_000)]),
+      });
+      if (!response.ok) throw new Error(t('bulk.errorProcessOneDoc'));
+    } finally {
+      targetIds.forEach(id => scheduledProcessJobIdsRef.current.delete(id));
+    }
   };
 
   const retryFailedJob = async (jobId: string) => {
@@ -1187,11 +1100,11 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
       setJobIds(createdJobIds);
       setJobMetaById(metaById);
       setJobStateById(getInitialBulkJobStateById({ createdJobIds, jobStateById: initialJobStateById }) as Record<string, JobState>);
-      // Start extraction from the browser so bulk uploads don't depend on trigger-worker.
+      // Confirm server dispatch before allowing the upload window to close.
       try {
         await triggerBulkProcessing(createdJobIds.filter(id => initialJobStateById[id]?.status === "queued"), aiSignal, "initial_batch");
       } catch {
-        // ignore: polling will still update already-finished jobs
+        toast.error(t("bulk.queueStartFailed"));
       }
 
     } catch (err: any) {
@@ -1208,8 +1121,8 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
       const { shouldBlockClose } = getBulkCloseCancellation({
         activeJobIds: activeJobIdsRef.current, aiLoading, aiStep, jobIds, jobStateById,
       });
-      if (shouldBlockClose || scheduledProcessJobIdsRef.current.size > 0) {
-        toast.info(t("bulk.keepOpenWhileProcessing"));
+      if (shouldBlockClose) {
+        toast.info(t("bulk.waitForUpload"));
         return;
       }
 
@@ -1429,12 +1342,12 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
         const shouldKickQueuedJobs =
           queuedIdsNeedingProcessing.length > 0 &&
           processingIds.length === 0 &&
-          Date.now() - lastTriggerWorkerKickAtRef.current >= 5000;
+          Date.now() - lastTriggerWorkerKickAtRef.current >= 30000;
         if (shouldKickQueuedJobs) {
           logger.warn("[BulkUploadModal] queued jobs detected without an active process request; retrying", {
             queuedIds: queuedIdsNeedingProcessing,
           });
-          void triggerBulkProcessing(queuedIdsNeedingProcessing, aiSignal, "queued_safety_net");
+          void triggerBulkProcessing(queuedIdsNeedingProcessing, aiSignal, "queued_safety_net").catch(error => logger.warn("Queue dispatch unavailable", { error }));
         }
         // Move to review as soon as there are no pending jobs.
         if (aiStep === "processing" && (!hasPending || doneIds.length > 0)) setAiStep("review");
@@ -1980,7 +1893,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                         : t("bulk.aiProcessingHint")}
                     </p>
                   </div>
-                  <p className="text-xs text-muted-foreground">{t("bulk.keepOpenWhileProcessing")}</p>
+                  <p className="text-xs text-muted-foreground">{t("bulk.backgroundProcessing")}</p>
                   {jobStats.total > 0 && (
                     <div className="mx-auto h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-secondary/60">
                       <div

@@ -46,6 +46,7 @@
     "@tanstack/react-query": "^5.83.0",
     "@upstash/ratelimit": "^2.0.7",
     "@upstash/redis": "^1.36.0",
+    "@vercel/functions": "^3.9.9",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

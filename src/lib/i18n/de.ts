@@ -4,7 +4,9 @@ import type { I18nKey } from "./es";
 export const de: Record<I18nKey, string> = {
   "bulk.retryDocument": "Extraktion erneut versuchen",
   "bulk.retryDocumentConfirm": "Extraktion von „{name}“ mit der bereits hochgeladenen Datei erneut starten? Eine erfolgreiche Extraktion wird auf dein Kontingent angerechnet.",
-  "bulk.keepOpenWhileProcessing": "Der Stapel wird noch verarbeitet. Lass dieses Fenster bis zum Abschluss geöffnet. Zum Stoppen wähle „Extraktion abbrechen“.",
+  "bulk.queueStartFailed": "Die Dateien sind gespeichert, aber der Warteschlangenstart konnte nicht bestätigt werden. Öffne dieses Fenster erneut, um fortzufahren.",
+  "bulk.backgroundProcessing": "Du kannst dieses Fenster schließen: Hochgeladene Dokumente werden im Hintergrund weiterverarbeitet. Fehlgeschlagene Extraktionen werden nicht automatisch wiederholt.",
+  "bulk.waitForUpload": "Warte, bis der Upload abgeschlossen und der Stapelstart bestätigt ist.",
   "bulk.deleteDocument": "Löschen",
   "bulk.deleteDocumentLabel": "Dokument {name} löschen",
   "bulk.deleteDocumentConfirm": "„{name}“ und die Originaldatei löschen? Dies kann nicht rückgängig gemacht werden.",

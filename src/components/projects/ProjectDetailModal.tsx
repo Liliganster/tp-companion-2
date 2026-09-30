@@ -116,44 +116,9 @@ export function ProjectDetailModal({ open, onOpenChange, project, selectedYear =
       abortControllerRef.current.abort();
     }
 
-    const pendingCallsheetsFromRef = Array.from(cancelCallsheetJobIdsRef.current);
-    const visibleNonDoneCallsheets = (realCallSheetsRef.current ?? [])
-      .filter((doc) => doc.status !== "done")
-      .map((doc) => String(doc.id ?? "").trim())
-      .filter(Boolean);
-    const pendingCallsheets = Array.from(new Set([...pendingCallsheetsFromRef, ...visibleNonDoneCallsheets]));
-    const inFlightCount = docAbortControllersRef.current.size;
-    const activeExtractionCount = activeExtractionCountRef.current;
-    const totalPending = pendingCallsheets.length;
-    const shouldShowCancelToast = totalPending > 0 || inFlightCount > 0 || activeExtractionCount > 0;
-
-    logger.warn("[runCloseCleanup] Pending jobs to cancel:", {
-      origin,
-      pendingCallsheetsFromRef,
-      visibleNonDoneCallsheets,
-      pendingCallsheets,
-      totalPending,
-      inFlightCount,
-      activeExtractionCount,
-    });
-
-    docAbortControllersRef.current.forEach((ac, docId) => {
-      logger.warn("[runCloseCleanup] Aborting extraction for:", docId);
-      ac.abort();
-    });
-
-    void cancelCallsheetJobs(pendingCallsheets);
-
-    if (shouldShowCancelToast) {
-      const totalToCancel = Math.max(totalPending, inFlightCount, activeExtractionCount);
-      logger.warn("[runCloseCleanup] Showing cancel toast for", totalToCancel, "jobs");
-      setTimeout(() => {
-        toast.info(tf("ui.cancelledCount", { count: totalToCancel }), {
-          duration: 4000,
-        });
-      }, 50);
-    }
-
+    // Closing stops local listeners only. Persisted extraction is cancelled solely
+    // by the explicit Cancel action, never by dialog lifecycle changes.
+    docAbortControllersRef.current.forEach(ac => ac.abort());
     docAbortControllersRef.current.clear();
     cancelCallsheetJobIdsRef.current.clear();
   }, []);
@@ -929,7 +894,7 @@ export function ProjectDetailModal({ open, onOpenChange, project, selectedYear =
     try {
       logger.warn("[handleExtract] Processing started - will set UI to processing", { docId: doc.id });
       // The server reserves quota before clearing previous extraction results.
-      const newRequestId = previouslyProcessed ? uuidv4() : undefined;
+      const newRequestId = previouslyProcessed || ["failed", "cancelled"].includes(doc.status) ? uuidv4() : undefined;
 
       // Actualizar project_id si hace falta
       if (project?.id) {

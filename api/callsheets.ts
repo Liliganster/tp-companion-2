@@ -1,3 +1,4 @@
+import { dispatchCallsheetWorker } from "./_utils/callsheetDispatch.js";
 /**
  * Consolidated router for all /api/callsheets/* routes.
  * Handler logic is verbatim from original files.
@@ -52,6 +53,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
         status: completedJob?.status, reviewReason: completedJob?.needs_review_reason });
     }
     if (reservation.busy) return sendJson(res, 409, { error: "not_claimable", status: "processing" });
+    if (reservation.reason === "manual_retry_required") return sendJson(res, 409, { error: "manual_retry_required" });
     if (!reservation.allowed) return sendJson(res, 402, { error: "quota_exceeded", reason: reservation.reason });
     const job = { storage_path: reservation.storagePath };
 
@@ -272,87 +274,23 @@ const handleTriggerWorker = withApiObservability(async function handler(req: any
     const normalizedJobId = String(jobId ?? "").trim();
     const hasJobId = Boolean(normalizedJobId);
 
+    const newRequestId = req.query?.requestId ?? req.body?.requestId;
+    if (newRequestId !== undefined && !z.string().uuid().safeParse(newRequestId).success) return sendJson(res, 400, { error: 'invalid_request_id' });
     if (hasJobId) {
-      // Atomically claim the job here (trigger-worker → "processing") so the DB never
-      // shows "queued" to the user for a manual single-job trigger.
-      // The worker receives preClaimed=1 and skips its own claim step.
-      const now = new Date().toISOString();
-      const { data: claimed, error: claimError } = await supabaseAdmin
-        .from("callsheet_jobs")
-        .update({ status: "processing", processing_started_at: now, processed_at: now })
-        .eq("id", normalizedJobId)
-        .eq("user_id", user.id)
-        .in("status", ["queued", "created", "failed", "cancelled"])
-        .select("id")
-        .maybeSingle();
-
-      if (claimError) {
-        log.error({ claimError, jobId: normalizedJobId }, "[trigger-worker] claim failed");
-        return sendJson(res, 500, { error: "claim_failed", message: claimError.message });
-      }
-      if (!claimed) {
-        // Already processing/done — still fire worker so it can finish if it was interrupted.
-        const { data: existing } = await supabaseAdmin
-          .from("callsheet_jobs")
-          .select("status")
-          .eq("id", normalizedJobId)
-          .eq("user_id", user.id)
-          .maybeSingle();
-        const existingStatus = String((existing as any)?.status ?? "");
-        if (existingStatus === "done") return sendJson(res, 200, { ok: true, triggered: false, message: "already_done" });
-        if (existingStatus !== "processing")
-          return sendJson(res, 400, { ok: false, error: "not_claimable", status: existingStatus });
-      }
+      const { data: job, error } = await supabaseAdmin.from('callsheet_jobs').select('status').eq('id', normalizedJobId).eq('user_id', user.id).maybeSingle();
+      if (error) throw error;
+      if (!job) return sendJson(res, 404, { error: 'job_not_found' });
+      if (job.status === 'processing') return sendJson(res, 200, { ok: true, triggered: false, status: 'processing' });
+      if (!newRequestId && job.status !== 'queued') return sendJson(res, 409, { error: 'manual_retry_required', status: job.status });
     } else {
-      const { count, error } = await supabaseAdmin.from("callsheet_jobs").select("id", { head: true, count: "exact" }).eq("status", "queued").eq("user_id", user.id);
-      if (error) { log.error({ error }, "[trigger-worker] Error fetching jobs"); return sendJson(res, 500, { error: "fetch_failed", message: error.message }); }
-      if (!count) return sendJson(res, 200, { ok: true, processed: 0, message: "No jobs queued" });
+      const { count, error } = await supabaseAdmin.from('callsheet_jobs').select('id', { head: true, count: 'exact' }).eq('status', 'queued').eq('user_id', user.id);
+      if (error) throw error;
+      if (!count) return sendJson(res, 200, { ok: true, triggered: false });
     }
-
-    const protocol = req.headers.host?.includes("localhost") ? "http" : "https";
-    const params = new URLSearchParams({ manual: "1", skipGeocode: "1", userId: user.id });
-    if (hasJobId) {
-      params.set("jobId", normalizedJobId);
-      params.set("preClaimed", "1"); // job is already in "processing"; worker skips its claim step
-    }
-    const workerUrl = `${protocol}://${req.headers.host}/api/worker?${params.toString()}`;
-
-    log.info(
-      {
-        jobId: hasJobId ? normalizedJobId : null,
-        internalTrigger: isInternalTrigger,
-        userId: user.id,
-      },
-      "[trigger-worker] Firing worker (fire-and-forget)",
-    );
-
-    // Fire-and-forget: do NOT await — Vercel Hobby has a 10s function limit
-    // and the worker (Gemini PDF processing) can take 15-30s.
-    // The frontend polls /api/callsheets/status for the result.
-    void fetch(workerUrl, {
-      method: "POST",
-      headers: { Authorization: cronSecret ? `Bearer ${cronSecret}` : "", "Content-Type": "application/json" },
-    })
-      .then(async (response) => {
-        if (response.ok) return;
-        const bodyPreview = (await response.text().catch(() => "")).slice(0, 300);
-        log.error(
-          {
-            status: response.status,
-            bodyPreview,
-            jobId: hasJobId ? normalizedJobId : null,
-            internalTrigger: isInternalTrigger,
-            userId: user.id,
-          },
-          "[trigger-worker] worker fetch non-ok (background)",
-        );
-      })
-      .catch((err) =>
-        log.error(
-          { err, internalTrigger: isInternalTrigger, userId: user.id },
-          "[trigger-worker] worker fetch error (background)",
-        ),
-      );
+    const params = new URLSearchParams({ manual: '1', skipGeocode: '1', userId: user.id });
+    if (hasJobId) params.set('jobId', normalizedJobId);
+    if (newRequestId) params.set('requestId', newRequestId);
+    await dispatchCallsheetWorker(params);
 
     return sendJson(res, 200, { ok: true, triggered: true, jobId: hasJobId ? normalizedJobId : null });
   } catch (e: any) {

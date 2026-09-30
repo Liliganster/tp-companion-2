@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-const m=vi.hoisted(()=>({jobs:[] as any[],extract:vi.fn(),finish:vi.fn(),reserve:vi.fn()}));
+const m=vi.hoisted(()=>({jobs:[] as any[],extract:vi.fn(),finish:vi.fn(),reserve:vi.fn(),background:[] as Promise<unknown>[],dispatch:vi.fn()}));
+vi.mock('@vercel/functions',()=>({waitUntil:(promise:Promise<unknown>)=>{m.background.push(promise);}}));
+vi.mock('./callsheetDispatch.js',()=>({dispatchCallsheetWorker:m.dispatch}));
 vi.mock('../../src/lib/supabaseServer.js',()=>({supabaseAdmin:{from:(table:string)=>{
  let changes:any;const filters:Array<(row:any)=>boolean>=[];let single=false;let head=false;
  const result=()=>{
@@ -22,12 +24,12 @@ vi.mock('./entitlements.js',()=>({getServerPlanTier:async()=>'pro'}));
 vi.mock('./aiQuota.js',()=>({reserveAiQuota:m.reserve,finishAiQuota:m.finish}));
 vi.mock('./callsheetExtraction.js',()=>({extractCallsheet:m.extract}));
 import handler from '../worker';
-const run=async()=>{
+const run=async(query={})=>{
  const res:any={status:vi.fn(()=>res),json:vi.fn(),setHeader:vi.fn(),end:vi.fn()};
- await handler({method:'POST',headers:{},query:{}},res);return res;
+ await handler({method:'POST',headers:{},query},res);return res;
 };
 beforeEach(()=>{
- vi.clearAllMocks();vi.stubEnv('CRON_SECRET','');vi.stubEnv('VERCEL_ENV','');
+ vi.clearAllMocks();m.background=[];vi.stubEnv('CRON_SECRET','');vi.stubEnv('VERCEL_ENV','');
  m.jobs=[{id:'job',user_id:'user',status:'queued',storage_path:'user/job/file.pdf',created_at:'2026-09-10',next_retry_at:'2020-01-01',retry_count:0}];
  m.reserve.mockImplementation(async()=>{m.jobs[0].status='processing';return {allowed:true,requestId:'request',attemptId:'attempt',storagePath:'user/job/file.pdf'};});
  m.extract.mockRejectedValue(new Error('Request aborted'));
@@ -46,4 +48,34 @@ it('stale processing becomes a visible failure instead of being queued for anoth
  m.jobs[0].status='processing';m.jobs[0].processing_started_at='2020-01-01';
  await run();expect(m.jobs[0]).toMatchObject({status:'failed',next_retry_at:null});
  expect(m.extract).not.toHaveBeenCalled();expect(m.reserve).not.toHaveBeenCalled();
+});
+
+it('acknowledges the background job while extraction is still pending and retains its promise',async()=>{
+ let reject!: (error: Error) => void;
+ m.extract.mockImplementation(()=>new Promise((_resolve,rejectPromise)=>{reject=rejectPromise;}));
+ const res=await run({background:'1'});
+ expect(res.status).toHaveBeenCalledWith(202);
+ expect(m.background).toHaveLength(1);
+ await vi.waitFor(()=>expect(m.extract).toHaveBeenCalledOnce());
+ expect(m.jobs[0].status).toBe('processing');
+ reject(new Error('provider timeout'));
+ await m.background[0];
+ expect(m.jobs[0].status).toBe('failed');
+ expect(res.json).toHaveBeenCalledOnce();
+ await run();expect(m.extract).toHaveBeenCalledOnce();
+});
+
+it('does not keep dispatching when quota storage is unavailable',async()=>{
+ m.reserve.mockRejectedValue(new Error('database unavailable'));
+ await run();expect(m.extract).not.toHaveBeenCalled();expect(m.dispatch).not.toHaveBeenCalled();
+ expect(m.jobs[0].status).toBe('queued');
+});
+it('does not spin or call AI when the account already has active extractions',async()=>{
+ m.reserve.mockResolvedValue({allowed:false,busy:true,reason:'concurrency_limit'});
+ await run();expect(m.extract).not.toHaveBeenCalled();expect(m.dispatch).not.toHaveBeenCalled();
+ expect(m.jobs[0].status).toBe('queued');
+});
+it('a manual worker never expires another customer processing job',async()=>{
+ m.jobs=[{id:'other',user_id:'other-user',status:'processing',processing_started_at:'2020-01-01'}];
+ await run({manual:'1',userId:'user'});expect(m.jobs[0].status).toBe('processing');expect(m.extract).not.toHaveBeenCalled();
 });

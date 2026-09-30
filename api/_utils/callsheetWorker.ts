@@ -1,7 +1,7 @@
 import { getPlanLimits } from "./plans.js";
 
 export const CALLSHEET_WORKER_FETCH_LIMIT = 16;
-export const CALLSHEET_PARALLEL_BATCH_SIZE = getPlanLimits("pro").maxCallsheetsPerWorkerRun;
+export const CALLSHEET_PARALLEL_BATCH_SIZE = 2;
 
 type JobWithUser = {
   user_id?: string | null;

@@ -3,7 +3,9 @@
 export const es = {
   "bulk.retryDocument": "Reintentar extracción",
   "bulk.retryDocumentConfirm": "¿Reintentar la extracción de «{name}» usando el archivo ya subido? Si termina correctamente, consumirá una extracción de tu cuota.",
-  "bulk.keepOpenWhileProcessing": "El lote sigue procesándose. Mantén esta ventana abierta hasta que termine. Para detenerlo, usa «Cancelar extracción».",
+  "bulk.queueStartFailed": "Los archivos están guardados, pero no se pudo confirmar el inicio de la cola. Vuelve a abrir esta ventana para continuar.",
+  "bulk.backgroundProcessing": "Puedes cerrar esta ventana: los documentos subidos siguen procesándose en segundo plano. Los fallos no se reintentan automáticamente.",
+  "bulk.waitForUpload": "Espera a que termine la subida y se confirme el inicio del lote.",
   "bulk.deleteDocument": "Eliminar",
   "bulk.deleteDocumentLabel": "Eliminar documento {name}",
   "bulk.deleteDocumentConfirm": "¿Eliminar \"{name}\" y su archivo original? Esta acción no se puede deshacer.",

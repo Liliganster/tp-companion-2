@@ -11,7 +11,7 @@ import {
 import { getPlanLimits as getServerPlanLimits } from "./plans.js";
 
 describe("callsheetWorker", () => {
-  it("keeps client and server Pro limits aligned at 20 uploads and 5 parallel jobs", () => {
+  it("keeps client and server Pro limits aligned at 20 uploads and 2 parallel provider calls", () => {
     const clientLimits = getClientPlanLimits("pro");
     const serverLimits = getServerPlanLimits("pro");
 
@@ -21,12 +21,12 @@ describe("callsheetWorker", () => {
     expect(serverLimits.maxCallsheetsPerWorkerRun).toBe(5);
     expect(serverLimits.maxCallsheetsPerBatch).toBe(clientLimits.maxCallsheetsPerBatch);
     expect(serverLimits.maxCallsheetsPerWorkerRun).toBe(clientLimits.maxCallsheetsPerWorkerRun);
-    expect(CALLSHEET_PARALLEL_BATCH_SIZE).toBe(5);
+    expect(CALLSHEET_PARALLEL_BATCH_SIZE).toBe(2);
   });
 
-  it("uses 5 jobs for manual batches and 1 for manual single-job runs", () => {
+  it("uses 2 jobs for manual batches and 1 for manual single-job runs", () => {
     expect(getCallsheetWorkerFetchLimit({ manual: false })).toBe(16);
-    expect(getCallsheetWorkerFetchLimit({ manual: true, manualJobId: null })).toBe(5);
+    expect(getCallsheetWorkerFetchLimit({ manual: true, manualJobId: null })).toBe(2);
     expect(getCallsheetWorkerFetchLimit({ manual: true, manualJobId: "job-1" })).toBe(1);
   });
 

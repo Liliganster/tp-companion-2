@@ -4,7 +4,9 @@ import type { I18nKey } from "./es";
 export const en: Record<I18nKey, string> = {
   "bulk.retryDocument": "Retry extraction",
   "bulk.retryDocumentConfirm": "Retry extraction of “{name}” using the uploaded file? A successful extraction will count towards your quota.",
-  "bulk.keepOpenWhileProcessing": "The batch is still processing. Keep this window open until it finishes. To stop it, use “Cancel extraction”.",
+  "bulk.queueStartFailed": "The files are saved, but the queue start could not be confirmed. Reopen this window to continue.",
+  "bulk.backgroundProcessing": "You can close this window: uploaded documents continue processing in the background. Failed extractions are not retried automatically.",
+  "bulk.waitForUpload": "Wait until uploading finishes and the batch start is confirmed.",
   "bulk.deleteDocument": "Delete",
   "bulk.deleteDocumentLabel": "Delete document {name}",
   "bulk.deleteDocumentConfirm": "Delete \"{name}\" and its original file? This cannot be undone.",
