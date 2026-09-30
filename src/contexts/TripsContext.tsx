@@ -1,3 +1,4 @@
+import { uiText } from "@/lib/ui-language";
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { formatSupabaseError } from "@/lib/supabaseErrors";
@@ -263,7 +264,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
     if (!parsedInput.success) {
       const issues = parsedInput.error.issues.map((i) => i.message).join("; ");
-      toast.error(`Datos del viaje inválidos. ${issues}`);
+      toast.error(uiText("ui.invalidTrip", { issues }));
       return false;
     }
 
@@ -457,7 +458,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       const parsed = TripInputSchema.safeParse(candidate);
       if (!parsed.success) {
         const issues = parsed.error.issues.map((i) => i.message).join("; ");
-        toast.error(`Datos del viaje inválidos. ${issues}`);
+        toast.error(uiText("ui.invalidTrip", { issues }));
         return false;
       }
     }

@@ -3,7 +3,7 @@
  *
  * "basic" = plan Free (nombre histórico en BD; la CHECK constraint de
  * user_profiles.plan_tier acepta basic/pro). El diferenciador real es la
- * cuota mensual de callsheets IA: Free 3/mes, Pro 60/mes. Los viajes
+ * cuota de callsheets IA: Free 3/mes; Pro mensual 60/mes y anual 400/año. Los viajes
  * manuales son ilimitados en ambos.
  *
  * UNLIMITED (Infinity) solo se usa en cliente; no serializar a JSON.
@@ -71,7 +71,7 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     maxCallsheetsPerWorkerRun: 1,
   },
 
-  // Pro: 60 callsheets IA/mes y proceso por lotes.
+  // Pro base (mensual): 60/mes. La cuota anual de 400 se resuelve en callsheetQuotaPolicy.
   pro: {
     maxActiveTrips: UNLIMITED,
     maxActiveTripsAI: UNLIMITED,

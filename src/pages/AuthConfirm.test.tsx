@@ -1,9 +1,11 @@
+vi.mock('@/contexts/UserProfileContext', () => ({ useUserProfile: () => ({ profile: { language: mocks.language } }) }));
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  language: 'es',
   verifyOtp: vi.fn(),
   toast: vi.fn(),
   navigateToRecoveryForm: vi.fn(),
@@ -37,6 +39,7 @@ function renderAt(path: string) {
 
 describe("AuthConfirm", () => {
   beforeEach(() => {
+    mocks.language = 'es';
     mocks.verifyOtp.mockReset();
     mocks.toast.mockReset();
     mocks.navigateToRecoveryForm.mockReset();
@@ -77,4 +80,16 @@ describe("AuthConfirm", () => {
     expect(mocks.verifyOtp).not.toHaveBeenCalled();
     expect(mocks.toast).not.toHaveBeenCalled();
   });
+});
+
+it.each([
+  ['en', 'Secure password reset', 'Continue securely', 'This link has expired or has already been used. Request a new recovery email.'],
+  ['de', 'Sicheres Zurücksetzen des Passworts', 'Sicher fortfahren', 'Dieser Link ist abgelaufen oder wurde bereits verwendet. Fordere eine neue Wiederherstellungs-E-Mail an.'],
+])('keeps recovery confirmation and errors in %s', async (language, title, button, error) => {
+  mocks.language = language;
+  mocks.verifyOtp.mockResolvedValue({ data: { session: null }, error: new Error('Email link is invalid or has expired') });
+  renderAt('/auth/confirm?token_hash=expired&type=recovery');
+  expect(screen.getByRole('heading', { name: title })).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: button }));
+  expect(await screen.findByText(error)).toBeInTheDocument();
 });

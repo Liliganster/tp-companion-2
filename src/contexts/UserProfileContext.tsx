@@ -1,3 +1,4 @@
+import { t as translate, normalizeLanguage } from "@/lib/i18n";
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "./AuthContext";
@@ -85,7 +86,7 @@ function parseProfileNumber(value: string): number | null {
 
 export function UserProfileProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
+  const [profile, setProfile] = useState<UserProfile>(() => ({ ...DEFAULT_PROFILE, language: detectBrowserLanguage() }));
   const [loading, setLoading] = useState(true);
   const offlineCacheKey = useMemo(() => (user?.id ? `cache:profile:v1:${user.id}` : null), [user?.id]);
 
@@ -281,18 +282,18 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
         return false;
       }
     };
-    toast.loading(options?.loadingText ?? "Guardando...", { id: toastId });
+    toast.loading(options?.loadingText ?? translate(normalizeLanguage(profile.language), "ui.profileSaving"), { id: toastId });
 
     // Escritura exclusivamente por la API: el navegador no tiene permisos de
     // INSERT/UPDATE sobre user_profiles y nunca puede tocar plan_tier/Stripe.
     const ok = await saveViaApi();
     if (ok) {
-      toast.success(options?.successText ?? "Perfil guardado", { id: toastId });
+      toast.success(options?.successText ?? translate(normalizeLanguage(profile.language), "ui.profileSaved"), { id: toastId });
       return true;
     }
 
     rollbackProfile();
-    toast.error("No se pudo guardar el perfil.", { id: toastId });
+    toast.error(translate(normalizeLanguage(profile.language), "ui.profileFailed"), { id: toastId });
     return false;
   }, [offlineCacheKey, profile, user]);
 

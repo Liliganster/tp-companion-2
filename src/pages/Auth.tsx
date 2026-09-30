@@ -61,7 +61,7 @@ export default function Auth() {
       const isInvalidLogin = message.toLowerCase().includes("invalid login credentials");
       toast({
         title: isInvalidLogin ? "Credenciales incorrectas" : "Auth error",
-        description: isInvalidLogin ? "Email o contraseña incorrectos." : err?.message ?? "Unexpected error",
+        description: isInvalidLogin ? t("ui.invalidLogin") : err?.message ?? t("ui.unexpected"),
         variant: "destructive",
       });
     } finally {
@@ -75,8 +75,8 @@ export default function Auth() {
     const cleanEmail = email.trim();
     if (!cleanEmail) {
       toast({
-        title: "Introduce tu email",
-        description: "Escribe tu email arriba para enviarte un enlace de recuperación.",
+        title: t("ui.enterEmail"),
+        description: t("ui.recoveryEmailHint"),
         variant: "destructive",
       });
       return;
@@ -86,14 +86,14 @@ export default function Auth() {
     try {
       await requestPasswordReset(cleanEmail, captchaToken || undefined);
       toast({
-        title: "Email enviado",
-        description: "Revisa tu bandeja de entrada para restablecer la contraseña.",
+        title: t("ui.emailSent"),
+        description: t("ui.checkInbox"),
       });
     } catch (err: any) {
       logger.warn("Password reset error", err);
       toast({
-        title: "No se pudo enviar",
-        description: err?.message ?? "Unexpected error",
+        title: t("ui.sendFailed"),
+        description: err?.message ?? t("ui.unexpected"),
         variant: "destructive",
       });
     } finally {
@@ -129,8 +129,8 @@ export default function Auth() {
       await signInWithGoogle(idToken, nonce, ...(captchaToken ? [captchaToken] : []));
     } catch (err: any) {
       toast({
-        title: "No se pudo iniciar sesión con Google",
-        description: err?.message ?? "Revisa la configuración del proveedor en Supabase/Google.",
+        title: t("ui.googleFailed"),
+        description: err?.message ?? t("ui.googleConfiguration"),
         variant: "destructive",
       });
       setIsLoading(false);
@@ -140,12 +140,12 @@ export default function Auth() {
 
   const handleGoogleError = useCallback((err: Error) => {
     toast({
-      title: "No se pudo iniciar sesión con Google",
-      description: err.message || "Revisa la configuración de Google.",
+      title: t("ui.googleFailed"),
+      description: err.message || t("ui.googleConfiguration"),
       variant: "destructive",
     });
     setIsLoading(false);
-  }, [toast]);
+  }, [toast, t]);
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-background">
@@ -206,8 +206,8 @@ export default function Auth() {
 
           {passwordUpdated && (
             <Alert className="mt-6 bg-secondary/20 border-border/60">
-              <AlertTitle>Contraseña actualizada</AlertTitle>
-              <AlertDescription>Ya puedes iniciar sesión con tu nueva contraseña.</AlertDescription>
+              <AlertTitle>{t("ui.passwordUpdated")}</AlertTitle>
+              <AlertDescription>{t("ui.newPasswordLogin")}</AlertDescription>
             </Alert>
           )}
 

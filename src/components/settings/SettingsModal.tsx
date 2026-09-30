@@ -58,14 +58,14 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const handleCheckUpdates = () => {
     toast({
       title: t("settings.appVersionTitle"),
-      description: "No hay un canal de actualizaciones configurado aún.",
+      description: t("ui.noUpdates"),
     });
   };
 
   const handleViewChangelog = () => {
     toast({
-      title: "Changelog",
-      description: "El changelog todavía no está publicado dentro de la app.",
+      title: t("ui.changelog"),
+      description: t("ui.noChangelog"),
     });
   };
 
@@ -85,7 +85,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const handleContactSupport = () => {
     toast({
       title: t("settings.supportTitle"),
-      description: "El canal de soporte aún no está configurado.",
+      description: t("ui.noSupport"),
     });
   };
 
@@ -682,9 +682,9 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 </div>}
               {activeTab === "security" && <div className="space-y-5">                  {/* Password / Security */}
                   <div className="pt-4">
-                    <h3 className="text-sm font-medium">Seguridad</h3>
+                    <h3 className="text-sm font-medium">{t("ui.security")}</h3>
                     <p className="text-xs text-muted-foreground mt-1 mb-3">
-                      Establece o actualiza tu contraseña para iniciar sesión con email.
+                      {t("ui.passwordHint")}
                     </p>
                     
 
@@ -698,7 +698,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       }}
                     >
                       <Lock className="w-4 h-4 mr-2" />
-                      Cambiar Contraseña
+                      {t("ui.changePassword")}
                     </Button>
                   </div>
 
@@ -725,7 +725,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   <div className="glass-card p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="font-medium">Gemini AI (Default)</h3>
+                        <h3 className="font-medium">{t("ui.geminiDefault")}</h3>
                         <p className="text-sm text-muted-foreground">{t("settings.apisGeminiBody")}</p>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -766,17 +766,17 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="openrouter-model">Modelo de OpenRouter</Label>
+                          <Label htmlFor="openrouter-model">{t("ui.model")}</Label>
                           <Select 
                             value={profileData.openrouterModel || "google/gemini-2.5-flash"}
                             onValueChange={(value) => setProfileData({ ...profileData, openrouterModel: value })}
                           >
                             <SelectTrigger id="openrouter-model">
-                              <SelectValue placeholder="Selecciona un modelo" />
+                              <SelectValue placeholder={t("ui.selectModel")} />
                             </SelectTrigger>
                             <SelectContent>
                               {modelsLoading ? (
-                                <SelectItem value="loading" disabled>Cargando modelos...</SelectItem>
+                                <SelectItem value="loading" disabled>{t("ui.loadingModels")}</SelectItem>
                               ) : openRouterModels && openRouterModels.length > 0 ? (
                                 openRouterModels.map(model => (
                                   <SelectItem key={model.id} value={model.id}>
@@ -793,7 +793,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                             </SelectContent>
                           </Select>
                           <p className="text-xs text-muted-foreground mt-1">
-                            Estos modelos están certificados para el reconocimiento de imágenes/PDFs.
+                            {t("ui.visionModels")}
                           </p>
                         </div>
                       </>
@@ -801,33 +801,33 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   </div>
 
                   <div className="glass-card p-4 space-y-2">
-                    <h3 className="font-medium">Ultima extraccion IA</h3>
+                    <h3 className="font-medium">{t("ui.lastExtraction")}</h3>
                     {lastAiUsage.loading ? (
-                      <p className="text-sm text-muted-foreground">Comprobando proveedor usado...</p>
+                      <p className="text-sm text-muted-foreground">{t("ui.checkingProvider")}</p>
                     ) : lastAiProviderLabel ? (
                       <div className="space-y-1 text-sm text-muted-foreground">
                         <p>
-                          Proveedor: <span className="text-foreground">{lastAiProviderLabel}</span>
+                          {t("ui.provider")} <span className="text-foreground">{lastAiProviderLabel}</span>
                         </p>
                         {lastAiUsage.model ? (
                           <p>
-                            Modelo: <span className="text-foreground">{lastAiUsage.model}</span>
+                            {t("ui.modelLabel")} <span className="text-foreground">{lastAiUsage.model}</span>
                           </p>
                         ) : null}
                         {lastAiUsage.vendor && lastAiUsage.provider === "openrouter" ? (
                           <p>
-                            Vendor real: <span className="text-foreground">{lastAiUsage.vendor}</span>
+                            {t("ui.actualProvider")} <span className="text-foreground">{lastAiUsage.vendor}</span>
                           </p>
                         ) : null}
                         {lastAiUsageDateLabel ? (
                           <p>
-                            Fecha: <span className="text-foreground">{lastAiUsageDateLabel}</span>
+                            {t("ui.date")} <span className="text-foreground">{lastAiUsageDateLabel}</span>
                           </p>
                         ) : null}
                       </div>
                     ) : (
                       <p className="text-sm text-muted-foreground">
-                        Todavia no hay una extraccion registrada con proveedor visible.
+                        {t("ui.noExtraction")}
                       </p>
                     )}
                   </div>
@@ -857,7 +857,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                             onClick={disconnectGoogle}
                             disabled={googleStatus.loading}
                           >
-                            Desconectar
+                            {t("ui.disconnect")}
                           </Button>
                         ) : null}
                       </div>
@@ -905,7 +905,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   </div>
 
                   <div className="glass-card p-4 space-y-2">
-                    <h3 className="font-medium">Changelog</h3>
+                    <h3 className="font-medium">{t("ui.changelog")}</h3>
                     <p className="text-sm text-muted-foreground">{t("settings.changelogBody")}</p>
                     <Button variant="outline" size="sm" type="button" onClick={handleViewChangelog}>
                       {t("settings.viewChangelog")}

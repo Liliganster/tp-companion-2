@@ -1,9 +1,10 @@
+import { uiText } from "@/lib/ui-language";
 export const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024;
 export const MANUAL_ACCEPT = '.csv,.tsv,.xlsx,.xls';
 
 export function validateDocumentSize(file: { size: number; name: string }) {
-  if (!file.size) throw new Error(`${file.name}: el archivo está vacío.`);
-  if (file.size > MAX_DOCUMENT_BYTES) throw new Error(`${file.name}: supera los 50 MB por archivo.`);
+  if (!file.size) throw new Error(uiText("ui.emptyFile", { name: file.name }));
+  if (file.size > MAX_DOCUMENT_BYTES) throw new Error(uiText("ui.largeFile", { name: file.name }));
 }
 
 export function normalizeImportHeader(value: string): string {
@@ -38,7 +39,7 @@ export function parseDelimitedRows(raw: string): string[][] {
     else if (!quoted && c === '\n') endRow();
     else cell += c;
   }
-  if (quoted) throw new Error('Hay una celda con comillas sin cerrar. Revisa el texto antes de guardar.');
+  if (quoted) throw new Error(uiText("ui.unclosedQuotes"));
   endRow(); return rows;
 }
 
@@ -51,7 +52,7 @@ export function mergeImportTables(tables: string[]): string {
   const headers = [...new Set(parsed.flatMap(rows => rows[0].map(normalizeImportHeader)))];
   return rowsToCsv([headers, ...parsed.flatMap(rows => {
     const keys = rows[0].map(normalizeImportHeader);
-    if (new Set(keys).size !== keys.length) throw new Error('Hay columnas con el mismo nombre. Renómbralas antes de importar.');
+    if (new Set(keys).size !== keys.length) throw new Error(uiText("ui.duplicateColumns"));
     return rows.slice(1).map(row => headers.map(key => row[keys.indexOf(key)] ?? ''));
   })]);
 }
@@ -64,14 +65,14 @@ export function validateOfficeZip(bytes: Uint8Array) {
   for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
     if (view.getUint32(i, true) === 0x06054b50) { end = i; break; }
   }
-  if (end < 0) throw new Error('El documento Office está dañado.');
+  if (end < 0) throw new Error(uiText("ui.damagedOffice"));
   const count = view.getUint16(end + 10, true);
   let offset = view.getUint32(end + 16, true), expanded = 0;
-  if (count === 65535 || offset === 0xffffffff) throw new Error('Este documento Office es demasiado complejo. Divídelo en varios archivos.');
+  if (count === 65535 || offset === 0xffffffff) throw new Error(uiText("ui.complexOffice"));
   for (let n = 0; n < count; n++) {
-    if (offset + 46 > bytes.length || view.getUint32(offset, true) !== 0x02014b50) throw new Error('El documento Office está dañado.');
+    if (offset + 46 > bytes.length || view.getUint32(offset, true) !== 0x02014b50) throw new Error(uiText("ui.damagedOffice"));
     expanded += view.getUint32(offset + 24, true);
-    if (expanded > 128 * 1024 * 1024) throw new Error('El documento Office contiene demasiados datos descomprimidos. Divídelo en varios archivos.');
+    if (expanded > 128 * 1024 * 1024) throw new Error(uiText("ui.expandedOffice"));
     offset += 46 + view.getUint16(offset + 28, true) + view.getUint16(offset + 30, true) + view.getUint16(offset + 32, true);
   }
 }
@@ -87,10 +88,10 @@ export async function readSpreadsheetTables(file: DocumentFile): Promise<{ name:
     else { try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch { text = new TextDecoder('windows-1252').decode(bytes); } }
     return [{ name: file.name, text: text.replace(/^\uFEFF/, '') }];
   }
-  if (ext !== 'xlsx' && ext !== 'xls') throw new Error(`${file.name}: selecciona CSV, TSV o Excel (.xlsx, .xls).`);
+  if (ext !== 'xlsx' && ext !== 'xls') throw new Error(uiText("ui.spreadsheetType", { name: file.name }));
   const isZip = bytes[0] === 0x50 && bytes[1] === 0x4b;
   const isOle = bytes[0] === 0xd0 && bytes[1] === 0xcf && bytes[2] === 0x11 && bytes[3] === 0xe0;
-  if ((ext === 'xlsx' && !isZip) || (ext === 'xls' && !isOle)) throw new Error(`${file.name}: no es un libro Excel válido.`);
+  if ((ext === 'xlsx' && !isZip) || (ext === 'xls' && !isOle)) throw new Error(uiText("ui.invalidWorkbook", { name: file.name }));
   if (isZip) validateOfficeZip(bytes);
   const XLSX = await import('xlsx');
   const book = XLSX.read(bytes, { type: 'array', cellDates: true, cellFormula: false, cellHTML: false });
@@ -99,7 +100,7 @@ export async function readSpreadsheetTables(file: DocumentFile): Promise<{ name:
     const normalized = rows.map(row => row.map(cell => cell instanceof Date ? cell.toISOString().slice(0, 10) : String(cell ?? '')));
     return { name: `${file.name} / ${name}`, text: rowsToCsv(normalized) };
   }).filter(sheet => sheet.text.trim());
-  if (!result.length) throw new Error(`${file.name}: no hay hojas visibles con datos.`);
+  if (!result.length) throw new Error(uiText("ui.noSheets", { name: file.name }));
   return result;
 }
 

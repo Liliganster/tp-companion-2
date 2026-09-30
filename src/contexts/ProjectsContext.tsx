@@ -1,3 +1,4 @@
+import { uiText } from "@/lib/ui-language";
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "./AuthContext";
@@ -121,7 +122,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
             const alreadyNotified = readLocalStorageFlag(PROJECT_TOTALS_MISSING_NOTIFIED_KEY) === true;
             if (!alreadyNotified) {
               writeLocalStorageFlag(PROJECT_TOTALS_MISSING_NOTIFIED_KEY, true);
-              toast.warning("Falta la vista 'project_totals' en Supabase. Ejecuta las migraciones para activar totales/importe.");
+              toast.warning(uiText("ui.totalsUnavailable"));
             }
           } else if (import.meta.env.DEV) {
             logger.warn("Error fetching project totals", totalsError);
@@ -219,7 +220,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
     if (existing) {
       logger.debug(`Project "${project.name}" already exists, skipping insert`);
-      toast.info(`El proyecto "${project.name}" ya existe`);
+      toast.info(uiText("ui.projectExistsNamed", { name: project.name }));
       return;
     }
 
@@ -243,7 +244,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       
       // Handle UNIQUE constraint violation
       if (error.code === '23505') {
-        toast.error(`El proyecto "${project.name}" ya existe`);
+        toast.error(uiText("ui.projectExistsNamed", { name: project.name }));
       } else {
         toast.error("Error creating project: " + error.message);
       }

@@ -159,7 +159,7 @@ export default function Index() {
                     ? `${aiQuota.used ?? 0}`
                     : `${aiQuota.used ?? "—"}/${Number.isFinite(aiQuota.limit) ? aiQuota.limit : "∞"}`}
               </span>
-              <span className="text-xs text-muted-foreground hidden sm:inline">{t("dashboard.aiChipLabel")}</span>
+              <span className="text-xs text-muted-foreground hidden sm:inline">{t(aiQuota.period === "annual" ? "dashboard.aiChipAnnual" : "dashboard.aiChipMonthly")}</span>
             </Link>
             <AttentionBell />
           </div>

@@ -244,7 +244,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
               : null;
            return originalProject?.producer ?? "";
         })(),
-        description: "Created via Trip",
+        description: t("ui.createdViaTrip"),
         ratePerKm: settingsRatePerKm,
         starred: false,
         trips: 0,
@@ -258,7 +258,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
       };
 
       await addProject(newProject);
-      toast.success(`Proyecto "${trimmedName}" creado`);
+      toast.success(tf("ui.projectCreatedNamed", { name: trimmedName }));
     },
     [projects, addProject, seedTrip]
   );
@@ -1319,7 +1319,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                       id="templateName"
                       value={templateName}
                       onChange={(e) => setTemplateName(e.target.value)}
-                      placeholder="Ej. Visita cliente X"
+                      placeholder={t("ui.templateExample")}
                                          />
                   </div>
                   <Button 
@@ -1330,7 +1330,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                       const { routeValues, waypoints, origin, destination } = getEffectiveRouteValues();
                       
                       if (!origin || !destination) {
-                        toast.error("La ruta debe tener origen y destino");
+                        toast.error(t("ui.routeRequired"));
                         return;
                       }
 
@@ -1340,7 +1340,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                         // Calculate estimated time roughly (e.g. 60km/h avg speed) if not available, or just leave 0
                         // Since we don't have duration here easily without calling API, we default to 0.
 
-                          if (!supabase || !user) throw new Error("No autenticado");
+                          if (!supabase || !user) throw new Error(t("bulk.errorNotAuthenticated"));
 
                           const { error } = await supabase.from("route_templates").insert({
                             user_id: user.id,
@@ -1361,14 +1361,14 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                         setSaveTemplateOpen(false);
                       } catch (e) {
                          logger.warn("Error al guardar plantilla", e);
-                         toast.error("Error al guardar plantilla");
+                         toast.error(t("ui.templateFailed"));
                       } finally {
                         setTemplateLoading(false);
                       }
                     }}
                   >
                     {templateLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                     {t("advancedRoutes.save") || "Guardar"}
+                     {t("advancedRoutes.save") || t("ui.save")}
                   </Button>
                 </div>
               </PopoverContent>
@@ -1395,14 +1395,14 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
 
                 if (!date.trim()) {
                   event.preventDefault();
-                  toast.error("Selecciona una fecha");
+                  toast.error(t("ui.dateRequired"));
                   return;
                 }
 
                 const routeNonEmpty = routeValues.map((v) => v.trim()).filter(Boolean);
                 if (routeNonEmpty.length < 2) {
                   event.preventDefault();
-                  toast.error("Completa origen y destino");
+                  toast.error(t("ui.fillRoute"));
                   return;
                 }
 
@@ -1446,7 +1446,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                         createdAt: new Date().toISOString()
                       });
                       projectId = newId;
-                      toast.success(`Proyecto "${trimmedProject}" creado`);
+                      toast.success(tf("ui.projectCreatedNamed", { name: trimmedProject }));
                     } catch (err) {
                       logger.warn("Failed to auto-create project", err);
                     }

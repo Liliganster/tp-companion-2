@@ -66,7 +66,7 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     maxCallsheetsPerWorkerRun: 1,
   },
 
-  // Pro: 60 callsheets IA/mes y proceso por lotes.
+  // Pro base (mensual): 60/mes. La cuota anual de 400 se resuelve en callsheetQuotaPolicy.
   pro: {
     maxActiveTrips: UNLIMITED,
     maxActiveTripsAI: UNLIMITED,

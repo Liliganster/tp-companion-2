@@ -1,3 +1,4 @@
+import { uiText } from "@/lib/ui-language";
 import { getProfileRates } from "@/lib/tripMoney";
 import { FormSection } from "@/components/ui/form-section";
 import { CALLSHEET_CLIENT_TIMEOUT_MS } from "@/lib/callsheetTiming";
@@ -71,7 +72,7 @@ const BULK_CALLSHEET_PROCESS_CONCURRENCY = 2;
 const BULK_DRIVE_IMPORT_QUERY_PARAM = "bulkDriveImport";
 
 async function loadGoogleApiJs() {
-  if (typeof window === "undefined") throw new Error("Google API no disponible");
+  if (typeof window === "undefined") throw new Error(uiText("ui.googleConfiguration"));
   const w = window as any;
   if (w.gapi?.load) return;
 
@@ -81,7 +82,7 @@ async function loadGoogleApiJs() {
       script.src = "https://apis.google.com/js/api.js";
       script.async = true;
       script.onload = () => resolve();
-      script.onerror = () => reject(new Error("No se pudo cargar Google API"));
+      script.onerror = () => reject(new Error(uiText("ui.googleConfiguration")));
       document.head.appendChild(script);
     });
   }
@@ -95,7 +96,7 @@ async function loadGooglePickerApi() {
       await loadGoogleApiJs();
       const w = window as any;
       await new Promise<void>((resolve, reject) => {
-        if (!w.gapi?.load) return reject(new Error("Google API no disponible"));
+        if (!w.gapi?.load) return reject(new Error(uiText("ui.googleConfiguration")));
         w.gapi.load("picker", { callback: () => resolve() });
       });
     })();
@@ -122,7 +123,7 @@ async function openGoogleDrivePicker(params: {
 
   const w = window as any;
   const google = w.google;
-  if (!google?.picker) throw new Error("Google Drive Picker no disponible");
+  if (!google?.picker) throw new Error(uiText("ui.googleConfiguration"));
 
   const mimeTypes = Array.isArray(params.mimeTypes) && params.mimeTypes.length > 0
     ? params.mimeTypes
@@ -170,7 +171,7 @@ async function openGoogleDrivePicker(params: {
 
       picker.setVisible(true);
     } catch (err: any) {
-      reject(new Error(err?.message || "Error opening Google Drive Picker"));
+      reject(new Error(err?.message || uiText("ui.googleConfiguration")));
     }
   });
 }
@@ -179,7 +180,7 @@ let googleIdentityServicesPromise: Promise<void> | null = null;
 
 /** Carga (una vez) el script de Google Identity Services. */
 async function loadGoogleIdentityServices(): Promise<void> {
-  if (typeof window === "undefined") throw new Error("Google Identity Services no disponible");
+  if (typeof window === "undefined") throw new Error(uiText("ui.googleConfiguration"));
   const w = window as any;
   if (w.google?.accounts?.oauth2) return;
   if (!googleIdentityServicesPromise) {
@@ -189,7 +190,7 @@ async function loadGoogleIdentityServices(): Promise<void> {
       script.async = true;
       script.defer = true;
       script.onload = () => resolve();
-      script.onerror = () => reject(new Error("No se pudo cargar Google Identity Services"));
+      script.onerror = () => reject(new Error(uiText("ui.googleConfiguration")));
       document.head.appendChild(script);
     });
   }
@@ -215,7 +216,7 @@ async function getDriveFileToken(clientId: string): Promise<string> {
         }
         resolve(response.access_token);
       },
-      error_callback: (error: any) => reject(new Error(error?.message || "Google authorization failed")),
+      error_callback: (error: any) => reject(new Error(error?.message || uiText("ui.googleConfiguration"))),
     });
     tokenClient.requestAccessToken();
   });
@@ -223,7 +224,7 @@ async function getDriveFileToken(clientId: string): Promise<string> {
 
 function getGoogleCloudProjectNumber(clientId: string): string {
   const projectNumber = clientId.trim().match(/^(\d+)-/)?.[1];
-  if (!projectNumber) throw new Error("Google OAuth Client ID no contiene un número de proyecto válido");
+  if (!projectNumber) throw new Error(uiText("ui.googleConfiguration"));
   return projectNumber;
 }
 
@@ -593,15 +594,15 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
       const destination = destinationRaw || profile.baseAddress || "";
 
       if (!dateIso) {
-        errors.push(`Fila ${rowIdx + 1}: fecha inválida`);
+        errors.push(tf("ui.rowDate", { row: rowIdx + 1 }));
         continue;
       }
       if (!projectName.trim()) {
-        errors.push(`Fila ${rowIdx + 1}: projectName vacío`);
+        errors.push(tf("ui.rowProject", { row: rowIdx + 1 }));
         continue;
       }
       if (!origin || !destination) {
-        errors.push(`Fila ${rowIdx + 1}: origin/destination vacíos (y no hay dirección base)`);
+        errors.push(tf("ui.rowAddress", { row: rowIdx + 1 }));
         continue;
       }
 
@@ -617,9 +618,9 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
       const routeValues = [origin, ...stops, destination].filter((x) => String(x ?? "").trim().length > 0);
 
       const distanceKm = parseImportDistance(get(iDistance));
-      if (distanceKm === null) { errors.push(`Fila ${rowIdx + 1}: kilómetros inválidos`); continue; }
+      if (distanceKm === null) { errors.push(tf("ui.rowKm", { row: rowIdx + 1 })); continue; }
       const stopsCheck = checkStopsLimit(Math.max(0, routeValues.length - 2));
-      if (!stopsCheck.allowed) { errors.push(stopsCheck.message || `Fila ${rowIdx + 1}: demasiadas paradas`); continue; }
+      if (!stopsCheck.allowed) { errors.push(stopsCheck.message || tf("ui.rowStops", { row: rowIdx + 1 })); continue; }
 
       tripsOut.push({
         id: uuidv4(),
@@ -718,7 +719,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
       const loaded: ImportTable[] = [];
       for (const file of files) {
         try {
-          if (!/\.(csv|tsv|xlsx|xls)$/i.test(file.name)) throw new Error(`${file.name}: CSV, TSV o Excel (.xlsx, .xls).`);
+          if (!/\.(csv|tsv|xlsx|xls)$/i.test(file.name)) throw new Error(tf("ui.spreadsheetType", { name: file.name }));
           loaded.push(...await readSpreadsheetTables(file));
         }
         catch (err) { toast.error(err instanceof Error ? err.message : t('bulk.errorCsvRead')); }
@@ -1814,7 +1815,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                 try {
                   validateDocumentSize({ name: 'CSV', size: new Blob([pastedCsv]).size });
                   const rows = parseDelimitedRows(pastedCsv);
-                  if (rows.length < 2) throw new Error('CSV: incluye cabeceras y al menos una fila.');
+                  if (rows.length < 2) throw new Error(t("ui.csvRows"));
                   const loaded = { name: `CSV ${manualTables.length + 1}`, text: pastedCsv };
                   mergeImportTables([...manualTables, loaded].map(table => table.text));
                   setManualTables(prev => [...prev, loaded]); setPastedCsv('');
@@ -1939,7 +1940,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                   <div className="flex justify-center">
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-secondary/30 px-3 py-1 text-xs text-muted-foreground">
                       <Sparkles className="h-3 w-3 text-primary" />
-                      {tf("bulk.aiQuotaLine", { used: aiQuota.used, limit: aiQuota.limit })}
+                      {tf(aiQuota.period === "annual" ? "bulk.aiQuotaAnnualLine" : "bulk.aiQuotaLine", { used: aiQuota.used, limit: aiQuota.limit })}
                       {" · "}
                       {tf("dashboard.aiCounterRenews", {
                         month: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toLocaleDateString(locale, { month: "long" }),

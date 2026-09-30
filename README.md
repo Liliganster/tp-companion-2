@@ -176,7 +176,7 @@ Dos planes (`api/_utils/plans.ts` ↔ `src/lib/plans.ts`), facturación con **St
 | Función | Free (`basic`) | Pro |
 |---|---|---|
 | Viajes manuales | Ilimitados | Ilimitados |
-| Callsheets IA / mes | **3** | **60** |
+| Callsheets IA | **3/mes** | **Mensual: 60/mes · Anual: 400/año de suscripción** |
 | Callsheets por lote | 3 | 20 |
 | Callsheets por corrida del worker | 1 | 5 |
 | Proyectos / plantillas de ruta | Ilimitados | Ilimitados |
@@ -394,3 +394,20 @@ Código presente en el repo pero desconectado por decisión de producto (Fase 1 
 - [BACKUP_RECOVERY.md](BACKUP_RECOVERY.md) — copias y recuperación
 - [VERCEL_SETUP.md](VERCEL_SETUP.md) — configuración de despliegue
 - [docs/archive/](docs/archive/) — auditorías y documentos históricos
+
+### Cuota del Pro anual
+
+Pro mensual mantiene 60 callsheets por mes natural (UTC). Pro anual incluye 400
+para todo el periodo anual de Stripe, sin recarga mensual ni acumulación entre
+años. Free mantiene 3/mes. El contador usa el registro de uso del servidor,
+incluidos reprocesados y documentos pendientes de revisión; borrar un documento
+no devuelve cuota. Las reservas simultáneas también consumen saldo disponible.
+
+Despliegue: aplicar primero la migración
+`supabase/migrations/20260930000001_annual_callsheet_quota.sql` y después
+publicar el código de la app/API. El webhook guarda el intervalo y el inicio y
+fin exactos de Stripe. Las suscripciones anuales existentes se completan en su
+primera consulta con Stripe; si no se puede verificar el periodo, no se concede
+un saldo mensual alternativo. Se conservan los RPC antiguos para la transición.
+Una renovación anual confirmada abre un nuevo saldo de 400; el mero cambio de
+mes o el vencimiento sin renovación confirmada no lo hace.

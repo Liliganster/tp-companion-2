@@ -5,7 +5,7 @@ import { findUserIdByStripeIds, saveStripeSubscription } from "./_utils/entitlem
 import {
   getPlanTierForSubscription,
   getSubscriptionCustomerId,
-  getSubscriptionPeriodEnd,
+  getSubscriptionQuotaPeriod,
   getSubscriptionPriceId,
   getSubscriptionUserId,
 } from "./_utils/stripeSubscription.js";
@@ -28,7 +28,7 @@ async function syncSubscription(subscription: Stripe.Subscription, eventCreated:
     subscriptionId: subscription.id,
     status: subscription.status,
     priceId: getSubscriptionPriceId(subscription),
-    currentPeriodEnd: getSubscriptionPeriodEnd(subscription),
+    ...getSubscriptionQuotaPeriod(subscription),
     cancelAtPeriodEnd: subscription.cancel_at_period_end,
     eventCreatedAt: new Date(eventCreated * 1000).toISOString(),
   });

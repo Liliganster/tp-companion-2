@@ -5,7 +5,10 @@ import { logger } from "@/lib/logger";
 
 export type { PlanTier, PlanLimits };
 
+export type AiQuotaPolicy = { limit: number; period: 'monthly' | 'annual'; periodStart: string; periodEnd: string };
+
 interface SubscriptionData {
+  aiQuota?: AiQuotaPolicy;
   plan_tier: PlanTier;
   status: string;
   started_at: string | null;
@@ -25,6 +28,7 @@ function normalizePlanTier(input: unknown): PlanTier {
 }
 
 interface PlanContextValue {
+  aiQuota?: AiQuotaPolicy;
   /** Current plan tier for the user */
   planTier: PlanTier;
   /** Plan limits for the current tier */
@@ -66,6 +70,7 @@ export function PlanProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       setSubscription({
         plan_tier: normalizePlanTier(data?.tier),
+        aiQuota: data?.aiQuota,
         status: typeof data?.status === "string" ? data.status : "free",
         started_at: typeof data?.startedAt === "string" ? data.startedAt : null,
         expires_at: typeof data?.expiresAt === "string" ? data.expiresAt : null,
@@ -140,6 +145,7 @@ export function PlanProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value: PlanContextValue = {
+    aiQuota: subscription?.aiQuota,
     planTier,
     limits,
     status: subscription?.status || "active",

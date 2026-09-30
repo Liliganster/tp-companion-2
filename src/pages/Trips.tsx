@@ -206,7 +206,7 @@ export default function Trips() {
     } catch {
       toast({
         title: t("trips.toastTripsDeletedTitle"),
-        description: "No se pudo borrar el viaje.",
+        description: t("ui.tripDeleteFailed"),
         variant: "destructive",
       });
     }
@@ -218,7 +218,7 @@ export default function Trips() {
 
       const start = new Date(`${trip.date}T09:00:00`);
       const end = new Date(`${trip.date}T10:00:00`);
-      const summary = `${trip.project} — ${trip.purpose || "Trip"}`;
+      const summary = `${trip.project} — ${trip.purpose || t("projectDetail.tripLabel")}`;
       const location = trip.route[trip.route.length - 1] ?? "";
       const description = `${t("trips.route")}: ${trip.route.join(" -> ")}\n${t("trips.distance")}: ${trip.distance} km`;
 
@@ -659,7 +659,7 @@ export default function Trips() {
                 {/* Stats Grid - Better responsive grid */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-1 sm:gap-2 text-xs sm:text-sm">
                   <div className="flex justify-between md:flex-col md:gap-0.5 [&>span:last-child]:text-success">
-                    <span className="text-muted-foreground">Distancia:</span>
+                    <span className="text-muted-foreground">{t("ui.distance")}</span>
                     <span className="font-medium">{trip.distance} km</span>
                   </div>
                   <div className="flex justify-between md:flex-col md:gap-0.5">

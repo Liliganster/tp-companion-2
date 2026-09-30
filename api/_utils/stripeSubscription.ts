@@ -14,6 +14,18 @@ export function getSubscriptionPeriodEnd(subscription: Stripe.Subscription): str
   return new Date(Math.max(...timestamps) * 1000).toISOString();
 }
 
+/** Use the same subscription item as the price that grants Pro. */
+export function getSubscriptionQuotaPeriod(subscription: Stripe.Subscription): { billingInterval: "monthly" | "annual" | null; currentPeriodStart: string | null; currentPeriodEnd: string | null } {
+  const item = subscription.items.data[0];
+  const recurring = item?.price?.recurring;
+  const billingInterval = recurring?.interval_count === 1
+    ? recurring.interval === 'year' ? 'annual' : recurring.interval === 'month' ? 'monthly' : null
+    : null;
+  const iso = (value: unknown) => typeof value === 'number' && Number.isFinite(value)
+    ? new Date(value * 1000).toISOString() : null;
+  return { billingInterval, currentPeriodStart: iso(item?.current_period_start), currentPeriodEnd: iso(item?.current_period_end) };
+}
+
 export function getSubscriptionCustomerId(subscription: Stripe.Subscription): string {
   return typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
 }

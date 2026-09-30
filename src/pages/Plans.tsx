@@ -67,7 +67,7 @@ export default function Plans() {
   };
 
   // Cantidades = las REALES de src/lib/plans.ts (Free: 3 IA/mes, lote de 3;
-  // Pro: 60 IA/mes, lote de 20). OpenRouter propio = solo Pro.
+  // Pro mensual: 60 IA/mes; anual: 400 IA/año de suscripción). OpenRouter propio = solo Pro.
   const basicFeatures = [
     { text: t("plans.features.unlimitedTrips"), included: true },
     { text: t("plans.features.unlimitedProjects"), included: true },
@@ -82,7 +82,7 @@ export default function Plans() {
 
   // Lo fuerte primero: la IA es el motivo de compra
   const proFeatures = [
-    { text: t("plans.features.ai60"), included: true },
+    { text: t(billing === "annual" ? "plans.features.ai400Annual" : "plans.features.ai60"), included: true },
     { text: t("plans.features.callsheetBulk20"), included: true },
     { text: t("plans.features.byoOpenrouter"), included: true },
     { text: t("plans.features.unlimitedTrips"), included: true },

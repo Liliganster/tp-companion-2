@@ -1,3 +1,4 @@
+import { LocalizedText } from "./localized-text";
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
@@ -45,7 +46,7 @@ const DialogContent = React.forwardRef<
       {/* Cierre glass: legible tanto sobre la imagen de cabecera como sobre la tarjeta */}
       <DialogPrimitive.Close className="absolute right-4 top-4 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/35 text-white/80 shadow-sm backdrop-blur-md transition-colors hover:bg-black/55 hover:text-white focus:outline-none focus:ring-2 focus:ring-ring disabled:pointer-events-none">
         <X className="h-4 w-4" />
-        <span className="sr-only">Close</span>
+        <span className="sr-only"><LocalizedText messageKey="modal.close" /></span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
   </DialogPortal>

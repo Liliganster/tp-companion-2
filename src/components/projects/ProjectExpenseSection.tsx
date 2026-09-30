@@ -212,7 +212,7 @@ export function ProjectExpenseSection({ projectId, onExpenseChange }: ProjectExp
           <h3 className="font-medium">{t("projectExpenses.title")}</h3>
         </div>
         <div className="text-sm text-muted-foreground text-center py-4">
-          Loading...
+          {t("ui.loading")}
         </div>
       </div>
     );

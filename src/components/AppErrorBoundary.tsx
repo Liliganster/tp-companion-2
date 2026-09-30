@@ -1,3 +1,4 @@
+import { uiText as t } from "@/lib/ui-language";
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { logger } from "@/lib/logger";
@@ -31,7 +32,7 @@ export class AppErrorBoundary extends React.Component<Props, State> {
 
   private handleReload = () => {
     if (window.__appRecovery) void window.__appRecovery.recover();
-    else if (window.confirm("Se recargará esta pestaña. Los cambios sin guardar se perderán. ¿Continuar?")) window.location.reload();
+    else if (window.confirm(t("ui.reloadConfirm"))) window.location.reload();
   };
 
   private handleReset = () => {
@@ -44,9 +45,9 @@ export class AppErrorBoundary extends React.Component<Props, State> {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="glass-card w-full max-w-lg p-6">
-          <h1 className="text-xl font-semibold">Algo ha fallado</h1>
+          <h1 className="text-xl font-semibold">{t("ui.errorTitle")}</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            La app encontró un error inesperado. Puedes recargar o volver a intentarlo.
+            {t("ui.errorBody")}
           </p>
           {import.meta.env.DEV && this.state.message ? (
             <pre className="mt-4 whitespace-pre-wrap rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
@@ -55,14 +56,14 @@ export class AppErrorBoundary extends React.Component<Props, State> {
           ) : null}
           <div className="mt-5 flex items-center gap-2">
             <Button variant="default" onClick={this.handleReload}>
-              Recargar
+              {t("ui.reload")}
             </Button>
             <Button variant="outline" onClick={this.handleReset}>
-              Reintentar
+              {t("ui.retry")}
             </Button>
           </div>
           <p className="mt-4 text-xs text-muted-foreground">
-            Si el problema persiste, revisa tu conexión o contacta con soporte.
+            {t("ui.errorSupport")}
           </p>
         </div>
       </div>

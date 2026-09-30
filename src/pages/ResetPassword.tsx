@@ -1,3 +1,4 @@
+import { useI18n } from "@/hooks/use-i18n";
 import { useState } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function ResetPassword() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, loading, requestPasswordReset } = useAuth();
@@ -43,31 +45,31 @@ export default function ResetPassword() {
     e.preventDefault();
     if (!supabase) {
       toast({
-        title: "Supabase no configurado",
-        description: "Faltan variables de entorno de Supabase.",
+        title: t("ui.supabaseMissing"),
+        description: t("ui.supabaseEnvMissing"),
         variant: "destructive",
       });
       return;
     }
     if (!user) {
       toast({
-        title: "Sesión no encontrada",
-        description: "Abre el enlace de recuperación desde tu email.",
+        title: t("ui.sessionMissing"),
+        description: t("ui.openRecoveryEmail"),
         variant: "destructive",
       });
       return;
     }
     if (nextPassword !== confirm) {
       toast({
-        title: "Las contraseñas no coinciden",
+        title: t("ui.passwordMismatch"),
         variant: "destructive",
       });
       return;
     }
     if (nextPassword.trim().length < 8) {
       toast({
-        title: "Contraseña demasiado corta",
-        description: "Usa al menos 8 caracteres.",
+        title: t("ui.passwordShort"),
+        description: t("ui.passwordMin"),
         variant: "destructive",
       });
       return;
@@ -93,17 +95,17 @@ export default function ResetPassword() {
       }
 
       toast({
-        title: "Contraseña actualizada",
-        description: "Ya puedes iniciar sesión con email y contraseña.",
+        title: t("ui.passwordUpdated"),
+        description: t("ui.passwordEmailLogin"),
       });
       navigate("/");
     } catch (err: any) {
       toast({
-        title: "No se pudo actualizar",
+        title: t("ui.updateFailed"),
         description:
           err?.code === "invalid_credentials" || err?.status === 400
-            ? "Comprueba tu contraseña actual e inténtalo de nuevo."
-            : err?.message ?? "Error inesperado",
+            ? t("ui.checkCurrentPassword")
+            : err?.message ?? t("ui.unexpectedError"),
         variant: "destructive",
       });
     } finally {
@@ -123,13 +125,13 @@ export default function ResetPassword() {
     return (
       <div className="min-h-screen flex items-center justify-center px-6">
         <div className="glass-card p-6 w-full max-w-md space-y-3">
-          <h1 className="text-lg font-semibold">Restablecer contraseña</h1>
+          <h1 className="text-lg font-semibold">{t("ui.resetPassword")}</h1>
           <p className="text-sm text-muted-foreground">
-            Abre el enlace de recuperación que te enviamos por email. Si ya lo abriste y llegaste aquí sin sesión, vuelve a intentarlo.
+            {t("ui.recoverySessionHint")}
           </p>
           <div className="flex items-center gap-3">
             <Button asChild variant="outline">
-              <Link to="/auth">Volver a login</Link>
+              <Link to="/auth">{t("ui.backLogin2")}</Link>
             </Button>
           </div>
         </div>
@@ -141,12 +143,12 @@ export default function ResetPassword() {
     return (
       <div className="min-h-screen flex items-center justify-center px-6">
         <div className="glass-card p-6 w-full max-w-md space-y-3">
-          <h1 className="text-lg font-semibold">Verificación necesaria</h1>
+          <h1 className="text-lg font-semibold">{t("ui.verificationNeeded")}</h1>
           <p className="text-sm text-muted-foreground">
-            Inicia el cambio desde Ajustes o utiliza el enlace seguro enviado a tu correo.
+            {t("ui.startSecureChange")}
           </p>
           <Button asChild variant="outline">
-            <Link to="/">Volver al panel</Link>
+            <Link to="/">{t("ui.backDashboard")}</Link>
           </Button>
         </div>
       </div>
@@ -160,13 +162,13 @@ export default function ResetPassword() {
       try {
         await requestPasswordReset(user.email);
         toast({
-          title: "Enlace de seguridad enviado",
-          description: "Abre el correo para establecer una contraseña de forma segura.",
+          title: t("ui.secureLinkSent"),
+          description: t("ui.openSecureEmail"),
         });
       } catch {
         toast({
-          title: "No se pudo enviar el enlace",
-          description: "Espera unos minutos e inténtalo de nuevo.",
+          title: t("ui.linkSendFailed"),
+          description: t("ui.retryLater"),
           variant: "destructive",
         });
       } finally {
@@ -177,15 +179,15 @@ export default function ResetPassword() {
     return (
       <div className="min-h-screen flex items-center justify-center px-6">
         <div className="glass-card p-6 w-full max-w-md space-y-4">
-          <h1 className="text-xl font-semibold">Establecer contraseña</h1>
+          <h1 className="text-xl font-semibold">{t("ui.setPassword")}</h1>
           <p className="text-sm text-muted-foreground">
-            Tu cuenta utiliza un proveedor externo. Para protegerla, te enviaremos un enlace de un solo uso a tu correo verificado.
+            {t("ui.externalAccount")}
           </p>
           <Button className="w-full" type="button" disabled={busy || !user.email} onClick={sendSecureLink}>
-            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Enviar enlace seguro"}
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : t("ui.sendSecureLink")}
           </Button>
           <Button asChild className="w-full" variant="outline">
-            <Link to="/">Volver al panel</Link>
+            <Link to="/">{t("ui.backDashboard")}</Link>
           </Button>
         </div>
       </div>
@@ -195,15 +197,15 @@ export default function ResetPassword() {
   return (
     <div className="min-h-screen flex items-center justify-center px-6">
       <div className="glass-card p-6 w-full max-w-md">
-        <h1 className="text-xl font-semibold mb-1">Nueva contraseña</h1>
+        <h1 className="text-xl font-semibold mb-1">{t("ui.newPassword")}</h1>
         <p className="text-sm text-muted-foreground mb-6">
-          Elige una contraseña nueva para tu cuenta.
+          {t("ui.choosePassword")}
         </p>
 
         <form className="space-y-4" onSubmit={onSubmit}>
           {requiresCurrentPassword && (
             <div className="space-y-2">
-              <Label htmlFor="current-password">Contraseña actual</Label>
+              <Label htmlFor="current-password">{t("ui.currentPassword")}</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
@@ -221,7 +223,7 @@ export default function ResetPassword() {
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="new-password">Contraseña</Label>
+            <Label htmlFor="new-password">{t("ui.password")}</Label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -250,7 +252,7 @@ export default function ResetPassword() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="confirm-password">Confirmar contraseña</Label>
+            <Label htmlFor="confirm-password">{t("ui.confirmPassword")}</Label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -279,7 +281,7 @@ export default function ResetPassword() {
           </div>
 
           <Button className="w-full" type="submit" disabled={!canSubmit}>
-            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Guardar"}
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : t("ui.save")}
           </Button>
         </form>
       </div>

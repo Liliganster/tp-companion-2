@@ -1,3 +1,4 @@
+import { useI18n } from "@/hooks/use-i18n";
 import { useEffect, useRef, useState } from "react";
 
 type Turnstile = {
@@ -33,6 +34,7 @@ export function AuthCaptcha({ siteKey, onToken }: {
   siteKey: string;
   onToken: (token: string) => void;
 }) {
+  const { t, language } = useI18n();
   const container = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -44,7 +46,7 @@ export function AuthCaptcha({ siteKey, onToken }: {
     loadScript().then(() => {
       if (disposed || !container.current) return;
       widget = window.turnstile!.render(container.current, {
-        sitekey: siteKey, size: "flexible", theme: "auto",
+        sitekey: siteKey, language, size: "flexible", theme: "auto",
         callback: (token: string) => { if (!disposed) { setFailed(false); onToken(token); } },
         "expired-callback": () => { if (!disposed) onToken(""); },
         "error-callback": () => { if (!disposed) { onToken(""); setFailed(true); } },
@@ -52,12 +54,12 @@ export function AuthCaptcha({ siteKey, onToken }: {
       });
     }).catch(() => { if (!disposed) setFailed(true); });
     return () => { disposed = true; if (widget !== undefined) window.turnstile?.remove(widget); };
-  }, [siteKey, onToken, attempt]);
+  }, [siteKey, onToken, attempt, language]);
   return <div className="space-y-2">
     <div ref={container} />
     {failed && <div role="alert" className="text-sm text-destructive">
-      No se pudo completar la verificación de seguridad. Comprueba tu conexión.
-      <button type="button" className="ml-2 underline" onClick={() => setAttempt(value => value + 1)}>Reintentar</button>
+      {t("ui.captchaFailed")}
+      <button type="button" className="ml-2 underline" onClick={() => setAttempt(value => value + 1)}>{t("ui.retry")}</button>
     </div>}
   </div>;
 }

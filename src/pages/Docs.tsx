@@ -139,7 +139,7 @@ export default function Docs() {
               label: "Cuotas de IA",
               items: [
                 "Gratuito: 3 extracciones al mes, lotes de hasta 3 archivos.",
-                "Pro: 60 extracciones al mes, lotes de hasta 20 archivos y procesamiento en paralelo.",
+                "Pro mensual: 60 extracciones al mes; Pro anual: 400 por año de suscripción, lotes de hasta 20 archivos y procesamiento en paralelo.",
                 "Pro además puede usar su propia clave de OpenRouter y elegir casi cualquier modelo multimodal (Ajustes → APIs).",
               ],
             },
@@ -245,7 +245,7 @@ export default function Docs() {
           title: "Planes",
           body: [
             "Gratuito: viajes, proyectos e informes ilimitados + 3 extracciones IA al mes (lotes de 3). Para organizarte y probar el flujo completo.",
-            "Pro: 60 extracciones al mes, lotes de 20, ZIP de documentación en los informes y tu propia clave de OpenRouter con el modelo multimodal que prefieras. Mensual sin permanencia o anual con descuento — ideal si acumulas los callsheets y los vuelcas de golpe.",
+            "Pro mensual: 60 extracciones al mes; Pro anual: 400 por año de suscripción, lotes de 20, ZIP de documentación en los informes y tu propia clave de OpenRouter con el modelo multimodal que prefieras. Mensual sin permanencia o anual con descuento — ideal si acumulas los callsheets y los vuelcas de golpe.",
           ],
         },
         {
@@ -422,7 +422,7 @@ export default function Docs() {
               label: "AI quotas",
               items: [
                 "Free: 3 extractions per month, batches of up to 3 files.",
-                "Pro: 60 extractions per month, batches of up to 20 files and parallel processing.",
+                "Pro monthly: 60 extractions per month; Pro annual: 400 per subscription year, batches of up to 20 files and parallel processing.",
                 "Pro can also use its own OpenRouter key and pick almost any multimodal model (Settings → APIs).",
               ],
             },
@@ -528,7 +528,7 @@ export default function Docs() {
           title: "Plans",
           body: [
             "Free: unlimited trips, projects and reports + 3 AI extractions per month (batches of 3). To get organized and try the full flow.",
-            "Pro: 60 extractions per month, batches of 20, the documentation ZIP on reports, and your own OpenRouter key with the multimodal model you prefer. Monthly with no commitment, or annual with a discount — ideal if you pile up callsheets and dump them all at once.",
+            "Pro monthly: 60 extractions per month; Pro annual: 400 per subscription year, batches of 20, the documentation ZIP on reports, and your own OpenRouter key with the multimodal model you prefer. Monthly with no commitment, or annual with a discount — ideal if you pile up callsheets and dump them all at once.",
           ],
         },
         {
@@ -705,7 +705,7 @@ export default function Docs() {
               label: "KI-Kontingente",
               items: [
                 "Gratis: 3 Extraktionen pro Monat, Uploads zu maximal 3 Dateien.",
-                "Pro: 60 Extraktionen pro Monat, Uploads zu maximal 20 Dateien und parallele Verarbeitung.",
+                "Pro monatlich: 60 Extraktionen pro Monat; Pro jährlich: 400 pro Abonnementjahr, Uploads zu maximal 20 Dateien und parallele Verarbeitung.",
                 "Pro kann außerdem den eigenen OpenRouter-Schlüssel nutzen und fast jedes multimodale Modell wählen (Einstellungen → APIs).",
               ],
             },
@@ -811,7 +811,7 @@ export default function Docs() {
           title: "Pläne",
           body: [
             "Gratis: unbegrenzte Fahrten, Projekte und Berichte + 3 KI-Extraktionen pro Monat (Uploads zu 3). Zum Organisieren und Ausprobieren des ganzen Flows.",
-            "Pro: 60 Extraktionen pro Monat, Uploads zu 20, das Dokumentations-ZIP bei Berichten und dein eigener OpenRouter-Schlüssel mit dem multimodalen Modell deiner Wahl. Monatlich ohne Bindung oder jährlich mit Rabatt — ideal, wenn du Callsheets sammelst und alles auf einmal hochlädst.",
+            "Pro monatlich: 60 Extraktionen pro Monat; Pro jährlich: 400 pro Abonnementjahr, Uploads zu 20, das Dokumentations-ZIP bei Berichten und dein eigener OpenRouter-Schlüssel mit dem multimodalen Modell deiner Wahl. Monatlich ohne Bindung oder jährlich mit Rabatt — ideal, wenn du Callsheets sammelst und alles auf einmal hochlädst.",
           ],
         },
         {

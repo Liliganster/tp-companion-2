@@ -40,7 +40,7 @@ export function RecentTrips() {
 
       <div className="flex-1">
         {!loading && recentTrips.length === 0 ? (
-          <div className="text-sm text-muted-foreground py-3">No hay viajes recientes.</div>
+          <div className="text-sm text-muted-foreground py-3">{t("ui.noRecentTrips")}</div>
         ) : null}
 
         {recentTrips.map((trip) => (

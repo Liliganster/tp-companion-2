@@ -400,7 +400,7 @@ export default function Projects() {
     } catch {
       toast({
         title: t("projects.toastDeletedTitle"),
-        description: "No se pudo borrar el proyecto.",
+        description: t("ui.projectDeleteFailed"),
         variant: "destructive",
       });
     }
@@ -509,7 +509,7 @@ export default function Projects() {
 
     toast({
       title: t("projects.toastDeletedTitle"),
-      description: `Se borraron ${ok}/${ids.length}. ${failed} fallaron (no se borró todo lo asociado).`,
+      description: tf("ui.partialDelete", { ok, total: ids.length, failed }),
       variant: "destructive",
     });
   };
@@ -537,7 +537,7 @@ export default function Projects() {
     if (exists) {
       toast({
         title: editingProjectId ? t("projects.edit") : t("projects.createNewProject"),
-        description: "Ya existe un proyecto con ese nombre",
+        description: t("ui.projectExists"),
         variant: "destructive",
       });
       throw new Error("Duplicate project name");
@@ -553,7 +553,7 @@ export default function Projects() {
 
       toast({
         title: t("projects.edit"),
-        description: "Proyecto actualizado",
+        description: t("ui.projectUpdated"),
       });
     } else {
       await addProject({
@@ -577,7 +577,7 @@ export default function Projects() {
 
       toast({
         title: t("projects.createProject"),
-        description: "Proyecto creado",
+        description: t("ui.projectCreated"),
       });
     }
     // Form reset is handled by Modal unmount/open change

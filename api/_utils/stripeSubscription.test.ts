@@ -3,6 +3,7 @@ import {
   getPlanTierForSubscription,
   getSubscriptionCustomerId,
   getSubscriptionPeriodEnd,
+  getSubscriptionQuotaPeriod,
   getSubscriptionPriceId,
   getSubscriptionUserId,
 } from "./stripeSubscription";
@@ -46,3 +47,10 @@ describe("Stripe subscription adapters", () => {
   });
 });
 
+
+it('reads the annual quota period from the same item as the Pro price', () => {
+  expect(getSubscriptionQuotaPeriod(subscription({ items: { data: [
+    { price: { id: 'price_annual', recurring: { interval: 'year', interval_count: 1 } }, current_period_start: 1700000000, current_period_end: 1731622400 },
+    { price: { id: 'addon' }, current_period_start: 1800000000, current_period_end: 1900000000 },
+  ] } }))).toEqual({ billingInterval: 'annual', currentPeriodStart: new Date(1700000000*1000).toISOString(), currentPeriodEnd: new Date(1731622400*1000).toISOString() });
+});

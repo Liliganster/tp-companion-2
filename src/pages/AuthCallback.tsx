@@ -1,3 +1,4 @@
+import { useI18n } from "@/hooks/use-i18n";
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
@@ -14,8 +15,11 @@ function parseHashParams(hash: string): URLSearchParams {
 }
 
 export default function AuthCallback() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const processedRef = useRef(false);
+  const translateRef = useRef(t);
+  translateRef.current = t;
 
   useEffect(() => {
     if (processedRef.current) return;
@@ -49,8 +53,9 @@ export default function AuthCallback() {
     });
     
     const run = async () => {
+      const t = translateRef.current;
       if (oauthError) {
-        toast.error("Error de autenticación", { description: oauthErrorDescription ?? oauthError });
+        toast.error(t("ui.authError"), { description: oauthErrorDescription ?? oauthError });
         navigate("/auth");
         return;
       }
@@ -74,12 +79,12 @@ export default function AuthCallback() {
           const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
           if (error) throw error;
         } else {
-          toast.error("No se recibió respuesta de Google", { description: "Vuelve a intentarlo desde la pantalla de acceso." });
+          toast.error(t("ui.noGoogleResponse"), { description: t("ui.retryLogin") });
           navigate("/auth");
           return;
         }
       } catch {
-        toast.error("No se pudo completar el inicio de sesión", { description: "Revisa la configuración de Google en Supabase." });
+        toast.error(t("ui.loginFailed"), { description: t("ui.checkGoogleSetup") });
         navigate("/auth");
         return;
       } finally {
@@ -93,7 +98,7 @@ export default function AuthCallback() {
 
       const { data, error } = await supabase.auth.getSession();
       if (error || !data.session) {
-        toast.error("Sesión no válida", { description: "No se pudo recuperar la sesión tras el login." });
+        toast.error(t("ui.invalidSession"), { description: t("ui.sessionFailed") });
         navigate("/auth");
         return;
       }
@@ -114,7 +119,7 @@ export default function AuthCallback() {
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="text-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
-        <p className="text-muted-foreground">Verifying authentication...</p>
+        <p className="text-muted-foreground">{t("ui.verifyingAuth")}</p>
       </div>
     </div>
   );

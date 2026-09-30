@@ -91,7 +91,7 @@ export function Sidebar({
 
       {/* Logo */}
       <div className="flex items-center justify-center h-16 px-4 border-b border-border/50 overflow-hidden">
-        <Link to="/" className="flex items-center justify-center w-full min-w-0 overflow-hidden" aria-label="Home">
+        <Link to="/" className="flex items-center justify-center w-full min-w-0 overflow-hidden" aria-label={t("ui.home")}>
           <img
             src={collapsed ? collapsedLogoSrc : logoSrc}
             alt="Logo"

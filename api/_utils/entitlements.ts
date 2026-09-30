@@ -9,6 +9,8 @@ export type BillingEntitlement = {
   subscriptionId: string | null;
   priceId: string | null;
   currentPeriodEnd: string | null;
+  currentPeriodStart?: string | null;
+  billingInterval?: "monthly" | "annual" | null;
   cancelAtPeriodEnd: boolean;
   eventCreatedAt: string | null;
 };
@@ -32,6 +34,8 @@ function fromRow(userId: string, row: any): BillingEntitlement {
     subscriptionId: typeof row?.stripe_subscription_id === "string" ? row.stripe_subscription_id : null,
     priceId: typeof row?.stripe_price_id === "string" ? row.stripe_price_id : null,
     currentPeriodEnd: typeof row?.stripe_current_period_end === "string" ? row.stripe_current_period_end : null,
+    currentPeriodStart: typeof row?.stripe_current_period_start === 'string' ? row.stripe_current_period_start : null,
+    billingInterval: row?.stripe_billing_interval === 'annual' || row?.stripe_billing_interval === 'monthly' ? row.stripe_billing_interval : null,
     cancelAtPeriodEnd: row?.stripe_cancel_at_period_end === true,
     eventCreatedAt: typeof row?.stripe_event_created_at === "string" ? row.stripe_event_created_at : null,
   };
@@ -40,7 +44,7 @@ function fromRow(userId: string, row: any): BillingEntitlement {
 export async function getBillingEntitlement(userId: string): Promise<BillingEntitlement> {
   const { data, error } = await supabaseAdmin
     .from("billing_entitlements")
-    .select("plan_tier, stripe_customer_id, stripe_subscription_id, stripe_subscription_status, stripe_price_id, stripe_current_period_end, stripe_cancel_at_period_end, stripe_event_created_at")
+    .select("plan_tier, stripe_customer_id, stripe_subscription_id, stripe_subscription_status, stripe_price_id, stripe_current_period_end, stripe_cancel_at_period_end, stripe_event_created_at, stripe_current_period_start, stripe_billing_interval")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -108,6 +112,8 @@ export async function saveStripeSubscription(args: {
   status: string;
   priceId: string | null;
   currentPeriodEnd: string | null;
+  currentPeriodStart: string | null;
+  billingInterval: "monthly" | "annual" | null;
   cancelAtPeriodEnd: boolean;
   eventCreatedAt: string;
 }): Promise<void> {
@@ -125,6 +131,8 @@ export async function saveStripeSubscription(args: {
     stripe_current_period_end: args.currentPeriodEnd,
     stripe_cancel_at_period_end: args.cancelAtPeriodEnd,
     stripe_event_created_at: args.eventCreatedAt,
+    stripe_current_period_start: args.currentPeriodStart,
+    stripe_billing_interval: args.billingInterval,
     updated_at: updatedAt,
   }, { onConflict: "user_id" });
   if (secureResult.error && !isMissingEntitlementsTable(secureResult.error)) throw secureResult.error;

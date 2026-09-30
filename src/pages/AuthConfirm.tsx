@@ -1,3 +1,4 @@
+import { useI18n } from "@/hooks/use-i18n";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Loader2, ShieldCheck } from "lucide-react";
@@ -22,6 +23,7 @@ async function withTimeout<T>(promise: Promise<T>): Promise<T> {
 }
 
 export default function AuthConfirm() {
+  const { t } = useI18n();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
@@ -48,14 +50,14 @@ export default function AuthConfirm() {
       const message = error instanceof Error ? error.message : "";
       const description =
         message === "RECOVERY_TIMEOUT"
-          ? "La verificación está tardando demasiado. Comprueba tu conexión e inténtalo de nuevo."
+          ? t("ui.verificationSlow")
           : /expired|invalid|otp_expired/i.test(message)
-            ? "Este enlace ha caducado o ya fue utilizado. Solicita un nuevo correo de recuperación."
-            : "No se pudo verificar el enlace. Solicita un nuevo correo de recuperación.";
+            ? t("ui.expiredLink")
+            : t("ui.verifyLinkFailed");
 
       setErrorMessage(description);
       toast({
-        title: "Enlace no válido",
+        title: t("ui.invalidLink"),
         description,
         variant: "destructive",
       });
@@ -68,10 +70,10 @@ export default function AuthConfirm() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-6">
         <div className="glass-card p-6 w-full max-w-md space-y-4 text-center">
-          <h1 className="text-xl font-semibold">Enlace no válido</h1>
-          <p className="text-sm text-muted-foreground">Solicita un nuevo correo para restablecer tu contraseña.</p>
+          <h1 className="text-xl font-semibold">{t("ui.invalidLink")}</h1>
+          <p className="text-sm text-muted-foreground">{t("ui.newRecoveryEmail")}</p>
           <Button asChild variant="outline" className="w-full">
-            <Link to="/auth">Volver al login</Link>
+            <Link to="/auth">{t("ui.backLogin")}</Link>
           </Button>
         </div>
       </div>
@@ -82,12 +84,12 @@ export default function AuthConfirm() {
     <div className="min-h-screen flex items-center justify-center bg-background px-6">
       <div className="glass-card p-6 w-full max-w-md space-y-4 text-center">
         <ShieldCheck className="w-10 h-10 text-primary mx-auto" />
-        <h1 className="text-xl font-semibold">Restablecimiento seguro</h1>
+        <h1 className="text-xl font-semibold">{t("ui.secureReset")}</h1>
         <p className="text-sm text-muted-foreground">
-          Confirma que quieres continuar para crear una nueva contraseña de Fahrtenbuch Pro.
+          {t("ui.confirmReset")}
         </p>
         <Button type="button" className="w-full" disabled={busy} onClick={confirmRecovery}>
-          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Continuar de forma segura"}
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : t("ui.continueSecure")}
         </Button>
         {errorMessage && (
           <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-left">
@@ -96,7 +98,7 @@ export default function AuthConfirm() {
               className="mt-2 inline-block text-sm font-medium text-primary hover:underline"
               href="https://dashboard.fahrtenbuchpro.com/auth"
             >
-              Solicitar otro enlace
+              {t("ui.anotherLink")}
             </a>
           </div>
         )}

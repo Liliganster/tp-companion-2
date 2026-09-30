@@ -287,7 +287,7 @@ export default function CalendarPage() {
           id: uuidv4(),
           name: newProjectName,
           producer: clientName,
-          description: "Imported from Google Calendar",
+          description: t("ui.calendarImport"),
           ratePerKm: getProfileRates(profile).ratePerKm,
           starred: false,
           trips: 0,
@@ -425,18 +425,18 @@ export default function CalendarPage() {
 
     const title = createForm.title.trim();
     if (!title) {
-      toast.error("Escribe un título para el evento");
+      toast.error(t("ui.eventTitleRequired"));
       return;
     }
 
     const start = new Date(createForm.startLocal);
     const end = new Date(createForm.endLocal);
     if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) {
-      toast.error("Revisa la fecha y hora de inicio/fin");
+      toast.error(t("ui.eventDates"));
       return;
     }
     if (end.getTime() <= start.getTime()) {
-      toast.error("La hora de fin debe ser posterior a la de inicio");
+      toast.error(t("ui.eventEnd"));
       return;
     }
 
@@ -458,11 +458,11 @@ export default function CalendarPage() {
 
       const data: any = await response.json().catch(() => null);
       if (!response.ok) {
-        toast.error(String(data?.error ?? "No se pudo crear el evento"));
+        toast.error(String(data?.error ?? t("ui.unexpected")));
         return;
       }
 
-      toast.success("Evento creado");
+      toast.success(t("ui.eventCreated"));
       setCreateOpen(false);
       await refreshEvents(currentDate);
     } finally {

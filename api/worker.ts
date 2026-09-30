@@ -183,9 +183,9 @@ export default withApiObservability(async function handler(req: any, res: any, {
         }
         if (reservation.busy) return;
         if (!reservation.allowed) {
-          await supabaseAdmin.from("callsheet_jobs").update({ status: "out_of_quota", needs_review_reason: "monthly_quota_exceeded" })
+          await supabaseAdmin.from("callsheet_jobs").update({ status: "out_of_quota", needs_review_reason: (reservation.reason ?? "quota_exceeded") })
             .eq("id", jobId).eq("user_id", userId).in("status", ["queued", "failed", "processing"]);
-          processedResults.push({ id: jobId, status: "out_of_quota", error: "monthly_quota_exceeded" });
+          processedResults.push({ id: jobId, status: "out_of_quota", error: (reservation.reason ?? "quota_exceeded") });
           return;
         }
         const claimed = { user_id: userId, storage_path: reservation.storagePath, processed_at: new Date().toISOString() };

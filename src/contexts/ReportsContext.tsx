@@ -1,3 +1,4 @@
+import { uiText } from "@/lib/ui-language";
 import { createContext, ReactNode, useCallback, useContext, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "./AuthContext";
@@ -89,7 +90,7 @@ export function ReportsProvider({ children }: { children: ReactNode }) {
         return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
       });
       if (reportsThisMonth.length >= limits.maxSavedReportsPerMonth) {
-        toast.error("Límite alcanzado: solo 1 informe por mes en el plan Basic. Mejora a Pro para informes ilimitados.");
+        toast.error(uiText("ui.reportLimit"));
         throw new Error("limits.maxReportsPerMonthReached");
       }
     }

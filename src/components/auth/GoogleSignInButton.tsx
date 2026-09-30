@@ -1,3 +1,5 @@
+import { uiText } from "@/lib/ui-language";
+import { useI18n } from "@/hooks/use-i18n";
 import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -23,6 +25,7 @@ type GoogleIdentityApi = {
       text: "signin_with" | "signup_with";
       logo_alignment: "left";
       width: number;
+      locale: string;
     },
   ) => void;
 };
@@ -49,9 +52,9 @@ function loadGoogleIdentityScript() {
 
     const handleLoad = () => {
       if (window.google?.accounts?.id) resolve();
-      else reject(new Error("Google Identity Services no se pudo inicializar."));
+      else reject(new Error(uiText("ui.googleConfiguration")));
     };
-    const handleError = () => reject(new Error("No se pudo cargar el acceso seguro de Google."));
+    const handleError = () => reject(new Error(uiText("ui.googleConfiguration")));
 
     script.addEventListener("load", handleLoad, { once: true });
     script.addEventListener("error", handleError, { once: true });
@@ -87,6 +90,7 @@ type GoogleSignInButtonProps = {
 };
 
 export function GoogleSignInButton({ disabled = false, isSignUp = false, onCredential, onError }: GoogleSignInButtonProps) {
+  const { language } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const onCredentialRef = useRef(onCredential);
   const onErrorRef = useRef(onError);
@@ -110,13 +114,13 @@ export function GoogleSignInButton({ disabled = false, isSignUp = false, onCrede
         ?? import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID
         ?? "",
       ).trim();
-      if (!clientId) throw new Error("Falta VITE_GOOGLE_LOGIN_CLIENT_ID en la configuración de la aplicación.");
+      if (!clientId) throw new Error(uiText("ui.googleConfiguration"));
 
       const [{ nonce, hashedNonce }] = await Promise.all([createNoncePair(), loadGoogleIdentityScript()]);
       if (cancelled || !containerRef.current) return;
 
       const googleIdentity = window.google?.accounts?.id;
-      if (!googleIdentity) throw new Error("Google Identity Services no está disponible.");
+      if (!googleIdentity) throw new Error(uiText("ui.googleConfiguration"));
 
       googleIdentity.initialize({
         client_id: clientId,
@@ -125,7 +129,7 @@ export function GoogleSignInButton({ disabled = false, isSignUp = false, onCrede
         use_fedcm_for_prompt: true,
         callback: (response) => {
           if (!response.credential) {
-            onErrorRef.current(new Error("Google no devolvió una credencial válida."));
+            onErrorRef.current(new Error(uiText("ui.googleConfiguration")));
             return;
           }
           void Promise.resolve(onCredentialRef.current(response.credential, nonce)).catch((error) => {
@@ -150,6 +154,7 @@ export function GoogleSignInButton({ disabled = false, isSignUp = false, onCrede
         text: isSignUp ? "signup_with" : "signin_with",
         logo_alignment: "left",
         width: buttonWidth,
+        locale: language,
       });
 
       // Google añade 10 px laterales y 2 px verticales dentro de su iframe.
@@ -172,7 +177,7 @@ export function GoogleSignInButton({ disabled = false, isSignUp = false, onCrede
     return () => {
       cancelled = true;
     };
-  }, [isSignUp]);
+  }, [isSignUp, language]);
 
   return (
     <div className="relative mt-6 h-8 w-full overflow-hidden rounded-md">

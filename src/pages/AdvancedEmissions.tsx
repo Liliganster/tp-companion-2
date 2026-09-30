@@ -563,7 +563,7 @@ export default function AdvancedEmissions() {
           {isLoadingEmissionsData ? (
             <div className="flex flex-col items-center justify-center h-full animate-fade-in">
               <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
-              <p className="text-muted-foreground">Cargando datos de emisiones...</p>
+              <p className="text-muted-foreground">{t("ui.emissionsLoading")}</p>
             </div>
           ) : (
             /* Results State */

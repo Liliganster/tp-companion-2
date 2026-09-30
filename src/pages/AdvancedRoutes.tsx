@@ -316,7 +316,7 @@ export default function AdvancedRoutes() {
     const endLocation = formData.endLocation.trim();
     const waypoints = (Array.isArray(formData.waypoints) ? formData.waypoints : []).map((w) => w.trim()).filter(Boolean);
     if (waypoints.length > 8) {
-      toast.error("Máximo 8 paradas intermedias");
+      toast.error(t("ui.maxStops"));
       return;
     }
 
@@ -417,7 +417,7 @@ export default function AdvancedRoutes() {
     const waypoints = (Array.isArray(template.waypoints) ? template.waypoints : []).map((w) => (w ?? "").trim()).filter(Boolean);
 
     if (!origin || !destination) {
-      toast.error("La plantilla necesita origen y destino");
+      toast.error(t("ui.templateRouteRequired"));
       return;
     }
 
@@ -591,7 +591,7 @@ export default function AdvancedRoutes() {
                     size="sm"
                     onClick={() => {
                       if ((formData.waypoints?.length ?? 0) >= 8) {
-                        toast.error("Máximo 8 paradas intermedias");
+                        toast.error(t("ui.maxStops"));
                         return;
                       }
                       setFormData((prev) => ({ ...prev, waypoints: [...(prev.waypoints ?? []), ""] }));
@@ -645,7 +645,7 @@ export default function AdvancedRoutes() {
                           }))
                         }
                         disabled={loading}
-                        title="Eliminar parada"
+                        title={t("ui.deleteStop")}
                       >
                         <X className="w-4 h-4" />
                       </Button>

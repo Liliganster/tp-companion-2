@@ -35,7 +35,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
     logger.debug("CallsheetUploader: uploading files", { filesCount: files.length, projectId, tripId });
 
     if (files.length > limits.maxCallsheetsPerBatch) {
-      toast.error(`Maximo ${limits.maxCallsheetsPerBatch} documentos por vez`);
+      toast.error(tf("ui.batchMax", { count: limits.maxCallsheetsPerBatch }));
       return;
     }
 
@@ -82,11 +82,11 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
       if (successCount > 0) {
         toast.success(
           autoQueue
-            ? `Se subieron ${successCount} documentos`
-            : `Se subieron ${successCount} documentos. Pulsa "Procesar ahora" para empezar.`,
+            ? tf("ui.uploaded", { count: successCount })
+            : tf("ui.uploadedProcess", { count: successCount }),
         );
       }
-      if (failCount > 0) toast.error(`Fallaron ${failCount} documentos`);
+      if (failCount > 0) toast.error(tf("ui.uploadFailedCount", { count: failCount }));
 
       if (autoQueue && queuedJobIds.length > 0) {
         try {
@@ -112,7 +112,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
       }
     } catch (err: any) {
       logger.warn("CallsheetUploader error", err);
-      toast.error(formatSupabaseError(err, "Error al subir callsheet"));
+      toast.error(formatSupabaseError(err, t("ui.callsheetUploadFailed")));
     } finally {
       setUploading(false);
     }
@@ -133,7 +133,7 @@ export function CallsheetUploader({ onJobCreated, tripId, projectId, autoQueue =
         <Button variant="outline" size="sm" asChild disabled={uploading} className="cursor-pointer">
           <span>
             {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-            Subir Callsheet
+            {t("ui.uploadCallsheet")}
           </span>
         </Button>
       </label>

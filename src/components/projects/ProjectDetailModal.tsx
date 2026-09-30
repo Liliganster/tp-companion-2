@@ -148,7 +148,7 @@ export function ProjectDetailModal({ open, onOpenChange, project, selectedYear =
       const totalToCancel = Math.max(totalPending, inFlightCount, activeExtractionCount);
       logger.warn("[runCloseCleanup] Showing cancel toast for", totalToCancel, "jobs");
       setTimeout(() => {
-        toast.info(`Procesamiento cancelado (${totalToCancel} trabajo${totalToCancel > 1 ? 's' : ''})`, {
+        toast.info(tf("ui.cancelledCount", { count: totalToCancel }), {
           duration: 4000,
         });
       }, 50);
@@ -432,7 +432,7 @@ export function ProjectDetailModal({ open, onOpenChange, project, selectedYear =
             date: nextTrip.date, route: nextTrip.route, distance: nextTrip.distance,
             co2: nextTrip.co2, purpose: nextTrip.purpose,
           });
-          if (!ok) throw new Error("No se pudo actualizar el viaje. Se conserva el anterior.");
+          if (!ok) throw new Error(t("ui.tripUpdateFailed"));
           processedJobsRef.current.add(job.id);
           return null;
         }
@@ -889,7 +889,7 @@ export function ProjectDetailModal({ open, onOpenChange, project, selectedYear =
   };
 
   const handleDeleteCallSheet = async (doc: ProjectDocument) => {
-      if (!confirm("¿Estás seguro de eliminar esta hoja de llamada? Se borrarán los datos asociados.")) return;
+      if (!confirm(t("ui.deleteCallsheet"))) return;
        try {
       await cascadeDeleteCallsheetJobById(supabase, doc.id);
         
@@ -912,14 +912,14 @@ export function ProjectDetailModal({ open, onOpenChange, project, selectedYear =
 
     if (doc.status === 'processing') {
       logger.warn("[handleExtract] EARLY RETURN: already processing", { docId: doc.id });
-      toast.info("El documento ya se está procesando");
+      toast.info(t("ui.alreadyProcessing"));
       return;
     }
 
     const previouslyProcessed = doc.status === 'done' || doc.status === 'needs_review';
     if (previouslyProcessed && !isReprocess) {
       logger.warn("[handleExtract] Document is done, asking confirmation", { docId: doc.id });
-      if (!confirm("Este documento ya fue procesado. ¿Quieres volver a procesarlo? Consumirá otra extracción de tu cuota.")) {
+      if (!confirm(t("ui.reprocess"))) {
         logger.warn("[handleExtract] EARLY RETURN: user cancelled reprocess", { docId: doc.id });
         return;
       }
@@ -985,11 +985,11 @@ export function ProjectDetailModal({ open, onOpenChange, project, selectedYear =
           localStatusOverridesRef.current.delete(doc.id);
           cancelCallsheetJobIdsRef.current.delete(doc.id);
           setRealCallSheets((prev) => prev.map((p) => p.id === doc.id ? { ...p, status: doc.status } : p));
-          toast.error("No queda cuota disponible. Se conservan el documento y los resultados anteriores.");
+          toast.error(t("ui.quotaPreserved"));
           return;
         }
         if (errData.error === "ai_quota_unavailable") {
-          throw new Error("No se pudo comprobar tu cuota. El documento se conserva; inténtalo de nuevo más tarde.");
+          throw new Error(t("ui.quotaUnavailable"));
         }
         throw new Error((errData as any).message ?? `Error ${response.status}`);
       }
@@ -1049,7 +1049,7 @@ export function ProjectDetailModal({ open, onOpenChange, project, selectedYear =
     localStatusOverridesRef.current.set(doc.id, 'cancelled');
     setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'cancelled' } : p));
     logger.warn("[handleCancelExtract] Showing toast");
-    toast.info("Procesamiento cancelado; documento conservado");
+    toast.info(t("ui.processingCancelled"));
     // Preserve the job and file for review.
     try {
       await cancelCallsheetJobs([doc.id]);
@@ -1073,7 +1073,7 @@ export function ProjectDetailModal({ open, onOpenChange, project, selectedYear =
     logger.warn("[handleTriggerWorker] Docs to process:", toProcess.map(d => ({ id: d.id, status: d.status, name: d.name })));
 
     if (toProcess.length === 0) {
-      toast.info("No hay documentos pendientes por procesar");
+      toast.info(t("ui.noPendingDocuments"));
       return;
     }
 
@@ -1086,7 +1086,7 @@ export function ProjectDetailModal({ open, onOpenChange, project, selectedYear =
         return;
       }
 
-      toast.info(`Iniciando extracción de ${toProcess.length} documento(s)...`);
+      toast.info(tf("ui.startingCount", { count: toProcess.length }));
 
       // Procesar documentos en lotes de 5 en paralelo
       const BATCH_SIZE = 5;
@@ -1221,10 +1221,10 @@ export function ProjectDetailModal({ open, onOpenChange, project, selectedYear =
         <DialogContent className="glass sm:max-w-4xl max-h-[90vh] p-0 gap-0 overflow-hidden z-[70] flex flex-col">
           <ModalHeaderImage className="h-28">
             <DialogTitle className="text-xl font-bold tracking-tight">
-              Viajes procesados ({pendingTrips.length})
+              {tf("ui.processedTrips", { count: pendingTrips.length })}
             </DialogTitle>
             <DialogDescription>
-              Revisa los viajes extraídos automáticamente y guárdalos todos juntos
+              {t("ui.reviewProcessed")}
             </DialogDescription>
           </ModalHeaderImage>
 
@@ -1325,7 +1325,7 @@ export function ProjectDetailModal({ open, onOpenChange, project, selectedYear =
                       ) : (
                         <>
                           <Sparkles className="h-4 w-4 mr-2" />
-                          Procesar con IA
+                          {t("ui.processAI")}
                         </>
                       )}
                     </Button>

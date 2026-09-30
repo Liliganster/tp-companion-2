@@ -97,7 +97,7 @@ export function ProjectEditModal({
             <Label htmlFor="name">{t("projects.projectName")}</Label>
             <Input
               id="name"
-              placeholder="e.g., Film Production XY"
+              placeholder={t("ui.producerExample")}
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
