@@ -1,3 +1,4 @@
+import { getProfileRates, tripKilometrageAmount } from "@/lib/tripMoney";
 import { getUploadedFileName } from "@/lib/uploadFileName";
 import { useMemo, useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -63,6 +64,7 @@ import { groupProjectTrips, resolveLegacyProjectId } from "@/lib/projectTrips";
 export default function Projects() {
   const { t, tf, locale } = useI18n();
   const { profile } = useUserProfile();
+  const { ratePerKm: settingsRatePerKm } = getProfileRates(profile);
   const { canAddProject } = usePlanLimits();
 
   const { emissionsInput, fuelFactorData: fuelFactor, gridData: atGrid } = useEmissionsInput();
@@ -120,8 +122,6 @@ export default function Projects() {
     documents: number;
     invoices: number;
     co2Emissions: number;
-    overrideCost: number;
-    distanceAtDefaultRate: number;
     invoiceDocs: ProjectDocument[];
     callSheetDocs: ProjectDocument[];
     tripDocs: ProjectDocument[];
@@ -297,8 +297,6 @@ export default function Projects() {
           documents: 0,
           invoices: 0,
           co2Emissions: 0,
-          overrideCost: 0,
-          distanceAtDefaultRate: 0,
           invoiceDocs: [],
           callSheetDocs: [],
           tripDocs: [],
@@ -329,12 +327,6 @@ export default function Projects() {
           });
         }
 
-        if (typeof trip.ratePerKmOverride === "number" && Number.isFinite(trip.ratePerKmOverride)) {
-          current.overrideCost += distance * trip.ratePerKmOverride;
-        } else {
-          current.distanceAtDefaultRate += distance;
-        }
-
         map.set(key, current);
       }
     }
@@ -353,8 +345,6 @@ export default function Projects() {
         documents: 0,
         invoices: 0,
         co2Emissions: 0,
-        overrideCost: 0,
-        distanceAtDefaultRate: 0,
         invoiceDocs: [],
         callSheetDocs: [],
         tripDocs: [],
@@ -699,7 +689,7 @@ export default function Projects() {
                     const documents = stats?.documents ?? 0;
                     const invoices = stats?.invoices ?? 0;
                     const estimatedCost =
-                      (stats?.overrideCost ?? 0) + (stats?.distanceAtDefaultRate ?? 0) * (Number.isFinite(project.ratePerKm) ? project.ratePerKm : 0);
+                      tripKilometrageAmount({ distance: totalKm }, settingsRatePerKm);
 
                     return (
                       <TableRow

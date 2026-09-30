@@ -8,16 +8,14 @@ import { Link } from "react-router-dom";
 import { useI18n } from "@/hooks/use-i18n";
 import { useTrips } from "@/contexts/TripsContext";
 import { useUserProfile } from "@/contexts/UserProfileContext";
-import { parseLocaleNumber } from "@/lib/number";
-import { billableAmount } from "@/lib/tripMoney";
+import { billableAmount, getProfileRates } from "@/lib/tripMoney";
 
 export function RecentTrips() {
   const { t, locale } = useI18n();
   const { trips, loading } = useTrips();
   const { profile } = useUserProfile();
 
-  const defaultRate = parseLocaleNumber(profile.ratePerKm) || 0;
-  const surcharge = parseLocaleNumber(profile.passengerSurcharge) || 0;
+  const { ratePerKm: defaultRate, passengerSurcharge: surcharge } = getProfileRates(profile);
 
   const recentTrips = trips.slice(0, 5).map((trip) => {
     const route = Array.isArray(trip.route) ? trip.route : [];

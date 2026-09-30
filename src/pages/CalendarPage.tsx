@@ -1,3 +1,4 @@
+import { getProfileRates } from "@/lib/tripMoney";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
@@ -287,7 +288,7 @@ export default function CalendarPage() {
           name: newProjectName,
           producer: clientName,
           description: "Imported from Google Calendar",
-          ratePerKm: 0.3,
+          ratePerKm: getProfileRates(profile).ratePerKm,
           starred: false,
           trips: 0,
           totalKm: 0,

@@ -1,21 +1,40 @@
 import { describe, expect, it } from "vitest";
 import type { Trip } from "@/contexts/TripsContext";
 import type { UserProfile } from "@/contexts/UserProfileContext";
-import { billableAmount, rateForTrip, tripExpensesAmount, tripKilometrageAmount, tripPassengersAmount, vehicleCostPerKm } from "./tripMoney";
+import { billableAmount, getProfileRates, rateForTrip, tripExpensesAmount, tripKilometrageAmount, tripPassengersAmount, vehicleCostPerKm } from "./tripMoney";
 
 const trip = (over: Partial<Trip>): Trip =>
   ({ id: "t1", date: "2026-07-01", route: [], project: "", purpose: "", passengers: 0, co2: 0, distance: 0, ...over }) as Trip;
 
 describe("tripMoney (Fase 5: los mismos números que el informe)", () => {
-  it("la tarifa del viaje manda sobre la del perfil", () => {
-    expect(rateForTrip({ ratePerKmOverride: 0.42 }, 0.5)).toBe(0.42);
+  it("la tarifa de Ajustes manda incluso sobre tarifas antiguas del viaje", () => {
+    expect(rateForTrip({ ratePerKmOverride: 0.42 }, 0.5)).toBe(0.5);
+    expect(rateForTrip({ ratePerKmOverride: 0 }, 0.65)).toBe(0.65);
     expect(rateForTrip({ ratePerKmOverride: null }, 0.5)).toBe(0.5);
     expect(rateForTrip({}, 0.5)).toBe(0.5);
   });
 
+  it("aplica valores por defecto solo a tarifas ausentes o no válidas", () => {
+    for (const value of [undefined, "", "  ", "invalid", "-1", "Infinity"]) {
+      expect(getProfileRates({ ratePerKm: value, passengerSurcharge: value })).toEqual({ ratePerKm: 0.5, passengerSurcharge: 0.15 });
+    }
+    expect(getProfileRates({ ratePerKm: "0", passengerSurcharge: "0,00" })).toEqual({ ratePerKm: 0, passengerSurcharge: 0 });
+    expect(getProfileRates({ ratePerKm: "0,65", passengerSurcharge: "0.25" })).toEqual({ ratePerKm: 0.65, passengerSurcharge: 0.25 });
+    expect(getProfileRates({ ratePerKm: "0,65" })).toEqual({ ratePerKm: 0.65, passengerSurcharge: 0.15 });
+  });
+
+  it("recalcula viajes antiguos con las tarifas actuales de Ajustes", () => {
+    const journey = trip({ distance: 405, passengers: 2, ratePerKmOverride: 0.3 });
+    const defaults = getProfileRates({});
+    expect(tripKilometrageAmount(journey, defaults.ratePerKm)).toBe(202.5);
+    expect(billableAmount([journey], defaults.ratePerKm, defaults.passengerSurcharge)).toBeCloseTo(202.8);
+    const custom = getProfileRates({ ratePerKm: "0,65", passengerSurcharge: "0,25" });
+    expect(billableAmount([journey], custom.ratePerKm, custom.passengerSurcharge)).toBeCloseTo(263.75);
+  });
+
   it("kilometraje = km × tarifa (sin pasajeros ni gastos)", () => {
     expect(tripKilometrageAmount(trip({ distance: 10 }), 0.5)).toBe(5);
-    expect(tripKilometrageAmount(trip({ distance: 10, ratePerKmOverride: 0.42 }), 0.5)).toBeCloseTo(4.2);
+    expect(tripKilometrageAmount(trip({ distance: 10, ratePerKmOverride: 0.42 }), 0.5)).toBe(5);
     expect(tripKilometrageAmount(trip({ distance: Number.NaN }), 0.5)).toBe(0);
   });
 
@@ -23,7 +42,7 @@ describe("tripMoney (Fase 5: los mismos números que el informe)", () => {
     expect(tripPassengersAmount(trip({ passengers: 2 }), 0.15)).toBeCloseTo(0.3);
     expect(tripPassengersAmount(trip({ passengers: 0 }), 0.15)).toBe(0);
     expect(tripPassengersAmount(trip({ passengers: Number.NaN }), 0.15)).toBe(0);
-    expect(tripPassengersAmount(trip({ passengers: 2 }), Number.NaN)).toBe(0);
+    expect(tripPassengersAmount(trip({ passengers: 2 }), Number.NaN)).toBeCloseTo(0.3);
     // El kilometraje NO incluye pasajeros (regla: separados en todas las vistas)
     expect(tripKilometrageAmount(trip({ distance: 10, passengers: 5 }), 0.5)).toBe(5);
   });
@@ -37,9 +56,9 @@ describe("tripMoney (Fase 5: los mismos números que el informe)", () => {
   it("€ a facturar: kilometraje + suplemento por pasajeros + gastos", () => {
     const trips = [
       trip({ distance: 10, passengers: 2, tollAmount: 5 }), // 5 + 2×0,15 + 5
-      trip({ distance: 20, ratePerKmOverride: 0.4 }),       // 8
+      trip({ distance: 20, ratePerKmOverride: 0.4 }),       // 10 (Ajustes)
     ];
-    expect(billableAmount(trips, 0.5, 0.15)).toBeCloseTo(5 + 0.3 + 5 + 8);
+    expect(billableAmount(trips, 0.5, 0.15)).toBeCloseTo(5 + 0.3 + 5 + 10);
   });
 
   it("coste del coche por km desde el perfil (gasolina)", () => {

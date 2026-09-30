@@ -18,9 +18,8 @@ import { useI18n } from "@/hooks/use-i18n";
 import { useTrips } from "@/contexts/TripsContext";
 import { useAiQuota } from "@/hooks/use-ai-quota";
 import { calculateTreesNeeded, formatTreeEquivalent, calculateTripEmissions, TripEmissionsInput } from "@/lib/emissions";
-import { parseLocaleNumber } from "@/lib/number";
 import { useEmissionsInput } from "@/hooks/use-emissions-input";
-import { billableAmount } from "@/lib/tripMoney";
+import { billableAmount, getProfileRates } from "@/lib/tripMoney";
 import { parseTripDate } from "@/lib/tripDates";
 
 function percentageChange(current: number, previous: number): number {
@@ -109,16 +108,12 @@ export default function Index() {
     return dt != null && dt >= startOfPrevMonth && dt < startOfThisMonth;
   });
 
-  // Onboarding: sin tarifa y dirección base la distancia y el dinero no se
-  // calculan solos — el fallo más confuso para un usuario nuevo (o para el
-  // que vuelve tras meses). El banner desaparece solo al completar el perfil.
-  const rateMissing = !(parseLocaleNumber(profile.ratePerKm) > 0);
+  // The base address is required for routing; rates have defaults.
   const baseMissing = !profile.baseAddress.trim();
-  const profileIncomplete = rateMissing || baseMissing;
+  const profileIncomplete = baseMissing;
 
   // € a facturar del mes: kilometraje + pasajeros + gastos (coherente con el informe)
-  const defaultRate = parseLocaleNumber(profile.ratePerKm) || 0;
-  const surcharge = parseLocaleNumber(profile.passengerSurcharge) || 0;
+  const { ratePerKm: defaultRate, passengerSurcharge: surcharge } = getProfileRates(profile);
   const billableThisMonth = billableAmount(tripsThisMonth, defaultRate, surcharge);
   const billablePrevMonth = billableAmount(tripsPrevMonth, defaultRate, surcharge);
 
@@ -170,8 +165,7 @@ export default function Index() {
           </div>
         </div>
 
-        {/* Banner "completa tu perfil": guía al usuario a la tarifa y la
-            dirección base para que todo se calcule solo */}
+        {/* Banner "completa tu perfil": solicita la dirección base para calcular rutas */}
         {profileIncomplete && (
           <div className="glass-card border-warning/40 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
             <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -181,11 +175,7 @@ export default function Index() {
               <div className="min-w-0">
                 <p className="text-sm font-semibold">{t("dashboard.setupTitle")}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {rateMissing && baseMissing
-                    ? t("dashboard.setupBothMissing")
-                    : rateMissing
-                      ? t("dashboard.setupRateMissing")
-                      : t("dashboard.setupBaseMissing")}
+                  {t("dashboard.setupBaseMissing")}
                 </p>
               </div>
             </div>

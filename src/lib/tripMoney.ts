@@ -1,17 +1,32 @@
 /**
  * Dinero por viaje — helpers compartidos del dashboard (Fase 4) coherentes
- * con el informe (Fase 3): el importe del viaje es km × tarifa (el override
- * del viaje manda), el suplemento por pasajeros va aparte y los gastos
+ * con el informe: el importe del viaje es km × tarifa de Ajustes.
+ * El suplemento por pasajeros va aparte y los gastos
  * (peaje/parking/combustible/otros) son su propia suma.
  */
 import type { Trip } from "@/contexts/TripsContext";
 import type { UserProfile } from "@/contexts/UserProfileContext";
 import { parseLocaleNumber } from "@/lib/number";
 
-export function rateForTrip(trip: Pick<Trip, "ratePerKmOverride">, defaultRatePerKm: number): number {
-  return typeof trip.ratePerKmOverride === "number" && Number.isFinite(trip.ratePerKmOverride)
-    ? trip.ratePerKmOverride
-    : defaultRatePerKm;
+export const DEFAULT_RATE_PER_KM = 0.50;
+export const DEFAULT_PASSENGER_SURCHARGE = 0.15;
+
+function configuredRate(value: unknown, fallback: number): number {
+  const parsed = typeof value === "number" ? value : parseLocaleNumber(value);
+  return parsed != null && Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+/** Settings is the only rate source. An explicit zero is a valid user choice. */
+export function getProfileRates(profile: Partial<Pick<UserProfile, "ratePerKm" | "passengerSurcharge">>) {
+  return {
+    ratePerKm: configuredRate(profile.ratePerKm, DEFAULT_RATE_PER_KM),
+    passengerSurcharge: configuredRate(profile.passengerSurcharge, DEFAULT_PASSENGER_SURCHARGE),
+  };
+}
+
+/** Legacy trip overrides remain stored, but never override the Settings rate. */
+export function rateForTrip(_trip: Pick<Trip, "ratePerKmOverride">, settingsRatePerKm: number): number {
+  return configuredRate(settingsRatePerKm, DEFAULT_RATE_PER_KM);
 }
 
 /** Kilometraje del viaje: km × tarifa (sin pasajeros ni gastos). */
@@ -27,7 +42,7 @@ export function tripKilometrageAmount(trip: Pick<Trip, "distance" | "ratePerKmOv
  */
 export function tripPassengersAmount(trip: Pick<Trip, "passengers">, passengerSurcharge: number): number {
   const passengers = Number.isFinite(trip.passengers) ? trip.passengers : 0;
-  const surcharge = Number.isFinite(passengerSurcharge) ? passengerSurcharge : 0;
+  const surcharge = configuredRate(passengerSurcharge, DEFAULT_PASSENGER_SURCHARGE);
   return passengers * surcharge;
 }
 

@@ -81,7 +81,7 @@ Página `/trips`. Lista de viajes con:
 - **Alta manual** (`AddTripModal`) con origen, paradas intermedias (hasta 25), destino y autocompletado de direcciones de Google Places.
 - **Cálculo automático de distancia** vía Google Directions (Routes API) a través del proxy de servidor.
 - **Detalle / edición** de cada viaje (`TripDetailModal`), incluido mapa de la ruta (`TripGoogleMap`).
-- **Tarifa por viaje**: cada viaje puede sobrescribir la tarifa €/km por defecto (el override manda en el informe).
+- **Tarifas únicas en Ajustes**: todos los viajes, proyectos e informes usan la tarifa del perfil; si falta, 0,50 €/km y 0,15 € por pasajero. Un cero explícito se respeta. Las tarifas antiguas por viaje o proyecto no intervienen.
 - **Pasajeros (Mitfahrer)** por viaje para el suplemento por acompañante.
 - **Gastos del viaje** (peaje, parking, combustible, otros) en EUR, con foto de recibo adjunta.
 - **Consumo real** del viaje (campos de combustible/energía) para el cálculo de coste.

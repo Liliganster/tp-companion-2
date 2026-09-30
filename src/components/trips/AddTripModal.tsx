@@ -1,3 +1,4 @@
+import { getProfileRates } from "@/lib/tripMoney";
 import { FormSection } from "@/components/ui/form-section";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -200,7 +201,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
   const [savingTrip, setSavingTrip] = useState(false);
   const seedTrip = trip ?? prefill ?? null;
   const [projectOpen, setProjectOpen] = useState(false);
-  const settingsRateLabel = useMemo(() => profile.ratePerKm, [profile.ratePerKm]);
+  const { ratePerKm: settingsRatePerKm } = getProfileRates(profile);
 
   const projectOptions = useMemo(() => {
     const byLower = new Map<string, string>();
@@ -244,7 +245,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
            return originalProject?.producer ?? "";
         })(),
         description: "Created via Trip",
-        ratePerKm: 0.3,
+        ratePerKm: settingsRatePerKm,
         starred: false,
         trips: 0,
         totalKm: 0,
@@ -528,7 +529,6 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
   const [project, setProject] = useState("");
   const [purpose, setPurpose] = useState("");
   const [specialOrigin, setSpecialOrigin] = useState<NonNullable<TripData["specialOrigin"]>>("base");
-  const [tripRate, setTripRate] = useState("");
   const [distanceLoading, setDistanceLoading] = useState(false);
   const [locationBias, setLocationBias] = useState<{ lat: number; lng: number } | undefined>(undefined);
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
@@ -648,8 +648,6 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
     setProject(seedTrip?.project || "");
     setPurpose(seedTrip?.purpose || "");
     setSpecialOrigin(defaultSpecialOrigin || "base");
-    const rateOverride = seedTrip?.ratePerKmOverride;
-    setTripRate(rateOverride != null ? formatLocaleNumber(rateOverride) : "");
     // Initialize expense fields
     setTollAmount(seedTrip?.tollAmount != null ? formatLocaleNumber(seedTrip.tollAmount) : "");
     setParkingAmount(seedTrip?.parkingAmount != null ? formatLocaleNumber(seedTrip.parkingAmount) : "");
@@ -1029,10 +1027,11 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
               <Input
                 id="tripRate"
                 type="text"
-                value={tripRate}
-                onChange={(e) => setTripRate(e.target.value)}
-                placeholder={settingsRateLabel}
-                             />
+                value={formatLocaleNumber(settingsRatePerKm)}
+                readOnly
+                aria-describedby="trip-rate-source"
+              />
+              <p id="trip-rate-source" className="text-xs text-muted-foreground">{t("settings.ratesSource")}</p>
             </div>
           </div>
 
@@ -1388,7 +1387,6 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                 try {
                 const distanceValue = parseLocaleNumber(distance) ?? 0;
                 const passengersValue = parseLocaleNumber(passengers) ?? 0;
-                const rateOverride = parseLocaleNumber(tripRate);
                 // Parse expense values
                 const tollValue = parseLocaleNumber(tollAmount);
                 const parkingValue = parseLocaleNumber(parkingAmount);
@@ -1435,7 +1433,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                         id: newId,
                         name: trimmedProject,
                         producer: inheritedProducer, // Inherit client
-                        ratePerKm: parseLocaleNumber(profile.ratePerKm) ?? 0,
+                        ratePerKm: settingsRatePerKm,
                         starred: false,
                         trips: 0,
                         totalKm: 0,
@@ -1467,7 +1465,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                   purpose,
                   passengers: Math.max(0, Math.floor(passengersValue)),
                   distance: Math.max(0, distanceValue),
-                  ratePerKmOverride: rateOverride == null ? null : Math.max(0, rateOverride),
+                  ratePerKmOverride: seedTrip?.ratePerKmOverride ?? null,
                   specialOrigin,
                   // Per-trip expenses
                   tollAmount: tollValue == null ? null : Math.max(0, tollValue),

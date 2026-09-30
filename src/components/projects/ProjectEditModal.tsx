@@ -1,3 +1,5 @@
+import { useUserProfile } from "@/contexts/UserProfileContext";
+import { getProfileRates } from "@/lib/tripMoney";
 import { useState, useEffect } from "react";
 import {
   Dialog,
@@ -39,7 +41,8 @@ export function ProjectEditModal({
   const [name, setName] = useState("");
   const [producer, setProducer] = useState("");
   const [description, setDescription] = useState("");
-  const [ratePerKm, setRatePerKm] = useState("0.30");
+  const { profile } = useUserProfile();
+  const { ratePerKm } = getProfileRates(profile);
 
   // Reset form when opening or changing project
   useEffect(() => {
@@ -48,17 +51,11 @@ export function ProjectEditModal({
         setName(project.name ?? "");
         setProducer(project.producer ?? "");
         setDescription(project.description ?? "");
-        setRatePerKm(
-          typeof project.ratePerKm === "number" && Number.isFinite(project.ratePerKm)
-            ? String(project.ratePerKm)
-            : "0.30"
-        );
       } else {
         // Create mode
         setName("");
         setProducer("");
         setDescription("");
-        setRatePerKm("0.30");
       }
     }
   }, [open, project]);
@@ -69,14 +66,11 @@ export function ProjectEditModal({
 
     setLoading(true);
     try {
-      const parsedRate = parseFloat(ratePerKm.replace(",", "."));
-      const finalRate = Number.isFinite(parsedRate) ? parsedRate : 0;
-
       await onSave({
         name: trimmedName,
         producer: producer.trim() || undefined,
         description: description.trim() || undefined,
-        ratePerKm: finalRate,
+        ratePerKm,
       });
       onOpenChange(false);
     } catch (e) {
@@ -133,10 +127,11 @@ export function ProjectEditModal({
               id="rate"
               type="number"
               step="0.01"
-              placeholder="0.30"
               value={ratePerKm}
-              onChange={(e) => setRatePerKm(e.target.value)}
+              readOnly
+              aria-describedby="project-rate-source"
             />
+            <p id="project-rate-source" className="text-xs text-muted-foreground">{t("settings.ratesSource")}</p>
           </div>
           </div>
         </div>

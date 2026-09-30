@@ -601,6 +601,9 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       <Label htmlFor="ratePerKm">{t("settings.ratePerKm")}</Label>
                       <Input
                         id="ratePerKm"
+                        placeholder="0,50"
+                        inputMode="decimal"
+                        aria-describedby="settings-rates-defaults"
                         value={profileData.ratePerKm}
                         onChange={(e) => setProfileData({ ...profileData, ratePerKm: e.target.value })}
                                              />
@@ -608,10 +611,15 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                     <Label htmlFor="passengerSurcharge">{t("settings.passengerSurcharge")}</Label>
                     <Input
                       id="passengerSurcharge"
+                      placeholder="0,15"
+                      inputMode="decimal"
+                      aria-describedby="settings-rates-defaults"
                       value={profileData.passengerSurcharge}
                       onChange={(e) => setProfileData({ ...profileData, passengerSurcharge: e.target.value })}
                                          />
-                  </div></div>                  {/* Costes del coche + km anuales (Fase 4: margen neto y % uso profesional) */}
+                  </div></div>
+                  <p id="settings-rates-defaults" className="text-xs text-muted-foreground">{t("settings.ratesDefaults")}</p>
+                  {/* Costes del coche + km anuales (Fase 4: margen neto y % uso profesional) */}
                   <div className="mt-4 space-y-3">
                     <div>
                       <h4 className="text-sm font-medium">{t("settings.carCostsTitle")}</h4>

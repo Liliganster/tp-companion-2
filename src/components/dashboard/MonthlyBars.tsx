@@ -6,8 +6,7 @@ import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recha
 import { useTrips } from "@/contexts/TripsContext";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { useI18n } from "@/hooks/use-i18n";
-import { parseLocaleNumber } from "@/lib/number";
-import { billableAmount } from "@/lib/tripMoney";
+import { billableAmount, getProfileRates } from "@/lib/tripMoney";
 import { parseTripDate } from "@/lib/tripDates";
 
 export function MonthlyBars() {
@@ -16,8 +15,7 @@ export function MonthlyBars() {
   const { profile } = useUserProfile();
 
   const data = useMemo(() => {
-    const defaultRate = parseLocaleNumber(profile.ratePerKm) || 0;
-    const surcharge = parseLocaleNumber(profile.passengerSurcharge) || 0;
+    const { ratePerKm: defaultRate, passengerSurcharge: surcharge } = getProfileRates(profile);
     const now = new Date();
 
     return Array.from({ length: 6 }, (_, i) => {

@@ -1,3 +1,4 @@
+import { getProfileRates, tripKilometrageAmount, tripPassengersAmount } from "@/lib/tripMoney";
 import { deleteReviewCallsheet, deleteSelectedTripRows } from "@/lib/deleteReviewCallsheet";
 import { useCallsheetReview } from "@/hooks/use-callsheet-review";
 import { getReviewCallsheetDrafts } from "@/lib/callsheetReview";
@@ -256,8 +257,7 @@ export default function Trips() {
     })();
   };
 
-  const settingsRatePerKm = parseLocaleNumber(profile.ratePerKm) ?? 0;
-  const settingsPassengerSurchargePerKm = parseLocaleNumber(profile.passengerSurcharge) ?? 0;
+  const { ratePerKm: settingsRatePerKm, passengerSurcharge: settingsPassengerSurcharge } = getProfileRates(profile);
   const baseLocation = [profile.baseAddress, profile.city, profile.country].map((p) => p.trim()).filter(Boolean).join(", ");
 
   const getTripTime = (trip: Trip) => {
@@ -273,13 +273,11 @@ export default function Trips() {
   // Reembolso por km SOLO (regla de la propietaria 2026-07-10: kilometraje y
   // suplemento por pasajeros separados en TODAS las vistas, igual que en el
   // informe; el suplemento se muestra aparte en la columna de pasajeros).
-  const calculateTripReimbursement = (trip: Trip) => {
-    const baseRate = trip.ratePerKmOverride ?? settingsRatePerKm;
-    return roundTo(trip.distance * baseRate, 2);
-  };
+  const calculateTripReimbursement = (trip: Trip) =>
+    roundTo(tripKilometrageAmount(trip, settingsRatePerKm), 2);
 
   const calculateTripPassengersAmount = (trip: Trip) =>
-    roundTo((Number.isFinite(trip.passengers) ? trip.passengers : 0) * settingsPassengerSurchargePerKm, 2);
+    roundTo(tripPassengersAmount(trip, settingsPassengerSurcharge), 2);
 
   // Calculate trip expenses (toll + parking + other + fuel)
   const calculateTripExpenses = (trip: Trip) => {

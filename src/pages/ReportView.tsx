@@ -20,7 +20,7 @@ import { usePlan } from "@/contexts/PlanContext";
 import { useI18n } from "@/hooks/use-i18n";
 import { buildProjectZip } from "@/hooks/use-project-export";
 import { buildReportPdf, type ReportPdfExpenseRow } from "@/lib/reportPdf";
-import { rateForTrip } from "@/lib/tripMoney";
+import { rateForTrip, getProfileRates, tripPassengersAmount } from "@/lib/tripMoney";
 import { FEATURES } from "@/lib/features";
 import type { AppLanguage } from "@/lib/i18n";
 
@@ -151,14 +151,7 @@ export default function ReportView() {
     })
     .sort((a, b) => getTripTime(a.date) - getTripTime(b.date) || a.id.localeCompare(b.id));
 
-  // Parse rates from profile
-  const parseLocaleNumber = (value: string | undefined) => {
-    if (!value) return 0;
-    const parsed = parseFloat(value.replace(",", "."));
-    return Number.isFinite(parsed) ? parsed : 0;
-  };
-  const ratePerKm = parseLocaleNumber(profile.ratePerKm);
-  const passengerSurcharge = parseLocaleNumber(profile.passengerSurcharge);
+  const { ratePerKm, passengerSurcharge } = getProfileRates(profile);
 
   const reportTrips: ReportTrip[] = filteredTrips.map((trip) => {
     const time = getTripTime(trip.date);
@@ -176,7 +169,7 @@ export default function ReportView() {
     // informe — producción/Finanzamt lo interpretan, los datos están ahí.
     // Con la opción "unir" (2026-07-10) el suplemento se suma al importe de
     // cada viaje y desaparece la línea separada; el total no cambia.
-    const reimbursement = distance * rate + (mergePassengers ? passengers * passengerSurcharge : 0);
+    const reimbursement = distance * rate + (mergePassengers ? tripPassengersAmount(trip, passengerSurcharge) : 0);
 
     return {
       date: dateLabel,
@@ -213,7 +206,7 @@ export default function ReportView() {
   const totalPassengers = trips.reduce((acc, trip) => acc + trip.passengers, 0);
   // Unidos: el suplemento ya está dentro de totalReimbursement → la línea
   // separada vale 0 y el total general queda idéntico.
-  const passengerSurchargeTotal = mergePassengers ? 0 : totalPassengers * passengerSurcharge;
+  const passengerSurchargeTotal = mergePassengers ? 0 : tripPassengersAmount({ passengers: totalPassengers }, passengerSurcharge);
   const grandTotal = totalReimbursement + passengerSurchargeTotal + totalExpenses;
   const totalCo2 = filteredTrips.reduce((acc, trip) => acc + (Number.isFinite(trip.co2) ? trip.co2 : 0), 0);
   // Columna Mitf. solo si algún viaje lleva pasajeros — igual que el PDF.
@@ -665,11 +658,11 @@ export default function ReportView() {
                 </p>
                 {!mergePassengers && (
                   <p>
-                    <span className="font-semibold">{t("reportView.passengerSurchargeLabel")}:</span> {profile.passengerSurcharge || "0"} €
+                    <span className="font-semibold">{t("reportView.passengerSurchargeLabel")}:</span> {passengerSurcharge.toLocaleString(locale, { minimumFractionDigits: 2 })} €
                   </p>
                 )}
                 <p>
-                  <span className="font-semibold">{t("reportView.ratePerKmLabel")}:</span> {profile.ratePerKm || "0"} €
+                  <span className="font-semibold">{t("reportView.ratePerKmLabel")}:</span> {ratePerKm.toLocaleString(locale, { minimumFractionDigits: 2 })} €
                 </p>
               </div>
             </div>

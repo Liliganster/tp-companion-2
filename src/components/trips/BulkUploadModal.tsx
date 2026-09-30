@@ -1,3 +1,4 @@
+import { getProfileRates } from "@/lib/tripMoney";
 import { FormSection } from "@/components/ui/form-section";
 import { CALLSHEET_CLIENT_TIMEOUT_MS } from "@/lib/callsheetTiming";
 import { compactCallsheetReviewReason, getCallsheetReviewLocations, type ReviewCallsheetLocation } from '@/lib/callsheetReview';
@@ -464,7 +465,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
         name: trimmed,
         producer,
         description: `Created from CSV import: ${sourceLabel}`,
-        ratePerKm: 0.30,
+        ratePerKm: getProfileRates(profile).ratePerKm,
         starred: false,
         trips: 0,
         totalKm: 0,
@@ -1530,7 +1531,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
       name: trimmed,
       producer,
       description: `Creado desde IA: ${fileName}`,
-      ratePerKm: 0.3,
+      ratePerKm: getProfileRates(profile).ratePerKm,
       starred: false,
       trips: 0,
       totalKm: 0,

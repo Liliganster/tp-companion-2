@@ -1,3 +1,4 @@
+import { getProfileRates } from "@/lib/tripMoney";
 import { FormSection } from "@/components/ui/form-section";
 import { useState } from 'react';
 import type { Trip } from '@/contexts/TripsContext';
@@ -52,7 +53,7 @@ export function TripDetailEditor({ trip, onSave, onCancel, onSaved, onSaving }: 
       let projectId = name === trip.project ? trip.projectId : projects.find(p => p.name.trim().toLowerCase() === name.toLowerCase())?.id;
       if (name && !projectId) {
         projectId = crypto.randomUUID();
-        await addProject({ id: projectId, name, ratePerKm: parseLocaleNumber(profile.ratePerKm) ?? 0, starred: false, createdAt: new Date().toISOString(), trips: 0, totalKm: 0, documents: 0, invoices: 0, estimatedCost: 0, shootingDays: 0, kmPerDay: 0, co2Emissions: 0 });
+        await addProject({ id: projectId, name, ratePerKm: getProfileRates(profile).ratePerKm, starred: false, createdAt: new Date().toISOString(), trips: 0, totalKm: 0, documents: 0, invoices: 0, estimatedCost: 0, shootingDays: 0, kmPerDay: 0, co2Emissions: 0 });
       }
       const saved = await onSave({ ...trip, ...amounts, date, project: name, projectId: name ? projectId : null, purpose, route: stops, distance: km, passengers: people });
       if (saved) onSaved();

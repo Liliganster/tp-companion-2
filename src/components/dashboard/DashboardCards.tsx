@@ -17,7 +17,7 @@ import { useI18n } from "@/hooks/use-i18n";
 import { useTrips } from "@/contexts/TripsContext";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { parseLocaleNumber } from "@/lib/number";
-import { vehicleCostPerKm } from "@/lib/tripMoney";
+import { vehicleCostPerKm, getProfileRates } from "@/lib/tripMoney";
 import { parseTripDate } from "@/lib/tripDates";
 import { Button } from "@/components/ui/button";
 
@@ -68,7 +68,7 @@ export function CarMarginCard() {
   // Mockup Claude Design 2026-07-12: la cifra protagonista es el margen POR
   // KM (tarifa − coste real), no el total del mes — es estable y se entiende
   // de un vistazo; el desglose va en la sublínea.
-  const defaultRate = parseLocaleNumber(profile.ratePerKm) || 0;
+  const { ratePerKm: defaultRate } = getProfileRates(profile);
   const costPerKm = vehicleCostPerKm(profile);
 
   return (
