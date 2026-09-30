@@ -1,6 +1,6 @@
-import { es, type I18nKey } from './i18n/es';
-import { en } from './i18n/en';
-import { de } from './i18n/de';
+import { es, type I18nKey } from './i18n/es.js';
+import { en } from './i18n/en.js';
+import { de } from './i18n/de.js';
 
 export type AppLanguage = 'es' | 'en' | 'de';
 export const DEFAULT_LANGUAGE: AppLanguage = 'es';

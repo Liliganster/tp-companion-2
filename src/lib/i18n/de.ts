@@ -2,6 +2,11 @@ import type { I18nKey } from "./es";
 
 // Available immediately with the other UI dictionaries.
 export const de: Record<I18nKey, string> = {
+  "bulk.deleteDocument": "Löschen",
+  "bulk.deleteDocumentLabel": "Dokument {name} löschen",
+  "bulk.deleteDocumentConfirm": "„{name}“ und die Originaldatei löschen? Dies kann nicht rückgängig gemacht werden.",
+  "bulk.documentDeleted": "Dokument gelöscht.",
+  "bulk.deleteDocumentError": "Das Dokument konnte nicht gelöscht werden. Es bleibt für einen erneuten Versuch verfügbar.",
   "plans.checking": "Abonnement wird geprüft…",
   "plans.unavailable": "Dein Abonnement konnte nicht geprüft werden. Versuche es erneut; du musst keinen weiteren Tarif kaufen.",
   "plans.statusUnavailable": "Abonnement nicht bestätigt",

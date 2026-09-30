@@ -504,6 +504,29 @@ export default function Trips() {
       });
     } finally { setDeletingSelected(false); }
   };
+  const handleDeleteReviewDocument = async (trip: Trip, name: string) => {
+    if (deletingSelected || !window.confirm(tf("bulk.deleteDocumentConfirm", { name }))) return;
+    setDeletingSelected(true);
+    try {
+      await deleteReviewCallsheet(supabase, trip.id);
+      setRemovedReviewIds(prev => new Set([...prev, trip.id]));
+      setSelectedIds(prev => { const next = new Set(prev); next.delete(trip.id); return next; });
+      if (selectedTrip?.id === trip.id) { setDetailModalOpen(false); setSelectedTrip(null); }
+      if (tripToEdit?.id === trip.id) { setEditModalOpen(false); setTripToEdit(null); }
+      void reviewQuery.refetch();
+      toast({ title: t("bulk.documentDeleted") });
+    } catch {
+      toast({ title: t("bulk.deleteDocumentError"), variant: "destructive" });
+    } finally { setDeletingSelected(false); }
+  };
+  const reviewDeleteButton = (trip: Trip, name: string, status: string) =>
+    ["failed", "needs_review", "out_of_quota", "cancelled"].includes(status) ? (
+      <Button variant="outline" disabled={deletingSelected} aria-label={tf("bulk.deleteDocumentLabel", { name })}
+        onClick={() => void handleDeleteReviewDocument(trip, name)}>
+        <Trash2 className="mr-2 h-4 w-4" />{t("bulk.deleteDocument")}
+      </Button>
+    ) : null;
+
   const isAllSelected = selectableIds.length > 0 && selectableIds.every(id => selectedIds.has(id));
   const isSomeSelected = selectedIds.size > 0;
 
@@ -595,6 +618,7 @@ export default function Trips() {
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => { setSelectedTrip(trip); setDetailModalOpen(true); }}>{t("callsheetReview.open")}</Button>
             <Button variant="outline" disabled={["created", "queued", "processing"].includes(job.status)} onClick={() => handleEditTrip(trip)}>{t("callsheetReview.edit")}</Button>
+                    {reviewDeleteButton(trip, name, job.status)}
           </div>
         </div>)}
 
@@ -803,6 +827,7 @@ export default function Trips() {
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={() => { setSelectedTrip(trip); setDetailModalOpen(true); }}>{t("callsheetReview.open")}</Button>
                     <Button variant="outline" disabled={["created", "queued", "processing"].includes(job.status)} onClick={() => handleEditTrip(trip)}>{t("callsheetReview.edit")}</Button>
+                    {reviewDeleteButton(trip, name, job.status)}
                   </div>
                 </TableCell>
               </TableRow>)}

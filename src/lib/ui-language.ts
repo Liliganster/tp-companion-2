@@ -1,4 +1,4 @@
-import { normalizeLanguage, tf, type I18nKey } from './i18n';
+import { normalizeLanguage, tf, type I18nKey } from './i18n.js';
 
 export function uiText(key: I18nKey, params: Record<string, string | number> = {}) {
   const language = normalizeLanguage(typeof document === 'undefined' ? 'es' : document.documentElement.lang);

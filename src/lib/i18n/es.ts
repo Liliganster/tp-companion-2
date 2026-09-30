@@ -1,6 +1,11 @@
 // Idioma base de Fahrtenbuch Pro. Las claves tipadas (I18nKey) derivan de este objeto.
 // ES se queda: es el idioma de la propietaria (decisión registrada en PLAN.md).
 export const es = {
+  "bulk.deleteDocument": "Eliminar",
+  "bulk.deleteDocumentLabel": "Eliminar documento {name}",
+  "bulk.deleteDocumentConfirm": "¿Eliminar \"{name}\" y su archivo original? Esta acción no se puede deshacer.",
+  "bulk.documentDeleted": "Documento eliminado.",
+  "bulk.deleteDocumentError": "No se pudo eliminar el documento. Sigue disponible para volver a intentarlo.",
   "plans.checking": "Comprobando suscripción…",
   "plans.unavailable": "No se ha podido comprobar tu suscripción. Vuelve a intentarlo; no necesitas comprar otro plan.",
   "plans.statusUnavailable": "Suscripción sin verificar",

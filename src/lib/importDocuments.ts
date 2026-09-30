@@ -1,4 +1,4 @@
-import { uiText } from "@/lib/ui-language";
+import { uiText } from "./ui-language.js";
 export const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024;
 export const MANUAL_ACCEPT = '.csv,.tsv,.xlsx,.xls';
 
