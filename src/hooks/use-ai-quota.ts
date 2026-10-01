@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlan } from '@/contexts/PlanContext';
 import { logger } from '@/lib/logger';
@@ -10,6 +10,9 @@ import { logger } from '@/lib/logger';
 export function useAiQuota() {
   const { user, getAccessToken } = useAuth();
   const { limits, aiQuota } = usePlan();
+  const [creditsAvailable, setCreditsAvailable] = useState<number | null>(null);
+  const [revision, setRevision] = useState(0);
+  const refresh = useCallback(() => setRevision(value => value + 1), []);
   const [used, setUsed] = useState<number | null>(null);
   const [limit, setLimit] = useState(aiQuota?.limit ?? limits.aiJobsPerMonth);
   const [period, setPeriod] = useState<'monthly' | 'annual'>(aiQuota?.period ?? 'monthly');
@@ -20,6 +23,7 @@ export function useAiQuota() {
   useEffect(() => {
     let cancelled = false;
     setUsed(null);
+    setCreditsAvailable(null);
     setBypass(false);
     setLimit(aiQuota?.limit ?? limits.aiJobsPerMonth);
     setPeriod(aiQuota?.period ?? 'monthly');
@@ -35,6 +39,7 @@ export function useAiQuota() {
         const data = await response.json();
         if (typeof data.used !== 'number' || typeof data.limit !== 'number') throw new Error('Invalid AI quota');
         if (!cancelled) {
+          setCreditsAvailable(typeof data.creditsAvailable === 'number' ? data.creditsAvailable : null);
           setUsed(data.used); setLimit(data.limit); setBypass(data.bypass === true);
           setPeriod(data.period === 'annual' ? 'annual' : 'monthly');
           setPeriodEnd(data.periodEnd ?? null);
@@ -46,7 +51,7 @@ export function useAiQuota() {
     }
     void fetchQuota();
     return () => { cancelled = true; };
-  }, [user?.id, getAccessToken, limits.aiJobsPerMonth, aiQuota?.limit, aiQuota?.period, aiQuota?.periodEnd]);
+  }, [revision, user?.id, getAccessToken, limits.aiJobsPerMonth, aiQuota?.limit, aiQuota?.period, aiQuota?.periodEnd]);
 
-  return { used, limit, period, periodEnd, bypass, loading };
+  return { used, limit, period, periodEnd, bypass, loading, creditsAvailable, refresh };
 }

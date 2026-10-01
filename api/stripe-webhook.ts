@@ -10,6 +10,8 @@ import {
   getSubscriptionUserId,
 } from "./_utils/stripeSubscription.js";
 
+import { fulfillAiCredits } from './_utils/aiCredits.js';
+
 async function findUserId(subscription: Stripe.Subscription): Promise<string | null> {
   const metadataId = getSubscriptionUserId(subscription);
   if (metadataId) return metadataId;
@@ -56,8 +58,18 @@ async function processEvent(event: Stripe.Event) {
     return;
   }
 
-  if (event.type === "checkout.session.completed") {
+  if (event.type === 'charge.refunded') {
+    const charge = event.data.object as Stripe.Charge;
+    const paymentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id;
+    if (paymentId) {
+      const sessions = await stripe.checkout.sessions.list({ payment_intent: paymentId, limit: 1 });
+      for (const session of sessions.data) await fulfillAiCredits(session.id);
+    }
+    return;
+  }
+  if (event.type === "checkout.session.completed" || event.type === 'checkout.session.async_payment_succeeded') {
     const session = event.data.object as Stripe.Checkout.Session;
+    if (session.mode === 'payment') { await fulfillAiCredits(session.id); return; }
     const subscriptionId = typeof session.subscription === "string"
       ? session.subscription
       : session.subscription?.id;

@@ -1,4 +1,3 @@
-import { getUploadedFileName } from "@/lib/uploadFileName";
 /**
  * Campana "Necesita tu atención" — vive en la cabecera del dashboard, a la
  * derecha del contador de IA (estilo Unity: campana con globo naranja).
@@ -9,7 +8,10 @@ import { getUploadedFileName } from "@/lib/uploadFileName";
  * callsheets pendientes de revisión. Cada línea lleva a su solución.
  * Vacío = "Todo en orden".
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAttentionJobs } from "@/hooks/use-attention-jobs";
+import { getReviewCallsheetDrafts } from "@/lib/callsheetReview";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, Bell, CheckCircle2, ChevronRight, FileWarning } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -17,8 +19,6 @@ import { useTrips } from "@/contexts/TripsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { computeTripWarnings } from "@/lib/trip-warnings";
 import { useI18n } from "@/hooks/use-i18n";
-import { supabase } from "@/lib/supabaseClient";
-import { logger } from "@/lib/logger";
 
 type AttentionItem = {
   id: string;
@@ -32,45 +32,43 @@ export function AttentionBell() {
   const navigate = useNavigate();
   const { trips } = useTrips();
   const { user } = useAuth();
-  const [jobItems, setJobItems] = useState<AttentionItem[]>([]);
+  const queryClient = useQueryClient();
+  const jobIssues = useAttentionJobs();
+  const { refetch } = jobIssues;
+
+  // Saving/deleting a trip changes which jobs still need review. React Query
+  // cancels obsolete requests so an earlier response cannot restore old issues.
+  useEffect(() => { if (user?.id) void refetch(); }, [user?.id, trips, refetch]);
+
+  const refresh = () => {
+    if (!user?.id) return;
+    void refetch();
+    void queryClient.invalidateQueries({ queryKey: ['trips', user.id] });
+  };
 
   useEffect(() => {
-    let cancelled = false;
-    async function fetchJobIssues() {
-      if (!user?.id) {
-        setJobItems([]);
-        return;
-      }
-      try {
-        const { data, error } = await supabase
-          .from("callsheet_jobs")
-          .select("id, status, needs_review_reason, storage_path, created_at")
-          .eq("user_id", user.id)
-          .in("status", ["failed", "needs_review"])
-          .order("created_at", { ascending: false })
-          .limit(10);
-        if (error || cancelled) return;
-        setJobItems(
-          (data ?? []).map((job: any) => {
-            const fileName = getUploadedFileName(String(job.storage_path ?? "")) || "callsheet";
-            const failed = String(job.status) === "failed";
-            return {
-              id: `job:${job.id}`,
-              title: failed ? t("dashboard.attentionCallsheetFailed") : t("dashboard.attentionCallsheetReview"),
-              message: [fileName, job.needs_review_reason].filter(Boolean).join(" · "),
-              to: failed ? "/trips?action=upload" : "/projects",
-            };
-          }),
-        );
-      } catch (err) {
-        logger.warn("AttentionBell: fetching callsheet issues failed", err);
-      }
-    }
-    void fetchJobIssues();
-    return () => {
-      cancelled = true;
+    const refreshTrips = () => {
+      if (user?.id) void queryClient.invalidateQueries({ queryKey: ['trips', user.id] });
     };
-  }, [user?.id, t]);
+    window.addEventListener('focus', refreshTrips);
+    window.addEventListener('online', refreshTrips);
+    return () => {
+      window.removeEventListener('focus', refreshTrips);
+      window.removeEventListener('online', refreshTrips);
+    };
+  }, [user?.id, queryClient]);
+
+  // Match the Trips table: already-saved callsheets and unfinished uploads
+  // are not unresolved document drafts, even if an old job status remains.
+  const jobItems = useMemo<AttentionItem[]>(() => {
+    if (!user?.id || jobIssues.isError) return [];
+    return getReviewCallsheetDrafts(jobIssues.data ?? [], trips, []).map(({ job, name }) => ({
+      id: `job:${job.id}`,
+      title: t(job.status === 'failed' ? 'dashboard.attentionCallsheetFailed' : 'dashboard.attentionCallsheetReview'),
+      message: [name, job.needs_review_reason].filter(Boolean).join(' · '),
+      to: '/trips',
+    }));
+  }, [user?.id, jobIssues.data, jobIssues.isError, trips, t]);
 
   const tripItems = useMemo<AttentionItem[]>(() => {
     return computeTripWarnings(trips, t)
@@ -81,7 +79,7 @@ export function AttentionBell() {
   const items = [...jobItems, ...tripItems];
 
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={(open) => { if (open) refresh(); }}>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
@@ -106,7 +104,13 @@ export function AttentionBell() {
             </span>
           )}
         </div>
-        {items.length === 0 ? (
+        {jobIssues.isError && <div role="status" className="p-3 text-sm text-muted-foreground">
+          <p>{t('dashboard.attentionUnavailable')}</p>
+          <button type="button" className="mt-2 underline" onClick={refresh}>{t('ui.retry')}</button>
+        </div>}
+        {items.length === 0 && jobIssues.isPending && user?.id ? (
+          <p role="status" className="p-6 text-center text-sm text-muted-foreground">{t('ui.loading')}</p>
+        ) : items.length === 0 && !jobIssues.isError ? (
           <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
             <CheckCircle2 className="w-8 h-8 text-success" />
             <p className="text-sm font-medium">{t("dashboard.attentionEmpty")}</p>

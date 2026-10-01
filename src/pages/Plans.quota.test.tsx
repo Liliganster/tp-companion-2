@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+vi.mock('@/components/plans/AiCreditPack', () => ({ AiCreditPack: () => null }));
 vi.mock('@/components/layout/MainLayout', () => ({ MainLayout: ({ children }: any) => children }));
 vi.mock('@/hooks/use-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 const planMock = vi.hoisted(() => ({ planTier: 'basic', isLoading: false, subscriptionError: false, refreshSubscription: vi.fn() }));

@@ -148,7 +148,7 @@ export default function Index() {
               <Sparkles className="w-4 h-4 text-primary" />
               <span
                 className={`text-xs font-semibold tabular-nums ${
-                  !aiQuota.bypass && aiQuota.used != null && Number.isFinite(aiQuota.limit) && aiQuota.used >= aiQuota.limit
+                  !aiQuota.bypass && aiQuota.used != null && Number.isFinite(aiQuota.limit) && aiQuota.used >= aiQuota.limit && (aiQuota.creditsAvailable ?? 0) <= 0
                     ? "text-destructive"
                     : "text-foreground"
                 }`}
@@ -160,6 +160,7 @@ export default function Index() {
                     : `${aiQuota.used ?? "—"}/${Number.isFinite(aiQuota.limit) ? aiQuota.limit : "∞"}`}
               </span>
               <span className="text-xs text-muted-foreground hidden sm:inline">{t(aiQuota.period === "annual" ? "dashboard.aiChipAnnual" : "dashboard.aiChipMonthly")}</span>
+              {aiQuota.creditsAvailable != null && aiQuota.creditsAvailable > 0 && <span className="text-xs font-medium text-primary">{tf('credits.extraShort', { count: aiQuota.creditsAvailable })}</span>}
             </Link>
             <AttentionBell />
           </div>

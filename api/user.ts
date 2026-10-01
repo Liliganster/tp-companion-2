@@ -98,7 +98,7 @@ async function handleAiQuota(req: VercelRequest, res: VercelResponse) {
     const quota = await checkAiMonthlyQuota(user.id, planTier);
     const bypassEnabled = quota.bypass === true;
 
-    return res.status(200).json({ bypass: bypassEnabled, planTier, limit: quota.limit, used: quota.used, period: quota.period, periodStart: quota.periodStart, periodEnd: quota.periodEnd, remaining: bypassEnabled ? null : quota.remaining });
+    return res.status(200).json({ bypass: bypassEnabled, planTier, limit: quota.limit, used: quota.used, period: quota.period, periodStart: quota.periodStart, periodEnd: quota.periodEnd, remaining: bypassEnabled ? null : quota.remaining, creditsAvailable: quota.creditsAvailable ?? null, creditBalance: quota.creditBalance ?? null, creditReserved: quota.creditReserved ?? null });
   } catch (err: any) {
     console.error("Error fetching AI quota:", err);
     return res.status(500).json({ error: "Internal server error" });

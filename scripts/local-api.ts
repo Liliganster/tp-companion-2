@@ -23,6 +23,7 @@ const WORKER_POLL_MS = 8000;
 const ROUTES: Array<[prefix: string, mod: string]> = [
   ["/api/google/", "../api/google.js"],
   ["/api/user/", "../api/user.js"],
+  ["/api/stripe/", "../api/stripe.js"],
   ["/api/callsheets/", "../api/callsheets.js"],
   ["/api/invoices/", "../api/invoices.js"],
   ["/api/expenses/", "../api/expenses.js"],

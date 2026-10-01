@@ -5,7 +5,7 @@ import { getCallsheetQuotaPolicy } from "./callsheetQuotaPolicy.js";
 import { getFreeIdentityHash } from "./freeUsage.js";
 import { assertStorageOwnership } from "./storageOwnership.js";
 
-export type QuotaDecision = { allowed: boolean; limit: number; used: number; remaining: number; reserved?: number; bypass?: boolean; period?: "monthly" | "annual"; periodStart?: string; periodEnd?: string; planTier?: PlanTier; reason?: string };
+export type QuotaDecision = { allowed: boolean; limit: number; used: number; remaining: number; reserved?: number; planRemaining?: number; creditBalance?: number; creditReserved?: number; creditsAvailable?: number; bypass?: boolean; period?: "monthly" | "annual"; periodStart?: string; periodEnd?: string; planTier?: PlanTier; reason?: string };
 export type AiReservation = { allowed: boolean; completed?: boolean; busy?: boolean; reason?: string; requestId?: string; storagePath?: string; userId: string; jobId: string; attemptId: string };
 export class AiQuotaUnavailableError extends Error {
   constructor() { super("ai_quota_unavailable"); }

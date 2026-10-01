@@ -1,0 +1,21 @@
+import { beforeEach, expect, it, vi } from 'vitest';
+const m=vi.hoisted(()=>({create:vi.fn(),ready:vi.fn(),fulfill:vi.fn(),user:vi.fn(),rate:vi.fn()}));
+vi.mock('./_utils/supabase.js',()=>({requireSupabaseUser:m.user,sendJson:(res:any,code:number,body:any)=>{res.statusCode=code;res.body=body;}}));
+vi.mock('./_utils/rateLimit.js',()=>({enforceRateLimit:m.rate}));
+vi.mock('./_utils/entitlements.js',()=>({getBillingEntitlement:async()=>({customerId:'cus_u'}),saveStripeCustomerId:vi.fn()}));
+vi.mock('./_utils/stripeClient.js',()=>({getStripeClient:()=>({checkout:{sessions:{create:m.create}}}),getPublicAppUrl:()=> 'https://app.example',getStripePriceId:vi.fn()}));
+vi.mock('./_utils/aiCredits.js',()=>({AI_CREDIT_PACK:{kind:'ai_credits_100_v1',amount:1000,credits:100,currency:'eur'},assertAiCreditsReady:m.ready,fulfillAiCredits:m.fulfill}));
+import handler from './stripe';
+const purchaseId='d095bd03-8a76-43c8-9f01-b111596bfc52';
+const run=async(body:any={purchaseId},url='/api/stripe/credits',method='POST')=>{const res:any={setHeader:vi.fn()};await handler({method,url,body} as any,res);return res;};
+beforeEach(()=>{vi.clearAllMocks();m.user.mockResolvedValue({id:'u'});m.rate.mockResolvedValue(true);m.ready.mockResolvedValue(undefined);m.create.mockResolvedValue({url:'https://checkout.stripe.com/example'});m.fulfill.mockResolvedValue('paid');});
+it('fixes EUR10 and 100 credits server-side, including for an existing Pro account',async()=>{
+ expect((await run({purchaseId,amount:1,credits:9999})).statusCode).toBe(200);
+ expect(m.create).toHaveBeenCalledWith(expect.objectContaining({mode:'payment',customer:'cus_u',line_items:[{quantity:1,price_data:{currency:'eur',unit_amount:1000,tax_behavior:'inclusive',product_data:{name:'FahrtenbuchPro · 100 AI credits'}}}]}),{idempotencyKey:`ai-credits:u:${purchaseId}`});
+});
+it('does not open a payment when the migration is missing',async()=>{m.ready.mockRejectedValue(new Error('missing migration'));expect((await run()).statusCode).toBe(503);expect(m.create).not.toHaveBeenCalled();});
+it('rejects missing purchase identifier',async()=>{expect((await run({})).statusCode).toBe(400);expect(m.create).not.toHaveBeenCalled();});
+it('requires authentication',async()=>{m.user.mockResolvedValue(null);await run();expect(m.create).not.toHaveBeenCalled();});
+it('enforces rate limit',async()=>{m.rate.mockResolvedValue(false);await run();expect(m.create).not.toHaveBeenCalled();});
+it('requires POST',async()=>{expect((await run({},undefined,'GET')).statusCode).toBe(405);expect(m.create).not.toHaveBeenCalled();});
+it('confirmation binds Stripe lookup to the authenticated user',async()=>{expect((await run({sessionId:'cs_test_123'},'/api/stripe/credits/confirm')).body).toEqual({status:'paid'});expect(m.fulfill).toHaveBeenCalledWith('cs_test_123','u');});

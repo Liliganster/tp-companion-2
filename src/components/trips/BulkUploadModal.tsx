@@ -295,6 +295,9 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
   const { t, tf, locale } = useI18n();
   // Contador de IA transparente en el punto de gasto (Fase 4 del PLAN.md)
   const aiQuota = useAiQuota();
+  useEffect(() => {
+    if (open) aiQuota.refresh?.();
+  }, [open, aiQuota.refresh]);
   const exampleText = t("bulk.examplePlaceholder");
   // Import desde Drive disponible cuando las claves del picker están configuradas
   // (independiente del flag global FEATURES.googleDrive, que rige la conexión
@@ -1817,6 +1820,10 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                   </Button>
                 )}
 
+                <div className="flex flex-wrap justify-center items-center gap-2 text-xs">
+                  {aiQuota.creditsAvailable != null && <span>{tf('credits.balance', { count: aiQuota.creditsAvailable })}</span>}
+                  <Button variant="link" size="sm" onClick={() => { handleOpenChange(false); navigate('/plans'); }}>{t('credits.buy')}</Button>
+                </div>
                 {/* Contador de IA transparente ANTES de gastar (Fase 4) */}
                 {aiQuota.used != null && Number.isFinite(aiQuota.limit) && !aiQuota.bypass && (
                   <div className="flex justify-center">
@@ -1825,7 +1832,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                       {tf(aiQuota.period === "annual" ? "bulk.aiQuotaAnnualLine" : "bulk.aiQuotaLine", { used: aiQuota.used, limit: aiQuota.limit })}
                       {" · "}
                       {tf("dashboard.aiCounterRenews", {
-                        month: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toLocaleDateString(locale, { month: "long" }),
+                        month: new Date(aiQuota.periodEnd ?? new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1)).toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" }),
                       })}
                     </span>
                   </div>

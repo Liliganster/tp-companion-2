@@ -8,6 +8,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
 
+import { AiCreditPack } from '@/components/plans/AiCreditPack';
+
 export default function Plans() {
   const { t } = useI18n();
   const { planTier, isLoading, subscriptionError, refreshSubscription } = usePlan();
@@ -248,6 +250,7 @@ export default function Plans() {
           </div>
         </div>
 
+        <AiCreditPack />
       </div>
     </MainLayout>
   );
