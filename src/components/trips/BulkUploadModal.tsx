@@ -1,3 +1,4 @@
+import { buildCallsheetRoute, buildBaseRouteAddress, isBaseRouteAddress } from '@/lib/callsheetRoute';
 import { CALLSHEET_CLIENT_TIMEOUT_MS } from '@/lib/callsheetTiming';
 import { uiText } from "@/lib/ui-language";
 import { getProfileRates } from "@/lib/tripMoney";
@@ -930,7 +931,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
           }
           setJobStateById(prev => ({ ...prev, [jobId]: previousState }));
           if (completion.error === 'retry_limit_exceeded') toast.warning(t('bulk.retryLimit'));
-          else toast.error(t(response.status === 402 ? 'ui.quotaPreserved' : response.status === 409 ? 'bulk.retryBusy' : 'bulk.errorProcessOneDoc'));
+          else toast.error(t(completion.error === 'ai_provider_unavailable' ? 'ui.aiProviderUnavailable' : response.status === 402 ? 'ui.quotaPreserved' : response.status === 409 ? 'bulk.retryBusy' : 'bulk.errorProcessOneDoc'));
           return;
         }
         throw new Error(completion.reason || completion.message || t('bulk.errorProcessOneDoc'));
@@ -1386,7 +1387,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
             toast.error(t("bulk.errorProcessOneDoc"), {
               description: String(j.needs_review_reason ?? "").includes("storage_ownership_not_verified")
                 ? t("uploads.ownershipError")
-                : String(j.needs_review_reason ?? "").trim() || undefined,
+                : j.needs_review_reason === "ai_provider_unavailable" ? t("ui.aiProviderUnavailable") : String(j.needs_review_reason ?? "").trim() || undefined,
             });
           }
         }
@@ -1545,9 +1546,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
         extractedProducer || (findProjectByCompatibleName(projects, trimmedProjectName)?.producer ?? "").trim();
       const projectIdToUse = await resolveProjectId(trimmedProjectName, extractedProducer, meta.fileName);
 
-      const baseAddress = (profile.baseAddress ?? "").trim();
-      const stops = review.locations.map((l) => (l ?? "").trim()).filter(Boolean);
-      const route = baseAddress ? [baseAddress, ...stops, baseAddress] : stops;
+      const route = buildCallsheetRoute(profile, review.locations);
 
       // Duplicado (misma fecha + misma ruta que un viaje existente): confirmar antes.
       const dupKey = buildTripDuplicateKey(review.date, route);
@@ -2104,13 +2103,13 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                                 {tf("bulk.locationsRouteLabel", { count: review.locations.length })}
                               </Label>
                               <div className="space-y-2 rounded-xl border border-white/10 bg-background/40 p-3">
-                                <div className="flex items-center gap-2.5 text-xs text-muted-foreground">
+                                {!isBaseRouteAddress(profile, review.locations[0] ?? '') && (<div className="flex items-center gap-2.5 text-xs text-muted-foreground">
                                   <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success/15 text-success ring-1 ring-success/25">
                                     <MapPin className="h-3 w-3" />
                                   </span>
                                   <span className="font-semibold">{t("bulk.originLabel")}:</span>
-                                  <span className="truncate">{profile.baseAddress || t("bulk.notSet")}</span>
-                                </div>
+                                  <span className="truncate">{buildBaseRouteAddress(profile) || t("bulk.notSet")}</span>
+                                </div>)}
 
                                 <div className="space-y-2">
                                   {review.locations.map((loc, idx) => (
@@ -2138,13 +2137,13 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                                   )}
                                 </div>
 
-                                <div className="flex items-center gap-2.5 text-xs text-muted-foreground">
+                                {!isBaseRouteAddress(profile, review.locations[review.locations.length - 1] ?? '') && (<div className="flex items-center gap-2.5 text-xs text-muted-foreground">
                                   <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary ring-1 ring-primary/25">
                                     <MapPin className="h-3 w-3" />
                                   </span>
                                   <span className="font-semibold">{t("bulk.destinationLabel")}:</span>
-                                  <span className="truncate">{profile.baseAddress || t("bulk.notSet")}</span>
-                                </div>
+                                  <span className="truncate">{buildBaseRouteAddress(profile) || t("bulk.notSet")}</span>
+                                </div>)}
                               </div>
                             </div>
 

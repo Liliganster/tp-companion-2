@@ -1,3 +1,4 @@
+import { AiProviderUnavailableError, resolveCallsheetAiSettings } from './_utils/callsheetAiSettings.js';
 import { waitUntil } from "@vercel/functions";
 import { dispatchCallsheetWorker } from "./_utils/callsheetDispatch.js";
 import { supabaseAdmin } from "../src/lib/supabaseServer.js";
@@ -159,7 +160,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
     );
 
     for (const uid of userIds) {
-      const [{ data: profile }, planTier] = await Promise.all([
+      const [{ data: profile, error: profileError }, planTier] = await Promise.all([
         supabaseAdmin
           .from("user_profiles")
           .select("openrouter_enabled, openrouter_api_key, openrouter_model")
@@ -167,7 +168,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
           .maybeSingle(),
         getServerPlanTier(uid),
       ]);
-      userProfileCache.set(uid, profile ?? {});
+      userProfileCache.set(uid, profileError ? null : profile);
       planTierByUserId.set(uid, planTier);
     }
 
@@ -185,6 +186,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
       let reservation: AiReservation | undefined;
       try {
         const userId = String(job.user_id ?? "").trim();
+        const userSettings = resolveCallsheetAiSettings(userProfileCache.get(userId), planTierByUserId.get(userId));
         reservation = await reserveAiQuota(userId, jobId, planTierByUserId.get(userId), newRequestId);
         if (reservation.completed) {
           processedResults.push({ id: jobId, status: "done", cached: true });
@@ -213,20 +215,6 @@ export default withApiObservability(async function handler(req: any, res: any, {
         advancedJobIds.add(jobId);
         const claimed = { user_id: userId, storage_path: reservation.storagePath, processed_at: new Date().toISOString() };
         log.info({ jobId, retryCount: currentRetry }, "callsheet_job_start");
-
-        // Fetch AI user settings — reuse the profile cached during plan-limit checks (no extra DB query).
-        // OpenRouter propio = SOLO plan Pro (el servidor no se fía del perfil a secas).
-        let userSettings = undefined;
-        if (userId && String(planTierByUserId.get(userId) ?? "basic").toLowerCase() === "pro") {
-          const cachedProfile = userProfileCache.get(userId);
-          if (cachedProfile?.openrouter_enabled && cachedProfile?.openrouter_api_key) {
-            userSettings = {
-              openrouterEnabled: cachedProfile.openrouter_enabled,
-              openrouterApiKey: cachedProfile.openrouter_api_key,
-              openrouterModel: cachedProfile.openrouter_model,
-            };
-          }
-        }
 
         const selectedAiProvider = userSettings ? "openrouter" : "gemini";
         const selectedAiModel = userSettings?.openrouterModel || "gemini-2.5-flash";
@@ -305,6 +293,13 @@ export default withApiObservability(async function handler(req: any, res: any, {
         log.info({ jobId, retryCount: currentRetry }, "callsheet_job_done");
         processedResults.push({ id: jobId, status: outcome.status, retries: currentRetry });
       } catch (jobErr: any) {
+        if (jobErr instanceof AiProviderUnavailableError) {
+          // Only fail unclaimed jobs; never overwrite another active attempt.
+          await supabaseAdmin.from('callsheet_jobs').update({ status: 'failed', needs_review_reason: 'ai_provider_unavailable' })
+            .eq('id', jobId).eq('user_id', job.user_id).eq('status', 'queued');
+          processedResults.push({ id: jobId, status: 'failed', error: 'ai_provider_unavailable' });
+          return;
+        }
         if (!reservation?.allowed) {
           log.error({ jobId, err: jobErr }, "quota_reservation_failed");
           processedResults.push({ id: jobId, status: "failed", error: "ai_quota_unavailable" });

@@ -253,7 +253,8 @@ export async function generateContent(
   userSettings?: AiUserSettings,
   options?: GenerationOptions,
 ): Promise<AiGenerationResult> {
-  if (userSettings?.openrouterEnabled && userSettings?.openrouterApiKey) {
+  if (userSettings?.openrouterEnabled) {
+    if (!userSettings.openrouterApiKey?.trim()) throw new Error('ai_provider_unavailable');
     const orModel = userSettings.openrouterModel || "google/gemini-2.5-flash";
     return callOpenRouter(orModel, prompt, userSettings.openrouterApiKey, schema, undefined, options);
   }
@@ -285,7 +286,8 @@ export async function generateContentFromPDF(
   options?: GenerationOptions,
   visualDetail?: Buffer,
 ): Promise<AiGenerationResult> {
-    if (userSettings?.openrouterEnabled && userSettings?.openrouterApiKey) {
+    if (userSettings?.openrouterEnabled) {
+    if (!userSettings.openrouterApiKey?.trim()) throw new Error('ai_provider_unavailable');
         const orModel = userSettings.openrouterModel || "google/gemini-2.5-flash";
         const base64Data = pdfData.toString("base64");
 
@@ -364,7 +366,8 @@ export async function generateContentFromImages(
   schema?: JsonSchema,
   userSettings?: AiUserSettings,
 ): Promise<AiGenerationResult> {
-    if (userSettings?.openrouterEnabled && userSettings?.openrouterApiKey) {
+    if (userSettings?.openrouterEnabled) {
+    if (!userSettings.openrouterApiKey?.trim()) throw new Error('ai_provider_unavailable');
         const orModel = userSettings.openrouterModel || "google/gemini-2.5-flash";
         
         // Build content array with text + all images

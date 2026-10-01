@@ -108,7 +108,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     profileData.openrouterApiKey,
     open && planTier === "pro" && profileData.openrouterEnabled
   );
-  const geminiActive = !(planTier === "pro" && profileData.openrouterEnabled);
+  const geminiActive = !profile.openrouterEnabled;
   const [lastAiUsage, setLastAiUsage] = useState<{
     loading: boolean;
     provider: string | null;
@@ -722,6 +722,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               {activeTab === "apis" && (
                 <div className="space-y-6">
                   <h2 className="text-lg font-medium">{t("settings.tabApis")}</h2>
+                  <p className="text-sm text-muted-foreground">{t("settings.apisSavedSelection")}</p>
                   <div className="glass-card p-4">
                     <div className="flex items-center justify-between">
                       <div>
@@ -730,7 +731,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <div className={cn("w-2 h-2 rounded-full", geminiActive ? "bg-success" : "bg-muted-foreground/40")} />
-                        {t("settings.apisActive")}
+                        {t(geminiActive ? "settings.apisActive" : "settings.apisInactive")}
                       </div>
                     </div>
                   </div>

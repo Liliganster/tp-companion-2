@@ -16,7 +16,7 @@ const document = { id: 'job', name: 'original.pdf', storagePath: 'user/job/origi
 function open(route = ['Origin', 'Destination'], patch = {}) {
   return render(<TooltipProvider><AddTripModal open trip={{ id: 'job', callsheet_job_id: 'job', date: '2026-09-10', route, project: 'Film', documents: [document], distance: 12, ...patch }} onOpenChange={mocks.close} onSave={mocks.save} onViewDocument={mocks.view} /></TooltipProvider>);
 }
-beforeEach(() => { cleanup(); vi.clearAllMocks(); mocks.projects = [{ id: 'project', name: 'Film' }]; });
+beforeEach(() => { mocks.profile.baseAddress=""; mocks.profile.city=""; mocks.profile.country=""; cleanup(); vi.clearAllMocks(); mocks.projects = [{ id: 'project', name: 'Film' }]; });
 it('keeps an unresolved blank stop between known sites and saves its manual correction in place', async () => {
   mocks.save.mockResolvedValue(true);
   const { baseElement } = open(['Jesuitenwiese Prater', '', 'Erzbischofgasse 8']);
@@ -85,4 +85,20 @@ it('keeps unresolved middle locations for correction instead of silently droppin
   await waitFor(() => expect(screen.getByText('tripModal.update')).not.toBeDisabled());
   expect(mocks.save).not.toHaveBeenCalled();
   expect(mocks.close).not.toHaveBeenCalled();
+});
+
+it('recognizes saved short base endpoints instead of wrapping them a second time',async()=>{
+ mocks.profile.baseAddress='Home 1';mocks.profile.city='Wien';mocks.profile.country='Austria';
+ mocks.save.mockResolvedValue(true);
+ const {baseElement}=open(['Home 1','Studio 8','Home 1']);
+ const inputs=Array.from(baseElement.querySelectorAll<HTMLInputElement>('[data-tour="trip-route"] input'));
+ expect(inputs.map(input=>input.value)).toEqual(['Home 1','Studio 8','Home 1']);
+ fireEvent.click(screen.getByText('tripModal.update'));
+ await waitFor(()=>expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({route:['Home 1','Studio 8','Home 1']})));
+});
+it('recognizes a full base without appending its city and country again',()=>{
+ mocks.profile.baseAddress='Home 1, Wien, Austria';mocks.profile.city='Wien';mocks.profile.country='Austria';
+ const {baseElement}=open(['Home 1, Wien, Austria','Studio 8','Home 1, Wien, Austria']);
+ const inputs=Array.from(baseElement.querySelectorAll<HTMLInputElement>('[data-tour="trip-route"] input'));
+ expect(inputs.map(input=>input.value)).toEqual(['Home 1, Wien, Austria','Studio 8','Home 1, Wien, Austria']);
 });

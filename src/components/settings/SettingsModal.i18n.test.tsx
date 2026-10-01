@@ -43,3 +43,11 @@ it('updates an open settings dialog immediately when the selected language chang
   expect(screen.getByRole('button', { name: 'Passwort ändern' })).toBeInTheDocument();
   expect(screen.queryByText('Cambiar contraseña')).not.toBeInTheDocument();
 });
+
+it('shows Gemini inactive when the saved account uses OpenRouter', () => {
+  mocks.profile.language='es'; mocks.profile.openrouterEnabled=true;
+  render(<MemoryRouter><SettingsModal open onOpenChange={mocks.close} /></MemoryRouter>);
+  fireEvent.click(screen.getByRole('button', { name: 'Integraciones' }));
+  expect(screen.getByText('Inactivo')).toBeInTheDocument();
+  mocks.profile.openrouterEnabled=false;
+});

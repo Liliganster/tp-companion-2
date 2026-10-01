@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-const m=vi.hoisted(()=>({jobs:[] as any[],extract:vi.fn(),finish:vi.fn(),reserve:vi.fn(),background:[] as Promise<unknown>[],dispatch:vi.fn()}));
+const m=vi.hoisted(()=>({profile:{} as any,profileError:null as any,jobs:[] as any[],extract:vi.fn(),finish:vi.fn(),reserve:vi.fn(),background:[] as Promise<unknown>[],dispatch:vi.fn()}));
 vi.mock('@vercel/functions',()=>({waitUntil:(promise:Promise<unknown>)=>{m.background.push(promise);}}));
 vi.mock('./callsheetDispatch.js',()=>({dispatchCallsheetWorker:m.dispatch}));
 vi.mock('../../src/lib/supabaseServer.js',()=>({supabaseAdmin:{from:(table:string)=>{
  let changes:any;const filters:Array<(row:any)=>boolean>=[];let single=false;let head=false;let take=Infinity;
  const result=()=>{
-  const rows=table==='callsheet_jobs'?m.jobs.filter(row=>filters.every(f=>f(row))):[{}];
+  const rows=table==='callsheet_jobs'?m.jobs.filter(row=>filters.every(f=>f(row))):table==='user_profiles'?(m.profile?[m.profile]:[]):[{}];
   if(changes) rows.forEach(row=>Object.assign(row,changes));
-  return {data:head?null:single?rows[0]??null:rows.slice(0,take),error:null,count:rows.length};
+  return {data:head?null:single?rows[0]??null:rows.slice(0,take),error:table==='user_profiles'?m.profileError:null,count:rows.length};
  };
  const q:any={select:(_fields:any,options:any)=>{head=Boolean(options?.head);return q;},
  eq:(field:string,value:any)=>{filters.push(row=>row[field]===value);return q;},
@@ -30,6 +30,7 @@ const run=async(query={})=>{
  await handler({method:'POST',headers:{},query},res);return res;
 };
 beforeEach(()=>{
+ m.profile={};m.profileError=null;
  vi.clearAllMocks();m.dispatch.mockReset();m.background=[];vi.stubEnv('CRON_SECRET','');vi.stubEnv('VERCEL_ENV','');
  m.jobs=[{id:'job',user_id:'user',status:'queued',storage_path:'user/job/file.pdf',created_at:'2026-09-10',next_retry_at:'2020-01-01',retry_count:0}];
  m.reserve.mockImplementation(async()=>{m.jobs[0].status='processing';m.jobs[0].ai_request_id='request';return {allowed:true,requestId:'request',attemptId:'attempt',storagePath:'user/job/file.pdf'};});
@@ -175,4 +176,19 @@ it.each(['exception', 'invalid-result'])('an old %s cannot fail a newer extracti
   else resolve({ ok: false, kind: 'invalid_extraction', message: 'old invalid result' });
   await m.background[0];
   expect(m.jobs[0]).toMatchObject({ status: 'processing', ai_request_id: 'new-user-attempt' });
+});
+
+it.each(['missing','error','missing-key'])('worker blocks invalid provider settings without spending quota: %s', async kind => {
+  if(kind==='missing') m.profile=null;
+  if(kind==='error') m.profileError={message:'database unavailable'};
+  if(kind==='missing-key') m.profile={openrouter_enabled:true,openrouter_api_key:''};
+  await run();
+  expect(m.reserve).not.toHaveBeenCalled();
+  expect(m.extract).not.toHaveBeenCalled();
+  expect(m.jobs[0]).toMatchObject({status:'failed',needs_review_reason:'ai_provider_unavailable'});
+});
+it('worker honors exactly the same OpenRouter selection as direct processing',async()=>{
+  m.profile={openrouter_enabled:true,openrouter_api_key:'offline',openrouter_model:'google/gemini-3.8-flash'};
+  await run();
+  expect(m.extract).toHaveBeenCalledWith(expect.objectContaining({userSettings:{openrouterEnabled:true,openrouterApiKey:'offline',openrouterModel:'google/gemini-3.8-flash'}}));
 });

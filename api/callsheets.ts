@@ -1,3 +1,4 @@
+import { AiProviderUnavailableError, resolveCallsheetAiSettings } from './_utils/callsheetAiSettings.js';
 import { dispatchCallsheetWorker } from "./_utils/callsheetDispatch.js";
 /**
  * Consolidated router for all /api/callsheets/* routes.
@@ -35,10 +36,13 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
   let reservation: AiReservation | undefined;
   try {
     // 1. Fetch user profile to get AI plan tier
-    const [{ data: profile }, planTier] = await Promise.all([
+    const [{ data: profile, error: profileError }, planTier] = await Promise.all([
       supabaseAdmin.from("user_profiles").select("openrouter_enabled, openrouter_api_key, openrouter_model").eq("id", user.id).maybeSingle(),
       getServerPlanTier(user.id),
     ]);
+
+    if (profileError) throw new AiProviderUnavailableError();
+    const userSettings = resolveCallsheetAiSettings(profile, planTier);
 
     const newRequestId = req.query?.requestId;
     if (newRequestId !== undefined && !z.string().uuid().safeParse(newRequestId).success) {
@@ -58,14 +62,6 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
     if (reservation.reason === "manual_retry_required") return sendJson(res, 409, { error: "manual_retry_required" });
     if (!reservation.allowed) return sendJson(res, 402, { error: "quota_exceeded", reason: reservation.reason });
     const job = { storage_path: reservation.storagePath };
-
-    // 3. Load user AI settings (OpenRouter override if configured).
-    // OpenRouter propio = SOLO plan Pro (regla de la propietaria 2026-07-10):
-    // la UI ya lo esconde en Free, pero el servidor no debe fiarse del perfil.
-    const isPro = planTier === "pro";
-    const userSettings = isPro && profile?.openrouter_enabled && profile?.openrouter_api_key
-      ? { openrouterEnabled: true, openrouterApiKey: profile.openrouter_api_key, openrouterModel: profile.openrouter_model }
-      : undefined;
 
     // 4. Núcleo COMPARTIDO con api/worker.ts (Fase 2: pipelines unificados
     // en api/_utils/callsheetExtraction.ts). Aquí solo queda la traducción
@@ -103,6 +99,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
     return sendJson(res, 200, { ok: true, jobId, status: outcome.status, reviewReason: outcome.reviewReason, date: outcome.date, projectName: outcome.projectName, locations: outcome.locations });
   } catch (err: any) {
     log.error({ err, jobId }, "callsheet_process_error");
+    if (err instanceof AiProviderUnavailableError) return sendJson(res, 503, { error: 'ai_provider_unavailable' });
     if (err instanceof AiQuotaUnavailableError) return sendJson(res, 503, { error: "ai_quota_unavailable" });
     if (err instanceof StorageOwnershipError) {
       await supabaseAdmin.from("callsheet_jobs")

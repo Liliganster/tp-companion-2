@@ -215,3 +215,17 @@ it('shows manual review immediately after the third unsuccessful retry', async (
   await waitFor(() => expect(mocks.warning).toHaveBeenCalledWith('bulk.retryLimit'));
   expect(mocks.fetch).toHaveBeenCalledOnce();
 });
+
+it('saves existing base endpoints once and preserves a return visit inside the route',async()=>{
+ mocks.jobs=[{id:'job',status:'needs_review',storage_path:'user/job/Original.pdf',created_at:new Date().toISOString()}];
+ mocks.result={date_value:'2026-09-10',project_value:'Film'};
+ mocks.locations=['Home','Studio 8','Studio 8','Home','Park 2','Home'].map((value,position)=>({position,formatted_address:value,address_raw:value,selection_state:'confirmed'}));
+ open();
+ await screen.findByDisplayValue('Park 2');
+ expect(screen.queryByText(/bulk\.originLabel/)).toBeNull();
+ expect(screen.queryByText(/bulk\.destinationLabel/)).toBeNull();
+ fireEvent.click(screen.getByText('bulk.saveTrip'));
+ await waitFor(()=>expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({route:['Home','Studio 8','Home','Park 2','Home']})));
+ // Review evidence stays editable; it is not silently deleted from the document.
+ expect(screen.getAllByDisplayValue('Studio 8')).toHaveLength(2);
+});

@@ -1,33 +1,8 @@
 import { getCountryCode } from "@/lib/country-mapping";
 import { callsheetAddressKey, normalizeCallsheetAddress } from './callsheetAddress';
 
-type UserProfileLike = {
-  baseAddress?: string | null;
-  city?: string | null;
-  country?: string | null;
-};
-
-export function buildBaseRouteAddress(profile: UserProfileLike): string {
-  const baseAddress = (profile.baseAddress ?? "").trim();
-  const city = (profile.city ?? "").trim();
-  const country = (profile.country ?? "").trim();
-
-  if (!baseAddress) return "";
-
-  const lowerBase = baseAddress.toLowerCase();
-  const parts = [baseAddress];
-
-  if (city && !lowerBase.includes(city.toLowerCase())) {
-    parts.push(city);
-  }
-
-  const joined = parts.join(", ");
-  if (country && !joined.toLowerCase().includes(country.toLowerCase())) {
-    parts.push(country);
-  }
-
-  return parts.join(", ");
-}
+import { buildBaseRouteAddress, buildCallsheetRoute, isBaseRouteAddress, type UserProfileLike } from './callsheetRoute';
+export { buildBaseRouteAddress } from './callsheetRoute';
 
 export async function optimizeCallsheetLocationsAndDistance(args: {
   profile: UserProfileLike;
@@ -78,7 +53,7 @@ export async function optimizeCallsheetLocationsAndDistance(args: {
   const region = getCountryCode(country);
 
   const normalizedLocs: string[] = [];
-  const waypoints: string[] = [];
+  const waypointByDisplay = new Map<string, string>();
   let previousPlace = '';
   const resolved = new Map<string, {display: string; waypoint: string; identity: string}>();
   for (const address of currentLocs) {
@@ -89,7 +64,9 @@ export async function optimizeCallsheetLocationsAndDistance(args: {
     const addressKey = identity;
     const cached = resolved.get(addressKey);
     // Coordinates and Maps links already identify a destination; do not geocode them as prose.
-    if (cached) {
+    if (isBaseRouteAddress(profile, address)) {
+      display = baseAddress; waypoint = baseAddress; identity = callsheetAddressKey(baseAddress);
+    } else if (cached) {
       ({display, waypoint, identity} = cached);
     } else if (!/^https?:\/\//i.test(address) && !/^-?\d+\.\d+\s*,\s*-?\d+\.\d+$/.test(address)) {
       try {
@@ -113,12 +90,15 @@ export async function optimizeCallsheetLocationsAndDistance(args: {
     if (previousPlace === identity) continue;
     previousPlace = identity;
     normalizedLocs.push(display);
-    waypoints.push(waypoint);
+    waypointByDisplay.set(callsheetAddressKey(display), waypoint);
   }
 
   let distanceKm: number | null = null;
 
+  const route = buildCallsheetRoute(profile, normalizedLocs);
+  if (baseAddress && route.length === 1) return { locations: normalizedLocs, distanceKm: 0 };
   if (baseAddress) {
+    const waypoints = route.slice(1, -1).map(address => waypointByDisplay.get(callsheetAddressKey(address)) ?? address);
     try {
       const { res, data } = await fetchJsonWithTimeout(
         "/api/google/directions",

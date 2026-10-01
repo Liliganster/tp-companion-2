@@ -1,3 +1,4 @@
+import { buildCallsheetRoute } from '@/lib/callsheetRoute';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { FormSection } from "@/components/ui/form-section";
 import { getUploadedFileName } from "@/lib/uploadFileName";
@@ -27,7 +28,7 @@ import { resolveCallsheetMime } from "@/lib/callsheetMime";
 import { useTrips, type Trip } from "@/contexts/TripsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEmissionsInput } from "@/hooks/use-emissions-input";
-import { buildBaseRouteAddress, optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
+import { optimizeCallsheetLocationsAndDistance } from "@/lib/callsheetOptimization";
 import { uuidv4 } from "@/lib/utils";
 
 import { cancelCallsheetJobs } from "@/lib/aiJobCancellation";
@@ -329,8 +330,7 @@ export function ProjectDetailModal({ open, onOpenChange, project, selectedYear =
         // Stop if modal was closed while the directions/geocoding API was running
         if (abortControllerRef.current?.signal.aborted) return null;
 
-        const base = buildBaseRouteAddress(profile);
-        const route = base ? [base, ...normalizedLocs, base] : normalizedLocs;
+        const route = buildCallsheetRoute(profile, normalizedLocs);
 
         const distance = typeof distanceKm === "number" ? distanceKm : 0;
 
@@ -960,6 +960,13 @@ export function ProjectDetailModal({ open, onOpenChange, project, selectedYear =
           cancelCallsheetJobIdsRef.current.delete(doc.id);
           setRealCallSheets((prev) => prev.map((p) => p.id === doc.id ? { ...p, status: doc.status } : p));
           toast.error(t("ui.quotaPreserved"));
+          return;
+        }
+        if (errData.error === 'ai_provider_unavailable') {
+          localStatusOverridesRef.current.delete(doc.id);
+          cancelCallsheetJobIdsRef.current.delete(doc.id);
+          setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: doc.status } : p));
+          toast.error(t('ui.aiProviderUnavailable'));
           return;
         }
         if (errData.error === "ai_quota_unavailable") {

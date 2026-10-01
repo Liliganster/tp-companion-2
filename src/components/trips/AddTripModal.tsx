@@ -1,3 +1,4 @@
+import { buildBaseRouteAddress, isBaseRouteAddress } from '@/lib/callsheetRoute';
 import { resolveEditedTripProjectId, isValidTripEdit } from "@/lib/tripEditing";
 import { getProfileRates } from "@/lib/tripMoney";
 import { FormSection } from "@/components/ui/form-section";
@@ -306,8 +307,7 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
   }, [profile.country]);
 
   const baseLocation = useMemo(() => {
-    const parts = [profile.baseAddress, profile.city, profile.country].map((p) => p.trim()).filter(Boolean);
-    return parts.join(", ");
+    return buildBaseRouteAddress(profile);
   }, [profile.baseAddress, profile.city, profile.country]);
 
   const parseTripDateToTime = useCallback((value: string) => {
@@ -455,10 +455,9 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
     // origen/destino (al sobrescribirlas se perdían las paradas): se listan
     // como paradas y origen/destino quedan vacíos para añadirlos alrededor.
     const cameFromCallsheet = Boolean((seedTrip as any)?.callsheet_job_id);
-    const baseNorm = (baseLocation ?? "").trim().toLowerCase();
     const routeVals = (seedTrip?.route ?? []).map((v) => String(v ?? "").trim())
       .filter(value => cameFromCallsheet || Boolean(value));
-    const routeTouchesBase = baseNorm.length > 0 && routeVals.some((v) => v.toLowerCase() === baseNorm);
+    const routeTouchesBase = routeVals.some(value => isBaseRouteAddress(profile, value));
     if (cameFromCallsheet && routeVals.length >= 1 && !routeTouchesBase) {
       return [
         { id: "origin", value: "", type: "origin" as const },

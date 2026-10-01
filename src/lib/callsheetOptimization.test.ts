@@ -58,3 +58,23 @@ it('builds a postal address without the establishment name',async()=>{
  ])).toBe('Rustenschacherallee 9, 1020 Wien, Austria');
  expect(googlePostalAddress([{long_name:'Theatre',types:['establishment']}])).toBe('');
 });
+
+it('excludes base endpoints from Maps waypoints and avoids geocoding the configured base',async()=>{
+ const request=vi.fn(async(url:unknown,init:RequestInit)=>{
+  const body=JSON.parse(String(init.body));
+  if(url==='/api/google/geocode') {
+   expect(body.address).toBe('Studio 8');
+   return new Response(JSON.stringify({resultCount:1,partialMatch:false,placeId:'studio',postalAddress:'Studio 8',types:['street_address']}));
+  }
+  expect(body).toMatchObject({origin:'Home 1, Wien, Austria',destination:'Home 1, Wien, Austria',waypoints:['place_id:studio']});
+  return new Response(JSON.stringify({totalDistanceMeters:5000}));
+ });
+ vi.stubGlobal('fetch',request);
+ const result=await optimizeCallsheetLocationsAndDistance({profile:{baseAddress:'Home 1',city:'Wien',country:'Austria'},rawLocations:['Home 1','Studio 8','Home 1, Wien, Austria'],accessToken:'mock'});
+ expect(result.distanceKm).toBe(5);expect(request).toHaveBeenCalledTimes(2);
+});
+it('does not request a zero-length route when all locations are the base',async()=>{
+ const request=vi.fn();vi.stubGlobal('fetch',request);
+ expect((await optimizeCallsheetLocationsAndDistance({profile:{baseAddress:'Home'},rawLocations:['Home','Home'],accessToken:'mock'})).distanceKm).toBe(0);
+ expect(request).not.toHaveBeenCalled();
+});

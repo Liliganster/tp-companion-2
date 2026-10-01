@@ -64,7 +64,7 @@ export function TripDetailEditor({ trip, onSave, onCancel, onSaved, onSaving }: 
       <div><Label htmlFor="detail-edit-date">{t('tripModal.date')}</Label><Input id="detail-edit-date" type="date" required value={date} onChange={e => setDate(e.target.value)} /></div>
       <div><Label htmlFor="detail-edit-project">{t('tripModal.project')}</Label><Input id="detail-edit-project" list="detail-projects" maxLength={120} value={project} onChange={e => setProject(e.target.value)} /><datalist id="detail-projects">{projects.map(p => <option key={p.id} value={p.name} />)}</datalist></div>
       </div>
-      <div><Label htmlFor="detail-edit-purpose">{t('tripModal.purpose')}</Label><Input id="detail-edit-purpose" maxLength={500} value={purpose} onChange={e => setPurpose(e.target.value)} /></div>
+      <div><Label htmlFor="detail-edit-purpose">{t('tripDetail.purpose')}</Label><Input id="detail-edit-purpose" maxLength={500} value={purpose} onChange={e => setPurpose(e.target.value)} /></div>
       <div className="space-y-2"><Label>{t('tripDetail.route')}</Label>{route.map((stop, index) => <div className="flex items-start gap-2" key={index}>
         <span className="mt-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs text-primary">{index + 1}</span>
         <textarea rows={2} className="flex min-h-16 w-full resize-y rounded-lg border border-input bg-secondary px-3 py-2 text-sm leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50" aria-label={`${t('tripDetail.route')} ${index + 1}`} required value={stop} onChange={e => setRoute(prev => prev.map((value, i) => i === index ? e.target.value : value))} />

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
-  reserve: vi.fn(), finish: vi.fn(), extract: vi.fn(), from: vi.fn(),
+  reserve: vi.fn(), finish: vi.fn(), extract: vi.fn(), from: vi.fn(), plan: vi.fn(),
 }));
 vi.mock("../../src/lib/supabaseServer.js", () => ({ supabaseAdmin: { from: mocks.from } }));
 vi.mock("./observability.js", () => ({ withApiObservability: (fn: (...args: any[]) => unknown) => (req: unknown, res: unknown) => fn(req, res, { log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, requestId: "trace" }) }));
@@ -9,7 +9,7 @@ vi.mock("./supabase.js", () => ({
   sendJson: (res: { statusCode: number; body: unknown }, code: number, body: unknown) => { res.statusCode = code; res.body = body; },
 }));
 vi.mock("./rateLimit.js", () => ({ enforceRateLimit: async () => true }));
-vi.mock("./entitlements.js", () => ({ getServerPlanTier: async () => "pro" }));
+vi.mock("./entitlements.js", () => ({ getServerPlanTier: mocks.plan }));
 vi.mock("./aiQuota.js", () => ({
   reserveAiQuota: mocks.reserve, finishAiQuota: mocks.finish,
   AiQuotaUnavailableError: class extends Error {},
@@ -23,6 +23,7 @@ const run = async () => {
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.plan.mockResolvedValue("pro");
   const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), update: vi.fn(() => chain), maybeSingle: vi.fn().mockResolvedValue({ data: {} }) };
   mocks.from.mockReturnValue(chain);
   mocks.reserve.mockResolvedValue({ allowed: true, requestId: "request", userId: "user", jobId: "job", attemptId: "attempt", storagePath: "user/file.pdf" });
@@ -96,4 +97,29 @@ it('blocks the fourth retry before AI and returns the manual-review reason', asy
   expect(response.setHeader).toHaveBeenCalledWith('X-Callsheet-Retries-Used', '3');
   expect(mocks.extract).not.toHaveBeenCalled();
   expect(mocks.finish).not.toHaveBeenCalled();
+});
+
+it.each([
+  {data:null,error:null},
+  {data:{openrouter_enabled:true,openrouter_api_key:'offline'},error:{message:'database unavailable'}},
+  {data:{openrouter_enabled:true,openrouter_api_key:''},error:null},
+])('direct processing blocks unreadable or invalid AI settings before claiming quota', async profileResult => {
+  mocks.from().maybeSingle.mockResolvedValue(profileResult);
+  const res=await run();
+  expect(res.statusCode).toBe(503);
+  expect(res.body).toEqual({error:'ai_provider_unavailable'});
+  expect(mocks.reserve).not.toHaveBeenCalled();
+  expect(mocks.extract).not.toHaveBeenCalled();
+});
+it('direct processing passes the selected OpenRouter model to the extractor', async () => {
+  mocks.from().maybeSingle.mockResolvedValue({data:{openrouter_enabled:true,openrouter_api_key:'offline',openrouter_model:'google/gemini-3.8-flash'},error:null});
+  expect((await run()).statusCode).toBe(200);
+  expect(mocks.extract).toHaveBeenCalledWith(expect.objectContaining({userSettings:{openrouterEnabled:true,openrouterApiKey:'offline',openrouterModel:'google/gemini-3.8-flash'}}));
+});
+it('direct processing never changes an OpenRouter account to Gemini after a plan downgrade', async () => {
+  mocks.plan.mockResolvedValue('basic');
+  mocks.from().maybeSingle.mockResolvedValue({data:{openrouter_enabled:true,openrouter_api_key:'offline'},error:null});
+  expect((await run()).statusCode).toBe(503);
+  expect(mocks.reserve).not.toHaveBeenCalled();
+  expect(mocks.extract).not.toHaveBeenCalled();
 });
