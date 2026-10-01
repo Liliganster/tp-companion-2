@@ -1,3 +1,4 @@
+import { CALLSHEET_CLIENT_TIMEOUT_MS } from '@/lib/callsheetTiming';
 import { uiText } from "@/lib/ui-language";
 import { getProfileRates } from "@/lib/tripMoney";
 import { FormSection } from "@/components/ui/form-section";
@@ -289,6 +290,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
   const cancelRequestedRef = useRef(false);
   const aiAbortControllerRef = useRef<AbortController | null>(null);
   const scheduledProcessJobIdsRef = useRef(new Set<string>());
+  const retryRequestIdsRef = useRef(new Map<string, string>());
   const lastTriggerWorkerKickAtRef = useRef(0);
   const dragDepthRef = useRef(0);
   
@@ -400,6 +402,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     optimizeChainRef.current = Promise.resolve();
     scheduledProcessJobIdsRef.current.clear();
     lastTriggerWorkerKickAtRef.current = 0;
+    retryRequestIdsRef.current.clear();
     jobResultsLoadingRef.current.clear();
     failureToastShownRef.current.clear();
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -855,8 +858,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
   const triggerBulkProcessing = async (
     ids: string[],
     signal: AbortSignal | null | undefined,
-    reason: "initial_batch" | "queued_safety_net" | "stale_processing_retry" | "manual_retry",
-    requestIds: Record<string, string> = {},
+    reason: "initial_batch" | "queued_safety_net",
   ) => {
     const targetIds = Array.from(new Set(ids.map((id) => String(id ?? "").trim()).filter(Boolean))).filter(
       (id) => !scheduledProcessJobIdsRef.current.has(id) && !savedByJobIdRef.current[id],
@@ -870,9 +872,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     targetIds.forEach((id) => scheduledProcessJobIdsRef.current.add(id));
 
     try {
-      const jobId = reason === 'manual_retry' ? targetIds[0] : undefined;
-      const query = jobId ? '?jobId=' + encodeURIComponent(jobId) + '&requestId=' + encodeURIComponent(requestIds[jobId]) : '';
-      const response = await fetch('/api/callsheets/trigger-worker' + query, {
+      const response = await fetch('/api/callsheets/trigger-worker', {
         method: 'POST', headers: { Authorization: token ? 'Bearer ' + token : '', 'Content-Type': 'application/json' },
         signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(20_000)]),
       });
@@ -883,15 +883,75 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
   };
 
   const retryFailedJob = async (jobId: string) => {
-    if (!["failed", "cancelled"].includes(jobStateById[jobId]?.status ?? "") ||
+    const previousState = jobStateById[jobId];
+    if (!["failed", "cancelled", "out_of_quota", "needs_review", "done"].includes(previousState?.status ?? "") ||
         savedByJobIdRef.current[jobId] || scheduledProcessJobIdsRef.current.has(jobId)) return;
     if (!window.confirm(tf("bulk.retryDocumentConfirm", { name: jobMetaById[jobId]?.fileName ?? jobId }))) return;
+
+    // A deliberate new extraction gets its own identity; old results stay on
+    // the server until the replacement commits, but must never refill this UI.
+    const requestId = uuidv4();
+    retryRequestIdsRef.current.set(jobId, requestId);
+    scheduledProcessJobIdsRef.current.add(jobId);
+    cancelRequestedRef.current = false;
+    if (!aiAbortControllerRef.current || aiAbortControllerRef.current.signal.aborted) {
+      aiAbortControllerRef.current = new AbortController();
+    }
+    const signal = aiAbortControllerRef.current.signal;
+    const previousReview = reviewByJobIdRef.current[jobId];
+    const remainingReviews = { ...reviewByJobIdRef.current };
+    delete remainingReviews[jobId];
+    reviewByJobIdRef.current = remainingReviews;
+    setReviewByJobId(prev => { const next = { ...prev }; delete next[jobId]; return next; });
     failureToastShownRef.current.delete(jobId);
-    setJobStateById(prev => ({ ...prev, [jobId]: { status: "queued", needsReviewReason: null } }));
+    setJobStateById(prev => ({ ...prev, [jobId]: { status: "processing", needsReviewReason: null } }));
+    setAiStep("processing");
+    let retriesUsed = 0;
     try {
-      await triggerBulkProcessing([jobId], aiAbortControllerRef.current?.signal, "manual_retry", { [jobId]: uuidv4() });
-    } catch {
-      setJobStateById(prev => ({ ...prev, [jobId]: { status: "failed", needsReviewReason: t("bulk.errorProcessOneDoc") } }));
+      const token = await getAccessToken();
+      if (!token) throw new Error(t("bulk.errorProcessOneDoc"));
+      if (isAiCancelled(signal)) return;
+      // Same extraction core as the first upload. Wait for its real outcome,
+      // not a fire-and-forget dispatch which may never claim this document.
+      const response = await fetch(`/api/callsheets/process?jobId=${encodeURIComponent(jobId)}&requestId=${requestId}`, {
+        method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        signal: AbortSignal.any([signal, AbortSignal.timeout(CALLSHEET_CLIENT_TIMEOUT_MS)]),
+      });
+      retriesUsed = Number(response.headers.get('X-Callsheet-Retries-Used') ?? 0);
+      const completion = await response.json().catch(() => ({}));
+      if (isAiCancelled(signal)) return;
+      if (!response.ok) {
+        if ([402, 409, 429, 503].includes(response.status)) {
+          // No extraction was started: restore the editable previous state.
+          retryRequestIdsRef.current.delete(jobId);
+          if (previousReview) {
+            reviewByJobIdRef.current[jobId] = previousReview;
+            setReviewByJobId(prev => ({ ...prev, [jobId]: previousReview }));
+          }
+          setJobStateById(prev => ({ ...prev, [jobId]: previousState }));
+          if (completion.error === 'retry_limit_exceeded') toast.warning(t('bulk.retryLimit'));
+          else toast.error(t(response.status === 402 ? 'ui.quotaPreserved' : response.status === 409 ? 'bulk.retryBusy' : 'bulk.errorProcessOneDoc'));
+          return;
+        }
+        throw new Error(completion.reason || completion.message || t('bulk.errorProcessOneDoc'));
+      }
+      if (!['done', 'needs_review'].includes(completion.status)) throw new Error(t('bulk.errorProcessOneDoc'));
+      setJobStateById(prev => ({ ...prev, [jobId]: { status: completion.status, needsReviewReason: completion.reviewReason ?? null } }));
+      await loadJobResult(jobId, signal, completion.status === 'needs_review');
+      aiQuota.refresh?.();
+      if (retriesUsed >= 3 && completion.status === 'needs_review') toast.warning(t('bulk.retryLimit'));
+    } catch (error) {
+      if (isAiCancelled(signal)) return;
+      const message = error instanceof Error ? error.message : t('bulk.errorProcessOneDoc');
+      // An uncertain network result is never automatically sent to AI again.
+      retryRequestIdsRef.current.delete(jobId);
+      failureToastShownRef.current.add(jobId);
+      setJobStateById(prev => ({ ...prev, [jobId]: { status: 'failed', needsReviewReason: message } }));
+      if (retriesUsed >= 3) toast.warning(t('bulk.retryLimit'));
+      else toast.error(t('bulk.errorProcessOneDoc'), { description: message });
+    } finally {
+      scheduledProcessJobIdsRef.current.delete(jobId);
+      if (!isAiCancelled(signal)) setAiStep('review');
     }
   };
 
@@ -1153,9 +1213,10 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
 
   // Multi-job: carga resultados para TODOS los documentos completados y los muestra en paralelo.
   const enqueueOptimization = (jobId: string, rawLocations: string[], signal?: AbortSignal | null) => {
+    const resultRequestId = retryRequestIdsRef.current.get(jobId);
     optimizeChainRef.current = optimizeChainRef.current
       .then(async () => {
-        if (isAiCancelled(signal)) return;
+        if (isAiCancelled(signal) || retryRequestIdsRef.current.get(jobId) !== resultRequestId) return;
         setReviewByJobId((prev) => {
           const cur = prev[jobId];
           if (!cur) return prev;
@@ -1163,14 +1224,14 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
         });
 
         const token = await getAccessToken();
-        if (isAiCancelled(signal)) return;
+        if (isAiCancelled(signal) || retryRequestIdsRef.current.get(jobId) !== resultRequestId) return;
         const { distanceKm } = await optimizeCallsheetLocationsAndDistance({
           profile,
           rawLocations,
           accessToken: token,
           signal: signal ?? undefined,
         });
-        if (isAiCancelled(signal)) return;
+        if (isAiCancelled(signal) || retryRequestIdsRef.current.get(jobId) !== resultRequestId) return;
 
         setReviewByJobId((prev) => {
           const cur = prev[jobId];
@@ -1210,6 +1271,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     if (reviewByJobIdRef.current[jobId]) return;
     if (savedByJobIdRef.current[jobId]) return;
 
+    const resultRequestId = retryRequestIdsRef.current.get(jobId);
     jobResultsLoadingRef.current.add(jobId);
     try {
       const [{ data: result, error: resultError }, { data: locs, error: locsError }] = await Promise.all([
@@ -1219,12 +1281,14 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
       if (isAiCancelled(signal)) return;
 
       if (resultError || locsError || !result) return;
+      if (retryRequestIdsRef.current.get(jobId) !== resultRequestId) return;
+      if (resultRequestId && result.extraction_request_id !== resultRequestId) return;
 
       const locationDetails = getCallsheetReviewLocations(locs ?? []);
       const rawLocations = locationDetails.map(location => location.value);
 
       setReviewByJobId((prev) => {
-        if (prev[jobId]) return prev;
+        if (prev[jobId] || retryRequestIdsRef.current.get(jobId) !== resultRequestId) return prev;
         return {
           ...prev,
           [jobId]: {
@@ -1259,12 +1323,15 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
         if (isAiCancelled(aiSignal)) return;
         const { data: fetchedJobs, error: jobsError } = await supabase
           .from("callsheet_jobs")
-          .select("id, status, needs_review_reason, created_at, processing_started_at, processed_at")
+          .select("id, status, needs_review_reason, created_at, processing_started_at, processed_at, ai_request_id")
           .in("id", jobIds);
         if (isAiCancelled(aiSignal)) return;
 
         if (jobsError || !fetchedJobs) return;
-        const jobs = fetchedJobs.map(job => resolveCallsheetProcessingState(job, scheduledProcessJobIdsRef.current.has(String(job.id))));
+        const jobs = fetchedJobs.filter(job => {
+          const expected = retryRequestIdsRef.current.get(String(job.id));
+          return !expected || job.ai_request_id === expected;
+        }).map(job => resolveCallsheetProcessingState(job, scheduledProcessJobIdsRef.current.has(String(job.id))));
 
         const doneIds = jobs.filter((j: any) => j.status === "done").map((j: any) => String(j.id));
         const queuedIds = jobs
@@ -1280,7 +1347,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
           (j: any) => j.status === "failed" || j.status === "out_of_quota",
         );
 
-        const hasPending = jobs.some((j: any) => {
+        const hasPending = scheduledProcessJobIdsRef.current.size > 0 || jobs.some((j: any) => {
           const s = String(j?.status ?? "");
           return s === "created" || s === "queued" || s === "processing";
         });
@@ -2110,7 +2177,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
                           </div>
                         )}
 
-                        {["failed", "cancelled"].includes(job.status) && !job.saved && (
+                        {["failed", "cancelled", "out_of_quota", "needs_review", "done"].includes(job.status) && !job.saved && (
                           <Button type="button" variant="outline" onClick={() => void retryFailedJob(job.id)}>
                             {t("bulk.retryDocument")}
                           </Button>

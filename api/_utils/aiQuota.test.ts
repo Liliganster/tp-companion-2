@@ -82,7 +82,7 @@ describe("atomic quota bridge", () => {
     mocks.rpc.mockResolvedValue({ data: { allowed: true, requestId: "request", storagePath: "user/file.pdf" }, error: null });
     const r = await reserveAiQuota("user", "job");
     expect(mocks.ownership).toHaveBeenCalledWith("user", "callsheets", "user/file.pdf");
-    expect(mocks.rpc).toHaveBeenCalledWith("reserve_ai_quota_v2", expect.objectContaining({
+    expect(mocks.rpc).toHaveBeenCalledWith("reserve_ai_quota_v3", expect.objectContaining({
       p_user_id: "user", p_job_id: "job", p_limit: 3, p_identity_hash: "stable-identity", p_new_request_id: null,
     }));
     expect(r.attemptId).toBeTruthy();

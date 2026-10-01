@@ -27,6 +27,8 @@ export const en: Record<I18nKey, string> = {
   "projects.moveTripRetained": "The source project still has independent documents or expenses and has been kept.",
   "projects.moveTripFailed": "The move could not be confirmed. Refresh the list before trying again.",
   "projects.moveTripUnavailable": "Moving trips requires a database update. The trip has not been moved.",
+  "bulk.retryLimit": "You have reached the limit of 3 retries. Review and correct the document manually.",
+  "bulk.retryBusy": "This document is already being extracted or both processing slots are busy. Wait for one extraction to finish before retrying.",
   "bulk.retryDocument": "Retry extraction",
   "bulk.retryDocumentConfirm": "Retry extraction of “{name}” using the uploaded file? A successful extraction will count towards your quota.",
   "bulk.queueStartFailed": "The files are saved, but the queue start could not be confirmed. Reopen this window to continue.",

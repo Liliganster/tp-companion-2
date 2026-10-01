@@ -192,6 +192,10 @@ export default withApiObservability(async function handler(req: any, res: any, {
         }
         if (reservation.busy) return;
         if (!reservation.allowed) {
+          if (reservation.reason === 'retry_limit_exceeded') {
+            processedResults.push({ id: jobId, status: job.status, error: 'retry_limit_exceeded' });
+            return;
+          }
           if (reservation.reason === "manual_retry_required") {
             const { error } = await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", needs_review_reason: "manual_retry_required" }).eq("id", jobId).eq("user_id", userId).in("status", ["queued", "processing"]);
             if (error) throw error;
@@ -265,7 +269,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
             .from("callsheet_jobs")
             .update({ status: "failed", needs_review_reason: outcome.message })
             .eq("id", jobId)
-            .eq("status", "processing");
+            .eq("status", "processing").eq("ai_request_id", reservation.requestId);
           processedResults.push({ id: jobId, status: "failed", error: outcome.message });
           return;
         }
@@ -314,7 +318,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
         await supabaseAdmin.from('callsheet_jobs').update({
           status: 'failed', needs_review_reason: errorMessage, last_error: errorMessage,
           retry_count: currentRetry + 1, next_retry_at: null,
-        }).eq('id', jobId).eq('status', 'processing');
+        }).eq('id', jobId).eq('status', 'processing').eq('ai_request_id', reservation.requestId);
         processedResults.push({ id: jobId, status: 'failed', error: errorMessage });
       } finally {
         if (reservation?.allowed) {

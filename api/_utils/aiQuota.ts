@@ -6,7 +6,7 @@ import { getFreeIdentityHash } from "./freeUsage.js";
 import { assertStorageOwnership } from "./storageOwnership.js";
 
 export type QuotaDecision = { allowed: boolean; limit: number; used: number; remaining: number; reserved?: number; planRemaining?: number; creditBalance?: number; creditReserved?: number; creditsAvailable?: number; bypass?: boolean; period?: "monthly" | "annual"; periodStart?: string; periodEnd?: string; planTier?: PlanTier; reason?: string };
-export type AiReservation = { allowed: boolean; completed?: boolean; busy?: boolean; reason?: string; requestId?: string; storagePath?: string; userId: string; jobId: string; attemptId: string };
+export type AiReservation = { allowed: boolean; completed?: boolean; busy?: boolean; retryCount?: number; reason?: string; requestId?: string; storagePath?: string; userId: string; jobId: string; attemptId: string };
 export class AiQuotaUnavailableError extends Error {
   constructor() { super("ai_quota_unavailable"); }
 }
@@ -47,7 +47,7 @@ export async function reserveAiQuota(userId: string, jobId: string, plan?: PlanT
   // A quota reservation or reprocess must never authorize an arbitrary file.
   await assertStorageOwnership(userId, "callsheets", job.storage_path);
   const attemptId = randomUUID();
-  const { data, error } = await supabaseAdmin.rpc("reserve_ai_quota_v2", {
+  const { data, error } = await supabaseAdmin.rpc("reserve_ai_quota_v3", {
     ...(await quotaContext(userId, plan)).args, p_job_id: jobId, p_attempt_id: attemptId,
     p_new_request_id: newRequestId ?? null,
   });

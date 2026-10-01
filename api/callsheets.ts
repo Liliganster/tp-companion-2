@@ -45,6 +45,8 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
       return sendJson(res, 400, { error: "invalid_request_id" });
     }
     reservation = await reserveAiQuota(user.id, jobId, planTier, newRequestId);
+    if (typeof reservation.retryCount === 'number') res.setHeader('X-Callsheet-Retries-Used', String(reservation.retryCount));
+    if (reservation.reason === 'retry_limit_exceeded') return sendJson(res, 409, { error: 'retry_limit_exceeded', retryCount: reservation.retryCount });
     if (reservation.completed) {
       const { data: completedJob, error } = await supabaseAdmin.from('callsheet_jobs')
         .select('status, needs_review_reason').eq('id', jobId).eq('user_id', user.id).maybeSingle();
@@ -80,7 +82,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
     });
 
     if (outcome.ok === false) {
-      await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", needs_review_reason: outcome.message }).eq("id", jobId).eq("user_id", user.id).eq("status", "processing");
+      await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", needs_review_reason: outcome.message }).eq("id", jobId).eq("user_id", user.id).eq("status", "processing").eq("ai_request_id", reservation.requestId);
       if (outcome.kind === "download_failed") {
         return sendJson(res, 500, { error: "download_failed", message: outcome.message });
       }
@@ -111,7 +113,7 @@ const handleProcess = withApiObservability(async function handler(req: any, res:
     const timedOut = /timeout|timed out|aborted/i.test(String(err?.message ?? ""));
     const failureReason = timedOut ? "La extracción superó el tiempo de espera. El documento se conserva para revisión manual." : "processing_failed";
     try {
-      if (reservation?.allowed) await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", needs_review_reason: failureReason }).eq("id", jobId).eq("user_id", user.id).eq("status", "processing");
+      if (reservation?.allowed) await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", needs_review_reason: failureReason }).eq("id", jobId).eq("user_id", user.id).eq("status", "processing").eq("ai_request_id", reservation.requestId);
     } catch (updateErr) {
       // ignore
     }

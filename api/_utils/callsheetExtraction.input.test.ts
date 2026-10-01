@@ -314,3 +314,21 @@ it.each([
  const [draft]=getReviewCallsheetDrafts([{id:'job',storage_path:'user/job/source.pdf',created_at:'2026-09-11',status:'needs_review',callsheet_results:payload.p_result,callsheet_locations:payload.p_locations}],[],[]);
  expect(draft.trip).toMatchObject({date:'',extractedDate:evidence,route:['Example Street 1']});
 });
+
+it('downloads the complete original and calls AI again when a previous result belongs to another attempt', async () => {
+  mocks.persisted = { extraction_state: 'done', extraction_request_id: 'previous-attempt' };
+  const bytes = Buffer.from('%PDF-original-complete');
+  mocks.download.mockResolvedValue({ data: { size: bytes.length, arrayBuffer: async () => bytes } });
+  await expect(run('Original.pdf')).rejects.toThrow('MOCK_PROVIDER_REACHED');
+  expect(mocks.download).toHaveBeenCalledWith('user/job/Original.pdf');
+  expect(mocks.binary).toHaveBeenCalledOnce();
+  expect(mocks.binary.mock.calls[0][2]).toEqual(bytes);
+  expect(mocks.persisted.extraction_request_id).toBe('previous-attempt');
+});
+
+it('reuses a saved result only for the exact same request, never charging another provider call', async () => {
+  mocks.persisted = { extraction_state: 'needs_review', extraction_request_id: 'request' };
+  expect(await run('Original.pdf')).toEqual({ ok: true, cached: true, status: 'needs_review' });
+  expect(mocks.download).not.toHaveBeenCalled();
+  expect(mocks.binary).not.toHaveBeenCalled();
+});

@@ -26,6 +26,8 @@ export const es = {
   "projects.moveTripRetained": "El proyecto de origen conserva documentos o gastos independientes y no se ha eliminado.",
   "projects.moveTripFailed": "No se pudo confirmar el traslado. Actualiza la lista antes de reintentar.",
   "projects.moveTripUnavailable": "El traslado necesita una actualización de la base de datos. No se ha movido el viaje.",
+  "bulk.retryLimit": "Has alcanzado el límite de 3 reintentos. Revisa y corrige el documento manualmente.",
+  "bulk.retryBusy": "Ya hay una extracción activa para este documento o los dos puestos están ocupados. Espera a que termine una antes de reintentar.",
   "bulk.retryDocument": "Reintentar extracción",
   "bulk.retryDocumentConfirm": "¿Reintentar la extracción de «{name}» usando el archivo ya subido? Si termina correctamente, consumirá una extracción de tu cuota.",
   "bulk.queueStartFailed": "Los archivos están guardados, pero no se pudo confirmar el inicio de la cola. Vuelve a abrir esta ventana para continuar.",

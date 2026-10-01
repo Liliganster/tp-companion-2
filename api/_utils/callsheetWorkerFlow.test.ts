@@ -32,7 +32,7 @@ const run=async(query={})=>{
 beforeEach(()=>{
  vi.clearAllMocks();m.dispatch.mockReset();m.background=[];vi.stubEnv('CRON_SECRET','');vi.stubEnv('VERCEL_ENV','');
  m.jobs=[{id:'job',user_id:'user',status:'queued',storage_path:'user/job/file.pdf',created_at:'2026-09-10',next_retry_at:'2020-01-01',retry_count:0}];
- m.reserve.mockImplementation(async()=>{m.jobs[0].status='processing';return {allowed:true,requestId:'request',attemptId:'attempt',storagePath:'user/job/file.pdf'};});
+ m.reserve.mockImplementation(async()=>{m.jobs[0].status='processing';m.jobs[0].ai_request_id='request';return {allowed:true,requestId:'request',attemptId:'attempt',storagePath:'user/job/file.pdf'};});
  m.extract.mockRejectedValue(new Error('Request aborted'));
  m.finish.mockResolvedValue(true);
 });
@@ -90,6 +90,7 @@ function rollingScenario(count: number) {
    if (job.status !== 'queued') return { allowed: false, busy: true };
    if (m.jobs.filter(row => row.user_id === userId && row.status === 'processing').length >= 2) return { allowed: false, busy: true, reason: 'concurrency_limit' };
    job.status = 'processing';
+   job.ai_request_id = jobId;
    return { allowed: true, jobId, userId, requestId: jobId, attemptId: 'attempt-' + jobId, storagePath: job.storage_path };
  });
  m.finish.mockImplementation(async (reservation: any, success: boolean) => {
@@ -159,4 +160,19 @@ it('replaces a failed document with the next queued one instead of retrying the 
  await Promise.all(m.background);
  expect(m.extract.mock.calls.filter(([args]) => args.jobId === 'job-0')).toHaveLength(1);
  expect(scenario.peak()).toBe(2);
+});
+
+it.each(['exception', 'invalid-result'])('an old %s cannot fail a newer extraction attempt', async kind => {
+  let resolve!: (value: any) => void;
+  let reject!: (error: Error) => void;
+  m.extract.mockImplementation(() => new Promise((res, rej) => { resolve = res; reject = rej; }));
+  await run({ background: '1' });
+  await vi.waitFor(() => expect(m.extract).toHaveBeenCalledOnce());
+  // The old lease expired and the user deliberately started a new extraction.
+  m.jobs[0].ai_request_id = 'new-user-attempt';
+  m.jobs[0].status = 'processing';
+  if (kind === 'exception') reject(new Error('late provider timeout'));
+  else resolve({ ok: false, kind: 'invalid_extraction', message: 'old invalid result' });
+  await m.background[0];
+  expect(m.jobs[0]).toMatchObject({ status: 'processing', ai_request_id: 'new-user-attempt' });
 });

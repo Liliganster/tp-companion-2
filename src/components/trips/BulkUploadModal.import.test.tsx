@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, cleanup, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-const mocks = vi.hoisted(() => ({ info: vi.fn(), confirm: vi.fn(), save: vi.fn(), fetch: vi.fn(), error: vi.fn(), optimize: vi.fn(), tables: [] as any[], jobs: [] as any[], locations: [] as any[], result: null as any, t: (s: string) => s, tf: vi.fn((s: string) => s) }));
+const mocks = vi.hoisted(() => ({ warning: vi.fn(), info: vi.fn(), confirm: vi.fn(), save: vi.fn(), fetch: vi.fn(), error: vi.fn(), optimize: vi.fn(), tables: [] as any[], jobs: [] as any[], locations: [] as any[], result: null as any, t: (s: string) => s, tf: vi.fn((s: string) => s) }));
 vi.mock('@/lib/callsheetOptimization', () => ({ optimizeCallsheetLocationsAndDistance: mocks.optimize }));
 vi.mock('@/hooks/use-i18n', () => ({ useI18n: () => ({ t: mocks.t, tf: mocks.tf, locale: 'es' }) }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ getAccessToken: async () => 'test' }) }));
@@ -21,7 +21,7 @@ vi.mock('@/lib/supabaseClient', () => ({ supabase: {
     }; return q;
   },
 } }));
-vi.mock('sonner', () => ({ toast: { error: mocks.error, success: () => {}, info: mocks.info, warning: () => {} } }));
+vi.mock('sonner', () => ({ toast: { error: mocks.error, success: () => {}, info: mocks.info, warning: mocks.warning } }));
 import { BulkUploadModal } from './BulkUploadModal';
 const csv = 'date;projectName;origin;destination;km\n2026-09-09;Film;A;B;25';
 function file(name: string, text: string, type = 'text/csv') {
@@ -138,13 +138,13 @@ it('closes the modal without cancelling server extraction', async () => {
 });
 it.each(['failed', 'cancelled'])('retries a %s document only on explicit confirmation, using its existing id', async status => {
   mocks.jobs = [{ id: 'job', status, storage_path: 'user/job/Original.pdf', created_at: new Date().toISOString() }];
-  mocks.fetch.mockResolvedValue(new Response('{}', { status: 200 }));
+  mocks.fetch.mockResolvedValue(new Response(JSON.stringify({ ok: true, status: "done" }), { status: 200 }));
   open(); await screen.findByText('Original.pdf');
   expect(mocks.fetch).not.toHaveBeenCalled();
   fireEvent.click(await screen.findByRole('button', { name: 'bulk.retryDocument' }));
   await waitFor(() => expect(mocks.fetch).toHaveBeenCalledOnce());
   expect(mocks.confirm).toHaveBeenCalledWith('bulk.retryDocumentConfirm');
-  expect(mocks.fetch.mock.calls[0][0]).toMatch(/^\/api\/callsheets\/trigger-worker\?jobId=job&requestId=[a-f0-9-]+$/);
+  expect(mocks.fetch.mock.calls[0][0]).toMatch(/^\/api\/callsheets\/process\?jobId=job&requestId=[a-f0-9-]+$/);
   expect(mocks.fetch.mock.calls[0][1].method).toBe('POST');
 });
 it('does not retry when the user declines the new extraction', async () => {
@@ -153,4 +153,65 @@ it('does not retry when the user declines the new extraction', async () => {
   open(); await screen.findByText('Original.pdf');
   fireEvent.click(await screen.findByRole('button', { name: 'bulk.retryDocument' }));
   expect(mocks.fetch).not.toHaveBeenCalled();
+});
+
+it('reextracts a reviewed document from scratch and replaces the previous preview with the new version', async () => {
+  mocks.jobs = [{ id: 'job', status: 'needs_review', ai_request_id: 'old', storage_path: 'user/job/Original.pdf', created_at: new Date().toISOString() }];
+  mocks.result = { date_value: '2026-09-10', project_value: 'Old Film', extraction_request_id: 'old' };
+  mocks.locations = [{ position: 0, address_raw: 'Old address', selection_state: 'candidate' }];
+  let complete!: (value: Response) => void;
+  mocks.fetch.mockImplementation(() => new Promise<Response>(resolve => { complete = resolve; }));
+  open(); await screen.findByDisplayValue('Old address');
+  fireEvent.click(screen.getByRole('button', { name: 'bulk.retryDocument' }));
+  await waitFor(() => expect(mocks.fetch).toHaveBeenCalledOnce());
+  expect(screen.queryByDisplayValue('Old address')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'bulk.retryDocument' })).not.toBeInTheDocument();
+  const url = new URL(mocks.fetch.mock.calls[0][0], 'https://example.test');
+  const freshId = url.searchParams.get('requestId');
+  mocks.jobs = [{ ...mocks.jobs[0], status: 'needs_review', ai_request_id: freshId }];
+  mocks.result = { date_value: '2026-10-01', project_value: 'New Film', extraction_request_id: freshId };
+  mocks.locations = [{ position: 0, address_raw: 'New address', selection_state: 'candidate' }];
+  complete(new Response(JSON.stringify({ ok: true, status: 'needs_review', reviewReason: 'Check address' }), { status: 200 }));
+  expect(await screen.findByDisplayValue('New address')).toBeInTheDocument();
+  expect(screen.queryByDisplayValue('Old address')).not.toBeInTheDocument();
+  expect(screen.getByDisplayValue('New Film')).toBeInTheDocument();
+  expect(mocks.fetch).toHaveBeenCalledOnce();
+  expect(mocks.save).not.toHaveBeenCalled();
+});
+
+it('restores the previous review when both processing slots are busy, without auto retrying', async () => {
+  mocks.jobs = [{ id: 'job', status: 'needs_review', storage_path: 'user/job/Original.pdf', created_at: new Date().toISOString() }];
+  mocks.result = { date_value: '2026-09-10', project_value: 'Film' };
+  mocks.locations = [{ position: 0, address_raw: 'Reviewed address', selection_state: 'candidate' }];
+  mocks.fetch.mockResolvedValue(new Response(JSON.stringify({ error: 'not_claimable', status: 'processing' }), { status: 409 }));
+  open(); await screen.findByDisplayValue('Reviewed address');
+  fireEvent.click(screen.getByRole('button', { name: 'bulk.retryDocument' }));
+  await waitFor(() => expect(mocks.error).toHaveBeenCalledWith('bulk.retryBusy'));
+  expect(await screen.findByDisplayValue('Reviewed address')).toBeInTheDocument();
+  expect(mocks.fetch).toHaveBeenCalledOnce();
+});
+
+it('retries a timed-out processing document with a fresh identity instead of an ignored worker dispatch', async () => {
+  mocks.jobs = [{ id: 'job', status: 'processing', ai_request_id: 'old', storage_path: 'user/job/Original.pdf', created_at: '2020-01-01', processing_started_at: '2020-01-01' }];
+  mocks.fetch.mockResolvedValue(new Response(JSON.stringify({ ok: true, status: 'done' }), { status: 200 }));
+  open();
+  fireEvent.click(await screen.findByRole('button', { name: 'bulk.retryDocument' }));
+  await waitFor(() => expect(mocks.fetch).toHaveBeenCalledOnce());
+  expect(mocks.fetch.mock.calls[0][0]).toMatch(/^\/api\/callsheets\/process\?jobId=job&requestId=[a-f0-9-]+$/);
+});
+
+it('shows the manual-review toast when the three-retry limit is reached', async () => {
+  mocks.jobs = [{ id: 'job', status: 'failed', storage_path: 'user/job/Original.pdf', created_at: new Date().toISOString() }];
+  mocks.fetch.mockResolvedValue(new Response(JSON.stringify({ error: 'retry_limit_exceeded', retryCount: 3 }), { status: 409 }));
+  open(); fireEvent.click(await screen.findByRole('button', { name: 'bulk.retryDocument' }));
+  await waitFor(() => expect(mocks.warning).toHaveBeenCalledWith('bulk.retryLimit'));
+  expect(mocks.fetch).toHaveBeenCalledOnce();
+  expect(screen.getByRole('button', { name: 'bulk.retryDocument' })).toBeInTheDocument();
+});
+it('shows manual review immediately after the third unsuccessful retry', async () => {
+  mocks.jobs = [{ id: 'job', status: 'failed', storage_path: 'user/job/Original.pdf', created_at: new Date().toISOString() }];
+  mocks.fetch.mockResolvedValue(new Response(JSON.stringify({ error: 'extraction_invalid', reason: 'invalid' }), { status: 422, headers: { 'X-Callsheet-Retries-Used': '3' } }));
+  open(); fireEvent.click(await screen.findByRole('button', { name: 'bulk.retryDocument' }));
+  await waitFor(() => expect(mocks.warning).toHaveBeenCalledWith('bulk.retryLimit'));
+  expect(mocks.fetch).toHaveBeenCalledOnce();
 });

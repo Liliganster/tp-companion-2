@@ -27,6 +27,8 @@ export const de: Record<I18nKey, string> = {
   "projects.moveTripRetained": "Das Quellprojekt enthält noch eigenständige Dokumente oder Ausgaben und bleibt erhalten.",
   "projects.moveTripFailed": "Die Verschiebung konnte nicht bestätigt werden. Aktualisiere die Liste vor einem erneuten Versuch.",
   "projects.moveTripUnavailable": "Zum Verschieben ist eine Datenbankaktualisierung erforderlich. Die Fahrt wurde nicht verschoben.",
+  "bulk.retryLimit": "Du hast das Limit von 3 erneuten Versuchen erreicht. Prüfe und korrigiere das Dokument manuell.",
+  "bulk.retryBusy": "Dieses Dokument wird bereits verarbeitet oder beide Verarbeitungsplätze sind belegt. Warte, bis eine Extraktion abgeschlossen ist, bevor du es erneut versuchst.",
   "bulk.retryDocument": "Extraktion erneut versuchen",
   "bulk.retryDocumentConfirm": "Extraktion von „{name}“ mit der bereits hochgeladenen Datei erneut starten? Eine erfolgreiche Extraktion wird auf dein Kontingent angerechnet.",
   "bulk.queueStartFailed": "Die Dateien sind gespeichert, aber der Warteschlangenstart konnte nicht bestätigt werden. Öffne dieses Fenster erneut, um fortzufahren.",

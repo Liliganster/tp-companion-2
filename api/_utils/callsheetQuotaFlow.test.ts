@@ -38,6 +38,7 @@ describe("direct extraction quota gate", () => {
     expect(mocks.from().update).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed' }));
     expect(mocks.finish).toHaveBeenCalledWith(expect.anything(), false);
     expect(mocks.finish).not.toHaveBeenCalledWith(expect.anything(), true);
+    expect(mocks.from().eq).toHaveBeenCalledWith("ai_request_id", "request");
     expect(mocks.extract).toHaveBeenCalledOnce();
   });
   it("does not call AI or delete documents when quota is exhausted", async () => {
@@ -75,4 +76,24 @@ it('treats a completed review extraction as billable success, never a technical 
   expect(response.body).toMatchObject({status:'needs_review',reviewReason:'Confirm year'});
   expect(mocks.finish).toHaveBeenCalledWith(expect.anything(),true);
   expect(mocks.from().update).not.toHaveBeenCalled();
+});
+
+it('passes the explicit new extraction identity through quota reservation and extraction', async () => {
+  const requestId = '67b90c25-381a-47e5-b145-883c9b3d5cd0';
+  mocks.reserve.mockResolvedValue({ allowed: true, requestId, userId: 'user', jobId: 'job', attemptId: 'attempt', storagePath: 'user/Original.pdf' });
+  const res = { statusCode: 0, body: null as unknown, setHeader: vi.fn(), end: vi.fn() };
+  await handler({ method: 'POST', url: '/api/callsheets/process', query: { jobId: 'job', requestId } }, res);
+  expect(mocks.reserve).toHaveBeenCalledWith('user', 'job', 'pro', requestId);
+  expect(mocks.extract).toHaveBeenCalledWith(expect.objectContaining({ requestId, storagePath: 'user/Original.pdf' }));
+  expect(mocks.extract).toHaveBeenCalledOnce();
+});
+
+it('blocks the fourth retry before AI and returns the manual-review reason', async () => {
+  mocks.reserve.mockResolvedValue({ allowed: false, reason: 'retry_limit_exceeded', retryCount: 3 });
+  const response = await run();
+  expect(response.statusCode).toBe(409);
+  expect(response.body).toEqual({ error: 'retry_limit_exceeded', retryCount: 3 });
+  expect(response.setHeader).toHaveBeenCalledWith('X-Callsheet-Retries-Used', '3');
+  expect(mocks.extract).not.toHaveBeenCalled();
+  expect(mocks.finish).not.toHaveBeenCalled();
 });

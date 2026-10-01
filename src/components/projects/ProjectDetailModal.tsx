@@ -891,10 +891,11 @@ export function ProjectDetailModal({ open, onOpenChange, project, selectedYear =
     }
 
     activeExtractionCountRef.current += 1;
+    let retriesUsed = 0;
     try {
       logger.warn("[handleExtract] Processing started - will set UI to processing", { docId: doc.id });
       // The server reserves quota before clearing previous extraction results.
-      const newRequestId = previouslyProcessed || ["failed", "cancelled"].includes(doc.status) ? uuidv4() : undefined;
+      const newRequestId = previouslyProcessed || ["failed", "cancelled", "out_of_quota"].includes(doc.status) ? uuidv4() : undefined;
 
       // Actualizar project_id si hace falta
       if (project?.id) {
@@ -928,6 +929,7 @@ export function ProjectDetailModal({ open, onOpenChange, project, selectedYear =
         },
         signal: AbortSignal.any([docAc.signal, AbortSignal.timeout(CALLSHEET_CLIENT_TIMEOUT_MS)]),
       });
+      retriesUsed = Number(response.headers.get('X-Callsheet-Retries-Used') ?? 0);
       logger.warn("[handleExtract] API response", { docId: doc.id, status: response.status, ok: response.ok });
 
       docAbortControllersRef.current.delete(doc.id);
@@ -935,6 +937,13 @@ export function ProjectDetailModal({ open, onOpenChange, project, selectedYear =
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
         logger.error("[handleExtract] API error", errData, { docId: doc.id });
+        if (errData.error === 'retry_limit_exceeded') {
+          localStatusOverridesRef.current.delete(doc.id);
+          cancelCallsheetJobIdsRef.current.delete(doc.id);
+          setRealCallSheets(prev => prev.map(item => item.id === doc.id ? { ...item, status: doc.status } : item));
+          toast.warning(t('bulk.retryLimit'));
+          return;
+        }
         if (response.status === 409 && (errData as any)?.error === "not_claimable") {
           // Otro proceso ya reclamó este job (cron local, doble clic o un intento
           // previo interrumpido). NO es un error: se deja el documento y el
@@ -964,7 +973,8 @@ export function ProjectDetailModal({ open, onOpenChange, project, selectedYear =
         localStatusOverridesRef.current.delete(doc.id);
         cancelCallsheetJobIdsRef.current.delete(doc.id);
         setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'needs_review', needs_review_reason: completion.reviewReason } : p));
-        toast.warning(t('bulk.statusNeedsReview'), { description: completion.reviewReason });
+        if (retriesUsed >= 3) toast.warning(t('bulk.retryLimit'));
+        else toast.warning(t('bulk.statusNeedsReview'), { description: completion.reviewReason });
         return;
       }
 
@@ -995,7 +1005,8 @@ export function ProjectDetailModal({ open, onOpenChange, project, selectedYear =
       cancelCallsheetJobIdsRef.current.delete(doc.id);
       localStatusOverridesRef.current.delete(doc.id);
       setRealCallSheets(prev => prev.map(p => p.id === doc.id ? { ...p, status: 'failed' } : p));
-      toast.error(tf("projectDetail.toastExtractionStartError", { message: e.message }));
+      if (retriesUsed >= 3) toast.warning(t('bulk.retryLimit'));
+      else toast.error(tf("projectDetail.toastExtractionStartError", { message: e.message }));
     } finally {
       activeExtractionCountRef.current = Math.max(0, activeExtractionCountRef.current - 1);
     }
