@@ -362,9 +362,10 @@ export default function Trips() {
 
   const handleSaveTrip = async (data: SavedTrip) => {
     const trimmedProject = data.project.trim();
-    const trimmedInvoice = data.invoice?.trim() ? data.invoice.trim() : undefined;
+    const previous = trips.find(t => t.id === data.id);
+    const trimmedInvoice = data.invoice === undefined ? previous?.invoice : data.invoice?.trim() || undefined;
 
-    const exists = trips.some((t) => t.id === data.id);
+    const exists = Boolean(previous);
 
     // Check plan limits for new trips (not updates)
     if (!exists) {
@@ -1010,7 +1011,7 @@ export default function Trips() {
       />
 
       {/* Trip Detail Modal */}
-      <TripDetailModal trip={selectedTrip} open={detailModalOpen} onOpenChange={setDetailModalOpen} onSave={handleSaveTrip} />
+      <TripDetailModal trip={selectedTrip} open={detailModalOpen} onOpenChange={setDetailModalOpen} onSave={handleSaveTrip} allowEditing={!editModalOpen} />
 
       {/* Edit Trip Modal */}
       <AddTripModal

@@ -122,3 +122,38 @@ it('keeps the complete route validation for a manual trip', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('tripDetail.editInvalid');
   expect(mocks.save).not.toHaveBeenCalled();
 });
+
+it('saves a reviewed Fundbox trip with the persisted ID returned for an existing project', async () => {
+  mocks.addProject.mockResolvedValueOnce('real-fundbox-id');
+  await open({ ...trip, project: 'Fundbox', projectId: null });
+  fireEvent.click(screen.getByText('tripModal.save'));
+  await waitFor(() => expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ project: 'Fundbox', projectId: 'real-fundbox-id', documents: trip.documents })));
+  expect(mocks.addProject).toHaveBeenCalledWith(expect.objectContaining({ name: 'Fundbox' }));
+});
+it('retains the review and does not save a trip when project persistence fails', async () => {
+  mocks.addProject.mockRejectedValueOnce(new Error('Offline'));
+  await open({ ...trip, project: 'Fundbox', projectId: null });
+  fireEvent.change(screen.getByLabelText('tripModal.purpose'), { target: { value: 'Reviewed purpose' } });
+  fireEvent.click(screen.getByText('tripModal.save'));
+  await screen.findByRole('alert');
+  expect(mocks.save).not.toHaveBeenCalled();
+  expect(screen.getByLabelText('tripModal.purpose')).toHaveValue('Reviewed purpose');
+  expect(screen.getByTitle('tripDetail.previewFrameTitle')).toBeInTheDocument();
+});
+
+it('opens the original in consultation mode without a second editor when another form owns the edit', async () => {
+  const { rerender } = render(<TripDetailModal trip={trip} open allowEditing={false} onOpenChange={vi.fn()} onSave={mocks.save} />);
+  await screen.findByTitle('tripDetail.previewFrameTitle');
+  expect(screen.queryByText('trips.edit')).not.toBeInTheDocument();
+  expect(screen.queryByText('tripModal.save')).not.toBeInTheDocument();
+  rerender(<TripDetailModal trip={trip} open allowEditing onOpenChange={vi.fn()} onSave={mocks.save} />);
+  fireEvent.click(screen.getByText('trips.edit'));
+  expect(screen.getByLabelText('tripModal.purpose')).toHaveValue('Shooting');
+  expect(mocks.save).not.toHaveBeenCalled();
+});
+it('keeps the explicit project ID and unedited data in the document editor too', async () => {
+  await open({ ...trip, projectId: 'original-project', fuelLiters: 7, evKwhUsed: 4, invoice: 'INV-1', ratePerKmOverride: 0.6 });
+  fireEvent.click(screen.getByText('tripModal.save'));
+  await waitFor(() => expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'original-project', fuelLiters: 7, evKwhUsed: 4, invoice: 'INV-1', ratePerKmOverride: 0.6, documents: trip.documents })));
+  expect(mocks.addProject).not.toHaveBeenCalled();
+});

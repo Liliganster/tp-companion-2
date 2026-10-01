@@ -24,9 +24,9 @@ describe("callsheetWorker", () => {
     expect(CALLSHEET_PARALLEL_BATCH_SIZE).toBe(2);
   });
 
-  it("uses 2 jobs for manual batches and 1 for manual single-job runs", () => {
+  it("fetches spare candidates for rolling slots and only one document for an explicit single-job run", () => {
     expect(getCallsheetWorkerFetchLimit({ manual: false })).toBe(16);
-    expect(getCallsheetWorkerFetchLimit({ manual: true, manualJobId: null })).toBe(2);
+    expect(getCallsheetWorkerFetchLimit({ manual: true, manualJobId: null })).toBe(5);
     expect(getCallsheetWorkerFetchLimit({ manual: true, manualJobId: "job-1" })).toBe(1);
   });
 

@@ -1,6 +1,9 @@
+import { useQueryClient } from "@tanstack/react-query";
+import { ProjectTripTransfer, ProjectDropRow } from "@/components/projects/ProjectTripTransfer";
+import { moveProjectTrip, type ProjectTripDrag } from "@/lib/moveProjectTrip";
 import { getProfileRates, tripKilometrageAmount } from "@/lib/tripMoney";
 import { getUploadedFileName } from "@/lib/uploadFileName";
-import { useMemo, useState, useEffect } from "react";
+import { Fragment, useMemo, useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
@@ -92,6 +95,11 @@ export default function Projects() {
   const { user } = useAuth();
   const { projects, addProject, updateProject, deleteProject } = useProjects();
   const { trips } = useTrips();
+  const queryClient = useQueryClient();
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  const [draggedTrip, setDraggedTrip] = useState<ProjectTripDrag | null>(null);
+  const [movingTrip, setMovingTrip] = useState(false);
+  const moveInFlight = useRef(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -406,6 +414,30 @@ export default function Projects() {
     }
   };
 
+  const handleMoveTrip = async (drag: ProjectTripDrag, targetId: string) => {
+    if (!user || !supabase || moveInFlight.current || drag.sourceProjectId === targetId) return;
+    moveInFlight.current = true;
+    setMovingTrip(true); setDraggedTrip(null);
+    try {
+      const result = await moveProjectTrip(supabase, drag, targetId);
+      queryClient.setQueryData<typeof trips>(['trips', user.id], current => (current ?? []).map(trip => trip.id === drag.tripId ? { ...trip, projectId: targetId, project: result.project_name } : trip));
+      if (result.source_deleted) {
+        queryClient.setQueryData<Project[]>(['projects', user.id], current => (current ?? []).filter(p => p.id !== drag.sourceProjectId));
+        setSelectedIds(current => { const next = new Set(current); next.delete(drag.sourceProjectId); return next; });
+      }
+      setExpandedProjects(current => new Set([...current, targetId]));
+      setCountsRefreshToken(value => value + 1);
+      toast({ title: tf('projects.moveTripDone', { name: result.project_name }),
+        description: result.source_deleted ? t('projects.moveTripRemoved') : result.source_retained ? t('projects.moveTripRetained') : undefined });
+    } catch (error) {
+      toast({ title: t((error as { code?: string })?.code === 'PGRST202' ? 'projects.moveTripUnavailable' : 'projects.moveTripFailed'), variant: 'destructive' });
+    } finally {
+      // Also reconcile after a lost response: the transaction may already have committed.
+      await Promise.allSettled([queryClient.invalidateQueries({ queryKey: ['trips', user.id] }), queryClient.invalidateQueries({ queryKey: ['projects', user.id] })]);
+      moveInFlight.current = false; setMovingTrip(false);
+    }
+  };
+
   const openEditProject = (project: Project) => {
     setEditingProjectId(project.id);
     setCreateProjectOpen(true);
@@ -692,14 +724,16 @@ export default function Projects() {
                       tripKilometrageAmount({ distance: totalKm }, settingsRatePerKm);
 
                     return (
-                      <TableRow
-                        key={project.id}
+                      <Fragment key={project.id}>
+                      <ProjectDropRow
+                        projectId={project.id} dragged={draggedTrip} busy={movingTrip} onMove={handleMoveTrip}
                         className={`animate-slide-up cursor-pointer ${selectedIds.has(project.id) ? 'bg-primary/10' : ''}`}
                         style={{ animationDelay: `${index * 50}ms` }}
                         role="button"
                         tabIndex={0}
-                        onClick={() => openProjectDetails(project)}
+                        onClick={() => { if (!movingTrip) openProjectDetails(project); }}
                         onKeyDown={(e) => {
+                          if (movingTrip || e.target !== e.currentTarget) return;
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
                             openProjectDetails(project);
@@ -729,7 +763,8 @@ export default function Projects() {
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <Car className="w-4 h-4 text-primary" />
-                            <span>{tripsCount}</span>
+                            <button type="button" className="rounded px-2 py-1 underline underline-offset-4 hover:bg-primary/10" aria-label={tf('projects.showTrips', { name: project.name })} aria-expanded={expandedProjects.has(project.id)}
+                              onClick={event => { event.stopPropagation(); setExpandedProjects(current => { const next = new Set(current); if (next.has(project.id)) next.delete(project.id); else next.add(project.id); return next; }); }}>{tripsCount}</button>
                           </div>
                         </TableCell>
                         <TableCell className="text-right hidden lg:table-cell">
@@ -759,6 +794,7 @@ export default function Projects() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                disabled={movingTrip}
                                 className="h-8 w-8"
                                 onClick={(e) => e.stopPropagation()}
                               >
@@ -796,7 +832,11 @@ export default function Projects() {
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>
-                      </TableRow>
+                      </ProjectDropRow>
+                      {expandedProjects.has(project.id) && <TableRow><TableCell colSpan={10} className="bg-muted/20 py-2">
+                        <ProjectTripTransfer sourceProjectId={project.id} trips={projectTripsById.get(project.id) ?? []} projects={projects} busy={movingTrip} onMove={handleMoveTrip} onDrag={setDraggedTrip} />
+                      </TableCell></TableRow>}
+                      </Fragment>
                     );
                   })()
                 ))}

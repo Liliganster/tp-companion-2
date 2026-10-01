@@ -66,7 +66,7 @@ type ProjectsContextValue = {
   projects: Project[];
   loading: boolean;
   refreshProjects: () => void;
-  addProject: (project: Project) => Promise<void>;
+  addProject: (project: Project) => Promise<string>;
   updateProject: (id: string, patch: Partial<Project>) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
 };
@@ -201,35 +201,25 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     };
   }, [refreshProjects, user]);
 
-  const addProject = useCallback(async (project: Project) => {
-    if (!supabase || !user) return;
+  // Return only an ID confirmed in the database; callers use it for trip foreign keys.
+  const addProject = useCallback(async (project: Project): Promise<string> => {
+    if (!supabase || !user) throw new Error("Project creation requires an authenticated connection");
 
-    // Check if project already exists (by name)
-    const { data: existing, error: checkError } = await supabase
-      .from("projects")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("name", project.name)
-      .maybeSingle();
-
+    const findExisting = () => supabase.from("projects").select("id")
+      .eq("user_id", user.id).eq("name", project.name).maybeSingle();
+    const { data: existing, error: checkError } = await findExisting();
     if (checkError) {
       logger.warn("Error checking for existing project", checkError);
       toast.error("Error: " + checkError.message);
-      return;
+      throw checkError;
     }
-
     if (existing) {
-      logger.debug(`Project "${project.name}" already exists, skipping insert`);
-      toast.info(uiText("ui.projectExistsNamed", { name: project.name }));
-      return;
+      void queryClient.invalidateQueries({ queryKey });
+      return existing.id;
     }
-
-    // Optimistic update
-    const prev = (queryClient.getQueryData<Project[]>(queryKey) ?? []) as Project[];
-    queryClient.setQueryData<Project[]>(queryKey, [project, ...prev]);
 
     const { error } = await supabase.from("projects").insert({
-      id: project.id, // Use client-generated ID if provided, else DB generates? Schema has gen_random_uuid() default but allows insert
+      id: project.id,
       user_id: user.id,
       name: project.name,
       producer: project.producer,
@@ -238,23 +228,23 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       starred: project.starred,
       archived: project.archived
     });
-
     if (error) {
-      logger.warn("Error adding project", error);
-      
-      // Handle UNIQUE constraint violation
+      // Another import/tab may create this name between the lookup and insert.
       if (error.code === '23505') {
-        toast.error(uiText("ui.projectExistsNamed", { name: project.name }));
-      } else {
-        toast.error("Error creating project: " + error.message);
+        const { data: concurrent, error: lookupError } = await findExisting();
+        if (!lookupError && concurrent) {
+          void queryClient.invalidateQueries({ queryKey });
+          return concurrent.id;
+        }
       }
-      
-      // Revert optimistic update
-      queryClient.setQueryData<Project[]>(
-        queryKey,
-        (cur) => (cur ?? []).filter((p) => p.id !== project.id),
-      );
+      logger.warn("Error adding project", error);
+      toast.error("Error creating project: " + error.message);
+      throw error;
     }
+
+    // Never expose an unpersisted ID to other forms or concurrent imports.
+    queryClient.setQueryData<Project[]>(queryKey, cur => [project, ...(cur ?? []).filter(p => p.id !== project.id)]);
+    return project.id;
   }, [queryClient, queryKey, user]);
 
   const updateProject = useCallback(async (id: string, patch: Partial<Project>) => {

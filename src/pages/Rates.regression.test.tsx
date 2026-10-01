@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, within, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -33,14 +34,16 @@ afterEach(cleanup);
 
 describe('Settings rates across screens', () => {
   it('projects use 0.50 by default and update when Settings changes, ignoring legacy project and trip rates', async () => {
-    const view = render(<MemoryRouter><Projects /></MemoryRouter>);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const projectPage = () => <QueryClientProvider client={client}><MemoryRouter><Projects /></MemoryRouter></QueryClientProvider>;
+    const view = render(projectPage());
     await waitFor(() => expect(within(view.container).getByText('202.50 €')).toBeInTheDocument());
     expect(within(view.container).queryByText('121.50 €')).not.toBeInTheDocument();
     state.profile.ratePerKm = '0,65';
-    view.rerender(<MemoryRouter><Projects /></MemoryRouter>);
+    view.rerender(projectPage());
     expect(within(view.container).getByText('263.25 €')).toBeInTheDocument();
     state.profile.ratePerKm = '0';
-    view.rerender(<MemoryRouter><Projects /></MemoryRouter>);
+    view.rerender(projectPage());
     expect(within(view.container).getByText('0.00 €')).toBeInTheDocument();
   });
 

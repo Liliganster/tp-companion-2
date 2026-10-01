@@ -22,9 +22,10 @@ interface TripDetailModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (trip: Trip) => Promise<boolean>;
+  allowEditing?: boolean;
 }
 
-export function TripDetailModal({ trip, open, onOpenChange, onSave }: TripDetailModalProps) {
+export function TripDetailModal({ trip, open, onOpenChange, onSave, allowEditing = true }: TripDetailModalProps) {
   const { t, tf, locale } = useI18n();
   const { profile } = useUserProfile();
   const { trips } = useTrips();
@@ -147,8 +148,8 @@ export function TripDetailModal({ trip, open, onOpenChange, onSave }: TripDetail
         </div>
         <div className="flex flex-col md:flex-row flex-1 min-h-0">
           <div className={`w-full flex-1 md:flex-none md:shrink-0 md:border-r border-border min-h-0 ${mobilePane !== "details" ? "hidden md:block" : ""} ${editing ? "md:w-[44%] overflow-hidden" : "md:w-[360px] p-5 space-y-4 overflow-y-auto"}`}>
-            {editing ? <TripDetailEditor key={liveTrip.id} trip={liveTrip} onSave={onSave} onCancel={() => setEditing(false)} onSaved={() => setEditing(false)} onSaving={setSaving} /> : <>
-            <Button type="button" variant="outline" onClick={() => setEditing(true)}>{t("trips.edit")}</Button>
+            {editing && allowEditing ? <TripDetailEditor key={liveTrip.id} trip={liveTrip} onSave={onSave} onCancel={() => setEditing(false)} onSaved={() => setEditing(false)} onSaving={setSaving} /> : <>
+            {allowEditing && <Button type="button" variant="outline" onClick={() => setEditing(true)}>{t("trips.edit")}</Button>}
             <div>
               <Label className="text-xs uppercase tracking-wide text-muted-foreground">{t("tripDetail.date")}</Label>
               <p className="font-semibold">{formattedDate}</p>

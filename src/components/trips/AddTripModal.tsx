@@ -1,3 +1,4 @@
+import { resolveEditedTripProjectId, isValidTripEdit } from "@/lib/tripEditing";
 import { getProfileRates } from "@/lib/tripMoney";
 import { FormSection } from "@/components/ui/form-section";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -162,7 +163,7 @@ interface TripData {
   extractedDate?: string;
   route?: string[];
   project?: string;
-  projectId?: string; // Added
+  projectId?: string | null;
   purpose?: string;
   passengers?: number;
   distance?: number;
@@ -901,9 +902,13 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                                className="w-full" 
                                disabled={!project.trim()}
                                onClick={async () => {
-                                 await createProjectIfNeeded(project);
-                                 setProject(project.trim());
-                                 setProjectOpen(false);
+                                 try {
+                                   await createProjectIfNeeded(project);
+                                   setProject(project.trim());
+                                   setProjectOpen(false);
+                                 } catch (error) {
+                                   logger.warn("Failed to create project", error);
+                                 }
                                }}
                              >
                               {tf("tripModal.createProjectNamed", { name: project })}
@@ -1385,8 +1390,8 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                 if (savingTrip) return;
                 setSavingTrip(true);
                 try {
-                const distanceValue = parseLocaleNumber(distance) ?? 0;
-                const passengersValue = parseLocaleNumber(passengers) ?? 0;
+                const distanceValue = distance.trim() ? parseLocaleNumber(distance) : 0;
+                const passengersValue = passengers.trim() ? parseLocaleNumber(passengers) : 0;
                 // Parse expense values
                 const tollValue = parseLocaleNumber(tollAmount);
                 const parkingValue = parseLocaleNumber(parkingAmount);
@@ -1399,10 +1404,13 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                   return;
                 }
 
-                const routeNonEmpty = routeValues.map((v) => v.trim()).filter(Boolean);
-                if (routeNonEmpty.length < 2) {
-                  event.preventDefault();
-                  toast.error(t("ui.fillRoute"));
+                const fuelValue = parseLocaleNumber(fuelAmount);
+                const unresolvedStop = stops.slice(1, -1).some(stop => !(stopDraftsRef.current[stop.id] ?? stop.value).trim());
+                if (unresolvedStop || !isValidTripEdit({ date, route: routeValues, distance: distanceValue, passengers: passengersValue, documentTrip: Boolean(seedTrip?.callsheet_job_id), expenses: [
+                  { raw: tollAmount, value: tollValue }, { raw: parkingAmount, value: parkingValue },
+                  { raw: otherExpenses, value: otherValue }, { raw: fuelAmount, value: fuelValue },
+                ] })) {
+                  toast.error(t(seedTrip?.callsheet_job_id ? "tripDetail.editInvalidDocument" : "tripDetail.editInvalid"));
                   return;
                 }
 
@@ -1411,51 +1419,14 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
 
                 // 2. Resolve Project ID
                 const trimmedProject = project.trim();
-                let projectId: string | undefined = undefined;
+                const projectId = await resolveEditedTripProjectId(trimmedProject, seedTrip, projects, () => addProject({
+                  id: uuidv4(), name: trimmedProject,
+                  producer: (projects.find(p => p.id === seedTrip?.projectId) ?? projects.find(p => p.name.trim().toLowerCase() === seedTrip?.project?.trim().toLowerCase()))?.producer,
+                  ratePerKm: settingsRatePerKm, starred: false, trips: 0, totalKm: 0,
+                  documents: 0, invoices: 0, estimatedCost: 0, shootingDays: 0, kmPerDay: 0,
+                  co2Emissions: 0, createdAt: new Date().toISOString(),
+                }));
 
-                if (trimmedProject) {
-                  const existing = projects.find(p => p.name.trim().toLowerCase() === trimmedProject.toLowerCase());
-                  if (existing) {
-                    projectId = existing.id;
-                  } else {
-                    // Auto-create project if it doesn't exist
-                    const newId = uuidv4();
-                    
-                    // Try to inherit producer from original project (e.g. "Unknown X" -> "Client Name")
-                    const originalProjectName = seedTrip?.project;
-                    const originalProject = originalProjectName 
-                      ? projects.find(p => p.name.trim().toLowerCase() === originalProjectName.trim().toLowerCase()) 
-                      : null;
-                    const inheritedProducer = originalProject?.producer;
-
-                    try {
-                      await addProject({
-                        id: newId,
-                        name: trimmedProject,
-                        producer: inheritedProducer, // Inherit client
-                        ratePerKm: settingsRatePerKm,
-                        starred: false,
-                        trips: 0,
-                        totalKm: 0,
-                        documents: 0,
-                        invoices: 0,
-                        estimatedCost: 0,
-                        shootingDays: 0,
-                        kmPerDay: 0,
-                        co2Emissions: 0,
-                        createdAt: new Date().toISOString()
-                      });
-                      projectId = newId;
-                      toast.success(tf("ui.projectCreatedNamed", { name: trimmedProject }));
-                    } catch (err) {
-                      logger.warn("Failed to auto-create project", err);
-                    }
-                  }
-                }
-
-                // 3. Save Trip
-                const fuelValue = parseLocaleNumber(fuelAmount);
-                
                 const saved = await onSave?.({
                   id,
                   date,
@@ -1465,6 +1436,8 @@ export function AddTripModal({ trigger, trip, prefill, open, onOpenChange, previ
                   purpose,
                   passengers: Math.max(0, Math.floor(passengersValue)),
                   distance: Math.max(0, distanceValue),
+                  fuelLiters: seedTrip?.fuelLiters,
+                  evKwhUsed: seedTrip?.evKwhUsed,
                   ratePerKmOverride: seedTrip?.ratePerKmOverride ?? null,
                   specialOrigin,
                   // Per-trip expenses

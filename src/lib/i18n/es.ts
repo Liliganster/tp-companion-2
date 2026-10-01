@@ -1,6 +1,17 @@
 // Idioma base de Fahrtenbuch Pro. Las claves tipadas (I18nKey) derivan de este objeto.
 // ES se queda: es el idioma de la propietaria (decisión registrada en PLAN.md).
 export const es = {
+  "projects.showTrips": "Mostrar viajes de {name}",
+  "projects.moveTripHint": "Arrastra un viaje sobre otro proyecto o elige «Mover a…». Si el origen queda sin viajes ni documentos o gastos independientes, se elimina automáticamente.",
+  "projects.noTripsInFilter": "No hay viajes con este filtro.",
+  "projects.dragTrip": "Arrastrar viaje del {date}",
+  "projects.moveTripLabel": "Mover viaje del {date}",
+  "projects.moveTripTo": "Mover a…",
+  "projects.moveTripDone": "Viaje trasladado a «{name}».",
+  "projects.moveTripRemoved": "El proyecto de origen quedó vacío y se eliminó.",
+  "projects.moveTripRetained": "El proyecto de origen conserva documentos o gastos independientes y no se ha eliminado.",
+  "projects.moveTripFailed": "No se pudo confirmar el traslado. Actualiza la lista antes de reintentar.",
+  "projects.moveTripUnavailable": "El traslado necesita una actualización de la base de datos. No se ha movido el viaje.",
   "bulk.retryDocument": "Reintentar extracción",
   "bulk.retryDocumentConfirm": "¿Reintentar la extracción de «{name}» usando el archivo ya subido? Si termina correctamente, consumirá una extracción de tu cuota.",
   "bulk.queueStartFailed": "Los archivos están guardados, pero no se pudo confirmar el inicio de la cola. Vuelve a abrir esta ventana para continuar.",

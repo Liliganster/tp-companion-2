@@ -301,8 +301,7 @@ export default function CalendarPage() {
           createdAt: new Date(event.date).toISOString(),
         };
         
-        await addProject(newProject);
-        projectId = newProject.id;
+        projectId = await addProject(newProject);
       }
       
       // Crear viaje con el proyecto

@@ -2,6 +2,17 @@ import type { I18nKey } from "./es";
 
 // Available immediately with the other UI dictionaries.
 export const en: Record<I18nKey, string> = {
+  "projects.showTrips": "Show trips in {name}",
+  "projects.moveTripHint": "Drag a trip onto another project or choose “Move to…”. The source is removed automatically if no trips, independent documents or expenses remain.",
+  "projects.noTripsInFilter": "No trips match this filter.",
+  "projects.dragTrip": "Drag trip dated {date}",
+  "projects.moveTripLabel": "Move trip dated {date}",
+  "projects.moveTripTo": "Move to…",
+  "projects.moveTripDone": "Trip moved to “{name}”.",
+  "projects.moveTripRemoved": "The source project was empty and has been removed.",
+  "projects.moveTripRetained": "The source project still has independent documents or expenses and has been kept.",
+  "projects.moveTripFailed": "The move could not be confirmed. Refresh the list before trying again.",
+  "projects.moveTripUnavailable": "Moving trips requires a database update. The trip has not been moved.",
   "bulk.retryDocument": "Retry extraction",
   "bulk.retryDocumentConfirm": "Retry extraction of “{name}” using the uploaded file? A successful extraction will count towards your quota.",
   "bulk.queueStartFailed": "The files are saved, but the queue start could not be confirmed. Reopen this window to continue.",

@@ -12,7 +12,8 @@ export function getCallsheetWorkerFetchLimit(args: {
   manualJobId?: string | null;
 }): number {
   if (!args.manual) return CALLSHEET_WORKER_FETCH_LIMIT;
-  return args.manualJobId ? 1 : CALLSHEET_PARALLEL_BATCH_SIZE;
+  // Fetch spare candidates so concurrent continuations can skip an already claimed job.
+  return args.manualJobId ? 1 : getPlanLimits("pro").maxCallsheetsPerWorkerRun;
 }
 
 export function shouldSelfTriggerCallsheetBatch(args: {
@@ -68,4 +69,25 @@ export async function runWithConcurrencyLimit<T>(args: {
 
   const runners = Array.from({ length: Math.min(concurrency, items.length) }, () => consume());
   await Promise.all(runners);
+}
+
+/** Each slot completes one claim, then hands off independently. Spare candidates
+ * handle races between invocations without repeating a provider attempt. */
+export async function runCallsheetWorkerSlots<T>(args: {
+  items: readonly T[];
+  concurrency: number;
+  process: (item: T) => Promise<boolean>;
+  onSlotCompleted: () => Promise<void>;
+}): Promise<void> {
+  let nextIndex = 0;
+  const consume = async () => {
+    while (nextIndex < args.items.length) {
+      const item = args.items[nextIndex++];
+      if (await args.process(item)) {
+        await args.onSlotCompleted();
+        return;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(Math.max(1, args.concurrency), args.items.length) }, consume));
 }

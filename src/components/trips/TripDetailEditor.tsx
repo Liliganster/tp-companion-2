@@ -1,3 +1,4 @@
+import { resolveEditedTripProjectId, isValidTripEdit } from "@/lib/tripEditing";
 import { getProfileRates } from "@/lib/tripMoney";
 import { FormSection } from "@/components/ui/form-section";
 import { useState } from 'react';
@@ -44,17 +45,13 @@ export function TripDetailEditor({ trip, onSave, onCancel, onSaved, onSaving }: 
     const people = isDocumentTrip && !passengers.trim() ? 0 : parseLocaleNumber(passengers);
     const stops = route.map(stop => stop.trim());
     const amounts = Object.fromEntries(Object.entries(expenses).map(([key, value]) => [key, value.trim() ? parseLocaleNumber(value) : null]));
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date || stops.length < minStops || stops.some(stop => !stop) || km == null || km < 0 || km > 10000 || people == null || !Number.isInteger(people) || people < 0 || people > 99 || Object.entries(expenses).some(([key, value]) => value.trim() && (amounts[key] == null || amounts[key]! < 0))) {
+    if (!isValidTripEdit({ date, route: stops, distance: km, passengers: people, documentTrip: isDocumentTrip, expenses: Object.entries(expenses).map(([key, raw]) => ({ raw, value: amounts[key] })) })) {
       setError(t(isDocumentTrip ? 'tripDetail.editInvalidDocument' : 'tripDetail.editInvalid')); return;
     }
     setError(''); setSaving(true); onSaving(true);
     try {
       const name = project.trim();
-      let projectId = name === trip.project ? trip.projectId : projects.find(p => p.name.trim().toLowerCase() === name.toLowerCase())?.id;
-      if (name && !projectId) {
-        projectId = crypto.randomUUID();
-        await addProject({ id: projectId, name, ratePerKm: getProfileRates(profile).ratePerKm, starred: false, createdAt: new Date().toISOString(), trips: 0, totalKm: 0, documents: 0, invoices: 0, estimatedCost: 0, shootingDays: 0, kmPerDay: 0, co2Emissions: 0 });
-      }
+      const projectId = await resolveEditedTripProjectId(name, trip, projects, () => addProject({ id: crypto.randomUUID(), name, ratePerKm: getProfileRates(profile).ratePerKm, starred: false, createdAt: new Date().toISOString(), trips: 0, totalKm: 0, documents: 0, invoices: 0, estimatedCost: 0, shootingDays: 0, kmPerDay: 0, co2Emissions: 0 }));
       const saved = await onSave({ ...trip, ...amounts, date, project: name, projectId: name ? projectId : null, purpose, route: stops, distance: km, passengers: people });
       if (saved) onSaved();
       else setError(t('trips.toastTripSaveFailedBody'));

@@ -2,6 +2,17 @@ import type { I18nKey } from "./es";
 
 // Available immediately with the other UI dictionaries.
 export const de: Record<I18nKey, string> = {
+  "projects.showTrips": "Fahrten in {name} anzeigen",
+  "projects.moveTripHint": "Ziehe eine Fahrt auf ein anderes Projekt oder wähle „Verschieben nach…“. Das Quellprojekt wird automatisch entfernt, wenn keine Fahrten, eigenständigen Dokumente oder Ausgaben verbleiben.",
+  "projects.noTripsInFilter": "Keine Fahrten für diesen Filter.",
+  "projects.dragTrip": "Fahrt vom {date} ziehen",
+  "projects.moveTripLabel": "Fahrt vom {date} verschieben",
+  "projects.moveTripTo": "Verschieben nach…",
+  "projects.moveTripDone": "Fahrt nach „{name}“ verschoben.",
+  "projects.moveTripRemoved": "Das Quellprojekt war leer und wurde entfernt.",
+  "projects.moveTripRetained": "Das Quellprojekt enthält noch eigenständige Dokumente oder Ausgaben und bleibt erhalten.",
+  "projects.moveTripFailed": "Die Verschiebung konnte nicht bestätigt werden. Aktualisiere die Liste vor einem erneuten Versuch.",
+  "projects.moveTripUnavailable": "Zum Verschieben ist eine Datenbankaktualisierung erforderlich. Die Fahrt wurde nicht verschoben.",
   "bulk.retryDocument": "Extraktion erneut versuchen",
   "bulk.retryDocumentConfirm": "Extraktion von „{name}“ mit der bereits hochgeladenen Datei erneut starten? Eine erfolgreiche Extraktion wird auf dein Kontingent angerechnet.",
   "bulk.queueStartFailed": "Die Dateien sind gespeichert, aber der Warteschlangenstart konnte nicht bestätigt werden. Öffne dieses Fenster erneut, um fortzufahren.",

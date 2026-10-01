@@ -458,35 +458,25 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     // 3. Create new project
     const producer = String(producerRaw ?? "").trim();
     const newProjectId = uuidv4();
-    try {
-      await addProject({
-        id: newProjectId,
-        name: trimmed,
-        producer,
-        description: `Created from CSV import: ${sourceLabel}`,
-        ratePerKm: getProfileRates(profile).ratePerKm,
-        starred: false,
-        trips: 0,
-        totalKm: 0,
-        documents: 0,
-        invoices: 0,
-        estimatedCost: 0,
-        shootingDays: 0,
-        kmPerDay: 0,
-        co2Emissions: 0,
-        createdAt: new Date().toISOString(),
-      });
-      sessionCache?.set(key, newProjectId);
-      return newProjectId;
-    } catch (_err) {
-      // If creation failed (e.g. already exists on server), try fetching the existing one
-      const refetch = projects.find((p) => p.name.trim().toLowerCase() === key);
-      if (refetch) {
-        sessionCache?.set(key, refetch.id);
-        return refetch.id;
-      }
-      return undefined;
-    }
+    const savedProjectId = await addProject({
+      id: newProjectId,
+      name: trimmed,
+      producer,
+      description: `Created from CSV import: ${sourceLabel}`,
+      ratePerKm: getProfileRates(profile).ratePerKm,
+      starred: false,
+      trips: 0,
+      totalKm: 0,
+      documents: 0,
+      invoices: 0,
+      estimatedCost: 0,
+      shootingDays: 0,
+      kmPerDay: 0,
+      co2Emissions: 0,
+      createdAt: new Date().toISOString(),
+    });
+    sessionCache?.set(key, savedProjectId);
+    return savedProjectId;
   };
 
 
@@ -1435,7 +1425,7 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
     }
 
     const newProjectId = uuidv4();
-    await addProject({
+    const savedProjectId = await addProject({
       id: newProjectId,
       name: trimmed,
       producer,
@@ -1452,24 +1442,8 @@ export function BulkUploadModal({ trigger, onSave, defaultOpen = false }: BulkUp
       co2Emissions: 0,
     } as any);
 
-    // VERIFICAR contra la BD antes de referenciar el id: si el insert falló
-    // (red caída, duplicado con otra grafía…), devolver el id real o ninguno.
-    // Antes se devolvía el uuid nunca insertado → violación de FK en trips.
-    const { data: byName } = await supabase.from("projects").select("id").eq("name", trimmed).limit(1).maybeSingle();
-    if (byName?.id) {
-      const id = String((byName as any).id);
-      createdProjectsByNameRef.current[key] = id;
-      return id;
-    }
-    const { data: byId } = await supabase.from("projects").select("id").eq("id", newProjectId).maybeSingle();
-    if (byId?.id) {
-      createdProjectsByNameRef.current[key] = newProjectId;
-      return newProjectId;
-    }
-    // No se pudo crear ni encontrar: el viaje se guarda SIN proyecto (se puede
-    // asignar después) en vez de fallar con una referencia fantasma.
-    logger.warn("[BulkUploadModal] No se pudo crear/encontrar el proyecto; el viaje se guarda sin proyecto", { name: trimmed });
-    return undefined;
+    createdProjectsByNameRef.current[key] = savedProjectId;
+    return savedProjectId;
   };
 
   const updateReview = (jobId: string, patch: Partial<ReviewTrip>) => {

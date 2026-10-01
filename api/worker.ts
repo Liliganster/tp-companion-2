@@ -11,7 +11,7 @@ import {
   CALLSHEET_PARALLEL_BATCH_SIZE,
   getCallsheetWorkerFetchLimit,
   limitCallsheetJobsByPlan,
-  runWithConcurrencyLimit,
+  runCallsheetWorkerSlots,
   shouldSelfTriggerCallsheetBatch,
 } from "./_utils/callsheetWorker.js";
 import { startRuntimeWatchdog } from "./_utils/runtimeWatchdog.js";
@@ -29,6 +29,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
   const skipGeocode = manual && String(req.query?.skipGeocode ?? "").trim() === "1";
   const manualJobId = manual && typeof req.query?.jobId === "string" ? String(req.query.jobId).trim() : null;
   const newRequestId = manual && typeof req.query?.requestId === "string" ? req.query.requestId : undefined;
+  const slots = manualJobId || String(req.query?.slots ?? "") === "1" ? 1 : CALLSHEET_PARALLEL_BATCH_SIZE;
   const maxJobs = getCallsheetWorkerFetchLimit({ manual, manualJobId });
   const manualUserId = manual && typeof req.query?.userId === "string" ? String(req.query.userId).trim() : null;
   const createWatchdog = () => startRuntimeWatchdog({
@@ -82,7 +83,9 @@ export default withApiObservability(async function handler(req: any, res: any, {
     req,
     res,
     name: "callsheet_worker",
-    limit: 10,
+    // Continuations are authenticated and may occur once per document.
+    identifier: manualUserId ?? undefined,
+    limit: 60,
     windowMs: 60_000,
     requestId,
   });
@@ -171,7 +174,7 @@ export default withApiObservability(async function handler(req: any, res: any, {
     const limitedJobs = limitCallsheetJobsByPlan({ jobs, planTierByUserId });
 
     const processedResults: any[] = [];
-    let advancedCount = 0;
+    const advancedJobIds = new Set<string>();
 
     async function processJob(job: any) {
       // Leave queued work for the next invocation with a full provider budget.
@@ -189,18 +192,21 @@ export default withApiObservability(async function handler(req: any, res: any, {
         }
         if (reservation.busy) return;
         if (!reservation.allowed) {
-          advancedCount += 1;
           if (reservation.reason === "manual_retry_required") {
-            await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", needs_review_reason: "manual_retry_required" }).eq("id", jobId).eq("user_id", userId).in("status", ["queued", "processing"]);
+            const { error } = await supabaseAdmin.from("callsheet_jobs").update({ status: "failed", needs_review_reason: "manual_retry_required" }).eq("id", jobId).eq("user_id", userId).in("status", ["queued", "processing"]);
+            if (error) throw error;
+            advancedJobIds.add(jobId);
             processedResults.push({ id: jobId, status: "failed" });
             return;
           }
-          await supabaseAdmin.from("callsheet_jobs").update({ status: "out_of_quota", needs_review_reason: (reservation.reason ?? "quota_exceeded") })
+          const { error } = await supabaseAdmin.from("callsheet_jobs").update({ status: "out_of_quota", needs_review_reason: (reservation.reason ?? "quota_exceeded") })
             .eq("id", jobId).eq("user_id", userId).in("status", ["queued", "failed", "processing"]);
+          if (error) throw error;
+          advancedJobIds.add(jobId);
           processedResults.push({ id: jobId, status: "out_of_quota", error: (reservation.reason ?? "quota_exceeded") });
           return;
         }
-        advancedCount += 1;
+        advancedJobIds.add(jobId);
         const claimed = { user_id: userId, storage_path: reservation.storagePath, processed_at: new Date().toISOString() };
         log.info({ jobId, retryCount: currentRetry }, "callsheet_job_start");
 
@@ -318,31 +324,32 @@ export default withApiObservability(async function handler(req: any, res: any, {
       }
     }
 
-    // At most two provider calls per invocation; the database also bounds calls per account.
-    await runWithConcurrencyLimit({
-      items: limitedJobs,
-      concurrency: CALLSHEET_PARALLEL_BATCH_SIZE,
-      worker: async (job) => {
-        await processJob(job);
-      },
-    });
-
-    // Advance only after real progress. Failed documents never re-enter this queue.
-    // Each invocation has its own deadline; an empty/busy queue cannot spin forever.
-    if (advancedCount > 0 && shouldSelfTriggerCallsheetBatch({ manual, manualJobId, manualUserId })) {
+    // Each completed slot starts exactly one successor, without waiting for the
+    // other extraction. PostgreSQL still enforces the account-wide maximum of two.
+    const continueSlot = async () => {
+      if (!shouldSelfTriggerCallsheetBatch({ manual, manualJobId, manualUserId })) return;
       try {
         let remaining = supabaseAdmin.from('callsheet_jobs').select('id', { head: true, count: 'exact' }).eq('status', 'queued');
         if (manualUserId) remaining = remaining.eq('user_id', manualUserId);
         const { count, error } = await remaining;
         if (error) throw error;
         if ((count ?? 0) > 0) {
-          const params = new URLSearchParams();
+          const params = new URLSearchParams({ slots: "1" });
           if (manualUserId) { params.set('manual', '1'); params.set('userId', manualUserId); }
           if (skipGeocode) params.set('skipGeocode', '1');
           await dispatchCallsheetWorker(params);
         }
       } catch (error) { log.error({ error }, 'worker_next_batch_not_started'); }
-    }
+    };
+    await runCallsheetWorkerSlots({
+      items: limitedJobs,
+      concurrency: slots,
+      process: async job => {
+        await processJob(job);
+        return advancedJobIds.has(job.id);
+      },
+      onSlotCompleted: continueSlot,
+    });
 
     reply.status(200).json({ processed: processedResults.length, details: processedResults });
   } catch (err: any) {
